@@ -1,0 +1,83 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://your-org.com/schemas/events/llm_call.schema.json",
+  "title": "LLMCallEvent",
+  "description": "Canonical event emitted by every LLM call across all services",
+  "type": "object",
+  "required": [
+    "event_id",
+    "timestamp",
+    "service",
+    "model",
+    "prompt_tokens",
+    "completion_tokens",
+    "latency_ms",
+    "status"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this event"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 UTC timestamp of the call"
+    },
+    "trace_id": {
+      "type": "string",
+      "description": "OpenTelemetry trace ID for correlation"
+    },
+    "service": {
+      "type": "string",
+      "description": "Name of the originating service"
+    },
+    "model": {
+      "type": "string",
+      "description": "Model identifier e.g. claude-sonnet-4-6"
+    },
+    "prompt_tokens": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "completion_tokens": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "total_tokens": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "latency_ms": {
+      "type": "number",
+      "minimum": 0,
+      "description": "End-to-end latency in milliseconds"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["success", "error", "timeout", "rate_limited"]
+    },
+    "error_code": {
+      "type": "string",
+      "description": "Present only when status != success"
+    },
+    "cost_usd": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Estimated cost in USD"
+    },
+    "user_id": {
+      "type": "string",
+      "description": "Hashed/anonymised user identifier"
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Arbitrary service-specific key-value pairs",
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  }
+}

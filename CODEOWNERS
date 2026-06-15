@@ -1,0 +1,29 @@
+# Global fallback
+*                          @platform-team
+
+# Go services
+/services/                 @backend-team
+/services/gateway/         @backend-team @security-team
+
+# TypeScript API
+/api/                      @backend-team
+
+# Next.js dashboard
+/apps/dashboard/           @frontend-team
+
+# SDKs
+/sdks/                     @sdk-team
+
+# Infrastructure / deploy
+/deploy/                   @platform-team @security-team
+/deploy/postgres/          @platform-team @dba-team
+/deploy/clickhouse/        @platform-team @dba-team
+
+# Shared schemas — everyone must review
+/schemas/                  @backend-team @sdk-team @frontend-team
+
+# CI/CD
+/.github/                  @platform-team
+
+# Security-sensitive
+/services/auth/            @security-team
