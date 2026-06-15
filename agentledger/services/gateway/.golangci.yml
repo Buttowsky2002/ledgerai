@@ -1,0 +1,56 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    # Correctness
+    - govet
+    - errcheck
+    - staticcheck
+    - ineffassign
+    - unused
+
+    # Security (critical for a proxy handling credentials and PII)
+    - gosec
+    - bodyclose
+    - noctx
+    - sqlclosecheck
+
+    # Style / maintainability
+    - revive
+    - gofmt
+    - misspell
+
+linters-settings:
+  gosec:
+    # G104: unhandled errors — already caught by errcheck; avoid double-reporting
+    excludes: ["G104"]
+    severity: medium
+    confidence: medium
+
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+
+  revive:
+    rules:
+      - name: exported
+        disabled: false
+      - name: error-return
+        disabled: false
+      - name: error-strings
+        disabled: false
+      - name: var-naming
+        disabled: false
+
+issues:
+  # Don't report on test files for gosec (test fixtures may use weak patterns
+  # intentionally).
+  exclude-rules:
+    - path: "_test\\.go"
+      linters: [gosec]
+    - path: "smoke_test\\.py"
+      linters: [gosec]
+
+  max-issues-per-linter: 0
+  max-same-issues: 0

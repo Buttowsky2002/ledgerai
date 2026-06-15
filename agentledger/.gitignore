@@ -1,0 +1,23 @@
+# Gateway dev event-sink output (config.example.json → events.type=file)
+events.ndjson
+*.ndjson
+
+# Compiled binaries
+/bin/
+services/gateway/gateway
+
+# Go build cache
+*.test
+*.out
+coverage*.out
+
+# Local config overrides (never commit real keys)
+config.json
+!config.example.json
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store

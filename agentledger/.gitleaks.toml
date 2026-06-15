@@ -1,0 +1,51 @@
+title = "AgentLedger gitleaks configuration"
+
+# Extend the upstream default ruleset so all built-in secret patterns apply.
+[extend]
+  useDefault = true
+
+# ---------------------------------------------------------------------------
+# Global allowlist
+# ---------------------------------------------------------------------------
+# Entries here are exempt from ALL rules.  Keep this list short and justified.
+[allowlist]
+  description = "Known dev/test values that are not real secrets"
+
+  # Regexes matched against the full finding (match text).
+  regexes = [
+    # Explicit dev-only placeholder in docker-compose.yml — low entropy,
+    # clearly labelled, never used in production.
+    '''dev_only_change_me''',
+
+    # AgentLedger virtual-key identifiers (alk_* prefix).  These are routing
+    # identifiers stored as SHA-256 hashes in Postgres; the plaintext form
+    # shown here is meaningless without the gateway.
+    '''alk_[a-z][a-z0-9_]{3,}''',
+  ]
+
+  # Paths whose full content is exempt (relative to repo root).
+  # config.example.json contains only virtual-key names and env-var references
+  # — never real provider keys.
+  paths = [
+    '''agentledger/services/gateway/config\.example\.json''',
+    '''agentledger/docker-compose\.yml''',
+  ]
+
+# ---------------------------------------------------------------------------
+# Custom rule: detect real-looking AgentLedger virtual keys outside examples
+# ---------------------------------------------------------------------------
+# If a developer accidentally commits a real alk_ key (e.g. copied from a
+# running instance) outside the allowed example files, catch it.
+[[rules]]
+  id          = "agentledger-vkey-outside-example"
+  description = "AgentLedger virtual key committed outside example files"
+  regex       = '''(?i)(virtual[_-]?key|vkey|api[_-]?key)\s*[=:\"']\s*(alk_[a-z][a-z0-9_]{8,})'''
+  tags        = ["secret", "agentledger"]
+
+  [rules.allowlist]
+    paths = [
+      '''config\.example\.json''',
+      '''\.githooks/''',
+      '''\.gitleaks\.toml''',
+      '''ADRs/''',
+    ]

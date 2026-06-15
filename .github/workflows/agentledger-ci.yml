@@ -1,0 +1,142 @@
+name: AgentLedger CI
+
+on:
+  pull_request:
+    paths:
+      - "agentledger/**"
+      - ".github/workflows/agentledger-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "agentledger/**"
+      - ".github/workflows/agentledger-ci.yml"
+
+concurrency:
+  group: agentledger-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  security-events: write  # CodeQL SARIF upload
+
+# ---------------------------------------------------------------------------
+# Job ordering: gitleaks runs first and must pass; all other jobs depend on it.
+# This prevents wasted compute when a secret is in the diff.
+# ---------------------------------------------------------------------------
+jobs:
+
+  # ── 1. Secret scanning ─────────────────────────────────────────────────────
+  gitleaks:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          config-path: agentledger/.gitleaks.toml
+
+  # ── 2. Go lint + test + vulnerability scan ────────────────────────────────
+  go:
+    name: Go — lint, test, govulncheck
+    runs-on: ubuntu-latest
+    needs: gitleaks
+    defaults:
+      run:
+        working-directory: agentledger/services/gateway
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: agentledger/services/gateway/go.mod
+          cache: true
+          cache-dependency-path: agentledger/services/gateway/go.sum
+
+      - name: Verify go.sum is up to date
+        run: go mod verify
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          working-directory: agentledger/services/gateway
+          args: --config=.golangci.yml --timeout=5m
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: Test with race detector
+        run: go test -race -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-gateway
+          path: agentledger/services/gateway/coverage.out
+          retention-days: 7
+
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+  # ── 3. SAST — CodeQL ──────────────────────────────────────────────────────
+  codeql:
+    name: SAST (CodeQL — Go)
+    runs-on: ubuntu-latest
+    needs: gitleaks
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: go
+          # Point CodeQL at the gateway module; other Go services added here
+          # as they are introduced in later phases.
+          build-mode: autobuild
+
+      - uses: github/codeql-action/autobuild@v3
+
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:go"
+
+  # ── 4. Schema validation ──────────────────────────────────────────────────
+  # Validates the canonical event JSON Schema and any example fixtures.
+  # Runs independently of the Go jobs — schema is language-agnostic.
+  schema:
+    name: Event schema validation
+    runs-on: ubuntu-latest
+    needs: gitleaks
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Validate llm_call.schema.json is well-formed
+        run: |
+          node -e "JSON.parse(require('fs').readFileSync('agentledger/../schemas/events/llm_call.schema.json','utf8'))"
+
+      - name: Validate example fixtures (if any exist)
+        run: |
+          EXAMPLES=$(find schemas/events/examples -name '*.json' 2>/dev/null || true)
+          if [ -n "$EXAMPLES" ]; then
+            npx --yes ajv-cli validate \
+              -s schemas/events/llm_call.schema.json \
+              -d "schemas/events/examples/*.json"
+          else
+            echo "No example fixtures yet — skipping AJV validation."
+          fi
