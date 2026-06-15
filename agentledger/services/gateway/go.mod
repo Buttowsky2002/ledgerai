@@ -7,5 +7,9 @@ require (
 	github.com/redis/go-redis/v9 v9.7.3
 )
 
-// Run `go mod tidy` (or `make deps`) to populate go.sum with verified checksums.
-// If Go is not installed locally: docker run --rm -v "${PWD}:/w" -w /w golang:1.22-alpine go mod tidy
+require (
+	github.com/alicebob/gopher-json v0.0.0-20200520072559-a9ecdc9d1d3a // indirect
+	github.com/cespare/xxhash/v2 v2.2.0 // indirect
+	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
+	github.com/yuin/gopher-lua v1.1.1 // indirect
+)
