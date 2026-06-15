@@ -1,4 +1,4 @@
-.PHONY: test build up down lint install-hooks security-check audit
+.PHONY: test build up down lint install-hooks security-check audit deps
 
 GATEWAY_DIR := services/gateway
 HOOKS_DIR   := .githooks
@@ -46,3 +46,9 @@ security-check:
 # ── Dependency vulnerability audit ───────────────────────────────────────────
 audit:
 	cd $(GATEWAY_DIR) && go install golang.org/x/vuln/cmd/govulncheck@latest && govulncheck ./...
+
+# ── Module tidy (generate / update go.sum) ───────────────────────────────────
+# Run this after editing go.mod or adding imports. Requires Go installed locally.
+# Without Go: docker run --rm -v "$(CURDIR)/$(GATEWAY_DIR):/w" -w /w golang:1.22-alpine go mod tidy
+deps:
+	cd $(GATEWAY_DIR) && go mod tidy

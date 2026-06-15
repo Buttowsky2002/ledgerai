@@ -19,6 +19,20 @@ type Config struct {
 	VirtualKeys   []VirtualKey  `json:"virtual_keys"`
 	DLP           DLPConfig     `json:"dlp"`
 	Events        EventSinkCfg  `json:"events"`
+	Redis         RedisCfg      `json:"redis"`
+}
+
+// RedisCfg configures the optional Redis-backed BudgetStore.
+// When Addr is empty the gateway falls back to the in-process MemBudgetStore.
+type RedisCfg struct {
+	// Addr is "host:port". Empty → MemBudgetStore (single-process, ephemeral).
+	Addr string `json:"addr"`
+	// PasswordEnv is the environment variable name that holds the Redis auth
+	// password. Never put the password value here; config files hold env-var
+	// names only (per CLAUDE_CODE_BUILD_SPEC §4 rule 1).
+	PasswordEnv string `json:"password_env,omitempty"`
+	// DB is the Redis database index (0 = default).
+	DB int `json:"db,omitempty"`
 }
 
 // ProviderCfg routes model prefixes to an upstream OpenAI-compatible API.

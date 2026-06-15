@@ -40,7 +40,29 @@ func main() {
 	}
 
 	keys := NewKeyStore(cfg.VirtualKeys)
-	budgets := NewBudgetStore(cfg.VirtualKeys)
+
+	var budgets BudgetStore
+	if cfg.Redis.Addr != "" {
+		password := ""
+		if cfg.Redis.PasswordEnv != "" {
+			password = os.Getenv(cfg.Redis.PasswordEnv)
+		}
+		rb, err := NewRedisBudgetStore(cfg.Redis.Addr, password, cfg.Redis.DB, cfg.VirtualKeys,
+			func(key, month string, usd float64) {
+				slog.Info("budget.drain", "key", key, "month", month, "spend_usd", usd)
+			})
+		if err != nil {
+			slog.Error("redis budget store init failed", "err", err)
+			os.Exit(1)
+		}
+		budgets = rb
+		slog.Info("budget store: redis", "addr", cfg.Redis.Addr)
+	} else {
+		budgets = NewBudgetStore(cfg.VirtualKeys)
+		slog.Info("budget store: memory (not shared across replicas)")
+	}
+	defer budgets.Close()
+
 	dlp := NewDLPEngine(cfg.DLP)
 	sink := NewEventSink(cfg.Events)
 	defer sink.Close()

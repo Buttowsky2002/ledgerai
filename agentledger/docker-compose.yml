@@ -47,18 +47,29 @@ services:
       - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
     ports: ["19092:19092"]
 
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
   gateway:
     build: ./services/gateway
     environment:
       AGENTLEDGER_CONFIG: /etc/agentledger/config.json
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # Uncomment to enable Redis-backed budget store:
+      # AGENTLEDGER_REDIS_PASSWORD: ""
     ports: ["8080:8080"]
     volumes:
       - ./services/gateway/config.example.json:/etc/agentledger/config.json:ro
       - ./pricing:/etc/agentledger/pricing:ro
     depends_on:
       clickhouse: { condition: service_healthy }
+      redis: { condition: service_healthy }
 
 volumes:
   pg_data:

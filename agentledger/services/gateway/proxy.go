@@ -19,7 +19,7 @@ import (
 type Gateway struct {
 	cfg       *Config
 	keys      *KeyStore
-	budgets   *BudgetStore
+	budgets   BudgetStore
 	dlp       *DLPEngine
 	prices    *PriceBook
 	sink      *EventSink
