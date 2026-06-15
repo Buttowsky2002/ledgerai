@@ -57,3 +57,6 @@ sbom.*.json
 *.swo
 .DS_Store
 Thumbs.db
+
+# Claude Code internal
+.claude/
