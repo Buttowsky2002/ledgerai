@@ -1,0 +1,46 @@
+{
+  "listen_addr": ":8080",
+  "price_book_path": "../../pricing/pricebook.json",
+  "providers": [
+    {
+      "name": "openai",
+      "base_url": "https://api.openai.com",
+      "api_key_env": "OPENAI_API_KEY",
+      "model_prefixes": ["gpt-", "o3", "o4"]
+    },
+    {
+      "name": "anthropic",
+      "base_url": "https://api.anthropic.com",
+      "api_key_env": "ANTHROPIC_API_KEY",
+      "model_prefixes": ["claude-"]
+    }
+  ],
+  "virtual_keys": [
+    {
+      "key": "alk_dev_engineering",
+      "tenant_id": "00000000-0000-0000-0000-000000000001",
+      "team_id": "engineering",
+      "user_id": "dev@example.com",
+      "app_id": "support-copilot",
+      "environment": "dev",
+      "allowed_models": ["gpt-4o*", "claude-*"],
+      "monthly_budget_usd": 250,
+      "rate_limit_rpm": 120,
+      "dlp_policy_id": "default-redact"
+    }
+  ],
+  "dlp": {
+    "fail_mode": "open",
+    "policies": [
+      { "id": "default-redact", "action": "redact", "classes": ["credentials", "pci"] },
+      { "id": "audit-only", "action": "log" },
+      { "id": "strict-block", "action": "block", "classes": ["credentials", "pci", "pii"] }
+    ]
+  },
+  "events": {
+    "type": "file",
+    "path": "events.ndjson",
+    "flush_ms": 500,
+    "buffer_size": 4096
+  }
+}

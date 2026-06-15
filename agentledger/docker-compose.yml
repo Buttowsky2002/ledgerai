@@ -1,0 +1,65 @@
+# AgentLedger local development stack
+#
+#   docker compose up -d
+#   curl -s http://localhost:8080/healthz
+#
+# ClickHouse HTTP is exposed on :8123 — point the gateway event sink at
+# it directly for dev (events.type=http, url below), or run Redpanda in
+# between for the production-shaped pipeline.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: agentledger
+      POSTGRES_USER: agentledger
+      POSTGRES_PASSWORD: dev_only_change_me
+    ports: ["5432:5432"]
+    volumes:
+      - ./deploy/postgres:/docker-entrypoint-initdb.d:ro
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentledger"]
+      interval: 5s
+      retries: 10
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    ports: ["8123:8123", "9000:9000"]
+    volumes:
+      - ./deploy/clickhouse:/docker-entrypoint-initdb.d:ro
+      - ch_data:/var/lib/clickhouse
+    ulimits:
+      nofile: { soft: 262144, hard: 262144 }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8123/ping"]
+      interval: 5s
+      retries: 10
+
+  redpanda:
+    image: redpandadata/redpanda:v24.2.7
+    command:
+      - redpanda start
+      - --smp 1
+      - --memory 1G
+      - --overprovisioned
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+    ports: ["19092:19092"]
+
+  gateway:
+    build: ./services/gateway
+    environment:
+      AGENTLEDGER_CONFIG: /etc/agentledger/config.json
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    ports: ["8080:8080"]
+    volumes:
+      - ./services/gateway/config.example.json:/etc/agentledger/config.json:ro
+      - ./pricing:/etc/agentledger/pricing:ro
+    depends_on:
+      clickhouse: { condition: service_healthy }
+
+volumes:
+  pg_data:
+  ch_data:
