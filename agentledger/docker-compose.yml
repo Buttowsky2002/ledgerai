@@ -84,6 +84,18 @@ services:
       clickhouse: { condition: service_healthy }
       redpanda: { condition: service_started }
 
+  connector-sync:
+    build: ./services/connectors
+    environment:
+      AGENTLEDGER_PG_DSN: postgres://agentledger:dev_only_change_me@postgres:5432/agentledger?sslmode=disable
+      AGENTLEDGER_CLICKHOUSE_URL: http://clickhouse:8123
+      AGENTLEDGER_CLICKHOUSE_DB: agentledger
+      AGENTLEDGER_SYNC_INTERVAL_SEC: "3600"
+    ports: ["8092:8092"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      clickhouse: { condition: service_healthy }
+
   gateway:
     build: ./services/gateway
     environment:
