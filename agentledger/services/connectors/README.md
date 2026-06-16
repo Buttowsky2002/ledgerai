@@ -30,13 +30,25 @@ crash mid-page re-fetches and re-writes at most that one page on restart; the
 identity) collapses the duplicate. Result: **replay from cursor without
 duplicates** — at-least-once delivery, effectively-once storage.
 
+## Importers
+
+| Kind (`connectors.kind`) | Source | Auth | Key `config` fields |
+|--------------------------|--------|------|---------------------|
+| `openai_usage`   | OpenAI Costs API (`/v1/organization/costs`) | Bearer admin key | `api_key_env`, `base_url`, `lookback_days` |
+| `anthropic_usage`| Anthropic Cost Report (`/v1/organizations/cost_report`) | `x-api-key` + `anthropic-version` | `api_key_env`, `anthropic_version`, `lookback_days` |
+| `bedrock`        | AWS Cost Explorer `GetCostAndUsage` (SigV4) | `AWS_ACCESS_KEY_ID`/`_SECRET_ACCESS_KEY` (+ optional `_SESSION_TOKEN`) | `access_key_env`, `secret_key_env`, `region`, `service_name` |
+| `vertex`         | GCP BigQuery billing export (`jobs.query`) | OAuth2 bearer token | `project_id`, `billing_table`, `token_env`, `service_filter` |
+
+`config` holds env-var **names**, never secret values (CLAUDE.md rule 1).
+Per-tenant connector rows live in the Postgres `connectors` table; the
+control-plane API manages them (Phase 3), or insert them manually for local dev.
+
 ## Adding a provider importer
 
-Implement `Connector` (see `internal/connector/connector.go`), then register it
-in `cmd/connector-sync/main.go` → `registeredConnectors()`. Read the provider's
-API key from an env var **named** in the connector's `config` JSON (config holds
-env-var names, never secrets — CLAUDE.md rule 1). Importers landing next:
-OpenAI usage/costs, Anthropic usage, AWS Bedrock, GCP Vertex.
+Implement `Connector` (see `internal/connector/connector.go`) — just the
+provider-specific `Fetch` (the framework stamps tenant/source and handles
+cursor/rate-limit/retry/idempotency) — then register it in
+`cmd/connector-sync/main.go` → `registeredConnectors()`.
 
 ## Run
 

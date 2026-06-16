@@ -104,6 +104,8 @@ func registeredConnectors() []connector.Connector {
 	return []connector.Connector{
 		connector.NewOpenAIConnector(),
 		connector.NewAnthropicConnector(),
+		connector.NewBedrockConnector(),
+		connector.NewVertexConnector(),
 	}
 }
 
