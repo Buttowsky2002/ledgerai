@@ -152,10 +152,12 @@ func TestRedisRateLimitWindowResets(t *testing.T) {
 		t.Fatalf("second call: expected rate_limit_exceeded, got ok=%v reason=%q", ok, reason)
 	}
 
-	// Advance miniredis clock by 61 seconds to expire the rate key.
-	mr.FastForward(61 * time.Second)
+	// FastForward past the key TTL (window + 10 = 70 s) to force expiry.
+	// miniredis FastForward advances its expiry clock; once the rate-limit key
+	// expires, ZCARD returns 0 and the slot is free again.
+	mr.FastForward(71 * time.Second)
 
-	// Third call: allowed again after window expired.
+	// Third call: allowed again after the rate-limit key has expired.
 	if ok, reason := s.CheckAndCount(&vk); !ok {
 		t.Fatalf("after window reset: expected allowed, got reason=%q", reason)
 	}

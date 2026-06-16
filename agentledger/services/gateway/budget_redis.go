@@ -44,17 +44,22 @@ var rateSeq atomic.Int64
 // rateLimitScript atomically checks and records a rate-limit slot.
 // Returns 1 if the request is within the limit, 0 if it is rate-limited.
 //
+// Uses redis.call('TIME') for server-side time so that the sliding window
+// is consistent across replicas (no client clock skew) and advances correctly
+// with miniredis FastForward in tests.
+//
 // KEYS[1]  — rate key  (al:rate:{virtualKey})
-// ARGV[1]  — current time as float64 Unix seconds (nanosecond precision)
-// ARGV[2]  — window size in seconds (60)
-// ARGV[3]  — requests-per-minute limit
-// ARGV[4]  — unique member ID for this request
+// ARGV[1]  — window size in seconds (60)
+// ARGV[2]  — requests-per-minute limit
+// ARGV[3]  — unique member ID for this request
 var rateLimitScript = redis.NewScript(`
 local key    = KEYS[1]
-local now    = tonumber(ARGV[1])
-local window = tonumber(ARGV[2])
-local limit  = tonumber(ARGV[3])
-local member = ARGV[4]
+local window = tonumber(ARGV[1])
+local limit  = tonumber(ARGV[2])
+local member = ARGV[3]
+
+local t   = redis.call('TIME')
+local now = tonumber(t[1]) + tonumber(t[2]) / 1000000
 
 redis.call('ZREMRANGEBYSCORE', key, '-inf', now - window)
 local count = redis.call('ZCARD', key)
@@ -135,15 +140,14 @@ func (s *RedisBudgetStore) CheckAndCount(vk *VirtualKey) (bool, string) {
 		}
 	}
 
-	// 2. Rate-limit check-and-record (atomic Lua script).
+	// 2. Rate-limit check-and-record (atomic Lua script, server-side time).
 	if vk.RateLimitRPM > 0 {
-		now := float64(time.Now().UnixNano()) / 1e9
 		member := strconv.FormatInt(time.Now().UnixNano(), 10) + "." +
 			strconv.FormatInt(rateSeq.Add(1), 10)
 
 		res, err := rateLimitScript.Run(ctx, s.rdb,
 			[]string{rateKey(vk.Key)},
-			now, 60.0, vk.RateLimitRPM, member,
+			60.0, vk.RateLimitRPM, member,
 		).Int()
 		if err != nil {
 			slog.Warn("rate limit redis error — failing open", "key", vk.Key, "err", err)
