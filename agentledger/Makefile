@@ -20,6 +20,7 @@ build:
 	cd $(GATEWAY_DIR) && CGO_ENABLED=0 go build -o ../../bin/gateway .
 	cd $(COLLECTOR_DIR) && CGO_ENABLED=0 go build -o ../../bin/collector .
 	cd $(WORKERS_DIR) && CGO_ENABLED=0 go build -o ../../bin/ch-insert ./cmd/ch-insert
+	cd $(WORKERS_DIR) && CGO_ENABLED=0 go build -o ../../bin/reconcile ./cmd/reconcile
 	cd $(CONNECTORS_DIR) && CGO_ENABLED=0 go build -o ../../bin/connector-sync ./cmd/connector-sync
 
 # ── Local stack ──────────────────────────────────────────────────────────────
