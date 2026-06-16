@@ -1,0 +1,62 @@
+# Workers
+
+Go async consumers of the event bus. One binary per worker under `cmd/`; shared
+logic in `internal/`. The first worker is **ch-insert**.
+
+## ch-insert
+
+Consumes the Redpanda topic `events.raw`, batches events, and inserts them into
+ClickHouse via the HTTP `JSONEachRow` interface. Routes by event `kind`:
+
+| kind                | target table            |
+|---------------------|-------------------------|
+| `llm_call` / absent | `agentledger.llm_calls` |
+| `agent_run`         | `agentledger.agent_runs`|
+| `outcome`           | `agentledger.outcomes`  |
+| `tool_call`         | skipped (rolls up into `agent_runs`) |
+| unknown / bad JSON  | dead-lettered → `events.dlq` |
+
+### Delivery semantics
+
+- Offsets commit **only after** a batch is durably inserted, so a crash
+  re-delivers rather than loses events.
+- A whole-batch insert failure is treated as **transient** (ClickHouse down):
+  the worker retries in place and does **not** commit — no data loss.
+- A row that fails on its own while its batch-mates succeed is **poison**: it is
+  dead-lettered to `events.dlq` (with a `dlq-reason` header) and the rest proceed.
+- `llm_calls` is a `ReplacingMergeTree` keyed on `(tenant_id, ts, call_id)`, so
+  any re-delivery overlap is deduplicated — the pipeline is effectively
+  idempotent.
+
+### Run
+
+```bash
+cd services/workers
+go run ./cmd/ch-insert      # consumes events.raw → ClickHouse at :8123
+```
+
+### Endpoints (admin server, default `:8091`)
+
+| Path        | Purpose                                   |
+|-------------|-------------------------------------------|
+| `/healthz`  | Liveness.                                 |
+| `/readyz`   | Readiness — pings ClickHouse and brokers. |
+| `/metrics`  | Prometheus text exposition.               |
+
+### Environment variables
+
+| Variable                        | Default                   | Purpose                         |
+|---------------------------------|---------------------------|---------------------------------|
+| `AGENTLEDGER_KAFKA_BROKERS`     | `localhost:19092`         | Comma-separated broker list.    |
+| `AGENTLEDGER_KAFKA_TOPIC`       | `events.raw`              | Source topic.                   |
+| `AGENTLEDGER_KAFKA_DLQ_TOPIC`   | `events.dlq`              | Dead-letter topic.              |
+| `AGENTLEDGER_CONSUMER_GROUP`    | `ch-insert`               | Consumer group id.              |
+| `AGENTLEDGER_CLICKHOUSE_URL`    | `http://localhost:8123`   | ClickHouse HTTP endpoint.       |
+| `AGENTLEDGER_CLICKHOUSE_DB`     | `agentledger`             | Target database.                |
+| `AGENTLEDGER_CLICKHOUSE_USER`   | `default`                 | ClickHouse user.                |
+| `AGENTLEDGER_CLICKHOUSE_PASSWORD` | _(empty)_               | ClickHouse password (secret).   |
+| `AGENTLEDGER_WORKER_ADDR`       | `:8091`                   | Admin/metrics listen address.   |
+| `AGENTLEDGER_INSERT_RETRIES`    | `3`                       | Per-batch insert retries.       |
+| `AGENTLEDGER_RETRY_BACKOFF_MS`  | `250`                     | Base retry/redelivery backoff.  |
+
+See `docs/ADRs/006-clickhouse-insert-worker.md` for the design rationale.

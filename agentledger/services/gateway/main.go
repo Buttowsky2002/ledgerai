@@ -39,8 +39,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	keys := NewKeyStore(cfg.VirtualKeys)
-
 	var budgets BudgetStore
 	if cfg.Redis.Addr != "" {
 		password := ""
@@ -63,22 +61,37 @@ func main() {
 	}
 	defer budgets.Close()
 
-	dlp := NewDLPEngine(cfg.DLP)
 	sink := NewEventSink(cfg.Events)
 	defer sink.Close()
 
-	gw := &Gateway{
-		cfg:       cfg,
-		keys:      keys,
-		budgets:   budgets,
-		dlp:       dlp,
-		prices:    priceBook,
-		sink:      sink,
-		transport: newUpstreamTransport(),
+	gw := newGateway(cfg, priceBook, budgets, sink)
+
+	// Optional Postgres config hot-reload. When AGENTLEDGER_PG_DSN is set the
+	// gateway loads virtual_keys and DLP policies from Postgres and refreshes
+	// them every 30 s. On failure it serves the last-known-good snapshot.
+	if pgDSN := os.Getenv("AGENTLEDGER_PG_DSN"); pgDSN != "" {
+		cs, err := NewPGConfigStore(pgDSN, cfg)
+		if err != nil {
+			slog.Error("pg config store init failed", "err", err)
+			os.Exit(1)
+		}
+		defer cs.Close()
+		// Best-effort initial load; fall back to file config on error.
+		if pgCfg, loadErr := cs.Load(context.Background()); loadErr == nil {
+			gw.current.Store(newSnapshotFromHashed(pgCfg, priceBook))
+			slog.Info("initial config loaded from postgres", "keys", len(pgCfg.VirtualKeys))
+		} else {
+			slog.Warn("initial postgres config load failed; using file config", "err", loadErr)
+		}
+		reloadCtx, cancelReload := context.WithCancel(context.Background())
+		defer cancelReload()
+		StartHotReload(reloadCtx, cs, 30*time.Second, gw)
+		slog.Info("config hot-reload enabled", "interval", "30s")
 	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/chat/completions", gw.handleChatCompletions)
+	mux.HandleFunc("POST /v1/messages", gw.handleMessages) // Anthropic Messages API
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"ok"}`))

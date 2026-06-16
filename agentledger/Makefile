@@ -1,16 +1,24 @@
 .PHONY: test build up down lint install-hooks security-check audit deps
 
-GATEWAY_DIR := services/gateway
-HOOKS_DIR   := .githooks
-GIT_HOOKS   := $(shell git rev-parse --git-dir 2>/dev/null)/hooks
+GATEWAY_DIR   := services/gateway
+COLLECTOR_DIR := services/collector
+WORKERS_DIR   := services/workers
+GO_SERVICES   := $(GATEWAY_DIR) $(COLLECTOR_DIR) $(WORKERS_DIR)
+HOOKS_DIR     := .githooks
+GIT_HOOKS     := $(shell git rev-parse --git-dir 2>/dev/null)/hooks
 
 # ── Tests ────────────────────────────────────────────────────────────────────
 test:
-	cd $(GATEWAY_DIR) && go vet ./... && go test -race ./...
+	@for d in $(GO_SERVICES); do \
+		echo "==> test $$d"; \
+		(cd $$d && go vet ./... && go test -race ./...) || exit 1; \
+	done
 
 # ── Build ────────────────────────────────────────────────────────────────────
 build:
 	cd $(GATEWAY_DIR) && CGO_ENABLED=0 go build -o ../../bin/gateway .
+	cd $(COLLECTOR_DIR) && CGO_ENABLED=0 go build -o ../../bin/collector .
+	cd $(WORKERS_DIR) && CGO_ENABLED=0 go build -o ../../bin/ch-insert ./cmd/ch-insert
 
 # ── Local stack ──────────────────────────────────────────────────────────────
 up:
@@ -21,7 +29,10 @@ down:
 
 # ── Lint ─────────────────────────────────────────────────────────────────────
 lint:
-	cd $(GATEWAY_DIR) && gofmt -l . && go vet ./...
+	@for d in $(GO_SERVICES); do \
+		echo "==> lint $$d"; \
+		(cd $$d && gofmt -l . && go vet ./...) || exit 1; \
+	done
 
 # ── Pre-commit hook installation ─────────────────────────────────────────────
 # Copies the versioned hook into .git/hooks and marks it executable.
@@ -45,10 +56,16 @@ security-check:
 
 # ── Dependency vulnerability audit ───────────────────────────────────────────
 audit:
-	cd $(GATEWAY_DIR) && go install golang.org/x/vuln/cmd/govulncheck@latest && govulncheck ./...
+	@for d in $(GO_SERVICES); do \
+		echo "==> audit $$d"; \
+		(cd $$d && go install golang.org/x/vuln/cmd/govulncheck@latest && govulncheck ./...) || exit 1; \
+	done
 
 # ── Module tidy (generate / update go.sum) ───────────────────────────────────
 # Run this after editing go.mod or adding imports. Requires Go installed locally.
 # Without Go: docker run --rm -v "$(CURDIR)/$(GATEWAY_DIR):/w" -w /w golang:1.22-alpine go mod tidy
 deps:
-	cd $(GATEWAY_DIR) && go mod tidy
+	@for d in $(GO_SERVICES); do \
+		echo "==> tidy $$d"; \
+		(cd $$d && go mod tidy) || exit 1; \
+	done

@@ -28,6 +28,8 @@ services:
     ports: ["8123:8123", "9000:9000"]
     volumes:
       - ./deploy/clickhouse:/docker-entrypoint-initdb.d:ro
+      - ./deploy/clickhouse-config/storage.xml:/etc/clickhouse-server/config.d/storage.xml:ro
+      - ./deploy/clickhouse-config/users.xml:/etc/clickhouse-server/users.d/zz-default.xml:ro
       - ch_data:/var/lib/clickhouse
     ulimits:
       nofile: { soft: 262144, hard: 262144 }
@@ -55,6 +57,33 @@ services:
       interval: 5s
       retries: 10
 
+  collector:
+    build: ./services/collector
+    environment:
+      AGENTLEDGER_KAFKA_BROKERS: redpanda:9092
+      AGENTLEDGER_KAFKA_TOPIC: events.raw
+      AGENTLEDGER_EVENT_SCHEMA: /etc/agentledger/schemas/events/llm_call.schema.json
+    ports: ["8090:8090"]
+    volumes:
+      - ./schemas:/etc/agentledger/schemas:ro
+    depends_on:
+      redpanda: { condition: service_started }
+
+  ch-insert:
+    build:
+      context: ./services/workers
+      args: { CMD: ch-insert }
+    environment:
+      AGENTLEDGER_KAFKA_BROKERS: redpanda:9092
+      AGENTLEDGER_KAFKA_TOPIC: events.raw
+      AGENTLEDGER_KAFKA_DLQ_TOPIC: events.dlq
+      AGENTLEDGER_CLICKHOUSE_URL: http://clickhouse:8123
+      AGENTLEDGER_CLICKHOUSE_DB: agentledger
+    ports: ["8091:8091"]
+    depends_on:
+      clickhouse: { condition: service_healthy }
+      redpanda: { condition: service_started }
+
   gateway:
     build: ./services/gateway
     environment:
@@ -63,6 +92,9 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       # Uncomment to enable Redis-backed budget store:
       # AGENTLEDGER_REDIS_PASSWORD: ""
+      # Uncomment to enable Postgres config hot-reload (virtual keys + DLP policies,
+      # refreshed every 30s; serves last-known-good on outage). Unset = static file config.
+      # AGENTLEDGER_PG_DSN: postgres://agentledger:dev_only_change_me@postgres:5432/agentledger?sslmode=disable
     ports: ["8080:8080"]
     volumes:
       - ./services/gateway/config.example.json:/etc/agentledger/config.json:ro

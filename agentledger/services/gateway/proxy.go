@@ -13,17 +13,26 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
 type Gateway struct {
-	cfg       *Config
-	keys      *KeyStore
+	current   atomic.Pointer[gatewaySnapshot] // hot-reloadable config; swap atomically
 	budgets   BudgetStore
-	dlp       *DLPEngine
-	prices    *PriceBook
 	sink      *EventSink
 	transport *http.Transport
+}
+
+// newGateway creates a Gateway with an initial snapshot built from cfg and pb.
+func newGateway(cfg *Config, pb *PriceBook, budgets BudgetStore, sink *EventSink) *Gateway {
+	g := &Gateway{
+		budgets:   budgets,
+		sink:      sink,
+		transport: newUpstreamTransport(),
+	}
+	g.current.Store(newSnapshotFromCfg(cfg, pb))
+	return g
 }
 
 func newUpstreamTransport() *http.Transport {
@@ -51,16 +60,17 @@ type chatRequest struct {
 
 func (g *Gateway) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
-	callID := requestIDFrom(r.Context())
+	snap := g.current.Load()
 
 	// 1. Authenticate virtual key
-	vk, ok := g.authenticate(r)
+	vk, ok := g.authenticate(snap, r)
 	if !ok {
 		writeErr(w, http.StatusUnauthorized, "invalid_api_key", "unknown or missing AgentLedger virtual key")
 		return
 	}
 
-	// 2. Read + parse body (bounded)
+	// 2. Read + parse body (bounded). The OpenAI Chat Completions body is the
+	// gateway's internal canonical request format.
 	body, err := io.ReadAll(io.LimitReader(r.Body, 32<<20))
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid_request", "could not read body")
@@ -72,21 +82,35 @@ func (g *Gateway) handleChatCompletions(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	ev := LLMCallEvent{
+	ev := buildEvent(requestIDFrom(r.Context()), start, vk, r, req.Model, req.Stream)
+	g.serveCanonical(w, r, snap, vk, body, req, &ev, start, formatOpenAI)
+}
+
+// buildEvent seeds an LLMCallEvent with attribution + request context shared by
+// every inline-path entry point (chat completions and messages).
+func buildEvent(callID string, start time.Time, vk *VirtualKey, r *http.Request, model string, stream bool) LLMCallEvent {
+	return LLMCallEvent{
 		CallID: callID, Timestamp: start.UTC(),
 		TenantID: vk.TenantID, TeamID: vk.TeamID, UserID: vk.UserID,
 		AppID: vk.AppID, Environment: vk.Environment, VirtualKey: vk.Key,
 		AgentID:      r.Header.Get("X-AgentLedger-Agent-Id"),
 		RunID:        r.Header.Get("X-AgentLedger-Run-Id"),
 		StepID:       r.Header.Get("X-AgentLedger-Step-Id"),
-		RequestModel: req.Model, OperationName: "chat", Streamed: req.Stream,
+		RequestModel: model, OperationName: "chat", Streamed: stream,
 	}
+}
+
+// serveCanonical runs inline-path stages 3–9 on an already-parsed canonical
+// (OpenAI-format) request. format selects how successful responses and errors
+// are rendered to the client (OpenAI passthrough vs Anthropic Messages).
+func (g *Gateway) serveCanonical(w http.ResponseWriter, r *http.Request, snap *gatewaySnapshot,
+	vk *VirtualKey, body []byte, req chatRequest, ev *LLMCallEvent, start time.Time, format respFormat) {
 
 	// 3. Model allowlist
 	if !modelAllowed(vk, req.Model) {
 		ev.Status, ev.StatusCode = "blocked_policy", http.StatusForbidden
-		g.finish(w, &ev, start, http.StatusForbidden, "model_not_allowed",
-			fmt.Sprintf("model %q is not allowed for this key", req.Model))
+		g.finishFmt(w, ev, start, http.StatusForbidden, "model_not_allowed",
+			fmt.Sprintf("model %q is not allowed for this key", req.Model), format)
 		return
 	}
 
@@ -99,39 +123,48 @@ func (g *Gateway) handleChatCompletions(w http.ResponseWriter, r *http.Request) 
 			ev.Status = "blocked_budget"
 		}
 		ev.StatusCode = status
-		g.finish(w, &ev, start, status, reason, "request rejected by AgentLedger policy: "+reason)
+		g.finishFmt(w, ev, start, status, reason, "request rejected by AgentLedger policy: "+reason, format)
 		return
 	}
 
 	// 5. DLP precheck on message content
 	promptText := extractText(req)
 	ev.PromptHash = hashContent(promptText)
-	findings := g.dlp.Classify(promptText)
-	action := g.dlp.Decide(vk.DLPPolicyID, findings)
+	findings := snap.dlp.Classify(promptText)
+	action := snap.dlp.Decide(vk.DLPPolicyID, findings)
 	ev.DLPAction, ev.DLPFindings = action, findings
 	ev.RiskSeverity = maxSeverity(findings)
 
 	switch action {
 	case "block":
 		ev.Status, ev.StatusCode = "blocked_dlp", http.StatusForbidden
-		g.finish(w, &ev, start, http.StatusForbidden, "dlp_blocked",
-			"request blocked: sensitive data detected ("+findingClasses(findings)+")")
+		g.finishFmt(w, ev, start, http.StatusForbidden, "dlp_blocked",
+			"request blocked: sensitive data detected ("+findingClasses(findings)+")", format)
 		return
 	case "redact":
-		body = redactBody(g.dlp, body)
+		body = redactBody(snap.dlp, body)
 	}
 
 	// 6. Resolve upstream provider
-	prov, ok := g.cfg.resolveProvider(req.Model)
+	prov, ok := snap.cfg.resolveProvider(req.Model)
 	if !ok {
 		ev.Status, ev.StatusCode = "blocked_policy", http.StatusBadGateway
-		g.finish(w, &ev, start, http.StatusBadGateway, "no_provider", "no upstream configured for model "+req.Model)
+		g.finishFmt(w, ev, start, http.StatusBadGateway, "no_provider",
+			"no upstream configured for model "+req.Model, format)
 		return
 	}
 	ev.Provider = prov.Name
 
-	// 7. Proxy
-	usage, status, respModel, err := g.proxyUpstream(w, r, prov, body, req.Stream)
+	// 7. Proxy (response rendering depends on the client-facing format)
+	var usage Usage
+	var status int
+	var respModel string
+	var err error
+	if format == formatAnthropic {
+		usage, status, respModel, err = g.proxyMessages(w, r, prov, body, req.Stream)
+	} else {
+		usage, status, respModel, err = g.proxyUpstream(w, r, prov, body, req.Stream)
+	}
 	ev.StatusCode = status
 	ev.ResponseModel = respModel
 	if err != nil {
@@ -147,32 +180,37 @@ func (g *Gateway) handleChatCompletions(w http.ResponseWriter, r *http.Request) 
 	if priceModel == "" {
 		priceModel = req.Model
 	}
-	ev.CostUSD = g.prices.Cost(prov.Name, priceModel, usage, start)
+	ev.CostUSD = snap.prices.Cost(prov.Name, priceModel, usage, start)
 	g.budgets.AddSpend(vk.Key, ev.CostUSD)
 
 	// 9. Emit canonical event (async, non-blocking)
 	ev.LatencyMs = time.Since(start).Milliseconds()
-	g.sink.Emit(ev)
+	g.sink.Emit(*ev)
 }
 
-// proxyUpstream forwards the request and captures usage from either the
-// JSON response or the final SSE chunks (stream_options.include_usage).
-func (g *Gateway) proxyUpstream(w http.ResponseWriter, r *http.Request, prov *ProviderCfg, body []byte, stream bool) (Usage, int, string, error) {
-	var u Usage
+// dispatchUpstream sends the canonical (OpenAI-format) request to the resolved
+// provider's /v1/chat/completions endpoint and returns the live response. It is
+// shared by the OpenAI passthrough proxy and the Anthropic-translating proxy.
+func (g *Gateway) dispatchUpstream(r *http.Request, prov *ProviderCfg, body []byte, stream bool) (*http.Response, error) {
 	if stream {
 		body = ensureStreamUsage(body)
 	}
 	upReq, err := http.NewRequestWithContext(r.Context(), "POST",
 		strings.TrimRight(prov.BaseURL, "/")+"/v1/chat/completions", bytes.NewReader(body))
 	if err != nil {
-		writeErr(w, http.StatusBadGateway, "upstream_error", err.Error())
-		return u, http.StatusBadGateway, "", err
+		return nil, err
 	}
 	upReq.Header.Set("Content-Type", "application/json")
 	upReq.Header.Set("Authorization", "Bearer "+os.Getenv(prov.APIKeyEnv))
-
 	client := &http.Client{Transport: g.transport, Timeout: 10 * time.Minute}
-	resp, err := client.Do(upReq)
+	return client.Do(upReq)
+}
+
+// proxyUpstream forwards the request and captures usage from either the
+// JSON response or the final SSE chunks (stream_options.include_usage).
+func (g *Gateway) proxyUpstream(w http.ResponseWriter, r *http.Request, prov *ProviderCfg, body []byte, stream bool) (Usage, int, string, error) {
+	var u Usage
+	resp, err := g.dispatchUpstream(r, prov, body, stream)
 	if err != nil {
 		writeErr(w, http.StatusBadGateway, "upstream_error", err.Error())
 		return u, http.StatusBadGateway, "", err
@@ -275,19 +313,21 @@ func ensureStreamUsage(body []byte) []byte {
 
 // ---------- helpers ----------
 
-func (g *Gateway) authenticate(r *http.Request) (*VirtualKey, bool) {
+func (g *Gateway) authenticate(snap *gatewaySnapshot, r *http.Request) (*VirtualKey, bool) {
 	auth := r.Header.Get("Authorization")
 	key, found := strings.CutPrefix(auth, "Bearer ")
 	if !found {
 		return nil, false
 	}
-	return g.keys.Lookup(strings.TrimSpace(key))
+	return snap.keys.Lookup(strings.TrimSpace(key))
 }
 
-func (g *Gateway) finish(w http.ResponseWriter, ev *LLMCallEvent, start time.Time, status int, code, msg string) {
+// finishFmt emits the (terminal) event and writes a format-appropriate error
+// response. Used for every inline-path rejection (allowlist, budget, DLP, ...).
+func (g *Gateway) finishFmt(w http.ResponseWriter, ev *LLMCallEvent, start time.Time, status int, code, msg string, format respFormat) {
 	ev.LatencyMs = time.Since(start).Milliseconds()
 	g.sink.Emit(*ev)
-	writeErr(w, status, code, msg)
+	writeErrFmt(w, format, status, code, msg)
 }
 
 func modelAllowed(vk *VirtualKey, model string) bool {

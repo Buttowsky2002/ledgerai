@@ -63,13 +63,9 @@ func testGateway(t *testing.T, upstreamURL string) *Gateway {
 	}
 	os.Setenv("TEST_UPSTREAM_KEY", "sk-upstream")
 
-	g := &Gateway{
-		cfg: cfg, keys: NewKeyStore(cfg.VirtualKeys), budgets: NewBudgetStore(cfg.VirtualKeys),
-		dlp: NewDLPEngine(cfg.DLP), prices: pb, sink: NewEventSink(EventSinkCfg{Type: "file", Path: os.DevNull, FlushMs: 10, BufferSize: 64}),
-		transport: newUpstreamTransport(),
-	}
-
-	return g
+	return newGateway(cfg, pb,
+		NewBudgetStore(cfg.VirtualKeys),
+		NewEventSink(EventSinkCfg{Type: "file", Path: os.DevNull, FlushMs: 10, BufferSize: 64}))
 }
 
 func doChat(t *testing.T, g *Gateway, key, content string) (*httptest.ResponseRecorder, LLMCallEvent) {
