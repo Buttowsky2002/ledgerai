@@ -101,7 +101,9 @@ func runLoop(ctx context.Context, syncer *connector.Syncer, every time.Duration)
 // registeredConnectors returns the provider importers compiled into this build.
 // Importers are added here as they are implemented (Phase 2 tasks 2–4).
 func registeredConnectors() []connector.Connector {
-	return []connector.Connector{}
+	return []connector.Connector{
+		connector.NewOpenAIConnector(),
+	}
 }
 
 func env(key, def string) string {

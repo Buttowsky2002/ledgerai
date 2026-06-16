@@ -91,6 +91,16 @@ func (s *Syncer) syncOne(ctx context.Context, conn Connector, st State) error {
 		}
 
 		if len(pg.Records) > 0 {
+			// Attribution is framework-owned: connectors emit provider data;
+			// the Syncer stamps the tenant (from connector state) and defaults
+			// the source to the connector kind. This keeps importers minimal
+			// and guarantees rows can't be mis-attributed.
+			for i := range pg.Records {
+				pg.Records[i].TenantID = st.TenantID
+				if pg.Records[i].Source == "" {
+					pg.Records[i].Source = conn.Kind()
+				}
+			}
 			if err := s.sink.Write(ctx, pg.Records); err != nil {
 				return fmt.Errorf("sink: %w", err)
 			}
