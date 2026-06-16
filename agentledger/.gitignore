@@ -15,6 +15,10 @@ coverage*.out
 config.json
 !config.example.json
 
+# Python (SDK + e2e tests)
+__pycache__/
+*.pyc
+
 # Editor
 .idea/
 .vscode/

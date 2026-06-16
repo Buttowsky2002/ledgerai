@@ -31,6 +31,12 @@ curl http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hello"}]}'
 
+# or call it like Anthropic — same governance, Messages API in and out
+curl http://localhost:8080/v1/messages \
+  -H "Authorization: Bearer alk_dev_engineering" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"claude-3-5-sonnet-20241022","max_tokens":256,"messages":[{"role":"user","content":"hello"}]}'
+
 # canonical events (one JSON line per call, ClickHouse JSONEachRow-ready)
 tail -f events.ndjson
 ```

@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentledger.ai/schemas/events/llm_call.schema.json",
+  "title": "AgentLedger llm_call event",
+  "description": "Canonical activity record — one per gateway/SDK/connector LLM call. Single source of truth shared by every producer (gateway, SDK) and consumer (collector, workers, ClickHouse). Field names track the OpenTelemetry GenAI semantic conventions (gen_ai.*). SECURITY: additionalProperties is false by design so raw prompt/completion content can never enter the analytics pipeline (CLAUDE.md rule 2) — the schema has no content field and rejects unknown ones. Versioned: never change without a major bump and cross-team review (CLAUDE.md).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["call_id", "ts", "tenant_id"],
+  "properties": {
+    "kind": {
+      "description": "Event discriminator. Absent (gateway) or 'llm_call' both validate against this schema.",
+      "const": "llm_call"
+    },
+    "call_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "ts": { "type": "string", "format": "date-time" },
+
+    "tenant_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "team_id": { "type": "string", "maxLength": 128 },
+    "user_id": { "type": "string", "maxLength": 320 },
+    "app_id": { "type": "string", "maxLength": 128 },
+    "environment": { "type": "string", "maxLength": 32 },
+    "virtual_key_id": { "type": "string", "maxLength": 128 },
+
+    "agent_id": { "type": "string", "maxLength": 128 },
+    "run_id": { "type": "string", "maxLength": 128 },
+    "step_id": { "type": "string", "maxLength": 128 },
+
+    "provider": { "type": "string", "maxLength": 64 },
+    "request_model": { "type": "string", "maxLength": 128 },
+    "response_model": { "type": "string", "maxLength": 128 },
+    "operation_name": { "type": "string", "maxLength": 64 },
+
+    "input_tokens": { "type": "integer", "minimum": 0 },
+    "output_tokens": { "type": "integer", "minimum": 0 },
+    "cache_read_tokens": { "type": "integer", "minimum": 0 },
+    "cache_write_tokens": { "type": "integer", "minimum": 0 },
+    "cost_usd": { "type": "number", "minimum": 0 },
+
+    "latency_ms": { "type": "integer", "minimum": 0 },
+    "status_code": { "type": "integer", "minimum": 0, "maximum": 599 },
+    "status": {
+      "type": "string",
+      "enum": ["ok", "upstream_error", "blocked_dlp", "blocked_budget", "blocked_rate", "blocked_policy"]
+    },
+
+    "prompt_hash": { "type": "string", "maxLength": 64 },
+    "dlp_action": {
+      "type": "string",
+      "enum": ["allow", "log", "warn", "redact", "block"]
+    },
+    "dlp_findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "class": { "type": "string", "maxLength": 64 },
+          "category": { "type": "string", "maxLength": 64 },
+          "severity": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "count": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "risk_severity": { "type": "string", "enum": ["", "low", "medium", "high", "critical"] },
+    "streamed": { "type": "boolean" },
+
+    "source": {
+      "description": "Ingestion provenance for cross-source dedup.",
+      "type": "string",
+      "enum": ["gateway", "sdk", "provider_export"]
+    }
+  }
+}

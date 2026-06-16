@@ -1,0 +1,36 @@
+<?xml version="1.0"?>
+<!--
+  Dev storage policy for local ClickHouse.
+
+  deploy/clickhouse/001_events.sql declares hot/cold tiering on llm_calls
+  (`TTL toDateTime(ts) + INTERVAL 13 MONTH TO VOLUME 'cold'`). That requires the
+  active storage policy to define a volume named `cold`; the built-in default
+  policy does not, so without this config ClickHouse fails to start (exit 194,
+  "No such volume `cold`").
+
+  This redefines the `default` policy with two volumes on local disks so the
+  schema's tiered-storage intent is valid in dev. Production overrides this with
+  real object-storage / tiered disks (see docs/ARCHITECTURE.md §6).
+-->
+<clickhouse>
+    <storage_configuration>
+        <disks>
+            <cold_disk>
+                <type>local</type>
+                <path>/var/lib/clickhouse/cold/</path>
+            </cold_disk>
+        </disks>
+        <policies>
+            <default>
+                <volumes>
+                    <hot>
+                        <disk>default</disk>
+                    </hot>
+                    <cold>
+                        <disk>cold_disk</disk>
+                    </cold>
+                </volumes>
+            </default>
+        </policies>
+    </storage_configuration>
+</clickhouse>

@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<!--
+  Dev-only access override for local ClickHouse.
+
+  The official image's entrypoint DISABLES network access for the `default` user
+  when neither CLICKHOUSE_USER nor CLICKHOUSE_PASSWORD is set ("disabling network
+  access for user 'default'"), so every HTTP query returns 403
+  AUTHENTICATION_FAILED. This re-enables the default user with an empty password
+  and open networks so the collector→worker→ClickHouse pipeline works in local
+  dev. Mounted as users.d/zz-default.xml so it loads last and wins the merge.
+
+  DEV ONLY. Empty password + open networks is never used in production, which
+  authenticates per-service DB users with least-privilege grants (CLAUDE.md
+  rule 7). No secret lives here — an empty password is not a credential.
+-->
+<clickhouse>
+    <users>
+        <default>
+            <password></password>
+            <networks>
+                <ip>::/0</ip>
+            </networks>
+            <profile>default</profile>
+            <quota>default</quota>
+            <access_management>1</access_management>
+        </default>
+    </users>
+</clickhouse>
