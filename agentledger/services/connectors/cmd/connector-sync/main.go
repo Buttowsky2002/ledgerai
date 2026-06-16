@@ -103,6 +103,7 @@ func runLoop(ctx context.Context, syncer *connector.Syncer, every time.Duration)
 func registeredConnectors() []connector.Connector {
 	return []connector.Connector{
 		connector.NewOpenAIConnector(),
+		connector.NewAnthropicConnector(),
 	}
 }
 
