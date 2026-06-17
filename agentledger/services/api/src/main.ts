@@ -1,5 +1,6 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import cookieParser from 'cookie-parser';
 import { json } from 'express';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
@@ -35,6 +36,9 @@ async function bootstrap(): Promise<void> {
 
   // Cap request bodies (control-plane writes are small).
   app.use(json({ limit: process.env.AGENTLEDGER_API_BODY_LIMIT ?? '256kb' }));
+
+  // Parse cookies (refresh token + OIDC login transaction).
+  app.use(cookieParser());
 
   app.enableShutdownHooks();
 

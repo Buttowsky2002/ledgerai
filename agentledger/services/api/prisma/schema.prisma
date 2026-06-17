@@ -49,6 +49,7 @@ model Identity {
   teamId      String? @map("team_id") @db.Uuid
   managerId   String? @map("manager_id") @db.Uuid
   role        String @default("member")
+  apiRole     String @default("viewer") @map("api_role")
   source      String @default("manual")
   aliases     Json   @default("[]")
 

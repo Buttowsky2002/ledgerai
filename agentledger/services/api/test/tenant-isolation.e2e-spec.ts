@@ -26,6 +26,7 @@ describe('Tenant isolation (RLS)', () => {
 
   beforeAll(async () => {
     process.env.AGENTLEDGER_DEV_TRUST_HEADER = 'true';
+    process.env.AGENTLEDGER_JWT_SECRET = process.env.AGENTLEDGER_JWT_SECRET ?? 'test-secret';
     process.env.AGENTLEDGER_PG_DSN =
       process.env.AGENTLEDGER_PG_DSN ??
       'postgres://agentledger_api:dev_only_change_me@localhost:5432/agentledger?sslmode=disable';
@@ -76,10 +77,16 @@ describe('Tenant isolation (RLS)', () => {
     expect(names).not.toContain(teamBName);
   });
 
-  it('fails closed: no tenant bound returns zero rows', async () => {
+  it('fails closed at the API edge: unauthenticated request is rejected (401)', async () => {
+    // Task 2: a global AuthGuard now rejects requests with no principal (previously
+    // this returned 200/[]). Auth fails closed before any handler runs.
     const none = await request(app.getHttpServer()).get('/v1/teams');
-    expect(none.status).toBe(200);
-    expect(none.body).toEqual([]);
+    expect(none.status).toBe(401);
+  });
+
+  it('fails closed at the DB: a query with no tenant bound returns zero rows (RLS)', async () => {
+    const rows = await prisma.withTenant(null, (tx) => tx.team.findMany());
+    expect(rows).toEqual([]);
   });
 
   it('does not leak tenant context across pooled connections (A then B, repeated)', async () => {

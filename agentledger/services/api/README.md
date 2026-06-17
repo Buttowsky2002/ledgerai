@@ -4,9 +4,9 @@ NestJS + Prisma API over the Postgres control plane (tenants, identities, apps,
 agents, virtual keys, policies, price book, budgets, allocation rules, connectors,
 ROI templates, audit log). This is the TypeScript counterpart to the Go data plane.
 
-This slice (Phase 3, task 1) is the **foundation + tenant-isolation spine**: the
-service skeleton plus Postgres row-level security. AuthN/AuthZ, full CRUD,
-analytics endpoints, OpenAPI/TS-client, and the dashboard land in later tasks.
+Tasks 1–2 are in: the **foundation + tenant-isolation spine** (RLS) and
+**authentication + RBAC** (OIDC login, session JWTs, viewer/analyst/admin roles).
+Full CRUD, analytics endpoints, OpenAPI/TS-client, and the dashboard land in later tasks.
 
 ```
 request ─▶ TenantMiddleware (binds tenant ctx) ─▶ handler
@@ -44,14 +44,39 @@ AGENTLEDGER_DEV_TRUST_HEADER=true \
 npm run start:dev
 ```
 
+## Authentication & RBAC
+
+```
+GET /auth/login/:provider ─▶ OIDC provider ─▶ GET /auth/callback/:provider
+   (state+nonce+PKCE in            (Google/MS)      │ verify id_token
+    a signed httpOnly cookie)                       │ auth_lookup_identity(email)  ← SECURITY DEFINER
+                                                    ▼
+              access JWT (15m, body) + refresh JWT (7d, httpOnly cookie)
+                                                    │
+  request: Authorization: Bearer <access> ─▶ AuthMiddleware verifies → binds {tenantId,userId,role}
+                                           ─▶ AuthGuard (401 if none) ─▶ RolesGuard (@Roles) ─▶ handler → RLS
+```
+
+- Access token: short-lived (~15m), sent as `Authorization: Bearer`. Refresh token: ~7 days,
+  httpOnly Secure SameSite=strict cookie; `POST /auth/refresh` mints a new access token.
+- API roles `viewer | analyst | admin` come from `identities.api_role` (migration 003),
+  carried in the JWT and enforced by `@Roles()` (admin ⊇ analyst ⊇ viewer).
+- Unknown SSO emails are rejected (no auto-provisioning). Live Google/Microsoft login needs
+  provider client id/secret env vars; without them those providers are unavailable.
+
 ## Endpoints
 
-| Path          | Purpose                                            |
-|---------------|----------------------------------------------------|
-| `GET /healthz`| Liveness.                                          |
-| `GET /readyz` | Readiness — pings Postgres.                        |
-| `GET /metrics`| Prometheus text exposition.                        |
-| `GET /v1/teams` | Teams visible to the current tenant (RLS-scoped). |
+| Path          | Auth | Purpose                                            |
+|---------------|------|----------------------------------------------------|
+| `GET /healthz`| public | Liveness.                                        |
+| `GET /readyz` | public | Readiness — pings Postgres.                      |
+| `GET /metrics`| public | Prometheus text exposition.                      |
+| `GET /auth/login/:provider` | public | Start OIDC login (redirect to provider). |
+| `GET /auth/callback/:provider` | public | OIDC callback → issues tokens.        |
+| `POST /auth/refresh` | refresh cookie | Mint a fresh access token.              |
+| `POST /auth/logout` | public | Clear the refresh cookie.                        |
+| `GET /auth/me` | bearer | Current principal.                                |
+| `GET /v1/teams` | bearer, ≥analyst | Teams visible to the current tenant (RLS-scoped). |
 
 ## Environment variables
 
@@ -60,7 +85,13 @@ npm run start:dev
 | `AGENTLEDGER_PG_DSN` | _(required)_ | Postgres DSN. Use the `agentledger_api` role (non-superuser) so RLS applies. |
 | `AGENTLEDGER_API_ADDR` | `:8094` | Listen address (Go-style; the port is parsed out). |
 | `AGENTLEDGER_API_BODY_LIMIT` | `256kb` | Max request body size. |
-| `AGENTLEDGER_DEV_TRUST_HEADER` | _(unset)_ | **Dev only.** When `true`, the tenant is read from the `x-tenant-id` header. Replaced by JWT claims in task 2. |
+| `AGENTLEDGER_JWT_SECRET` | _(required)_ | HS256 signing secret for session JWTs. |
+| `AGENTLEDGER_JWT_ACCESS_TTL` | `15m` | Access-token lifetime. |
+| `AGENTLEDGER_JWT_REFRESH_TTL` | `7d` | Refresh-token lifetime. |
+| `AGENTLEDGER_OIDC_REDIRECT_BASE` | `http://localhost:8094` | Base URL for OIDC callback redirect URIs. |
+| `AGENTLEDGER_OIDC_GOOGLE_CLIENT_ID` / `_CLIENT_SECRET` | _(unset)_ | Google OIDC client; unset → provider unavailable. |
+| `AGENTLEDGER_OIDC_MICROSOFT_CLIENT_ID` / `_CLIENT_SECRET` | _(unset)_ | Microsoft OIDC client; unset → provider unavailable. |
+| `AGENTLEDGER_DEV_TRUST_HEADER` | _(unset)_ | **Dev only.** When `true`, an `x-tenant-id` header (no Bearer) binds a dev `admin` principal. |
 
 ## Test
 
