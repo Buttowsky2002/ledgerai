@@ -65,9 +65,13 @@ describe('Auth + RBAC', () => {
     expect(res.body.map((t: { name: string }) => t.name)).toEqual([teamName]);
   });
 
-  it('forbids a viewer on an analyst-gated route (403)', async () => {
+  it('forbids a viewer on an admin-gated write (403)', async () => {
+    // Reads are viewer+; writes are admin-only (task 3). A viewer POST is forbidden.
     const token = await jwt.mintAccess({ userId: randomUUID(), tenantId: tenantA, role: 'viewer' });
-    const res = await request(app.getHttpServer()).get('/v1/teams').set(bearer(token));
+    const res = await request(app.getHttpServer())
+      .post('/v1/teams')
+      .set(bearer(token))
+      .send({ name: 'denied' });
     expect(res.status).toBe(403);
   });
 

@@ -4,9 +4,10 @@ NestJS + Prisma API over the Postgres control plane (tenants, identities, apps,
 agents, virtual keys, policies, price book, budgets, allocation rules, connectors,
 ROI templates, audit log). This is the TypeScript counterpart to the Go data plane.
 
-Tasks 1–2 are in: the **foundation + tenant-isolation spine** (RLS) and
-**authentication + RBAC** (OIDC login, session JWTs, viewer/analyst/admin roles).
-Full CRUD, analytics endpoints, OpenAPI/TS-client, and the dashboard land in later tasks.
+Tasks 1–3 are in: the **foundation + tenant-isolation spine** (RLS),
+**authentication + RBAC** (OIDC login, session JWTs, viewer/analyst/admin roles), and
+**CRUD for all control-plane resources with an audit trail**. Analytics endpoints,
+OpenAPI/TS-client, and the dashboard land in later tasks.
 
 ```
 request ─▶ TenantMiddleware (binds tenant ctx) ─▶ handler
@@ -76,7 +77,27 @@ GET /auth/login/:provider ─▶ OIDC provider ─▶ GET /auth/callback/:provid
 | `POST /auth/refresh` | refresh cookie | Mint a fresh access token.              |
 | `POST /auth/logout` | public | Clear the refresh cookie.                        |
 | `GET /auth/me` | bearer | Current principal.                                |
-| `GET /v1/teams` | bearer, ≥analyst | Teams visible to the current tenant (RLS-scoped). |
+
+## Resources (CRUD)
+
+All under `/v1/`, tenant-scoped by RLS, **reads require `viewer`, writes require `admin`**,
+and **every create/update/delete writes an `audit_log` row** (`actor`/`action`/`object`/
+`{before,after}`, in the same transaction as the change). Standard verbs per resource:
+`GET` (list, `?limit`/`?offset` — default 50, max 100), `GET /:id`, `POST`, `PATCH /:id`,
+`DELETE /:id`. A foreign-tenant id returns 404 (RLS).
+
+| Resource | Path | Notes |
+|----------|------|-------|
+| Teams | `/v1/teams` | |
+| Identities | `/v1/identities` | `api_role` here drives RBAC. |
+| Apps | `/v1/apps` | |
+| Agents | `/v1/agents` | |
+| Policies | `/v1/policies` | DLP/budget/model_allow/approval. |
+| Budgets | `/v1/budgets` | |
+| Allocation rules | `/v1/allocation-rules` | |
+| Virtual keys | `/v1/virtual-keys` | `POST` returns the plaintext `alk_…` **once**; only the SHA-256 hash is stored; `DELETE` = revoke. |
+| Price book | `/v1/price-book` | **Global** (no tenant); reads viewer, writes admin. |
+| Tenant | `/v1/tenant` | `GET`/`PATCH` the caller's **own** tenant (no create/delete). |
 
 ## Environment variables
 

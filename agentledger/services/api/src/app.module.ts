@@ -6,10 +6,19 @@ import { AuthGuard } from './auth/auth.guard';
 import { AuthMiddleware } from './auth/auth.middleware';
 import { AuthModule } from './auth/auth.module';
 import { RolesGuard } from './auth/roles.guard';
+import { AgentsModule } from './agents/agents.module';
+import { AllocationRulesModule } from './allocation-rules/allocation-rules.module';
+import { AppsModule } from './apps/apps.module';
+import { BudgetsModule } from './budgets/budgets.module';
 import { HealthModule } from './health/health.module';
+import { IdentitiesModule } from './identities/identities.module';
 import { MetricsModule } from './metrics/metrics.module';
+import { PoliciesModule } from './policies/policies.module';
+import { PriceBookModule } from './price-book/price-book.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { TeamsModule } from './teams/teams.module';
+import { TenantModule } from './tenant/tenant.module';
+import { VirtualKeysModule } from './virtual-keys/virtual-keys.module';
 
 @Module({
   imports: [
@@ -35,7 +44,17 @@ import { TeamsModule } from './teams/teams.module';
     AuthModule,
     HealthModule,
     MetricsModule,
+    // Control-plane resources (CRUD + audit; RLS-scoped, admin-write/viewer-read).
     TeamsModule,
+    IdentitiesModule,
+    AppsModule,
+    AgentsModule,
+    PoliciesModule,
+    BudgetsModule,
+    AllocationRulesModule,
+    VirtualKeysModule,
+    PriceBookModule,
+    TenantModule,
   ],
   providers: [
     // Guard order matters: rate-limit → authenticate → authorize.
