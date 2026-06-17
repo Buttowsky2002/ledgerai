@@ -1,0 +1,12 @@
+-- DEV-ONLY — NOT a numbered migration. Mounted into the local Postgres init by
+-- docker-compose only. It gives the least-privilege `agentledger_api` role
+-- (created NOLOGIN in 002_rls.sql) a login and a throwaway dev password, so the
+-- API can connect as a NON-superuser and therefore be subject to RLS.
+--
+-- This matters: the bootstrap `agentledger` user is a SUPERUSER and would bypass
+-- RLS entirely. The API must connect as `agentledger_api`. In production the
+-- login/password are granted by a secret manager, never from the repo.
+--
+-- The password here is the same obvious dev placeholder as POSTGRES_PASSWORD in
+-- docker-compose.yml — not a secret.
+ALTER ROLE agentledger_api WITH LOGIN PASSWORD 'dev_only_change_me';

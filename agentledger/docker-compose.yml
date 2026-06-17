@@ -128,6 +128,38 @@ services:
       clickhouse: { condition: service_healthy }
       redis: { condition: service_healthy }
 
+  # Dev-only one-shot: grants the least-privilege agentledger_api role (created
+  # NOLOGIN in 002_rls.sql) a login + throwaway dev password, so the API connects
+  # as a NON-superuser and is therefore subject to RLS. Runs after Postgres is
+  # healthy and exits; prod grants the login via a secret manager instead.
+  pg-dev-init:
+    image: postgres:16-alpine
+    environment:
+      PGPASSWORD: dev_only_change_me
+    volumes:
+      - ./deploy/postgres-dev/dev_api_role.sql:/dev_api_role.sql:ro
+    # Wait for real TCP availability before applying: Postgres' healthcheck can
+    # pass during first-init (socket-only temp server) before it listens on TCP.
+    entrypoint:
+      ["sh", "-c", "until psql -h postgres -U agentledger -d agentledger -c 'SELECT 1' >/dev/null 2>&1; do echo 'waiting for postgres tcp'; sleep 1; done; psql -h postgres -U agentledger -d agentledger -v ON_ERROR_STOP=1 -f /dev_api_role.sql"]
+    restart: "no"
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  api:
+    build: ./services/api
+    environment:
+      # Connects as the least-privilege agentledger_api role (NON-superuser, so
+      # it is subject to RLS). The bootstrap `agentledger` user would bypass RLS.
+      AGENTLEDGER_PG_DSN: postgres://agentledger_api:dev_only_change_me@postgres:5432/agentledger?sslmode=disable
+      AGENTLEDGER_API_ADDR: ":8094"
+      # DEV ONLY: trust x-tenant-id header until OIDC/JWT (Phase 3 task 2) lands.
+      AGENTLEDGER_DEV_TRUST_HEADER: "true"
+    ports: ["8094:8094"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      pg-dev-init: { condition: service_completed_successfully }
+
 volumes:
   pg_data:
   ch_data:
