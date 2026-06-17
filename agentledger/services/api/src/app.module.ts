@@ -8,8 +8,10 @@ import { AuthModule } from './auth/auth.module';
 import { RolesGuard } from './auth/roles.guard';
 import { AgentsModule } from './agents/agents.module';
 import { AllocationRulesModule } from './allocation-rules/allocation-rules.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 import { AppsModule } from './apps/apps.module';
 import { BudgetsModule } from './budgets/budgets.module';
+import { ClickHouseModule } from './clickhouse/clickhouse.module';
 import { HealthModule } from './health/health.module';
 import { IdentitiesModule } from './identities/identities.module';
 import { MetricsModule } from './metrics/metrics.module';
@@ -41,6 +43,7 @@ import { VirtualKeysModule } from './virtual-keys/virtual-keys.module';
     // Global default rate limit; auth endpoints tighten it further (rule 6).
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
     PrismaModule,
+    ClickHouseModule,
     AuthModule,
     HealthModule,
     MetricsModule,
@@ -55,6 +58,7 @@ import { VirtualKeysModule } from './virtual-keys/virtual-keys.module';
     VirtualKeysModule,
     PriceBookModule,
     TenantModule,
+    AnalyticsModule,
   ],
   providers: [
     // Guard order matters: rate-limit → authenticate → authorize.

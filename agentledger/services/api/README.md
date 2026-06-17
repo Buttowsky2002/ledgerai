@@ -4,10 +4,10 @@ NestJS + Prisma API over the Postgres control plane (tenants, identities, apps,
 agents, virtual keys, policies, price book, budgets, allocation rules, connectors,
 ROI templates, audit log). This is the TypeScript counterpart to the Go data plane.
 
-Tasks 1–3 are in: the **foundation + tenant-isolation spine** (RLS),
-**authentication + RBAC** (OIDC login, session JWTs, viewer/analyst/admin roles), and
-**CRUD for all control-plane resources with an audit trail**. Analytics endpoints,
-OpenAPI/TS-client, and the dashboard land in later tasks.
+Tasks 1–4 are in: the **foundation + tenant-isolation spine** (RLS),
+**authentication + RBAC** (OIDC login, session JWTs, viewer/analyst/admin roles),
+**CRUD for all control-plane resources with an audit trail**, and **read-only analytics over
+the ClickHouse MVs**. OpenAPI/TS-client and the dashboard land in later tasks.
 
 ```
 request ─▶ TenantMiddleware (binds tenant ctx) ─▶ handler
@@ -99,11 +99,29 @@ and **every create/update/delete writes an `audit_log` row** (`actor`/`action`/`
 | Price book | `/v1/price-book` | **Global** (no tenant); reads viewer, writes admin. |
 | Tenant | `/v1/tenant` | `GET`/`PATCH` the caller's **own** tenant (no create/delete). |
 
+## Analytics (read-only)
+
+`GET /v1/analytics/*`, `viewer`+, served from **ClickHouse materialized views only** (never
+raw `llm_calls`). Tenant isolation is enforced by a `tenant_id` filter **bound from the JWT**
+(ClickHouse has no RLS); all inputs are parameterized. Date ranges via `?from`/`?to` (ISO,
+default last 30 days).
+
+| Path | View | Backs |
+|------|------|-------|
+| `/analytics/spend` | `spend_daily` | Executive spend (daily series). |
+| `/analytics/allocation?dimension=team\|app\|agent` | `spend_daily` / `spend_hourly_by_key` | Allocation. |
+| `/analytics/model-mix` | `spend_daily` | Model mix. |
+| `/analytics/burndown?virtualKeyId=` | `spend_hourly_by_key` | Budget burn-down (hourly + cumulative). |
+| `/analytics/risk` | `risk_daily` | Risk events. |
+| `/analytics/unit-economics?outcomeType=` | `v_unit_economics` | Cost per outcome. |
+| `/analytics/agents/:agentId` | `spend_hourly_by_key` + `agent_runs` | Agent detail. |
+
 ## Environment variables
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `AGENTLEDGER_PG_DSN` | _(required)_ | Postgres DSN. Use the `agentledger_api` role (non-superuser) so RLS applies. |
+| `AGENTLEDGER_CLICKHOUSE_URL` / `_DB` / `_USER` / `_PASSWORD` | `http://localhost:8123` / `agentledger` / `default` / _(empty)_ | ClickHouse connection for analytics. |
 | `AGENTLEDGER_API_ADDR` | `:8094` | Listen address (Go-style; the port is parsed out). |
 | `AGENTLEDGER_API_BODY_LIMIT` | `256kb` | Max request body size. |
 | `AGENTLEDGER_JWT_SECRET` | _(required)_ | HS256 signing secret for session JWTs. |

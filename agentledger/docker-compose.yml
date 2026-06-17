@@ -152,6 +152,8 @@ services:
       # Connects as the least-privilege agentledger_api role (NON-superuser, so
       # it is subject to RLS). The bootstrap `agentledger` user would bypass RLS.
       AGENTLEDGER_PG_DSN: postgres://agentledger_api:dev_only_change_me@postgres:5432/agentledger?sslmode=disable
+      AGENTLEDGER_CLICKHOUSE_URL: http://clickhouse:8123
+      AGENTLEDGER_CLICKHOUSE_DB: agentledger
       AGENTLEDGER_API_ADDR: ":8094"
       # Session-JWT signing secret (dev placeholder; prod injects via secret manager).
       AGENTLEDGER_JWT_SECRET: dev_only_change_me_jwt
@@ -168,6 +170,7 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       pg-dev-init: { condition: service_completed_successfully }
+      clickhouse: { condition: service_healthy }
 
 volumes:
   pg_data:
