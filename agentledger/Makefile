@@ -1,4 +1,4 @@
-.PHONY: test test-go test-api e2e build build-api build-shared-types openapi up down lint lint-api api-install install-hooks security-check audit deps
+.PHONY: test test-go test-api e2e build build-api build-shared-types build-dashboard openapi delete-tenant up down lint lint-api api-install install-hooks security-check audit deps
 
 GATEWAY_DIR      := services/gateway
 COLLECTOR_DIR    := services/collector
@@ -6,6 +6,7 @@ WORKERS_DIR      := services/workers
 CONNECTORS_DIR   := services/connectors
 API_DIR          := services/api
 SHARED_TYPES_DIR := packages/shared-types
+DASHBOARD_DIR    := apps/dashboard
 GO_SERVICES      := $(GATEWAY_DIR) $(COLLECTOR_DIR) $(WORKERS_DIR) $(CONNECTORS_DIR)
 HOOKS_DIR      := .githooks
 GIT_HOOKS      := $(shell git rev-parse --git-dir 2>/dev/null)/hooks
@@ -32,7 +33,7 @@ e2e:
 	cd $(API_DIR) && npm run test:e2e
 
 # ── Build ────────────────────────────────────────────────────────────────────
-build: build-api build-shared-types
+build: build-api build-shared-types build-dashboard
 	cd $(GATEWAY_DIR) && CGO_ENABLED=0 go build -o ../../bin/gateway .
 	cd $(COLLECTOR_DIR) && CGO_ENABLED=0 go build -o ../../bin/collector .
 	cd $(WORKERS_DIR) && CGO_ENABLED=0 go build -o ../../bin/ch-insert ./cmd/ch-insert
@@ -45,15 +46,25 @@ build-api:
 build-shared-types:
 	cd $(SHARED_TYPES_DIR) && npm run build
 
+# Dashboard build (Next.js); needs shared-types built first (file: dependency).
+build-dashboard:
+	cd $(DASHBOARD_DIR) && npm run build
+
 # Regenerate the published OpenAPI spec (docs/api/openapi.json) and the TS client.
 openapi:
 	cd $(API_DIR) && npm run generate:openapi
 	cd $(SHARED_TYPES_DIR) && npm run generate && npm run build
 
+# Tenant data-deletion job (rule 14). Destructive: Postgres cascade + ClickHouse
+# ALTER DELETE. Usage: make delete-tenant TENANT=<tenant-uuid>
+delete-tenant:
+	cd $(API_DIR) && node dist/cli/delete-tenant.js $(TENANT)
+
 # Install API toolchain (CI runs this before lint/test).
 api-install:
 	cd $(API_DIR) && npm ci
 	cd $(SHARED_TYPES_DIR) && npm ci
+	cd $(DASHBOARD_DIR) && npm ci
 
 # ── Local stack ──────────────────────────────────────────────────────────────
 up:

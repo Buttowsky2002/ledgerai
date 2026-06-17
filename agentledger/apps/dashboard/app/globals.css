@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-ink text-gray-100;
+}
+
+/* Dense, data-first table defaults. */
+.table {
+  @apply w-full text-sm border-collapse;
+}
+.table th {
+  @apply text-left font-medium text-muted px-3 py-2 border-b border-edge;
+}
+.table td {
+  @apply px-3 py-2 border-b border-edge/60 tabular-nums;
+}
+.table tr:hover td {
+  @apply bg-white/5;
+}

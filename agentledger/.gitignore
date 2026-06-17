@@ -27,6 +27,10 @@ coverage/
 .env
 !.env.example
 
+# Next.js (apps/dashboard)
+.next/
+next-env.d.ts
+
 # Editor
 .idea/
 .vscode/

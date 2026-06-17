@@ -46,6 +46,31 @@ export class ClickHouseService {
   }
 
   /**
+   * Execute a statement that returns no result set (DDL / INSERT / ALTER … DELETE).
+   * Unlike `query`, it does not request or parse a JSON body (ALTER returns empty).
+   */
+  async command(sql: string, params: Record<string, ChParam> = {}): Promise<void> {
+    const qs = new URLSearchParams({ database: this.db });
+    for (const [k, v] of Object.entries(params)) {
+      qs.set(`param_${k}`, String(v));
+    }
+    const res = await fetch(`${this.url}/?${qs.toString()}`, {
+      method: 'POST',
+      headers: {
+        'X-ClickHouse-User': this.user,
+        ...(this.password ? { 'X-ClickHouse-Key': this.password } : {}),
+        'Content-Type': 'text/plain',
+      },
+      body: sql,
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      this.logger.error(`clickhouse command failed (${res.status})`);
+      throw new Error(`clickhouse ${res.status}: ${text.slice(0, 300)}`);
+    }
+  }
+
+  /**
    * Tenant-scoped query: binds `param_tenant` from the request principal. The SQL
    * MUST filter `WHERE tenant_id = {tenant:String}`. Fails closed if no principal.
    */
