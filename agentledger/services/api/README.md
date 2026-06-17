@@ -4,10 +4,20 @@ NestJS + Prisma API over the Postgres control plane (tenants, identities, apps,
 agents, virtual keys, policies, price book, budgets, allocation rules, connectors,
 ROI templates, audit log). This is the TypeScript counterpart to the Go data plane.
 
-Tasks 1–4 are in: the **foundation + tenant-isolation spine** (RLS),
+Tasks 1–5 are in: the **foundation + tenant-isolation spine** (RLS),
 **authentication + RBAC** (OIDC login, session JWTs, viewer/analyst/admin roles),
-**CRUD for all control-plane resources with an audit trail**, and **read-only analytics over
-the ClickHouse MVs**. OpenAPI/TS-client and the dashboard land in later tasks.
+**CRUD for all control-plane resources with an audit trail**, **read-only analytics over
+the ClickHouse MVs**, and a **generated OpenAPI spec + typed TS client**. The dashboard lands
+in the next task.
+
+## OpenAPI / typed client
+
+- Swagger UI: **`/docs`** · spec JSON: **`/docs-json`** (both public).
+- Published spec: `docs/api/openapi.json` (committed). Regenerate with
+  `npm run generate:openapi` (uses Nest preview mode — no DB needed).
+- Typed client + types: `packages/shared-types` (`@agentledger/shared-types`) — generated from
+  the spec (`openapi-typescript` + `openapi-fetch`) and the event schema
+  (`json-schema-to-typescript`). From the repo root, `make openapi` refreshes both.
 
 ```
 request ─▶ TenantMiddleware (binds tenant ctx) ─▶ handler

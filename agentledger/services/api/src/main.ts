@@ -1,10 +1,12 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import { json } from 'express';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { ProblemDetailsFilter } from './common/problem-details.filter';
+import { buildOpenApiDocument } from './swagger';
 
 /** Parse a Go-style listen address (":8094") or a bare port; default 8094. */
 function resolvePort(): number {
@@ -39,6 +41,9 @@ async function bootstrap(): Promise<void> {
 
   // Parse cookies (refresh token + OIDC login transaction).
   app.use(cookieParser());
+
+  // OpenAPI: Swagger UI at /docs, spec JSON at /docs-json.
+  SwaggerModule.setup('docs', app, buildOpenApiDocument(app));
 
   app.enableShutdownHooks();
 

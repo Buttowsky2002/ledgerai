@@ -1,0 +1,32 @@
+{
+  "name": "@agentledger/shared-types",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Generated TypeScript types (OpenAPI + event JSON Schema) and a typed client for the AgentLedger control-plane API.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "src"],
+  "scripts": {
+    "generate:api": "openapi-typescript ../../docs/api/openapi.json -o src/openapi.ts",
+    "generate:events": "json2ts -i ../../schemas/events/llm_call.schema.json -o src/events.ts",
+    "generate": "npm run generate:api && npm run generate:events",
+    "build": "tsc -p tsconfig.json",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "openapi-fetch": "^0.13.1"
+  },
+  "devDependencies": {
+    "json-schema-to-typescript": "^15.0.4",
+    "openapi-typescript": "^7.4.4",
+    "typescript": "^5.6.3"
+  }
+}

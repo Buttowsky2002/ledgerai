@@ -1,11 +1,12 @@
-.PHONY: test test-go test-api e2e build build-api up down lint lint-api api-install install-hooks security-check audit deps
+.PHONY: test test-go test-api e2e build build-api build-shared-types openapi up down lint lint-api api-install install-hooks security-check audit deps
 
-GATEWAY_DIR    := services/gateway
-COLLECTOR_DIR  := services/collector
-WORKERS_DIR    := services/workers
-CONNECTORS_DIR := services/connectors
-API_DIR        := services/api
-GO_SERVICES    := $(GATEWAY_DIR) $(COLLECTOR_DIR) $(WORKERS_DIR) $(CONNECTORS_DIR)
+GATEWAY_DIR      := services/gateway
+COLLECTOR_DIR    := services/collector
+WORKERS_DIR      := services/workers
+CONNECTORS_DIR   := services/connectors
+API_DIR          := services/api
+SHARED_TYPES_DIR := packages/shared-types
+GO_SERVICES      := $(GATEWAY_DIR) $(COLLECTOR_DIR) $(WORKERS_DIR) $(CONNECTORS_DIR)
 HOOKS_DIR      := .githooks
 GIT_HOOKS      := $(shell git rev-parse --git-dir 2>/dev/null)/hooks
 
@@ -24,14 +25,14 @@ test-api:
 	@echo "==> test $(API_DIR)"
 	cd $(API_DIR) && npm test
 
-# Cross-tenant isolation acceptance test (security rule 3). Brings up Postgres
-# (migrations 001 + 002 auto-apply), then drives the API as two tenants.
+# API e2e: tenant isolation, auth/RBAC, CRUD+audit, and analytics. Needs Postgres
+# (migrations + dev role) and ClickHouse (MVs for analytics).
 e2e:
-	docker compose up -d postgres pg-dev-init
+	docker compose up -d postgres pg-dev-init clickhouse
 	cd $(API_DIR) && npm run test:e2e
 
 # ── Build ────────────────────────────────────────────────────────────────────
-build: build-api
+build: build-api build-shared-types
 	cd $(GATEWAY_DIR) && CGO_ENABLED=0 go build -o ../../bin/gateway .
 	cd $(COLLECTOR_DIR) && CGO_ENABLED=0 go build -o ../../bin/collector .
 	cd $(WORKERS_DIR) && CGO_ENABLED=0 go build -o ../../bin/ch-insert ./cmd/ch-insert
@@ -41,9 +42,18 @@ build: build-api
 build-api:
 	cd $(API_DIR) && npm run build
 
+build-shared-types:
+	cd $(SHARED_TYPES_DIR) && npm run build
+
+# Regenerate the published OpenAPI spec (docs/api/openapi.json) and the TS client.
+openapi:
+	cd $(API_DIR) && npm run generate:openapi
+	cd $(SHARED_TYPES_DIR) && npm run generate && npm run build
+
 # Install API toolchain (CI runs this before lint/test).
 api-install:
 	cd $(API_DIR) && npm ci
+	cd $(SHARED_TYPES_DIR) && npm ci
 
 # ── Local stack ──────────────────────────────────────────────────────────────
 up:
