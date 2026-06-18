@@ -1,27 +1,70 @@
-.PHONY: test build up down lint install-hooks security-check audit deps
+.PHONY: test test-go test-api e2e build build-api build-shared-types build-dashboard openapi delete-tenant up down lint lint-api api-install install-hooks security-check audit deps
 
-GATEWAY_DIR    := services/gateway
-COLLECTOR_DIR  := services/collector
-WORKERS_DIR    := services/workers
-CONNECTORS_DIR := services/connectors
-GO_SERVICES    := $(GATEWAY_DIR) $(COLLECTOR_DIR) $(WORKERS_DIR) $(CONNECTORS_DIR)
+GATEWAY_DIR      := services/gateway
+COLLECTOR_DIR    := services/collector
+WORKERS_DIR      := services/workers
+CONNECTORS_DIR   := services/connectors
+API_DIR          := services/api
+SHARED_TYPES_DIR := packages/shared-types
+DASHBOARD_DIR    := apps/dashboard
+GO_SERVICES      := $(GATEWAY_DIR) $(COLLECTOR_DIR) $(WORKERS_DIR) $(CONNECTORS_DIR)
 HOOKS_DIR      := .githooks
 GIT_HOOKS      := $(shell git rev-parse --git-dir 2>/dev/null)/hooks
 
 # ── Tests ────────────────────────────────────────────────────────────────────
-test:
+# `test` is infra-free (unit). The RLS cross-tenant isolation suite needs a live
+# Postgres and runs under `e2e`.
+test: test-go test-api
+
+test-go:
 	@for d in $(GO_SERVICES); do \
 		echo "==> test $$d"; \
 		(cd $$d && go vet ./... && go test -race ./...) || exit 1; \
 	done
 
+test-api:
+	@echo "==> test $(API_DIR)"
+	cd $(API_DIR) && npm test
+
+# API e2e: tenant isolation, auth/RBAC, CRUD+audit, and analytics. Needs Postgres
+# (migrations + dev role) and ClickHouse (MVs for analytics).
+e2e:
+	docker compose up -d postgres pg-dev-init clickhouse
+	cd $(API_DIR) && npm run test:e2e
+
 # ── Build ────────────────────────────────────────────────────────────────────
-build:
+build: build-api build-shared-types build-dashboard
 	cd $(GATEWAY_DIR) && CGO_ENABLED=0 go build -o ../../bin/gateway .
 	cd $(COLLECTOR_DIR) && CGO_ENABLED=0 go build -o ../../bin/collector .
 	cd $(WORKERS_DIR) && CGO_ENABLED=0 go build -o ../../bin/ch-insert ./cmd/ch-insert
 	cd $(WORKERS_DIR) && CGO_ENABLED=0 go build -o ../../bin/reconcile ./cmd/reconcile
 	cd $(CONNECTORS_DIR) && CGO_ENABLED=0 go build -o ../../bin/connector-sync ./cmd/connector-sync
+
+build-api:
+	cd $(API_DIR) && npm run build
+
+build-shared-types:
+	cd $(SHARED_TYPES_DIR) && npm run build
+
+# Dashboard build (Next.js); needs shared-types built first (file: dependency).
+build-dashboard:
+	cd $(DASHBOARD_DIR) && npm run build
+
+# Regenerate the published OpenAPI spec (docs/api/openapi.json) and the TS client.
+openapi:
+	cd $(API_DIR) && npm run generate:openapi
+	cd $(SHARED_TYPES_DIR) && npm run generate && npm run build
+
+# Tenant data-deletion job (rule 14). Destructive: Postgres cascade + ClickHouse
+# ALTER DELETE. Usage: make delete-tenant TENANT=<tenant-uuid>
+delete-tenant:
+	cd $(API_DIR) && node dist/cli/delete-tenant.js $(TENANT)
+
+# Install API toolchain (CI runs this before lint/test).
+api-install:
+	cd $(API_DIR) && npm ci
+	cd $(SHARED_TYPES_DIR) && npm ci
+	cd $(DASHBOARD_DIR) && npm ci
 
 # ── Local stack ──────────────────────────────────────────────────────────────
 up:
@@ -31,11 +74,15 @@ down:
 	docker compose down
 
 # ── Lint ─────────────────────────────────────────────────────────────────────
-lint:
+lint: lint-api
 	@for d in $(GO_SERVICES); do \
 		echo "==> lint $$d"; \
 		(cd $$d && gofmt -l . && go vet ./...) || exit 1; \
 	done
+
+lint-api:
+	@echo "==> lint $(API_DIR)"
+	cd $(API_DIR) && npm run lint
 
 # ── Pre-commit hook installation ─────────────────────────────────────────────
 # Copies the versioned hook into .git/hooks and marks it executable.

@@ -1,0 +1,204 @@
+// AgentLedger control-plane Prisma schema.
+//
+// IMPORTANT: This schema is a *typed query client only*. The source of truth for
+// the database structure is the forward-only SQL in deploy/postgres/*.sql
+// (repo rule: numbered, forward-only migrations — never `prisma migrate`).
+// Every model below mirrors deploy/postgres/001_core.sql; keep them in lockstep.
+// FK columns are modelled as scalars (no Prisma relations yet) to keep this slice
+// minimal — relations land with the CRUD task.
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("AGENTLEDGER_PG_DSN")
+}
+
+model Tenant {
+  tenantId        String   @id @default(dbgenerated("gen_random_uuid()")) @map("tenant_id") @db.Uuid
+  name            String
+  region          String   @default("us")
+  plan            String   @default("trial")
+  retentionDays   Int      @default(396) @map("retention_days")
+  contentCapture  String   @default("metadata_only") @map("content_capture")
+  complianceFlags Json     @default("{}") @map("compliance_flags")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("tenants")
+}
+
+model Team {
+  teamId       String  @id @default(dbgenerated("gen_random_uuid()")) @map("team_id") @db.Uuid
+  tenantId     String  @map("tenant_id") @db.Uuid
+  name         String
+  costCenter   String? @map("cost_center")
+  parentTeamId String? @map("parent_team_id") @db.Uuid
+
+  @@unique([tenantId, name])
+  @@map("teams")
+}
+
+model Identity {
+  userId      String @id @default(dbgenerated("gen_random_uuid()")) @map("user_id") @db.Uuid
+  tenantId    String @map("tenant_id") @db.Uuid
+  email       String
+  displayName String? @map("display_name")
+  teamId      String? @map("team_id") @db.Uuid
+  managerId   String? @map("manager_id") @db.Uuid
+  role        String @default("member")
+  apiRole     String @default("viewer") @map("api_role")
+  source      String @default("manual")
+  aliases     Json   @default("[]")
+
+  @@unique([tenantId, email])
+  @@map("identities")
+}
+
+model App {
+  appId            String  @id @default(dbgenerated("gen_random_uuid()")) @map("app_id") @db.Uuid
+  tenantId         String  @map("tenant_id") @db.Uuid
+  name             String
+  appType          String  @default("service") @map("app_type")
+  ownerUserId      String? @map("owner_user_id") @db.Uuid
+  environment      String  @default("prod")
+  approvedStatus   String  @default("pending") @map("approved_status")
+  businessFunction String? @map("business_function")
+
+  @@unique([tenantId, name, environment])
+  @@map("apps")
+}
+
+model Agent {
+  agentId          String   @id @default(dbgenerated("gen_random_uuid()")) @map("agent_id") @db.Uuid
+  tenantId         String   @map("tenant_id") @db.Uuid
+  appId            String?  @map("app_id") @db.Uuid
+  name             String
+  runtimeType      String?  @map("runtime_type")
+  ownerUserId      String?  @map("owner_user_id") @db.Uuid
+  dataAccessScope  Json     @default("[]") @map("data_access_scope")
+  connectedTools   Json     @default("[]") @map("connected_tools")
+  approvalStatus   String   @default("pending") @map("approval_status")
+  riskPosture      String   @default("unknown") @map("risk_posture")
+  decommissionedAt DateTime? @map("decommissioned_at") @db.Timestamptz
+
+  @@map("agents")
+}
+
+model VirtualKey {
+  keyId            String    @id @default(dbgenerated("gen_random_uuid()")) @map("key_id") @db.Uuid
+  tenantId         String    @map("tenant_id") @db.Uuid
+  keyHash          String    @unique @map("key_hash")
+  name             String
+  teamId           String?   @map("team_id") @db.Uuid
+  userId           String?   @map("user_id") @db.Uuid
+  appId            String?   @map("app_id") @db.Uuid
+  environment      String    @default("prod")
+  allowedModels    String[]  @default([]) @map("allowed_models")
+  monthlyBudgetUsd Decimal?  @map("monthly_budget_usd") @db.Decimal(12, 4)
+  rateLimitRpm     Int?      @map("rate_limit_rpm")
+  dlpPolicyId      String?   @map("dlp_policy_id") @db.Uuid
+  revokedAt        DateTime? @map("revoked_at") @db.Timestamptz
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("virtual_keys")
+}
+
+model Policy {
+  policyId  String   @id @default(dbgenerated("gen_random_uuid()")) @map("policy_id") @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  name      String
+  scope     Json     @default("{}")
+  kind      String
+  condition Json     @default("{}")
+  action    String
+  severity  String   @default("medium")
+  failMode  String   @default("open") @map("fail_mode")
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("policies")
+}
+
+model PriceBook {
+  priceId        String    @id @default(dbgenerated("gen_random_uuid()")) @map("price_id") @db.Uuid
+  provider       String
+  modelPrefix    String    @map("model_prefix")
+  tokenType      String    @map("token_type")
+  usdPerMillion  Decimal   @map("usd_per_million") @db.Decimal(12, 6)
+  currency       String    @default("USD")
+  effectiveStart DateTime  @map("effective_start") @db.Timestamptz
+  effectiveEnd   DateTime? @map("effective_end") @db.Timestamptz
+  source         String
+
+  @@map("price_book")
+}
+
+model AllocationRule {
+  ruleId         String    @id @default(dbgenerated("gen_random_uuid()")) @map("rule_id") @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  priority       Int       @default(100)
+  matchingLogic  Json      @map("matching_logic")
+  targetType     String    @map("target_type")
+  targetId       String    @map("target_id")
+  splitPct       Decimal   @default(100.00) @map("split_pct") @db.Decimal(5, 2)
+  effectiveStart DateTime  @default(now()) @map("effective_start") @db.Date
+  effectiveEnd   DateTime? @map("effective_end") @db.Date
+  ownerUserId    String?   @map("owner_user_id") @db.Uuid
+
+  @@map("allocation_rules")
+}
+
+model Budget {
+  budgetId  String  @id @default(dbgenerated("gen_random_uuid()")) @map("budget_id") @db.Uuid
+  tenantId  String  @map("tenant_id") @db.Uuid
+  scopeType String  @map("scope_type")
+  scopeId   String  @map("scope_id")
+  period    String  @default("monthly")
+  amountUsd Decimal @map("amount_usd") @db.Decimal(14, 2)
+  alertPcts Int[]   @default([50, 80, 100]) @map("alert_pcts")
+  hardLimit Boolean @default(false) @map("hard_limit")
+
+  @@unique([tenantId, scopeType, scopeId, period])
+  @@map("budgets")
+}
+
+model Connector {
+  connectorId String    @id @default(dbgenerated("gen_random_uuid()")) @map("connector_id") @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  kind        String
+  config      Json      @default("{}")
+  secretRef   String?   @map("secret_ref")
+  status      String    @default("pending")
+  lastSyncAt  DateTime? @map("last_sync_at") @db.Timestamptz
+  lastError   String?   @map("last_error")
+  syncCursor  Json      @default("{}") @map("sync_cursor")
+
+  @@map("connectors")
+}
+
+model RoiTemplate {
+  templateId   String @id @default(dbgenerated("gen_random_uuid()")) @map("template_id") @db.Uuid
+  tenantId     String? @map("tenant_id") @db.Uuid
+  name         String
+  outcomeType  String @map("outcome_type")
+  sourceSystem String @map("source_system")
+  valueFormula Json   @map("value_formula")
+  attribution  Json   @default("{}")
+
+  @@map("roi_templates")
+}
+
+model AuditLog {
+  id     BigInt   @id @default(autoincrement())
+  tenantId String @map("tenant_id") @db.Uuid
+  actor  String
+  action String
+  object String
+  detail Json     @default("{}")
+  at     DateTime @default(now()) @db.Timestamptz
+
+  @@map("audit_log")
+}
