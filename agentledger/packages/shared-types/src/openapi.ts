@@ -324,6 +324,38 @@ export interface paths {
         patch: operations["BudgetsController_update"];
         trace?: never;
     };
+    "/v1/roi-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["RoiTemplatesController_list"];
+        put?: never;
+        post: operations["RoiTemplatesController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/roi-templates/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["RoiTemplatesController_get"];
+        put?: never;
+        post?: never;
+        delete: operations["RoiTemplatesController_remove"];
+        options?: never;
+        head?: never;
+        patch: operations["RoiTemplatesController_update"];
+        trace?: never;
+    };
     "/v1/allocation-rules": {
         parameters: {
             query?: never;
@@ -673,6 +705,34 @@ export interface components {
             period?: "monthly" | "quarterly";
             alertPcts?: number[];
             hardLimit?: boolean;
+        };
+        ValueFormulaDto: {
+            hourly_rate: number;
+            baseline_minutes: number;
+            rework_pct?: number;
+        };
+        AttributionDto: {
+            window_minutes?: number;
+            /** @enum {string} */
+            match_on?: "branch" | "user" | "issue";
+        };
+        CreateRoiTemplateDto: {
+            name: string;
+            /** @enum {string} */
+            outcomeType: "pr_merged" | "ticket_resolved" | "issue_closed";
+            /** @enum {string} */
+            sourceSystem: "github" | "jira" | "zendesk" | "manual" | "api";
+            valueFormula: components["schemas"]["ValueFormulaDto"];
+            attribution?: components["schemas"]["AttributionDto"];
+        };
+        UpdateRoiTemplateDto: {
+            name?: string;
+            /** @enum {string} */
+            outcomeType?: "pr_merged" | "ticket_resolved" | "issue_closed";
+            /** @enum {string} */
+            sourceSystem?: "github" | "jira" | "zendesk" | "manual" | "api";
+            valueFormula?: components["schemas"]["ValueFormulaDto"];
+            attribution?: components["schemas"]["AttributionDto"];
         };
         CreateAllocationRuleDto: {
             matchingLogic: Record<string, never>;
@@ -1497,6 +1557,108 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["UpdateBudgetDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RoiTemplatesController_list: {
+        parameters: {
+            query: {
+                limit: string;
+                offset: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RoiTemplatesController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRoiTemplateDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RoiTemplatesController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RoiTemplatesController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RoiTemplatesController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateRoiTemplateDto"];
             };
         };
         responses: {

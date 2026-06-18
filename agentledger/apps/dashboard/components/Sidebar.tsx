@@ -8,6 +8,7 @@ const NAV = [
   { href: '/allocation', label: 'Allocation' },
   { href: '/model-mix', label: 'Model mix' },
   { href: '/budgets', label: 'Budgets' },
+  { href: '/roi-templates', label: 'ROI templates' },
   { href: '/risk', label: 'Risk events' },
   { href: '/settings', label: 'Settings' },
 ];

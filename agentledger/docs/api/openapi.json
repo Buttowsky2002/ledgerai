@@ -899,6 +899,134 @@
         ]
       }
     },
+    "/v1/roi-templates": {
+      "get": {
+        "operationId": "RoiTemplatesController_list",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "RoiTemplates"
+        ]
+      },
+      "post": {
+        "operationId": "RoiTemplatesController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRoiTemplateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "RoiTemplates"
+        ]
+      }
+    },
+    "/v1/roi-templates/{id}": {
+      "get": {
+        "operationId": "RoiTemplatesController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "RoiTemplates"
+        ]
+      },
+      "patch": {
+        "operationId": "RoiTemplatesController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRoiTemplateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "RoiTemplates"
+        ]
+      },
+      "delete": {
+        "operationId": "RoiTemplatesController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "RoiTemplates"
+        ]
+      }
+    },
     "/v1/allocation-rules": {
       "get": {
         "operationId": "AllocationRulesController_list",
@@ -2038,6 +2166,110 @@
           },
           "hardLimit": {
             "type": "boolean"
+          }
+        }
+      },
+      "ValueFormulaDto": {
+        "type": "object",
+        "properties": {
+          "hourly_rate": {
+            "type": "number"
+          },
+          "baseline_minutes": {
+            "type": "number"
+          },
+          "rework_pct": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "hourly_rate",
+          "baseline_minutes"
+        ]
+      },
+      "AttributionDto": {
+        "type": "object",
+        "properties": {
+          "window_minutes": {
+            "type": "number"
+          },
+          "match_on": {
+            "type": "string",
+            "enum": [
+              "branch",
+              "user",
+              "issue"
+            ]
+          }
+        }
+      },
+      "CreateRoiTemplateDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "outcomeType": {
+            "type": "string",
+            "enum": [
+              "pr_merged",
+              "ticket_resolved",
+              "issue_closed"
+            ]
+          },
+          "sourceSystem": {
+            "type": "string",
+            "enum": [
+              "github",
+              "jira",
+              "zendesk",
+              "manual",
+              "api"
+            ]
+          },
+          "valueFormula": {
+            "$ref": "#/components/schemas/ValueFormulaDto"
+          },
+          "attribution": {
+            "$ref": "#/components/schemas/AttributionDto"
+          }
+        },
+        "required": [
+          "name",
+          "outcomeType",
+          "sourceSystem",
+          "valueFormula"
+        ]
+      },
+      "UpdateRoiTemplateDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "outcomeType": {
+            "type": "string",
+            "enum": [
+              "pr_merged",
+              "ticket_resolved",
+              "issue_closed"
+            ]
+          },
+          "sourceSystem": {
+            "type": "string",
+            "enum": [
+              "github",
+              "jira",
+              "zendesk",
+              "manual",
+              "api"
+            ]
+          },
+          "valueFormula": {
+            "$ref": "#/components/schemas/ValueFormulaDto"
+          },
+          "attribution": {
+            "$ref": "#/components/schemas/AttributionDto"
           }
         }
       },
