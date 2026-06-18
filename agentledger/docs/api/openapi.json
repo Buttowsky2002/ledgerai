@@ -1650,6 +1650,16 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "minConfidence",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 0,
+              "maximum": 1,
+              "type": "number"
+            }
           }
         ],
         "responses": {

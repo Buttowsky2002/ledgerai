@@ -101,23 +101,33 @@ export class AnalyticsService {
     );
   }
 
-  unitEconomics(from?: string, to?: string, outcomeType?: string) {
+  // Cost per outcome, filtered by attribution confidence. Queries the base
+  // outcomes/agent_runs tables (NOT v_unit_economics) so a per-outcome
+  // confidence threshold can exclude rows BEFORE aggregation — the headline
+  // cost_per_outcome ratio stays correct. FINAL collapses the attribution
+  // matcher's re-inserted rows (same approach as agentDetail's agent_runs FINAL).
+  // minConfidence defaults to 0 (include all, incl. unattributed outcomes).
+  unitEconomics(from?: string, to?: string, outcomeType?: string, minConfidence = 0) {
     const r = this.range(from, to, 365);
-    const filter = outcomeType ? 'AND outcome_type = {otype:String}' : '';
-    const params: Record<string, ChParam> = { ...r };
+    const filter = outcomeType ? 'AND o.outcome_type = {otype:String}' : '';
+    const params: Record<string, ChParam> = { ...r, minconf: minConfidence };
     if (outcomeType) {
       params.otype = outcomeType;
     }
     return this.ch.queryScoped(
-      `SELECT month, outcome_type, team_id,
-              sum(outcomes) AS outcomes, sum(ai_cost_usd) AS ai_cost_usd,
-              sum(business_value_usd) AS business_value_usd,
-              sum(ai_cost_usd) / nullIf(sum(outcomes), 0) AS cost_per_outcome,
-              sum(business_value_usd) - sum(ai_cost_usd) AS net_value_usd,
-              avg(avg_confidence) AS avg_confidence
-       FROM v_unit_economics
-       WHERE tenant_id = {tenant:String}
-         AND month BETWEEN toStartOfMonth(toDate({from:Date})) AND toStartOfMonth(toDate({to:Date})) ${filter}
+      `SELECT toStartOfMonth(o.ts) AS month, o.outcome_type AS outcome_type, o.team_id AS team_id,
+              count() AS outcomes,
+              sum(r.total_cost_usd) AS ai_cost_usd,
+              sum(o.business_value_usd) AS business_value_usd,
+              sum(r.total_cost_usd) / nullIf(count(), 0) AS cost_per_outcome,
+              sum(o.business_value_usd) - sum(r.total_cost_usd) AS net_value_usd,
+              avg(o.attribution_confidence) AS avg_confidence
+       FROM agentledger.outcomes o FINAL
+       LEFT JOIN agentledger.agent_runs r FINAL
+         ON r.tenant_id = o.tenant_id AND r.run_id = o.run_id
+       WHERE o.tenant_id = {tenant:String}
+         AND toStartOfMonth(o.ts) BETWEEN toStartOfMonth(toDate({from:Date})) AND toStartOfMonth(toDate({to:Date}))
+         AND o.attribution_confidence >= {minconf:Float32} ${filter}
        GROUP BY month, outcome_type, team_id ORDER BY month`,
       params,
     );

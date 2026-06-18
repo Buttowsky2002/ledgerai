@@ -2122,6 +2122,7 @@ export interface operations {
                 from?: string;
                 to?: string;
                 outcomeType?: string;
+                minConfidence?: number;
             };
             header?: never;
             path?: never;

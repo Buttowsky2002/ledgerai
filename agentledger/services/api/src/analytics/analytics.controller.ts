@@ -43,7 +43,7 @@ export class AnalyticsController {
 
   @Roles('viewer') @Get('unit-economics')
   unitEconomics(@Query() q: UnitEconomicsQueryDto) {
-    return this.analytics.unitEconomics(q.from, q.to, q.outcomeType);
+    return this.analytics.unitEconomics(q.from, q.to, q.outcomeType, q.minConfidence);
   }
 
   @Roles('viewer') @Get('agents/:agentId')

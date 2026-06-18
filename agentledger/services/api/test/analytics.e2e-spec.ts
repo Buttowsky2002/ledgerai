@@ -126,4 +126,39 @@ describe('Analytics (ClickHouse MVs)', () => {
       .set(bearer(await tok(tenantA)));
     expect(res.status).toBe(400);
   });
+
+  it('unit-economics excludes low-confidence outcomes from headline numbers', async () => {
+    const tenantUE = randomUUID();
+    // Two completed runs with distinct cost, one high- and one low-confidence outcome.
+    await insertCH('agent_runs', [
+      { run_id: 'ue-r1', tenant_id: tenantUE, agent_id: 'a', app_id: 'app', user_id: 'u', started_at: '2026-06-10 09:00:00', ended_at: '2026-06-10 09:05:00', status: 'completed', total_cost_usd: 2.0, total_tokens: 10, llm_calls: 1, tool_calls: 0, risk_events: 0 },
+      { run_id: 'ue-r2', tenant_id: tenantUE, agent_id: 'a', app_id: 'app', user_id: 'u', started_at: '2026-06-10 09:10:00', ended_at: '2026-06-10 09:15:00', status: 'completed', total_cost_usd: 8.0, total_tokens: 10, llm_calls: 1, tool_calls: 0, risk_events: 0 },
+    ]);
+    await insertCH('outcomes', [
+      { outcome_id: 'ue-hi', tenant_id: tenantUE, ts: '2026-06-10 10:00:00', source_system: 'zendesk', outcome_type: 'ticket_resolved', team_id: 'team-ue', user_id: 'u', run_id: 'ue-r1', business_value_usd: 500, quality_score: 0.9, attribution_confidence: 0.95, completion_status: 'solved' },
+      { outcome_id: 'ue-lo', tenant_id: tenantUE, ts: '2026-06-10 11:00:00', source_system: 'zendesk', outcome_type: 'ticket_resolved', team_id: 'team-ue', user_id: 'u', run_id: 'ue-r2', business_value_usd: 300, quality_score: 0.4, attribution_confidence: 0.30, completion_status: 'solved' },
+    ]);
+    const sum = (body: { [k: string]: unknown }[], key: string) => body.reduce((s, r) => s + Number(r[key]), 0);
+
+    // Unfiltered: both outcomes, ai_cost = 2 + 8, cost_per_outcome = 10/2 = 5.
+    const all = await request(app.getHttpServer()).get('/v1/analytics/unit-economics').query(WIDE).set(bearer(await tok(tenantUE, 'viewer')));
+    expect(all.status).toBe(200);
+    expect(sum(all.body, 'outcomes')).toBe(2);
+    expect(sum(all.body, 'ai_cost_usd')).toBeCloseTo(10.0, 5);
+
+    // minConfidence 0.5 excludes the 0.30 outcome: 1 outcome, ai_cost = 2, cost_per_outcome = 2.
+    const filtered = await request(app.getHttpServer()).get('/v1/analytics/unit-economics').query({ ...WIDE, minConfidence: 0.5 }).set(bearer(await tok(tenantUE, 'viewer')));
+    expect(filtered.status).toBe(200);
+    expect(sum(filtered.body, 'outcomes')).toBe(1);
+    expect(sum(filtered.body, 'ai_cost_usd')).toBeCloseTo(2.0, 5);
+    expect(Number(filtered.body[0].cost_per_outcome)).toBeCloseTo(2.0, 5);
+  });
+
+  it('rejects an out-of-range minConfidence (400)', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/v1/analytics/unit-economics')
+      .query({ ...WIDE, minConfidence: 5 })
+      .set(bearer(await tok(tenantA, 'viewer')));
+    expect(res.status).toBe(400);
+  });
 });
