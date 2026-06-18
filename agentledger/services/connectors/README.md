@@ -43,12 +43,31 @@ duplicates** — at-least-once delivery, effectively-once storage.
 Per-tenant connector rows live in the Postgres `connectors` table; the
 control-plane API manages them (Phase 3), or insert them manually for local dev.
 
+## Outcome connectors (Phase 4)
+
+A parallel path imports **business outcomes** (not costs) into the ClickHouse
+`outcomes` table, for the ROI engine. It reuses the same framework helpers
+(cursor/rate-limit/retry/Postgres state) via `OutcomeConnector` / `OutcomeSyncer`
+/ `ClickHouseOutcomeSink` (`internal/connector/outcome.go`, `sink_outcome.go`),
+and runs in its own binary `cmd/outcome-sync` (admin `:8095`). The cost path is
+untouched. Connectors emit a **stable `outcome_id`** so re-scans collapse under the
+`outcomes` ReplacingMergeTree; `run_id`/`attribution_confidence`/`business_value_usd`
+are filled later by the attribution matcher and ROI templates.
+
+| Kind (`connectors.kind`) | Source | Auth | Key `config` fields |
+|--------------------------|--------|------|---------------------|
+| `github` | GitHub REST `/repos/{repo}/pulls` (merged PRs → `pr_merged`) | Bearer PAT | `repo` (`owner/name`), `token_env`, `lookback_days` |
+| `jira` / `zendesk` | _(Phase 4 task 2)_ | | |
+
 ## Adding a provider importer
 
-Implement `Connector` (see `internal/connector/connector.go`) — just the
+Cost importer: implement `Connector` (`internal/connector/connector.go`) — just the
 provider-specific `Fetch` (the framework stamps tenant/source and handles
 cursor/rate-limit/retry/idempotency) — then register it in
 `cmd/connector-sync/main.go` → `registeredConnectors()`.
+
+Outcome importer: implement `OutcomeConnector` and register it in
+`cmd/outcome-sync/main.go` → `registeredOutcomeConnectors()`.
 
 ## Run
 
@@ -70,6 +89,9 @@ go run ./cmd/connector-sync
 | `AGENTLEDGER_SYNC_INTERVAL_SEC` | `3600` | Seconds between sync passes. |
 | `AGENTLEDGER_CONNECTOR_INTERVAL_MS` | `1000` | Min spacing between provider calls. |
 | `AGENTLEDGER_CONNECTOR_RETRIES` | `4` | Retry attempts per fetch. |
-| `AGENTLEDGER_CONNECTOR_ADDR` | `:8092` | Admin/health listen address. |
+| `AGENTLEDGER_CONNECTOR_ADDR` | `:8092` | Admin/health listen address (connector-sync). |
+| `AGENTLEDGER_OUTCOME_SYNC_INTERVAL_SEC` | `3600` | Seconds between outcome sync passes. |
+| `AGENTLEDGER_OUTCOME_ADDR` | `:8095` | Admin/health listen address (outcome-sync). |
 
-See `docs/ADRs/007-connector-framework.md` for design rationale.
+See `docs/ADRs/007-connector-framework.md` (cost) and
+`docs/ADRs/016-outcome-connectors.md` (outcomes) for design rationale.

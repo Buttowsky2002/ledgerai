@@ -39,6 +39,7 @@ build: build-api build-shared-types build-dashboard
 	cd $(WORKERS_DIR) && CGO_ENABLED=0 go build -o ../../bin/ch-insert ./cmd/ch-insert
 	cd $(WORKERS_DIR) && CGO_ENABLED=0 go build -o ../../bin/reconcile ./cmd/reconcile
 	cd $(CONNECTORS_DIR) && CGO_ENABLED=0 go build -o ../../bin/connector-sync ./cmd/connector-sync
+	cd $(CONNECTORS_DIR) && CGO_ENABLED=0 go build -o ../../bin/outcome-sync ./cmd/outcome-sync
 
 build-api:
 	cd $(API_DIR) && npm run build
