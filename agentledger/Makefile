@@ -1,11 +1,12 @@
 .PHONY: test build up down lint install-hooks security-check audit deps
 
-GATEWAY_DIR   := services/gateway
-COLLECTOR_DIR := services/collector
-WORKERS_DIR   := services/workers
-GO_SERVICES   := $(GATEWAY_DIR) $(COLLECTOR_DIR) $(WORKERS_DIR)
-HOOKS_DIR     := .githooks
-GIT_HOOKS     := $(shell git rev-parse --git-dir 2>/dev/null)/hooks
+GATEWAY_DIR    := services/gateway
+COLLECTOR_DIR  := services/collector
+WORKERS_DIR    := services/workers
+CONNECTORS_DIR := services/connectors
+GO_SERVICES    := $(GATEWAY_DIR) $(COLLECTOR_DIR) $(WORKERS_DIR) $(CONNECTORS_DIR)
+HOOKS_DIR      := .githooks
+GIT_HOOKS      := $(shell git rev-parse --git-dir 2>/dev/null)/hooks
 
 # ── Tests ────────────────────────────────────────────────────────────────────
 test:
@@ -19,6 +20,8 @@ build:
 	cd $(GATEWAY_DIR) && CGO_ENABLED=0 go build -o ../../bin/gateway .
 	cd $(COLLECTOR_DIR) && CGO_ENABLED=0 go build -o ../../bin/collector .
 	cd $(WORKERS_DIR) && CGO_ENABLED=0 go build -o ../../bin/ch-insert ./cmd/ch-insert
+	cd $(WORKERS_DIR) && CGO_ENABLED=0 go build -o ../../bin/reconcile ./cmd/reconcile
+	cd $(CONNECTORS_DIR) && CGO_ENABLED=0 go build -o ../../bin/connector-sync ./cmd/connector-sync
 
 # ── Local stack ──────────────────────────────────────────────────────────────
 up:

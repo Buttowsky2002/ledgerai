@@ -84,6 +84,31 @@ services:
       clickhouse: { condition: service_healthy }
       redpanda: { condition: service_started }
 
+  reconcile:
+    build:
+      context: ./services/workers
+      args: { CMD: reconcile }
+    environment:
+      AGENTLEDGER_CLICKHOUSE_URL: http://clickhouse:8123
+      AGENTLEDGER_CLICKHOUSE_DB: agentledger
+      AGENTLEDGER_RECONCILE_THRESHOLD: "0.02"
+      AGENTLEDGER_RECONCILE_INTERVAL_SEC: "86400"
+    ports: ["8093:8093"]
+    depends_on:
+      clickhouse: { condition: service_healthy }
+
+  connector-sync:
+    build: ./services/connectors
+    environment:
+      AGENTLEDGER_PG_DSN: postgres://agentledger:dev_only_change_me@postgres:5432/agentledger?sslmode=disable
+      AGENTLEDGER_CLICKHOUSE_URL: http://clickhouse:8123
+      AGENTLEDGER_CLICKHOUSE_DB: agentledger
+      AGENTLEDGER_SYNC_INTERVAL_SEC: "3600"
+    ports: ["8092:8092"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      clickhouse: { condition: service_healthy }
+
   gateway:
     build: ./services/gateway
     environment:

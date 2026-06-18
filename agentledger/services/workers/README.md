@@ -60,3 +60,41 @@ go run ./cmd/ch-insert      # consumes events.raw → ClickHouse at :8123
 | `AGENTLEDGER_RETRY_BACKOFF_MS`  | `250`                     | Base retry/redelivery backoff.  |
 
 See `docs/ADRs/006-clickhouse-insert-worker.md` for the design rationale.
+
+## reconcile
+
+Diffs gateway-observed cost (`llm_calls`, `source=gateway`) against
+provider-billed cost (`provider_costs`, from the connectors) via the
+`v_cost_reconciliation` view, and books one `cost_adjustments` row per
+`(tenant, day, model)`, flagging rows whose `|drift_pct|` exceeds the threshold.
+
+```
+llm_calls (gateway) ┐
+                    ├─▶ v_cost_reconciliation ─▶ [reconcile] ─▶ cost_adjustments / v_flagged_drift
+provider_costs ─────┘
+```
+
+- Idempotent: `cost_adjustments` is a `ReplacingMergeTree` keyed on
+  `(tenant, day, model)`, so re-runs replace rather than duplicate.
+- Rows with no provider cost yet (import lag) are never flagged.
+- Reconciles a trailing window each run (default 35 days), so late-arriving
+  provider data re-reconciles automatically.
+
+### Run
+
+```bash
+cd services/workers
+go run ./cmd/reconcile      # reads/writes ClickHouse at :8123, admin on :8093
+```
+
+### Environment variables
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `AGENTLEDGER_CLICKHOUSE_URL` / `_DB` / `_USER` / `_PASSWORD` | `http://localhost:8123` / `agentledger` / `default` / _(empty)_ | ClickHouse connection. |
+| `AGENTLEDGER_RECONCILE_THRESHOLD` | `0.02` | Drift fraction above which a row is flagged. |
+| `AGENTLEDGER_RECONCILE_LOOKBACK_DAYS` | `35` | Trailing window reconciled each pass. |
+| `AGENTLEDGER_RECONCILE_INTERVAL_SEC` | `86400` | Seconds between passes. |
+| `AGENTLEDGER_WORKER_ADDR` | `:8093` | Admin/metrics listen address. |
+
+See `docs/ADRs/009-reconciliation-worker.md` for the design rationale.
