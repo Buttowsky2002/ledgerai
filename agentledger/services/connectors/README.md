@@ -57,7 +57,8 @@ are filled later by the attribution matcher and ROI templates.
 | Kind (`connectors.kind`) | Source | Auth | Key `config` fields |
 |--------------------------|--------|------|---------------------|
 | `github` | GitHub REST `/repos/{repo}/pulls` (merged PRs → `pr_merged`) | Bearer PAT | `repo` (`owner/name`), `token_env`, `lookback_days` |
-| `jira` / `zendesk` | _(Phase 4 task 2)_ | | |
+| `jira` | Jira Cloud REST `/rest/api/3/search` (Done issues → `issue_closed`) | Basic `email:token` | `base_url`, `email_env`, `token_env`, `project`, `lookback_days` |
+| `zendesk` | Zendesk Search API `/api/v2/search.json` (solved tickets → `ticket_resolved`) | Basic `email:token` | `base_url`, `email_env`, `token_env`, `lookback_days` |
 
 ## Adding a provider importer
 

@@ -98,10 +98,12 @@ func runLoop(ctx context.Context, syncer *connector.OutcomeSyncer, every time.Du
 }
 
 // registeredOutcomeConnectors returns the outcome importers compiled into this
-// build. Jira/Zendesk are added here as they land (Phase 4 task 2).
+// build.
 func registeredOutcomeConnectors() []connector.OutcomeConnector {
 	return []connector.OutcomeConnector{
 		connector.NewGitHubConnector(),
+		connector.NewJiraConnector(),
+		connector.NewZendeskConnector(),
 	}
 }
 
