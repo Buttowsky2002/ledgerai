@@ -81,11 +81,14 @@ func NewHTTPClient(baseURL, db, user, password string) *HTTPClient {
 // FetchOutcomes reads the merged-latest outcome rows (FINAL) updated since the
 // given timestamp.
 func (h *HTTPClient) FetchOutcomes(ctx context.Context, since string) ([]OutcomeRow, error) {
+	// Filter on the real DateTime64 column inside a subquery, then toString() it
+	// outside — aliasing toString(ts) AS ts at the top level shadows the ts
+	// column in WHERE, breaking the {since:DateTime64(3)} comparison (same gotcha
+	// the reconcile worker documents).
 	q := fmt.Sprintf(`SELECT outcome_id, tenant_id, toString(ts) AS ts, source_system,
 		outcome_type, team_id, user_id, run_id, business_value_usd, quality_score,
 		attribution_confidence, completion_status
-		FROM %s.outcomes FINAL
-		WHERE ts >= {since:DateTime64(3)}
+		FROM (SELECT * FROM %s.outcomes FINAL WHERE ts >= {since:DateTime64(3)})
 		FORMAT JSONEachRow`, h.db)
 	var rows []OutcomeRow
 	if err := h.query(ctx, q, since, &rows); err != nil {
@@ -97,10 +100,11 @@ func (h *HTTPClient) FetchOutcomes(ctx context.Context, since string) ([]Outcome
 // FetchRuns reads completed agent runs (FINAL) that ended since the given
 // timestamp — candidates for correlation.
 func (h *HTTPClient) FetchRuns(ctx context.Context, since string) ([]RunRow, error) {
+	// Subquery so the WHERE sees the real ended_at column, not the toString alias
+	// (see FetchOutcomes).
 	q := fmt.Sprintf(`SELECT run_id, tenant_id, user_id, toString(ended_at) AS ended_at,
 		status, objective, outcome_id
-		FROM %s.agent_runs FINAL
-		WHERE ended_at >= {since:DateTime64(3)} AND status = 'completed'
+		FROM (SELECT * FROM %s.agent_runs FINAL WHERE ended_at >= {since:DateTime64(3)} AND status = 'completed')
 		FORMAT JSONEachRow`, h.db)
 	var rows []RunRow
 	if err := h.query(ctx, q, since, &rows); err != nil {
