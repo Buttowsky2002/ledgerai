@@ -20,6 +20,7 @@ type ReconRow struct {
 	TenantID        string  `json:"tenant_id"`
 	Day             string  `json:"day"`
 	Model           string  `json:"model"`
+	VirtualKeyID    string  `json:"virtual_key_id"`
 	GatewayCostUSD  float64 `json:"gateway_cost_usd"`
 	ProviderCostUSD float64 `json:"provider_cost_usd"`
 	DriftUSD        float64 `json:"drift_usd"`
@@ -31,6 +32,7 @@ type Adjustment struct {
 	TenantID        string  `json:"tenant_id"`
 	Day             string  `json:"day"`
 	Model           string  `json:"model"`
+	VirtualKeyID    string  `json:"virtual_key_id"`
 	GatewayCostUSD  float64 `json:"gateway_cost_usd"`
 	ProviderCostUSD float64 `json:"provider_cost_usd"`
 	DriftUSD        float64 `json:"drift_usd"`
@@ -72,7 +74,7 @@ func (h *HTTPClient) Reconciliation(ctx context.Context, sinceDay string) ([]Rec
 	// Filter on the Date column inside a subquery, then stringify outside —
 	// aliasing toString(day) AS day at the top level would shadow the Date
 	// column in WHERE and break the {since:Date} comparison.
-	q := fmt.Sprintf(`SELECT tenant_id, toString(day) AS day, model,
+	q := fmt.Sprintf(`SELECT tenant_id, toString(day) AS day, model, virtual_key_id,
 		gateway_cost_usd, provider_cost_usd, drift_usd, drift_pct
 		FROM (SELECT * FROM %s.v_cost_reconciliation WHERE day >= {since:Date})
 		FORMAT JSONEachRow`, h.db)

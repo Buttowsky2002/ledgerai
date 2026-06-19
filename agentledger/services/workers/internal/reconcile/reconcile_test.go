@@ -68,6 +68,27 @@ func TestReconcileFlagsMaterialDrift(t *testing.T) {
 	}
 }
 
+func TestReconcilePreservesVirtualKey(t *testing.T) {
+	// A keyed provider row (OpenAI project) and a key-less one (model-level)
+	// must both book their virtual_key_id verbatim into the adjustment.
+	ch := &mockCH{rows: []ReconRow{
+		{TenantID: "t1", Day: "2026-06-15", Model: "gpt-4o", VirtualKeyID: "proj_abc", GatewayCostUSD: 100, ProviderCostUSD: 100, DriftPct: 0},
+		{TenantID: "t1", Day: "2026-06-15", Model: "claude", VirtualKeyID: "", GatewayCostUSD: 50, ProviderCostUSD: 50, DriftPct: 0},
+	}}
+	r := New(ch, 0.02, 1, nil)
+	r.now = fixedNow()
+	if err := r.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, a := range ch.written {
+		got[a.Model] = a.VirtualKeyID
+	}
+	if got["gpt-4o"] != "proj_abc" || got["claude"] != "" {
+		t.Fatalf("virtual_key_id not preserved into adjustments: %+v", got)
+	}
+}
+
 func TestReconcileThresholdBoundary(t *testing.T) {
 	r := New(&mockCH{}, 0.02, 1, nil)
 	cases := []struct {
