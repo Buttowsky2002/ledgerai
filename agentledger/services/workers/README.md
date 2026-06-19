@@ -98,3 +98,43 @@ go run ./cmd/reconcile      # reads/writes ClickHouse at :8123, admin on :8093
 | `AGENTLEDGER_WORKER_ADDR` | `:8093` | Admin/metrics listen address. |
 
 See `docs/ADRs/009-reconciliation-worker.md` for the design rationale.
+
+## attribution
+
+Correlates business `outcomes` to the `agent_runs` that produced them and stamps
+`run_id` + `attribution_confidence` (0..1) back onto the `outcomes` table, so
+`v_unit_economics` can join AI cost to each outcome.
+
+```
+outcomes (run_id='', conf=0) ┐
+                             ├─▶ [attribution] ─▶ outcomes (run_id, attribution_confidence)
+agent_runs (completed) ──────┘
+```
+
+- Signals: SDK direct link (`agent_runs.outcome_id`) → `1.0`; otherwise
+  time-proximity + identity (`user_id`) + issue/branch token in `objective`,
+  summed and gated by a minimum confidence.
+- Write strategy: re-inserts the full row into the `outcomes` ReplacingMergeTree
+  (read with `FINAL`); only rows whose attribution changed are written. Idempotent;
+  re-runs heal attribution clobbered by connector re-scans (eventual consistency).
+- Re-attributes a trailing window each pass (default 30 days).
+
+### Run
+
+```bash
+cd services/workers
+go run ./cmd/attribution   # reads/writes ClickHouse at :8123, admin on :8096
+```
+
+### Environment variables
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `AGENTLEDGER_CLICKHOUSE_URL` / `_DB` / `_USER` / `_PASSWORD` | `http://localhost:8123` / `agentledger` / `default` / _(empty)_ | ClickHouse connection. |
+| `AGENTLEDGER_ATTR_WINDOW_MIN` | `240` | Max minutes between a run ending and the outcome. |
+| `AGENTLEDGER_ATTR_LOOKBACK_DAYS` | `30` | Trailing window of outcomes re-attributed each pass. |
+| `AGENTLEDGER_ATTR_MIN_CONFIDENCE` | `0.3` | Below this an outcome is left unattributed. |
+| `AGENTLEDGER_ATTR_INTERVAL_SEC` | `900` | Seconds between passes. |
+| `AGENTLEDGER_WORKER_ADDR` | `:8096` | Admin/metrics listen address. |
+
+See `docs/ADRs/018-attribution-matcher.md` for the design rationale.

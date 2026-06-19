@@ -98,13 +98,32 @@ services:
       clickhouse: { condition: service_healthy }
 
   connector-sync:
-    build: ./services/connectors
+    build:
+      context: ./services/connectors
+      args: { CMD: connector-sync }
     environment:
       AGENTLEDGER_PG_DSN: postgres://agentledger:dev_only_change_me@postgres:5432/agentledger?sslmode=disable
       AGENTLEDGER_CLICKHOUSE_URL: http://clickhouse:8123
       AGENTLEDGER_CLICKHOUSE_DB: agentledger
       AGENTLEDGER_SYNC_INTERVAL_SEC: "3600"
     ports: ["8092:8092"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      clickhouse: { condition: service_healthy }
+
+  # Outcome connectors (GitHub/Jira/Zendesk) → ClickHouse outcomes (Phase 4).
+  outcome-sync:
+    build:
+      context: ./services/connectors
+      args: { CMD: outcome-sync }
+    environment:
+      AGENTLEDGER_PG_DSN: postgres://agentledger:dev_only_change_me@postgres:5432/agentledger?sslmode=disable
+      AGENTLEDGER_CLICKHOUSE_URL: http://clickhouse:8123
+      AGENTLEDGER_CLICKHOUSE_DB: agentledger
+      AGENTLEDGER_OUTCOME_SYNC_INTERVAL_SEC: "3600"
+      # GitHub PAT supplied at deploy time (env-var name referenced in connectors.config):
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+    ports: ["8095:8095"]
     depends_on:
       postgres: { condition: service_healthy }
       clickhouse: { condition: service_healthy }

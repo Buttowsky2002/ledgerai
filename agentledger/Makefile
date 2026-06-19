@@ -1,4 +1,4 @@
-.PHONY: test test-go test-api e2e build build-api build-shared-types build-dashboard openapi delete-tenant up down lint lint-api api-install install-hooks security-check audit deps
+.PHONY: test test-go test-api test-sdk-typescript e2e build build-api build-shared-types build-sdk-typescript build-dashboard openapi delete-tenant up down lint lint-api lint-sdk-typescript api-install install-hooks security-check audit deps
 
 GATEWAY_DIR      := services/gateway
 COLLECTOR_DIR    := services/collector
@@ -6,6 +6,7 @@ WORKERS_DIR      := services/workers
 CONNECTORS_DIR   := services/connectors
 API_DIR          := services/api
 SHARED_TYPES_DIR := packages/shared-types
+SDK_TS_DIR       := packages/sdk-typescript
 DASHBOARD_DIR    := apps/dashboard
 GO_SERVICES      := $(GATEWAY_DIR) $(COLLECTOR_DIR) $(WORKERS_DIR) $(CONNECTORS_DIR)
 HOOKS_DIR      := .githooks
@@ -14,7 +15,7 @@ GIT_HOOKS      := $(shell git rev-parse --git-dir 2>/dev/null)/hooks
 # ── Tests ────────────────────────────────────────────────────────────────────
 # `test` is infra-free (unit). The RLS cross-tenant isolation suite needs a live
 # Postgres and runs under `e2e`.
-test: test-go test-api
+test: test-go test-api test-sdk-typescript
 
 test-go:
 	@for d in $(GO_SERVICES); do \
@@ -26,6 +27,10 @@ test-api:
 	@echo "==> test $(API_DIR)"
 	cd $(API_DIR) && npm test
 
+test-sdk-typescript:
+	@echo "==> test $(SDK_TS_DIR)"
+	cd $(SDK_TS_DIR) && npm test
+
 # API e2e: tenant isolation, auth/RBAC, CRUD+audit, and analytics. Needs Postgres
 # (migrations + dev role) and ClickHouse (MVs for analytics).
 e2e:
@@ -33,18 +38,22 @@ e2e:
 	cd $(API_DIR) && npm run test:e2e
 
 # ── Build ────────────────────────────────────────────────────────────────────
-build: build-api build-shared-types build-dashboard
+build: build-api build-shared-types build-sdk-typescript build-dashboard
 	cd $(GATEWAY_DIR) && CGO_ENABLED=0 go build -o ../../bin/gateway .
 	cd $(COLLECTOR_DIR) && CGO_ENABLED=0 go build -o ../../bin/collector .
 	cd $(WORKERS_DIR) && CGO_ENABLED=0 go build -o ../../bin/ch-insert ./cmd/ch-insert
 	cd $(WORKERS_DIR) && CGO_ENABLED=0 go build -o ../../bin/reconcile ./cmd/reconcile
 	cd $(CONNECTORS_DIR) && CGO_ENABLED=0 go build -o ../../bin/connector-sync ./cmd/connector-sync
+	cd $(CONNECTORS_DIR) && CGO_ENABLED=0 go build -o ../../bin/outcome-sync ./cmd/outcome-sync
 
 build-api:
 	cd $(API_DIR) && npm run build
 
 build-shared-types:
 	cd $(SHARED_TYPES_DIR) && npm run build
+
+build-sdk-typescript:
+	cd $(SDK_TS_DIR) && npm run build
 
 # Dashboard build (Next.js); needs shared-types built first (file: dependency).
 build-dashboard:
@@ -64,6 +73,7 @@ delete-tenant:
 api-install:
 	cd $(API_DIR) && npm ci
 	cd $(SHARED_TYPES_DIR) && npm ci
+	cd $(SDK_TS_DIR) && npm ci
 	cd $(DASHBOARD_DIR) && npm ci
 
 # ── Local stack ──────────────────────────────────────────────────────────────
@@ -74,7 +84,7 @@ down:
 	docker compose down
 
 # ── Lint ─────────────────────────────────────────────────────────────────────
-lint: lint-api
+lint: lint-api lint-sdk-typescript
 	@for d in $(GO_SERVICES); do \
 		echo "==> lint $$d"; \
 		(cd $$d && gofmt -l . && go vet ./...) || exit 1; \
@@ -83,6 +93,10 @@ lint: lint-api
 lint-api:
 	@echo "==> lint $(API_DIR)"
 	cd $(API_DIR) && npm run lint
+
+lint-sdk-typescript:
+	@echo "==> lint $(SDK_TS_DIR)"
+	cd $(SDK_TS_DIR) && npm run lint
 
 # ── Pre-commit hook installation ─────────────────────────────────────────────
 # Copies the versioned hook into .git/hooks and marks it executable.

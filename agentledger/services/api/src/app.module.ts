@@ -18,6 +18,7 @@ import { MetricsModule } from './metrics/metrics.module';
 import { PoliciesModule } from './policies/policies.module';
 import { PriceBookModule } from './price-book/price-book.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { RoiTemplatesModule } from './roi-templates/roi-templates.module';
 import { TeamsModule } from './teams/teams.module';
 import { TenantModule } from './tenant/tenant.module';
 import { VirtualKeysModule } from './virtual-keys/virtual-keys.module';
@@ -54,6 +55,7 @@ import { VirtualKeysModule } from './virtual-keys/virtual-keys.module';
     AgentsModule,
     PoliciesModule,
     BudgetsModule,
+    RoiTemplatesModule,
     AllocationRulesModule,
     VirtualKeysModule,
     PriceBookModule,
