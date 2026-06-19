@@ -38,10 +38,19 @@ func main() {
 	defer producer.Close()
 
 	metrics := &Metrics{}
-	c := &Collector{validator: validator, producer: producer, metrics: metrics, maxBatch: cfg.MaxBatch}
+	c := &Collector{
+		validator:         validator,
+		producer:          producer,
+		metrics:           metrics,
+		maxBatch:          cfg.MaxBatch,
+		otelTenantAttr:    cfg.OtelTenantAttr,
+		otelDefaultTenant: cfg.OtelDefaultTenant,
+	}
 
 	mux := http.NewServeMux()
 	mux.Handle("POST /v1/events", limitBody(http.HandlerFunc(c.handleEvents), cfg.MaxBodyBytes))
+	// OTel GenAI: accept OTLP/JSON traces from any instrumented stack.
+	mux.Handle("POST /v1/ingest/otel", limitBody(http.HandlerFunc(c.handleOTel), cfg.MaxBodyBytes))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"ok"}`))

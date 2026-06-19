@@ -45,7 +45,7 @@ func testCollector(t *testing.T, prod Producer) *Collector {
 	if err != nil {
 		t.Fatalf("validator: %v", err)
 	}
-	return &Collector{validator: v, producer: prod, metrics: &Metrics{}, maxBatch: 1000}
+	return &Collector{validator: v, producer: prod, metrics: &Metrics{}, maxBatch: 1000, otelTenantAttr: otelTenantAttrDefault}
 }
 
 func post(t *testing.T, c *Collector, body string) *httptest.ResponseRecorder {

@@ -1,7 +1,8 @@
 # Collector
 
-HTTP ingest service for AgentLedger events. Validates incoming SDK and gateway
-events against the canonical schema and produces them to the event bus
+HTTP ingest service for AgentLedger events — the gateway-agnostic **front door**
+(ARCHITECTURE_PIVOT.md, Pillar 1). Validates incoming SDK, gateway, and OTel
+GenAI telemetry against the canonical schema and produces it to the event bus
 (Redpanda topic `events.raw`), keyed by tenant. The collector is stateless,
 horizontally scalable, and never blocks the caller — durability lives in the bus.
 
@@ -31,12 +32,42 @@ posts here via its `collector_url`.
 
 ## Endpoints
 
-| Method / path      | Purpose                                                            |
-|--------------------|--------------------------------------------------------------------|
-| `POST /v1/events`  | Ingest one event, a JSON array, or NDJSON. See status codes below. |
-| `GET /healthz`     | Liveness.                                                          |
-| `GET /readyz`      | Readiness — pings the event bus.                                   |
-| `GET /metrics`     | Prometheus text exposition.                                        |
+| Method / path          | Purpose                                                                  |
+|------------------------|--------------------------------------------------------------------------|
+| `POST /v1/events`      | Ingest one event, a JSON array, or NDJSON. See status codes below.       |
+| `POST /v1/ingest/otel` | Ingest OTLP/JSON traces; maps `gen_ai.*` spans to canonical events.      |
+| `GET /healthz`         | Liveness.                                                                |
+| `GET /readyz`          | Readiness — pings the event bus.                                         |
+| `GET /metrics`         | Prometheus text exposition.                                              |
+
+### `POST /v1/ingest/otel` — OTel GenAI
+
+Accepts an OTLP/JSON `ExportTraceServiceRequest`. Spans carrying GenAI markers
+(`gen_ai.system` / `gen_ai.request.model` / `gen_ai.operation.name`) are mapped
+to canonical `llm_call` events (`source:"otel"`); other spans are skipped. This
+lets any stack already emitting `gen_ai.*` spans (OpenLLMetry, Langfuse,
+Datadog, raw OTel SDK) stream telemetry in without code changes.
+
+```bash
+curl -i http://localhost:8090/v1/ingest/otel \
+  -H 'Content-Type: application/json' \
+  -H 'X-AgentLedger-Tenant: t1' \
+  -d '{"resourceSpans":[{"resource":{"attributes":[]},"scopeSpans":[{"spans":[
+       {"spanId":"s1","name":"chat","startTimeUnixNano":"1718800000000000000",
+        "endTimeUnixNano":"1718800001000000000","attributes":[
+          {"key":"gen_ai.system","value":{"stringValue":"openai"}},
+          {"key":"gen_ai.request.model","value":{"stringValue":"gpt-4o"}},
+          {"key":"gen_ai.usage.input_tokens","value":{"intValue":"10"}},
+          {"key":"gen_ai.usage.output_tokens","value":{"intValue":"5"}}]}]}]}]}'
+# → HTTP 200  {"accepted":1,"rejected_validation":0,"rejected_backpressure":0,"spans_skipped":0}
+```
+
+Returns 200 on any successful conversion, 429 on pure backpressure, 400 on an
+unparseable body. **Tenant** is resolved from the span/resource attribute named
+by `AGENTLEDGER_OTEL_TENANT_ATTR` (default `agentledger.tenant_id`), then the
+`X-AgentLedger-Tenant` header, then `AGENTLEDGER_OTEL_DEFAULT_TENANT`; a GenAI
+span with no resolvable tenant is dropped, never produced. Mapping details and
+format assumptions: `docs/ADRs/022-otel-genai-ingestion.md`.
 
 ### `POST /v1/events` status codes
 
@@ -70,6 +101,8 @@ minimal envelope check pending their own schemas; unknown kinds are rejected.
 | `AGENTLEDGER_MAX_BODY_BYTES`  | `4194304` (4 MiB)                                | Request body size limit.             |
 | `AGENTLEDGER_MAX_BATCH`       | `1000`                                           | Max events per request.              |
 | `AGENTLEDGER_MAX_INFLIGHT`    | `8192`                                           | Backpressure gate (in-flight records).|
+| `AGENTLEDGER_OTEL_TENANT_ATTR`| `agentledger.tenant_id`                          | OTel span/resource attr carrying the tenant.|
+| `AGENTLEDGER_OTEL_DEFAULT_TENANT`| _(empty)_                                     | Fallback tenant when no attr/header (empty = require explicit).|
 
 ## Design
 

@@ -17,6 +17,10 @@ type Config struct {
 	MaxBodyBytes int64    // AGENTLEDGER_MAX_BODY_BYTES (default 4 MiB)
 	MaxBatch     int      // AGENTLEDGER_MAX_BATCH (max events per request, default 1000)
 	MaxInflight  int      // AGENTLEDGER_MAX_INFLIGHT (backpressure gate, default 8192)
+
+	// OTel GenAI ingestion (gateway-agnostic source, ARCHITECTURE_PIVOT.md P1).
+	OtelTenantAttr    string // AGENTLEDGER_OTEL_TENANT_ATTR (resource/span attr carrying tenant; default agentledger.tenant_id)
+	OtelDefaultTenant string // AGENTLEDGER_OTEL_DEFAULT_TENANT (fallback when no attr/header; empty = require explicit tenant)
 }
 
 func LoadConfig() Config {
@@ -28,6 +32,9 @@ func LoadConfig() Config {
 		MaxBodyBytes: envInt64("AGENTLEDGER_MAX_BODY_BYTES", 4<<20),
 		MaxBatch:     int(envInt64("AGENTLEDGER_MAX_BATCH", 1000)),
 		MaxInflight:  int(envInt64("AGENTLEDGER_MAX_INFLIGHT", 8192)),
+
+		OtelTenantAttr:    env("AGENTLEDGER_OTEL_TENANT_ATTR", otelTenantAttrDefault),
+		OtelDefaultTenant: os.Getenv("AGENTLEDGER_OTEL_DEFAULT_TENANT"),
 	}
 }
 
