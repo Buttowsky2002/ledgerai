@@ -1,0 +1,19 @@
+{
+  "kind": "llm_call",
+  "call_id": "span456",
+  "ts": "2026-06-19T12:00:00Z",
+  "tenant_id": "t_demo",
+  "app_id": "support-agent",
+  "user_id": "agent@demo",
+  "environment": "production",
+  "run_id": "trace123",
+  "provider": "openai",
+  "request_model": "gpt-4o",
+  "response_model": "gpt-4o-2024-08-06",
+  "operation_name": "chat",
+  "input_tokens": 100,
+  "output_tokens": 40,
+  "latency_ms": 1000,
+  "status": "ok",
+  "source": "otel"
+}

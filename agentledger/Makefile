@@ -4,11 +4,12 @@ GATEWAY_DIR      := services/gateway
 COLLECTOR_DIR    := services/collector
 WORKERS_DIR      := services/workers
 CONNECTORS_DIR   := services/connectors
+ADAPTERS_DIR     := services/ingest/adapters
 API_DIR          := services/api
 SHARED_TYPES_DIR := packages/shared-types
 SDK_TS_DIR       := packages/sdk-typescript
 DASHBOARD_DIR    := apps/dashboard
-GO_SERVICES      := $(GATEWAY_DIR) $(COLLECTOR_DIR) $(WORKERS_DIR) $(CONNECTORS_DIR)
+GO_SERVICES      := $(GATEWAY_DIR) $(COLLECTOR_DIR) $(WORKERS_DIR) $(CONNECTORS_DIR) $(ADAPTERS_DIR)
 HOOKS_DIR      := .githooks
 GIT_HOOKS      := $(shell git rev-parse --git-dir 2>/dev/null)/hooks
 
@@ -45,6 +46,7 @@ build: build-api build-shared-types build-sdk-typescript build-dashboard
 	cd $(WORKERS_DIR) && CGO_ENABLED=0 go build -o ../../bin/reconcile ./cmd/reconcile
 	cd $(CONNECTORS_DIR) && CGO_ENABLED=0 go build -o ../../bin/connector-sync ./cmd/connector-sync
 	cd $(CONNECTORS_DIR) && CGO_ENABLED=0 go build -o ../../bin/outcome-sync ./cmd/outcome-sync
+	cd $(ADAPTERS_DIR) && CGO_ENABLED=0 go build -o ../../../bin/litellm-adapter ./cmd/litellm
 
 build-api:
 	cd $(API_DIR) && npm run build

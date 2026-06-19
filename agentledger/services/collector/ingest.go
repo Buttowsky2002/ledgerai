@@ -15,6 +15,10 @@ type Collector struct {
 	producer  Producer
 	metrics   *Metrics
 	maxBatch  int
+
+	// OTel GenAI ingest config (see otel.go).
+	otelTenantAttr    string
+	otelDefaultTenant string
 }
 
 // ingestResult summarizes what happened to a request's events.
@@ -86,6 +90,43 @@ func (c *Collector) handleEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, statusFor(res), res)
+}
+
+// ingestOutcome is the result of attempting to enqueue one constructed event.
+type ingestOutcome int
+
+const (
+	outcomeRejected     ingestOutcome = iota // failed validation or produce
+	outcomeAccepted                          // validated and enqueued
+	outcomeBackpressure                      // producer at capacity (retry later)
+)
+
+// produceValidated validates an event built in-process (e.g. mapped from an
+// OTLP span) against the canonical schema, then enqueues it. Unlike
+// handleEvents — which forwards the caller's original bytes verbatim — this
+// re-encodes the constructed map, since there is no original payload to
+// preserve. Metrics are updated; the caller maps the outcome to HTTP status.
+func (c *Collector) produceValidated(ev map[string]any) ingestOutcome {
+	if _, err := c.validator.Validate(ev); err != nil {
+		c.metrics.EventsRejectedValidate.Add(1)
+		slog.Debug("constructed event rejected", "err", err)
+		return outcomeRejected
+	}
+	raw, err := json.Marshal(ev)
+	if err != nil {
+		c.metrics.EventsRejectedValidate.Add(1)
+		return outcomeRejected
+	}
+	if err := c.producer.TryProduce([]byte(tenantOf(ev)), raw); err != nil {
+		if errors.Is(err, ErrBackpressure) {
+			c.metrics.EventsRejectedBackpres.Add(1)
+			return outcomeBackpressure
+		}
+		c.metrics.EventsRejectedValidate.Add(1)
+		return outcomeRejected
+	}
+	c.metrics.EventsAccepted.Add(1)
+	return outcomeAccepted
 }
 
 // statusFor maps an ingest outcome to an HTTP status code.

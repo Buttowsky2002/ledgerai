@@ -56,7 +56,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        module: [collector, connectors, gateway, workers]
+        # ingest/adapters is stdlib-only (no go.sum), so the cache key below
+        # points at go.mod, which every module has.
+        module: [collector, connectors, gateway, workers, ingest/adapters]
     defaults:
       run:
         working-directory: agentledger/services/${{ matrix.module }}
@@ -67,7 +69,7 @@ jobs:
         with:
           go-version-file: agentledger/services/${{ matrix.module }}/go.mod
           cache: true
-          cache-dependency-path: agentledger/services/${{ matrix.module }}/go.sum
+          cache-dependency-path: agentledger/services/${{ matrix.module }}/go.mod
 
       - name: Ensure go.mod/go.sum are tidy
         run: |
@@ -272,7 +274,11 @@ jobs:
         run: |
           EXAMPLES=$(find agentledger/schemas/events/examples -name '*.json' 2>/dev/null || true)
           if [ -n "$EXAMPLES" ]; then
-            npx --yes ajv-cli validate \
+            # llm_call.schema.json is JSON Schema draft 2020-12, so ajv-cli must
+            # run with --spec=draft2020 (default is draft-07) and load ajv-formats
+            # for the "date-time" format used by gen_ai timestamps.
+            npx --yes --package=ajv-cli@5 --package=ajv-formats \
+              ajv validate --spec=draft2020 -c ajv-formats \
               -s agentledger/schemas/events/llm_call.schema.json \
               -d "agentledger/schemas/events/examples/*.json"
           else

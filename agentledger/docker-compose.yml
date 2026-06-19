@@ -128,6 +128,20 @@ services:
       postgres: { condition: service_healthy }
       clickhouse: { condition: service_healthy }
 
+  # LiteLLM spend-log adapter (gateway-agnostic ingestion, Pivot P1).
+  # Point LiteLLM's logging callback at http://litellm-adapter:8097/ingest/litellm.
+  litellm-adapter:
+    build:
+      context: ./services/ingest/adapters
+      args: { CMD: litellm }
+    environment:
+      AGENTLEDGER_COLLECTOR_URL: http://collector:8090/v1/events
+      # Per-deployment default tenant (override per-record via metadata key).
+      AGENTLEDGER_ADAPTER_TENANT: ${AGENTLEDGER_ADAPTER_TENANT:-}
+    ports: ["8097:8097"]
+    depends_on:
+      collector: { condition: service_started }
+
   gateway:
     build: ./services/gateway
     environment:
