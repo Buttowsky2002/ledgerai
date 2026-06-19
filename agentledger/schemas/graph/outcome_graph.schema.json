@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentledger.ai/schemas/graph/outcome_graph.schema.json",
+  "title": "AgentLedger Agent Outcome Graph",
+  "description": "Formal contract for the Agent Outcome Graph (CLAUDE.md Phase 3): the moat that makes cost -> agent -> outcome -> value queryable with an attribution confidence on every edge. Nodes are identities (human AND non-human/agent), agent runs, and business outcomes; edges connect them and ALWAYS carry an attribution_confidence in [0,1] (1.0 for deterministic/agent-stamped links, <1.0 for probabilistic links from the attribution matcher). This document is the abstract serialization; its physical realization is the Postgres + ClickHouse tables/views described in README.md (identities/agents -> v_identities, agent_runs, outcomes, v_outcome_graph). SECURITY: nodes carry identifiers and categorical/financial attributes only — never raw prompt/completion content (CLAUDE.md rule 2).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["tenant_id", "nodes", "edges"],
+  "properties": {
+    "tenant_id": {
+      "type": "string",
+      "description": "Tenant that owns this subgraph; every node and edge is scoped to it."
+    },
+    "nodes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/node" }
+    },
+    "edges": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/edge" }
+    }
+  },
+  "$defs": {
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Attribution confidence in [0,1]. 1.0 == deterministic (SDK/agent-stamped); <1.0 == probabilistic (attribution matcher, time/identity/token signals)."
+    },
+    "node": {
+      "type": "object",
+      "required": ["node_id", "node_type"],
+      "oneOf": [
+        { "$ref": "#/$defs/identityNode" },
+        { "$ref": "#/$defs/agentRunNode" },
+        { "$ref": "#/$defs/outcomeNode" }
+      ]
+    },
+    "identityNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node_id", "node_type", "identity_type"],
+      "properties": {
+        "node_id": { "type": "string", "description": "user_id (human) or agent_id (NHI)." },
+        "node_type": { "const": "identity" },
+        "identity_type": {
+          "enum": ["human", "agent"],
+          "description": "First-class non-human identities (agents) sit alongside humans — CLAUDE.md Phase 3."
+        },
+        "display_name": { "type": "string" },
+        "email": { "type": ["string", "null"], "description": "Humans only; null for agents." },
+        "team_id": { "type": ["string", "null"] },
+        "runtime_type": { "type": ["string", "null"], "description": "Agents only: sdk|claude_code|cursor|mcp|custom." },
+        "owner_user_id": { "type": ["string", "null"], "description": "Agents only: the human identity that owns/operates this NHI." }
+      }
+    },
+    "agentRunNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node_id", "node_type"],
+      "properties": {
+        "node_id": { "type": "string", "description": "run_id." },
+        "node_type": { "const": "agent_run" },
+        "agent_id": { "type": "string" },
+        "user_id": { "type": "string" },
+        "started_at": { "type": "string", "format": "date-time" },
+        "ended_at": { "type": "string", "format": "date-time" },
+        "status": { "enum": ["completed", "failed", "cancelled", "timeout"] },
+        "total_cost_usd": { "type": "number", "description": "Fully-observed AI cost of the run (sum of its llm_calls)." },
+        "total_tokens": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "outcomeNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node_id", "node_type", "outcome_type"],
+      "properties": {
+        "node_id": { "type": "string", "description": "outcome_id, e.g. github:owner/repo#42." },
+        "node_type": { "const": "outcome" },
+        "source_system": { "type": "string", "description": "github|jira|zendesk|crm|manual|api." },
+        "outcome_type": { "type": "string", "description": "pr_merged|issue_closed|ticket_resolved|qualified_lead|..." },
+        "business_value_usd": { "type": "number", "minimum": 0 },
+        "quality_score": { "type": "number", "minimum": 0, "maximum": 1 },
+        "completion_status": { "type": "string" }
+      }
+    },
+    "edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["edge_type", "from", "to", "attribution_confidence"],
+      "properties": {
+        "edge_type": {
+          "enum": ["performed_by", "operates", "incurred_cost", "produced", "valued_at"],
+          "description": "performed_by: agent_run -> identity(human). operates: identity(human) -> identity(agent NHI). incurred_cost: agent_run -> cost (deterministic). produced: agent_run -> outcome (carries the matcher's confidence). valued_at: outcome -> business value (deterministic)."
+        },
+        "from": { "type": "string", "description": "Source node_id." },
+        "to": { "type": "string", "description": "Target node_id." },
+        "attribution_confidence": { "$ref": "#/$defs/confidence" },
+        "deterministic": {
+          "type": "boolean",
+          "description": "True when the link is asserted (agent-stamped/SDK/structural), implying attribution_confidence == 1.0."
+        }
+      }
+    }
+  }
+}
