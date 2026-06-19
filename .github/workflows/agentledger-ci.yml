@@ -56,7 +56,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        module: [collector, connectors, gateway, workers]
+        # ingest/adapters is stdlib-only (no go.sum), so the cache key below
+        # points at go.mod, which every module has.
+        module: [collector, connectors, gateway, workers, ingest/adapters]
     defaults:
       run:
         working-directory: agentledger/services/${{ matrix.module }}
@@ -67,7 +69,7 @@ jobs:
         with:
           go-version-file: agentledger/services/${{ matrix.module }}/go.mod
           cache: true
-          cache-dependency-path: agentledger/services/${{ matrix.module }}/go.sum
+          cache-dependency-path: agentledger/services/${{ matrix.module }}/go.mod
 
       - name: Ensure go.mod/go.sum are tidy
         run: |

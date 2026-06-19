@@ -1,0 +1,20 @@
+{
+  "kind": "llm_call",
+  "call_id": "litellm:abc-123",
+  "ts": "2026-06-19T12:00:00Z",
+  "tenant_id": "t_demo",
+  "team_id": "team_7",
+  "user_id": "alice@demo.test",
+  "app_id": "support-bot",
+  "virtual_key_id": "hashed_key_xyz",
+  "provider": "openai",
+  "request_model": "gpt-4o",
+  "operation_name": "acompletion",
+  "input_tokens": 120,
+  "output_tokens": 35,
+  "cache_read_tokens": 20,
+  "cost_usd": 0.0042,
+  "latency_ms": 1500,
+  "status": "ok",
+  "source": "adapter"
+}
