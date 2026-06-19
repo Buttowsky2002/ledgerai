@@ -133,6 +133,36 @@ export class AnalyticsService {
     );
   }
 
+  // Finance-grade ROI from the v_roi engine (baseline value, fully-loaded cost,
+  // confidence-weighted + risk-adjusted ROI). Aggregated per month/outcome_type.
+  // Headline excludes low-confidence links by default (minConfidence 0.5) per the
+  // Phase 4 acceptance bar; callers can pass 0 to see everything.
+  roi(from?: string, to?: string, outcomeType?: string, minConfidence = 0.5) {
+    const r = this.range(from, to, 365);
+    const filter = outcomeType ? 'AND outcome_type = {otype:String}' : '';
+    const params: Record<string, ChParam> = { ...r, minconf: minConfidence };
+    if (outcomeType) {
+      params.otype = outcomeType;
+    }
+    return this.ch.queryScoped(
+      `SELECT toStartOfMonth(outcome_ts) AS month, outcome_type AS outcome_type,
+              count() AS outcomes,
+              sum(value_usd) AS value_usd,
+              sum(fully_loaded_cost_usd) AS fully_loaded_cost_usd,
+              sum(nominal_roi_usd) AS nominal_roi_usd,
+              sum(expected_roi_usd) AS expected_roi_usd,
+              sum(risk_adjusted_roi_usd) AS risk_adjusted_roi_usd,
+              avg(attribution_confidence) AS avg_confidence,
+              avg(risk_exposure_pct) AS avg_risk_exposure
+       FROM agentledger.v_roi
+       WHERE tenant_id = {tenant:String}
+         AND toDate(outcome_ts) BETWEEN {from:Date} AND {to:Date}
+         AND attribution_confidence >= {minconf:Float32} ${filter}
+       GROUP BY month, outcome_type ORDER BY month`,
+      params,
+    );
+  }
+
   async agentDetail(agentId: string, from?: string, to?: string) {
     if (!agentId) {
       throw new BadRequestException('agentId required');

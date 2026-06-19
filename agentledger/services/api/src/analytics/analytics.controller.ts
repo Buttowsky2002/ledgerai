@@ -4,6 +4,7 @@ import {
   AllocationQueryDto,
   BurndownQueryDto,
   RangeQueryDto,
+  RoiQueryDto,
   UnitEconomicsQueryDto,
 } from './analytics.dto';
 import { AnalyticsService } from './analytics.service';
@@ -44,6 +45,11 @@ export class AnalyticsController {
   @Roles('viewer') @Get('unit-economics')
   unitEconomics(@Query() q: UnitEconomicsQueryDto) {
     return this.analytics.unitEconomics(q.from, q.to, q.outcomeType, q.minConfidence);
+  }
+
+  @Roles('viewer') @Get('roi')
+  roi(@Query() q: RoiQueryDto) {
+    return this.analytics.roi(q.from, q.to, q.outcomeType, q.minConfidence);
   }
 
   @Roles('viewer') @Get('agents/:agentId')

@@ -25,6 +25,7 @@
 CREATE TABLE IF NOT EXISTS agentledger.roi_rates
 (
     tenant_id                    LowCardinality(String),
+    source_system                LowCardinality(String),  -- github|jira|zendesk|...
     outcome_type                 LowCardinality(String),
     hourly_rate                  Float64 DEFAULT 0,   -- USD/hour of the human task
     baseline_minutes             Float64 DEFAULT 0,   -- pre-agent minutes per unit
@@ -37,7 +38,7 @@ CREATE TABLE IF NOT EXISTS agentledger.roi_rates
     updated_at                   DateTime64(3)
 )
 ENGINE = ReplacingMergeTree(updated_at)
-ORDER BY (tenant_id, outcome_type);
+ORDER BY (tenant_id, source_system, outcome_type);
 
 -- ============================================================
 -- Per-outcome actuals (override the template rate when known)
@@ -127,7 +128,7 @@ FROM agentledger.outcomes AS o FINAL
 LEFT JOIN agentledger.agent_runs AS r FINAL
     ON r.tenant_id = o.tenant_id AND r.run_id = o.run_id
 LEFT JOIN agentledger.roi_rates AS rt FINAL
-    ON rt.tenant_id = o.tenant_id AND rt.outcome_type = o.outcome_type
+    ON rt.tenant_id = o.tenant_id AND rt.source_system = o.source_system AND rt.outcome_type = o.outcome_type
 LEFT JOIN agentledger.roi_overrides AS ov FINAL
     ON ov.tenant_id = o.tenant_id AND ov.outcome_id = o.outcome_id
 LEFT JOIN agentledger.agent_risk AS ar FINAL

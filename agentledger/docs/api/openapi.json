@@ -1672,6 +1672,55 @@
         ]
       }
     },
+    "/v1/analytics/roi": {
+      "get": {
+        "operationId": "AnalyticsController_roi",
+        "parameters": [
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "outcomeType",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "minConfidence",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 0,
+              "maximum": 1,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Analytics"
+        ]
+      }
+    },
     "/v1/analytics/agents/{agentId}": {
       "get": {
         "operationId": "AnalyticsController_agentDetail",
@@ -2189,6 +2238,21 @@
             "type": "number"
           },
           "rework_pct": {
+            "type": "number"
+          },
+          "redeployment_factor": {
+            "type": "number"
+          },
+          "qa_cost_per_outcome": {
+            "type": "number"
+          },
+          "eval_cost_per_outcome": {
+            "type": "number"
+          },
+          "integration_cost_per_outcome": {
+            "type": "number"
+          },
+          "platform_overhead_pct": {
             "type": "number"
           }
         },
