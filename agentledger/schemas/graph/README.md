@@ -44,15 +44,19 @@ deterministic.
   joining `outcomes → agent_runs` exposing `ai_cost_usd`, `agent_id`,
   `business_value_usd`, `net_value_usd`, and the `attribution_confidence` of the
   `produced` edge, plus `headline_eligible` (confidence ≥ 0.5).
-- **`v_unit_economics`** (ClickHouse) — the cost-per-outcome headline. Excludes
-  low-confidence links (`attribution_confidence >= 0.5`) so weak/probabilistic
-  attributions never inflate headline ROI (Phase 3 acceptance).
+- **`v_unit_economics`** (ClickHouse) — the cost-per-outcome aggregate
+  (cost/value per month/outcome_type/team).
+- **Headline low-confidence exclusion** (Phase 3 acceptance) is enforced at the
+  API/UI layer, not in a view: `/v1/analytics/unit-economics` takes a
+  `minConfidence` param and the dashboard's headline defaults it to **0.5**
+  (showing the unfiltered count as a baseline), so weak/probabilistic
+  attributions never inflate headline ROI.
 
 ## Realizing migrations / code
 
 - Postgres: `deploy/postgres/005_identities_view.sql` (`v_identities`).
-- ClickHouse: `deploy/clickhouse/005_outcome_graph.sql` (`v_outcome_graph`,
-  headline-filtered `v_unit_economics`); base tables in `001_events.sql`.
+- ClickHouse: `deploy/clickhouse/005_outcome_graph.sql` (`v_outcome_graph`);
+  base tables + `v_unit_economics` in `001_events.sql`.
 - Matcher: `services/workers/internal/attribution`.
 - Outcome connectors: `services/connectors/internal/connector` (github, jira,
   zendesk; CRM deferred — see `docs/ADRs/025-crm-connector-deferral.md`).
