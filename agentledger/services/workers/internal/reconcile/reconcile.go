@@ -53,6 +53,7 @@ func (r *Reconciler) Run(ctx context.Context) error {
 			TenantID:        row.TenantID,
 			Day:             row.Day,
 			Model:           row.Model,
+			VirtualKeyID:    row.VirtualKeyID,
 			GatewayCostUSD:  row.GatewayCostUSD,
 			ProviderCostUSD: row.ProviderCostUSD,
 			DriftUSD:        row.DriftUSD,
