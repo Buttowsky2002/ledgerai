@@ -87,6 +87,18 @@ model Agent {
   @@map("agents")
 }
 
+model AgentToolAllowlist {
+  allowId   String   @id @default(dbgenerated("gen_random_uuid()")) @map("allow_id") @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  agentId   String   @map("agent_id") @db.Uuid
+  toolName  String   @map("tool_name")
+  mcpServer String?  @map("mcp_server")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([tenantId, agentId, toolName])
+  @@map("agent_tool_allowlist")
+}
+
 model VirtualKey {
   keyId            String    @id @default(dbgenerated("gen_random_uuid()")) @map("key_id") @db.Uuid
   tenantId         String    @map("tenant_id") @db.Uuid

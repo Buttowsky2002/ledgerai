@@ -7,6 +7,7 @@ import { AuthMiddleware } from './auth/auth.middleware';
 import { AuthModule } from './auth/auth.module';
 import { RolesGuard } from './auth/roles.guard';
 import { AgentsModule } from './agents/agents.module';
+import { AgentToolAllowlistModule } from './agent-tool-allowlist/agent-tool-allowlist.module';
 import { AllocationRulesModule } from './allocation-rules/allocation-rules.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AppsModule } from './apps/apps.module';
@@ -56,6 +57,7 @@ import { VirtualKeysModule } from './virtual-keys/virtual-keys.module';
     PoliciesModule,
     BudgetsModule,
     RoiTemplatesModule,
+    AgentToolAllowlistModule,
     AllocationRulesModule,
     VirtualKeysModule,
     PriceBookModule,

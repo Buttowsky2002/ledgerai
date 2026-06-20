@@ -48,7 +48,7 @@ export interface AgentLedgerLlmCallEvent {
   risk_severity?: "" | "low" | "medium" | "high" | "critical";
   streamed?: boolean;
   /**
-   * Ingestion provenance for cross-source dedup.
+   * Ingestion provenance for cross-source dedup. 'adapter' = normalized from a 3rd-party gateway's spend/usage log (LiteLLM/Bifrost/Portkey); 'otel' = mapped from gen_ai.* OTLP spans. Additive enum (ADR-022): existing producers/consumers are unaffected; the ClickHouse source column is a plain LowCardinality(String), so no migration is required.
    */
-  source?: "gateway" | "sdk" | "provider_export";
+  source?: "gateway" | "sdk" | "provider_export" | "adapter" | "otel";
 }

@@ -97,6 +97,21 @@ services:
     depends_on:
       clickhouse: { condition: service_healthy }
 
+  # Agent-Native Risk Engine (Phase 5): observed tool usage vs the deny-by-default
+  # allowlist → governed risk_events + agent_risk → risk-adjusted ROI.
+  risk-engine:
+    build:
+      context: ./services/workers
+      args: { CMD: risk-engine }
+    environment:
+      AGENTLEDGER_CLICKHOUSE_URL: http://clickhouse:8123
+      AGENTLEDGER_CLICKHOUSE_DB: agentledger
+      AGENTLEDGER_RISK_INTERVAL_SEC: "3600"
+      AGENTLEDGER_RISK_SPIKE_MIN: "5"
+    ports: ["8099:8099"]
+    depends_on:
+      clickhouse: { condition: service_healthy }
+
   connector-sync:
     build:
       context: ./services/connectors

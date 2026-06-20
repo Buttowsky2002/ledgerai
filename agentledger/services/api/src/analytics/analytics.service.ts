@@ -163,6 +163,28 @@ export class AnalyticsService {
     );
   }
 
+  // CISO agent risk register (Phase 5): per agent, its risk_exposure_pct plus the
+  // governed risk events behind it. Drives the CISO governance view. Empty until
+  // the risk-engine has run.
+  agentRisk() {
+    return this.ch.queryScoped(
+      `SELECT
+         e.agent_id AS agent_id,
+         any(r.risk_exposure_pct) AS risk_exposure_pct,
+         count() AS events,
+         countIf(e.severity = 'high') AS high_severity,
+         argMax(e.detail, e.detected_at) AS latest_detail,
+         argMax(e.category, e.detected_at) AS latest_category,
+         max(e.detected_at) AS last_detected
+       FROM agentledger.risk_events e FINAL
+       LEFT JOIN agentledger.agent_risk r FINAL
+         ON r.tenant_id = e.tenant_id AND r.agent_id = e.agent_id
+       WHERE e.tenant_id = {tenant:String}
+       GROUP BY e.agent_id
+       ORDER BY risk_exposure_pct DESC, events DESC`,
+    );
+  }
+
   async agentDetail(agentId: string, from?: string, to?: string) {
     if (!agentId) {
       throw new BadRequestException('agentId required');
