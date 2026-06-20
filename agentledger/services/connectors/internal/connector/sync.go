@@ -31,6 +31,8 @@ type Options struct {
 	MaxPages      int
 }
 
+// NewSyncer builds a Syncer that runs the given cost connectors, persisting
+// state via store and writing imported records to sink.
 func NewSyncer(store Store, sink Sink, connectors []Connector, opt Options) *Syncer {
 	reg := make(map[string]Connector, len(connectors))
 	for _, c := range connectors {

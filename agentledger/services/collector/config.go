@@ -23,6 +23,8 @@ type Config struct {
 	OtelDefaultTenant string // AGENTLEDGER_OTEL_DEFAULT_TENANT (fallback when no attr/header; empty = require explicit tenant)
 }
 
+// LoadConfig reads the collector configuration from environment variables,
+// applying defaults for any unset values.
 func LoadConfig() Config {
 	return Config{
 		ListenAddr:   env("AGENTLEDGER_COLLECTOR_ADDR", ":8090"),

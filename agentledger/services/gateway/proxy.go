@@ -17,6 +17,8 @@ import (
 	"time"
 )
 
+// Gateway is the OpenAI-compatible reverse proxy: it authenticates virtual keys,
+// enforces budgets/rate-limits/DLP, and emits activity events asynchronously.
 type Gateway struct {
 	current   atomic.Pointer[gatewaySnapshot] // hot-reloadable config; swap atomically
 	budgets   BudgetStore
@@ -215,7 +217,7 @@ func (g *Gateway) proxyUpstream(w http.ResponseWriter, r *http.Request, prov *Pr
 		writeErr(w, http.StatusBadGateway, "upstream_error", err.Error())
 		return u, http.StatusBadGateway, "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	for k, vals := range resp.Header {
 		for _, v := range vals {

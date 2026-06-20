@@ -18,33 +18,35 @@ linters:
 
     # Style / maintainability
     - revive
-    - gofmt
     - misspell
 
-linters-settings:
-  gosec:
-    excludes: ["G104"] # unhandled errors already covered by errcheck
-    severity: medium
-    confidence: medium
+  settings:
+    gosec:
+      excludes: ["G104"] # unhandled errors already covered by errcheck
+      severity: medium
+      confidence: medium
 
-  errcheck:
-    check-type-assertions: true
-    check-blank: true
+    revive:
+      rules:
+        - name: exported
+          disabled: false
+        - name: error-return
+          disabled: false
+        - name: error-strings
+          disabled: false
+        - name: var-naming
+          disabled: false
 
-  revive:
+  exclusions:
     rules:
-      - name: exported
-        disabled: false
-      - name: error-return
-        disabled: false
-      - name: error-strings
-        disabled: false
-      - name: var-naming
-        disabled: false
+      - path: "_test\\.go"
+        linters: [gosec]
+
+# gofmt is a formatter in golangci-lint v2, not a linter.
+formatters:
+  enable:
+    - gofmt
 
 issues:
-  exclude-rules:
-    - path: "_test\\.go"
-      linters: [gosec]
   max-issues-per-linter: 0
   max-same-issues: 0

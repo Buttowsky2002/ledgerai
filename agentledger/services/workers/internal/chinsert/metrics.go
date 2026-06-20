@@ -26,6 +26,6 @@ func (m *Metrics) WritePrometheus(w io.Writer) {
 		{"chinsert_insert_errors_total", "Failed ClickHouse insert attempts.", m.InsertErrors.Load()},
 	}
 	for _, r := range rows {
-		fmt.Fprintf(w, "# HELP %s %s\n# TYPE %s counter\n%s %d\n", r.name, r.help, r.name, r.name, r.val)
+		_, _ = fmt.Fprintf(w, "# HELP %s %s\n# TYPE %s counter\n%s %d\n", r.name, r.help, r.name, r.name, r.val)
 	}
 }

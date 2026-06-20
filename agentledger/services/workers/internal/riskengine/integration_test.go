@@ -116,11 +116,16 @@ func chInsert(t *testing.T, base, table string, rows []map[string]any) {
 		"input_format_skip_unknown_fields": {"1"},
 		"date_time_input_format":           {"best_effort"},
 	}
-	resp, err := http.Post(base+"/?"+q.Encode(), "application/x-ndjson", strings.NewReader(b.String()))
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, base+"/?"+q.Encode(), strings.NewReader(b.String()))
+	if err != nil {
+		t.Fatalf("ch insert %s: build request: %v", table, err)
+	}
+	req.Header.Set("Content-Type", "application/x-ndjson")
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("ch insert %s: %v", table, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		t.Fatalf("ch insert %s status %d: %s", table, resp.StatusCode, body)
@@ -129,11 +134,15 @@ func chInsert(t *testing.T, base, table string, rows []map[string]any) {
 
 func chScalar(t *testing.T, base, q string) string {
 	t.Helper()
-	resp, err := http.Get(base + "/?default_format=TabSeparated&query=" + url.QueryEscape(q))
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, base+"/?default_format=TabSeparated&query="+url.QueryEscape(q), nil)
+	if err != nil {
+		t.Fatalf("ch query: build request: %v", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("ch query: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("ch query status %d: %s", resp.StatusCode, body)

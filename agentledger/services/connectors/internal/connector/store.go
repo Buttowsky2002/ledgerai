@@ -46,6 +46,7 @@ func NewPGStore(dsn string) (*PGStore, error) {
 	return &PGStore{db: db}, nil
 }
 
+// Close closes the underlying database connection pool.
 func (s *PGStore) Close() error { return s.db.Close() }
 
 // ListActive returns every connector not explicitly disabled.
@@ -61,7 +62,7 @@ func (s *PGStore) ListActive(ctx context.Context) ([]State, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var out []State
 	for rows.Next() {
@@ -93,12 +94,14 @@ func (s *PGStore) SaveCursor(ctx context.Context, id string, cur Cursor) error {
 	return err
 }
 
+// MarkSuccess records a successful sync run, clearing any previous error.
 func (s *PGStore) MarkSuccess(ctx context.Context, id string) error {
 	_, err := s.db.ExecContext(ctx,
 		`UPDATE connectors SET status='ok', last_sync_at=now(), last_error=NULL WHERE connector_id=$1`, id)
 	return err
 }
 
+// MarkError records a failed sync run with the given error message.
 func (s *PGStore) MarkError(ctx context.Context, id, msg string) error {
 	_, err := s.db.ExecContext(ctx,
 		`UPDATE connectors SET status='error', last_error=$2 WHERE connector_id=$1`, id, msg)

@@ -23,6 +23,8 @@ type Engine struct {
 	now      func() time.Time
 }
 
+// New builds a risk Engine; spikeMin is the occurrence count at or above which an
+// unauthorized tool is escalated to "high" severity (defaults to 5 when zero).
 func New(ch CHClient, spikeMin uint32, m *Metrics) *Engine {
 	if m == nil {
 		m = &Metrics{}

@@ -24,6 +24,8 @@ type Config struct {
 	RetryBackoff  time.Duration // AGENTLEDGER_RETRY_BACKOFF_MS (250ms)
 }
 
+// LoadConfig reads the ch-insert worker configuration from environment
+// variables, applying defaults for any unset values.
 func LoadConfig() Config {
 	return Config{
 		Brokers:            splitCSV(env("AGENTLEDGER_KAFKA_BROKERS", "localhost:19092")),

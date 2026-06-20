@@ -68,6 +68,8 @@ type HTTPClient struct {
 	client   *http.Client
 }
 
+// NewHTTPClient builds an HTTPClient for the ClickHouse HTTP interface used by
+// the attribution matcher to read outcomes and agent runs.
 func NewHTTPClient(baseURL, db, user, password string) *HTTPClient {
 	return &HTTPClient{
 		baseURL:  baseURL,
@@ -129,7 +131,7 @@ func (h *HTTPClient) query(ctx context.Context, q, since string, out any) error 
 	if err != nil {
 		return fmt.Errorf("clickhouse query: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("clickhouse query status %d: %s", resp.StatusCode, bytes.TrimSpace(body))
@@ -166,7 +168,7 @@ func (h *HTTPClient) WriteOutcomes(ctx context.Context, rows []OutcomeRow) error
 	if err != nil {
 		return fmt.Errorf("clickhouse insert: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
 		return fmt.Errorf("clickhouse insert status %d: %s", resp.StatusCode, bytes.TrimSpace(msg))
@@ -185,7 +187,7 @@ func (h *HTTPClient) Ping(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	_, _ = io.Copy(io.Discard, resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("clickhouse ping status %d", resp.StatusCode)

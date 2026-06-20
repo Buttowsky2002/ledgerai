@@ -28,6 +28,7 @@ type AnthropicConnector struct {
 	now    func() time.Time
 }
 
+// NewAnthropicConnector constructs an AnthropicConnector with a default HTTP client.
 func NewAnthropicConnector() *AnthropicConnector {
 	return &AnthropicConnector{
 		client: &http.Client{Timeout: 30 * time.Second},
@@ -35,6 +36,7 @@ func NewAnthropicConnector() *AnthropicConnector {
 	}
 }
 
+// Kind returns the connector's stable identifier.
 func (c *AnthropicConnector) Kind() string { return "anthropic_usage" }
 
 // flexFloat parses a JSON value that may be a number or a numeric string
@@ -86,6 +88,7 @@ type anthropicCostResponse struct {
 	NextPage string `json:"next_page"`
 }
 
+// Fetch imports one page of org-billed cost records for the given cursor.
 func (c *AnthropicConnector) Fetch(ctx context.Context, cfg map[string]any, cur Cursor) (Page, error) {
 	baseURL := cfgString(cfg, "base_url", "https://api.anthropic.com")
 	keyEnv := cfgString(cfg, "api_key_env", "ANTHROPIC_ADMIN_KEY")
@@ -124,7 +127,7 @@ func (c *AnthropicConnector) Fetch(ctx context.Context, cfg map[string]any, cur 
 	if err != nil {
 		return Page{}, fmt.Errorf("anthropic cost_report request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
 		return Page{}, fmt.Errorf("anthropic cost_report status %d: %s", resp.StatusCode, strings.TrimSpace(string(msg)))

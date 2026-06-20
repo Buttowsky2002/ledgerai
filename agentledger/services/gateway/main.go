@@ -59,7 +59,7 @@ func main() {
 		budgets = NewBudgetStore(cfg.VirtualKeys)
 		slog.Info("budget store: memory (not shared across replicas)")
 	}
-	defer budgets.Close()
+	defer func() { _ = budgets.Close() }()
 
 	sink := NewEventSink(cfg.Events)
 	defer sink.Close()
@@ -75,7 +75,7 @@ func main() {
 			slog.Error("pg config store init failed", "err", err)
 			os.Exit(1)
 		}
-		defer cs.Close()
+		defer func() { _ = cs.Close() }()
 		// Best-effort initial load; fall back to file config on error.
 		if pgCfg, loadErr := cs.Load(context.Background()); loadErr == nil {
 			gw.current.Store(newSnapshotFromHashed(pgCfg, priceBook))

@@ -25,7 +25,7 @@ func NewValidator(path string) (*Validator, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open event schema %s: %w", path, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	c := jsonschema.NewCompiler()
 	c.AssertFormat = true

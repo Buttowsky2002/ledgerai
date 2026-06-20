@@ -6,6 +6,8 @@ import (
 	"sync"
 )
 
+// KeyStore is an in-memory lookup of virtual keys indexed by the SHA-256 hash
+// of their bearer token; plaintext tokens are never retained.
 type KeyStore struct {
 	mu   sync.RWMutex
 	keys map[string]*VirtualKey // map key is sha256hex(bearer_token)

@@ -15,6 +15,8 @@ import (
 // Token types follow provider billing semantics: input, output,
 // cache_read, cache_write. Prices are USD per 1M tokens.
 
+// PriceEntry is one price-book row: a provider/model/token-type rate effective
+// over a time window.
 type PriceEntry struct {
 	Provider       string     `json:"provider"`
 	Model          string     `json:"model"` // prefix match, longest wins
@@ -25,12 +27,14 @@ type PriceEntry struct {
 	Source         string     `json:"source"` // provenance for audit
 }
 
+// PriceBook is an in-memory collection of PriceEntry rows queried by Rate.
 type PriceBook struct {
 	entries []PriceEntry
 }
 
+// LoadPriceBook reads and parses the price book from a JSON file.
 func LoadPriceBook(path string) (*PriceBook, error) {
-	b, err := os.ReadFile(path)
+	b, err := os.ReadFile(path) // #nosec G304 -- path is an operator-provided price-book file path set at startup, not user input
 	if err != nil {
 		return nil, fmt.Errorf("read price book: %w", err)
 	}

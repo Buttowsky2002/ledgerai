@@ -64,6 +64,7 @@ type DLPConfig struct {
 	Policies []DLPPolicy `json:"policies"`
 }
 
+// DLPPolicy maps a classifier policy ID to the action taken when its classes match.
 type DLPPolicy struct {
 	ID      string   `json:"id"`
 	Action  string   `json:"action"`  // allow | log | warn | redact | block
@@ -81,8 +82,9 @@ type EventSinkCfg struct {
 	BufferSize int    `json:"buffer_size,omitempty"`
 }
 
+// LoadConfig reads and parses the gateway configuration from a JSON file.
 func LoadConfig(path string) (*Config, error) {
-	b, err := os.ReadFile(path)
+	b, err := os.ReadFile(path) // #nosec G304 -- path is an operator-provided config file path set at startup, not user input
 	if err != nil {
 		return nil, fmt.Errorf("read config: %w", err)
 	}

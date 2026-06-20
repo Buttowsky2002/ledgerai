@@ -42,6 +42,8 @@ type Matcher struct {
 	now           func() time.Time
 }
 
+// New builds a Matcher that correlates outcomes to agent runs within the given
+// time window and lookback, emitting links at or above minConfidence.
 func New(ch CHClient, window time.Duration, lookbackDays int, minConfidence float64, m *Metrics) *Matcher {
 	if m == nil {
 		m = &Metrics{}

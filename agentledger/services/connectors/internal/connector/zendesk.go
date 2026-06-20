@@ -37,10 +37,12 @@ type ZendeskConnector struct {
 	now    func() time.Time
 }
 
+// NewZendeskConnector constructs a ZendeskConnector with a default HTTP client.
 func NewZendeskConnector() *ZendeskConnector {
 	return &ZendeskConnector{client: &http.Client{Timeout: 30 * time.Second}, now: time.Now}
 }
 
+// Kind returns the connector's stable identifier.
 func (c *ZendeskConnector) Kind() string { return "zendesk" }
 
 type zdSearch struct {
@@ -54,6 +56,7 @@ type zdSearch struct {
 	Count    int     `json:"count"`
 }
 
+// Fetch imports one page of resolved tickets for the given cursor.
 func (c *ZendeskConnector) Fetch(ctx context.Context, cfg map[string]any, cur Cursor) (OutcomePage, error) {
 	baseURL, _ := cfg["base_url"].(string)
 	emailEnv, _ := cfg["email_env"].(string)
@@ -98,7 +101,7 @@ func (c *ZendeskConnector) Fetch(ctx context.Context, cfg map[string]any, cur Cu
 	if err != nil {
 		return OutcomePage{}, fmt.Errorf("zendesk request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
 		return OutcomePage{}, fmt.Errorf("zendesk status %d: %s", resp.StatusCode, msg)

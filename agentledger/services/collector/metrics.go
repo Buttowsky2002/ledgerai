@@ -41,6 +41,6 @@ func (m *Metrics) WritePrometheus(w io.Writer, prod Producer) {
 		{"collector_otel_spans_no_tenant_total", "GenAI spans dropped for lacking a tenant.", "counter", m.OtelSpansNoTenant.Load()},
 	}
 	for _, mt := range metrics {
-		fmt.Fprintf(w, "# HELP %s %s\n# TYPE %s %s\n%s %d\n", mt.name, mt.help, mt.name, mt.typ, mt.name, mt.val)
+		_, _ = fmt.Fprintf(w, "# HELP %s %s\n# TYPE %s %s\n%s %d\n", mt.name, mt.help, mt.name, mt.typ, mt.name, mt.val)
 	}
 }

@@ -79,7 +79,7 @@ func (s *PGConfigStore) loadVirtualKeys(ctx context.Context) ([]VirtualKey, erro
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var out []VirtualKey
 	for rows.Next() {
@@ -108,7 +108,7 @@ func (s *PGConfigStore) loadDLPPolicies(ctx context.Context) ([]DLPPolicy, error
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var out []DLPPolicy
 	for rows.Next() {

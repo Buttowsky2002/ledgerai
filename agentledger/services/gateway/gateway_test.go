@@ -61,7 +61,7 @@ func testGateway(t *testing.T, upstreamURL string) *Gateway {
 			{ID: "default", Action: "log"},
 		}},
 	}
-	os.Setenv("TEST_UPSTREAM_KEY", "sk-upstream")
+	_ = os.Setenv("TEST_UPSTREAM_KEY", "sk-upstream")
 
 	return newGateway(cfg, pb,
 		NewBudgetStore(cfg.VirtualKeys),

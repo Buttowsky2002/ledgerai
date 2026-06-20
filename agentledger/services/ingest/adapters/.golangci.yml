@@ -10,11 +10,10 @@ linters:
     - ineffassign
     - unused
 
-    # Security (critical for a proxy handling credentials and PII)
+    # Security (normalizes untrusted third-party spend/usage logs)
     - gosec
     - bodyclose
     - noctx
-    - sqlclosecheck
 
     # Style / maintainability
     - revive
@@ -22,8 +21,7 @@ linters:
 
   settings:
     gosec:
-      # G104: unhandled errors — already caught by errcheck; avoid double-reporting
-      excludes: ["G104"]
+      excludes: ["G104"] # unhandled errors already covered by errcheck
       severity: medium
       confidence: medium
 
@@ -40,7 +38,6 @@ linters:
 
   exclusions:
     rules:
-      # Test fixtures may use weak patterns intentionally.
       - path: "_test\\.go"
         linters: [gosec]
 

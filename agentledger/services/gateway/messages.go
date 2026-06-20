@@ -165,7 +165,7 @@ func (g *Gateway) proxyMessages(w http.ResponseWriter, r *http.Request, prov *Pr
 		writeAnthropicErr(w, http.StatusBadGateway, "api_error", err.Error())
 		return u, http.StatusBadGateway, "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
 		b, _ := io.ReadAll(resp.Body)
@@ -244,7 +244,7 @@ func translateStreamOpenAIToAnthropic(w http.ResponseWriter, body io.Reader, u *
 	flusher, _ := w.(http.Flusher)
 	emit := func(event string, payload any) {
 		b, _ := json.Marshal(payload)
-		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, b)
+		_, _ = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, b)
 		if flusher != nil {
 			flusher.Flush()
 		}

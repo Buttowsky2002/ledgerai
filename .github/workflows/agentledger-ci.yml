@@ -26,10 +26,10 @@ permissions:
 #   TS    — shared-types, api, dashboard, sdk-typescript
 #   + a compose-backed API e2e (RLS/RBAC/audit/analytics/ROI) and CodeQL.
 #
-# NOTE: golangci-lint is intentionally NOT run yet — the repo's .golangci.yml
-# configs need a v2-schema fix and the existing code carries a lint backlog
-# (errcheck/gosec/noctx/gofmt). Tracked as a separate cleanup; `go vet` is the
-# Go lint gate in the meantime.
+# golangci-lint runs per module as a BLOCKING gate (errcheck, gosec, staticcheck,
+# revive, bodyclose, noctx, sqlclosecheck, ineffassign, unused, govet, misspell;
+# gofmt via the formatters block). It rides on the already-required "Go — <module>"
+# checks, so no ruleset change is needed.
 # ---------------------------------------------------------------------------
 jobs:
 
@@ -86,13 +86,24 @@ jobs:
       - name: Test with race detector
         run: go test -race ./...
 
-      # Advisory: flags go1.22 stdlib CVEs fixed only in go1.23+ (the project pins
-      # Go 1.22 per CLAUDE.md). Flip to blocking after a Go-toolchain bump.
-      - name: govulncheck
-        continue-on-error: true
+      # Blocking. Runs after the build/test so the module cache is warm (golangci
+      # needs compiled deps for type info). Pinned to the version verified locally.
+      - name: golangci-lint
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
-          govulncheck ./...
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b "$(go env GOPATH)/bin" v2.1.6
+          "$(go env GOPATH)/bin/golangci-lint" run ./...
+
+      # Blocking. GOTOOLCHAIN pins the build to a current Go so the stdlib CVEs
+      # (fixed only in Go newer than the go.mod `go 1.22` language version) are
+      # resolved. Scoped to this step only, so golangci-lint above still sees the
+      # go 1.22 target (it refuses to run against a higher targeted version).
+      # govulncheck is pinned for determinism; its vuln DB is fetched at runtime.
+      - name: govulncheck
+        env:
+          GOTOOLCHAIN: go1.26.4
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.4.0
+          "$(go env GOPATH)/bin/govulncheck" ./...
 
   # ── 3. TypeScript — shared-types (build) ───────────────────────────────────
   node-shared-types:

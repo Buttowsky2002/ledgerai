@@ -60,6 +60,8 @@ type HTTPClient struct {
 	client   *http.Client
 }
 
+// NewHTTPClient builds an HTTPClient for the ClickHouse HTTP interface used by
+// the reconciliation worker.
 func NewHTTPClient(baseURL, db, user, password string) *HTTPClient {
 	return &HTTPClient{
 		baseURL:  baseURL,
@@ -70,6 +72,8 @@ func NewHTTPClient(baseURL, db, user, password string) *HTTPClient {
 	}
 }
 
+// Reconciliation returns per-day/model/key rows diffing observed vs billed cost
+// since the given day.
 func (h *HTTPClient) Reconciliation(ctx context.Context, sinceDay string) ([]ReconRow, error) {
 	// Filter on the Date column inside a subquery, then stringify outside —
 	// aliasing toString(day) AS day at the top level would shadow the Date
@@ -92,7 +96,7 @@ func (h *HTTPClient) Reconciliation(ctx context.Context, sinceDay string) ([]Rec
 	if err != nil {
 		return nil, fmt.Errorf("clickhouse query: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("clickhouse query status %d: %s", resp.StatusCode, bytes.TrimSpace(body))
@@ -112,6 +116,7 @@ func (h *HTTPClient) Reconciliation(ctx context.Context, sinceDay string) ([]Rec
 	return rows, nil
 }
 
+// WriteAdjustments inserts booked cost adjustments into ClickHouse.
 func (h *HTTPClient) WriteAdjustments(ctx context.Context, adj []Adjustment) error {
 	if len(adj) == 0 {
 		return nil
@@ -139,7 +144,7 @@ func (h *HTTPClient) WriteAdjustments(ctx context.Context, adj []Adjustment) err
 	if err != nil {
 		return fmt.Errorf("clickhouse insert: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
 		return fmt.Errorf("clickhouse insert status %d: %s", resp.StatusCode, bytes.TrimSpace(msg))
@@ -158,7 +163,7 @@ func (h *HTTPClient) Ping(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	_, _ = io.Copy(io.Discard, resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("clickhouse ping status %d", resp.StatusCode)

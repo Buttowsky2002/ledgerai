@@ -24,6 +24,8 @@ type ClickHouseOutcomeSink struct {
 	client   *http.Client
 }
 
+// NewClickHouseOutcomeSink builds a sink that writes outcomes rows via the
+// ClickHouse HTTP interface.
 func NewClickHouseOutcomeSink(baseURL, db, user, password string) *ClickHouseOutcomeSink {
 	return &ClickHouseOutcomeSink{
 		baseURL:  baseURL,
@@ -35,6 +37,7 @@ func NewClickHouseOutcomeSink(baseURL, db, user, password string) *ClickHouseOut
 	}
 }
 
+// WriteOutcomes inserts outcome records into ClickHouse.
 func (s *ClickHouseOutcomeSink) WriteOutcomes(ctx context.Context, records []OutcomeRecord) error {
 	if len(records) == 0 {
 		return nil
@@ -73,7 +76,7 @@ func (s *ClickHouseOutcomeSink) WriteOutcomes(ctx context.Context, records []Out
 	if err != nil {
 		return fmt.Errorf("clickhouse write: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
 		return fmt.Errorf("clickhouse write status %d: %s", resp.StatusCode, bytes.TrimSpace(msg))

@@ -60,6 +60,8 @@ func NewKafkaProducer(brokers []string, topic string, maxInflight int) (*KafkaPr
 	return &KafkaProducer{cl: cl, topic: topic, maxInflight: int64(maxInflight)}, nil
 }
 
+// TryProduce enqueues a record for asynchronous production, returning
+// ErrBackpressure when the inflight gate is already full.
 func (p *KafkaProducer) TryProduce(key, value []byte) error {
 	if p.inflight.Add(1) > p.maxInflight {
 		p.inflight.Add(-1)
@@ -80,6 +82,7 @@ func (p *KafkaProducer) TryProduce(key, value []byte) error {
 	return nil
 }
 
+// Stats returns a snapshot of produced, failed, and inflight record counts.
 func (p *KafkaProducer) Stats() ProducerStats {
 	return ProducerStats{
 		Produced: p.produced.Load(),
@@ -95,6 +98,7 @@ func (p *KafkaProducer) Ready() bool {
 	return p.cl.Ping(ctx) == nil
 }
 
+// Close flushes any buffered records and shuts down the underlying client.
 func (p *KafkaProducer) Close() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

@@ -64,6 +64,8 @@ type OutcomeSyncer struct {
 	maxPages int
 }
 
+// NewOutcomeSyncer builds an OutcomeSyncer that runs the given outcome
+// connectors, persisting state via store and writing outcomes to sink.
 func NewOutcomeSyncer(store Store, sink OutcomeSink, connectors []OutcomeConnector, opt Options) *OutcomeSyncer {
 	reg := make(map[string]OutcomeConnector, len(connectors))
 	for _, c := range connectors {

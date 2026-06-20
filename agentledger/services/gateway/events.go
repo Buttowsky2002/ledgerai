@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -71,10 +72,12 @@ type EventSink struct {
 	file *os.File
 }
 
+// NewEventSink starts the asynchronous event sink described by cfg: it opens the
+// spool file for the "file" type and launches the background flush loop.
 func NewEventSink(cfg EventSinkCfg) *EventSink {
 	s := &EventSink{cfg: cfg, ch: make(chan LLMCallEvent, cfg.BufferSize)}
 	if cfg.Type == "file" && cfg.Path != "" {
-		f, err := os.OpenFile(cfg.Path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+		f, err := os.OpenFile(cfg.Path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 		if err != nil {
 			slog.Error("event sink file open failed, falling back to stdout", "err", err)
 		} else {
@@ -133,7 +136,9 @@ func (s *EventSink) flush(batch []LLMCallEvent) {
 	}
 	switch s.cfg.Type {
 	case "http":
-		req, err := http.NewRequest("POST", s.cfg.URL, bytes.NewReader(buf.Bytes()))
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.cfg.URL, bytes.NewReader(buf.Bytes()))
 		if err == nil {
 			req.Header.Set("Content-Type", "application/x-ndjson")
 			resp, err := http.DefaultClient.Do(req)
@@ -154,6 +159,8 @@ func (s *EventSink) flush(batch []LLMCallEvent) {
 	}
 }
 
+// Close stops accepting new events, drains the buffer, and waits for the flush
+// loop to finish.
 func (s *EventSink) Close() {
 	close(s.ch)
 	s.wg.Wait()
