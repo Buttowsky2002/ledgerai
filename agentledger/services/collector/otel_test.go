@@ -217,6 +217,112 @@ func TestOTelMalformedBody(t *testing.T) {
 	}
 }
 
+// a tool/MCP span per the OTel GenAI execute_tool convention.
+func toolSpan() otelSpan {
+	return otelSpan{
+		TraceID:           "traceTool",
+		SpanID:            "spanTool",
+		Name:              "execute_tool shell.exec",
+		StartTimeUnixNano: "1718800000000000000",
+		EndTimeUnixNano:   "1718800000500000000",
+		Attributes: []otelKeyValue{
+			kv("gen_ai.operation.name", strVal("execute_tool")),
+			kv("gen_ai.tool.name", strVal("shell.exec")),
+			kv("gen_ai.tool.call.id", strVal("toolcall_1")),
+			kv("agentledger.agent_id", strVal("triage")),
+			kv("agentledger.mcp_server", strVal("filesystem")),
+		},
+		Status: otelStatus{Code: 1},
+	}
+}
+
+func TestOTelConvertsToolSpan(t *testing.T) {
+	m := &mockProducer{}
+	c := testCollector(t, m)
+	body := otelExport([]otelKeyValue{kv("agentledger.tenant_id", strVal("t_otel"))}, toolSpan())
+
+	w, res := postOTel(t, c, body, "")
+	if w.Code != http.StatusOK || res.Accepted != 1 || res.SpansSkipped != 0 {
+		t.Fatalf("status=%d result=%+v, want 200 accepted=1 skipped=0", w.Code, res)
+	}
+	if c.metrics.OtelToolSpansConverted.Load() != 1 {
+		t.Fatalf("OtelToolSpansConverted = %d, want 1", c.metrics.OtelToolSpansConverted.Load())
+	}
+	if string(m.records[0].key) != "t_otel" {
+		t.Fatalf("partition key = %q, want tenant t_otel", m.records[0].key)
+	}
+	var ev map[string]any
+	if err := json.Unmarshal(m.records[0].value, &ev); err != nil {
+		t.Fatalf("produced value not JSON: %v", err)
+	}
+	checks := map[string]any{
+		"kind": "tool_call", "tenant_id": "t_otel", "source": "otel",
+		"tool_call_id": "toolcall_1", "tool_name": "shell.exec",
+		"mcp_server": "filesystem", "agent_id": "triage", "run_id": "traceTool",
+	}
+	for k, want := range checks {
+		if ev[k] != want {
+			t.Errorf("%s = %v, want %v", k, ev[k], want)
+		}
+	}
+}
+
+func TestOTelToolSpanFallsBackToSpanIDAndName(t *testing.T) {
+	m := &mockProducer{}
+	c := testCollector(t, m)
+	span := toolSpan()
+	// No gen_ai.tool.call.id and no gen_ai.tool.name: rely on execute_tool +
+	// the span id (dedup key) and span name (tool name).
+	span.Attributes = []otelKeyValue{
+		kv("gen_ai.operation.name", strVal("execute_tool")),
+		kv("agentledger.tenant_id", strVal("t1")),
+	}
+	span.Name = "db.query"
+	body := otelExport(nil, span)
+
+	postOTel(t, c, body, "")
+	if m.count() != 1 {
+		t.Fatalf("expected 1 tool_call, got %d", m.count())
+	}
+	var ev map[string]any
+	_ = json.Unmarshal(m.records[0].value, &ev)
+	if ev["tool_call_id"] != "spanTool" {
+		t.Errorf("tool_call_id = %v, want spanTool (span id fallback)", ev["tool_call_id"])
+	}
+	if ev["tool_name"] != "db.query" {
+		t.Errorf("tool_name = %v, want db.query (span name fallback)", ev["tool_name"])
+	}
+}
+
+func TestOTelMixedTraceLLMAndTool(t *testing.T) {
+	m := &mockProducer{}
+	c := testCollector(t, m)
+	body := otelExport([]otelKeyValue{kv("agentledger.tenant_id", strVal("t1"))}, genAISpan(), toolSpan())
+
+	_, res := postOTel(t, c, body, "")
+	if res.Accepted != 2 || res.SpansSkipped != 0 {
+		t.Fatalf("result = %+v, want accepted=2 skipped=0", res)
+	}
+	if c.metrics.OtelSpansConverted.Load() != 1 || c.metrics.OtelToolSpansConverted.Load() != 1 {
+		t.Fatalf("converted llm=%d tool=%d, want 1/1",
+			c.metrics.OtelSpansConverted.Load(), c.metrics.OtelToolSpansConverted.Load())
+	}
+	// The execute_tool span must produce a tool_call, never be misread as llm_call.
+	kinds := map[string]int{}
+	for _, r := range m.records {
+		var ev map[string]any
+		_ = json.Unmarshal(r.value, &ev)
+		k, _ := ev["kind"].(string)
+		if k == "" {
+			k = "llm_call"
+		}
+		kinds[k]++
+	}
+	if kinds["llm_call"] != 1 || kinds["tool_call"] != 1 {
+		t.Fatalf("kinds = %v, want one llm_call and one tool_call", kinds)
+	}
+}
+
 func TestOTelConfiguredTenantAttr(t *testing.T) {
 	m := &mockProducer{}
 	c := testCollector(t, m)

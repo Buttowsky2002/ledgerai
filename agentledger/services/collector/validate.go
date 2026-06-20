@@ -58,6 +58,18 @@ func (v *Validator) Validate(ev map[string]any) (kind string, err error) {
 		if s, ok := ev["ts"].(string); !ok || s == "" {
 			return kind, fmt.Errorf("missing ts")
 		}
+		// tool_call rows land in agent_tool_calls, whose ReplacingMergeTree
+		// dedup key is (tenant_id, agent_id, tool_call_id). A missing
+		// tool_call_id would collapse every tool call for an agent into one
+		// row, so require it (and tool_name, the governed dimension) here.
+		if kind == "tool_call" {
+			if s, ok := ev["tool_call_id"].(string); !ok || s == "" {
+				return kind, fmt.Errorf("missing tool_call_id")
+			}
+			if s, ok := ev["tool_name"].(string); !ok || s == "" {
+				return kind, fmt.Errorf("missing tool_name")
+			}
+		}
 		return kind, nil
 	default:
 		return kind, fmt.Errorf("unknown event kind %q", kind)

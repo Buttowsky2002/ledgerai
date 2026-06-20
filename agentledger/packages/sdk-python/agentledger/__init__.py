@@ -137,14 +137,20 @@ class Run:
         })
 
     def record_tool_call(self, tool_name: str, status: str = "ok",
-                         latency_ms: int = 0) -> None:
+                         latency_ms: int = 0, mcp_server: str = "") -> None:
         self._tool_calls += 1
         _post({
-            "kind": "tool_call", "ts": _iso_now(),
+            "kind": "tool_call",
+            # Stable, unique id — the agent_tool_calls dedup key (without it,
+            # ClickHouse's ReplacingMergeTree collapses an agent's tool calls).
+            "tool_call_id": f"tool_{uuid.uuid4().hex[:16]}",
+            "ts": _iso_now(),
             "tenant_id": _config["tenant_id"], "run_id": self.run_id,
             "agent_id": self.agent_id, "step_id": self._next_step(),
             "operation_name": "execute_tool",     # gen_ai agent-span convention
-            "tool_name": tool_name, "status": status, "latency_ms": latency_ms,
+            "tool_name": tool_name,               # gen_ai.tool.name
+            "mcp_server": mcp_server,             # MCP server id, if any
+            "status": status, "latency_ms": latency_ms,
             "source": "sdk",
         })
 

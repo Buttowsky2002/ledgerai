@@ -69,9 +69,9 @@ func TestProcessRoutesByKind(t *testing.T) {
 		[]byte(`{"call_id":"2","tenant_id":"t1"}`), // no kind → llm_call
 		[]byte(`{"kind":"agent_run","run_id":"r1","tenant_id":"t1"}`),
 		[]byte(`{"kind":"outcome","outcome_id":"o1","tenant_id":"t1"}`),
-		[]byte(`{"kind":"tool_call","tenant_id":"t1"}`), // skip
-		[]byte(`{"kind":"banana","tenant_id":"t1"}`),    // dlq
-		[]byte(`{not valid json`),                       // dlq
+		[]byte(`{"kind":"tool_call","tenant_id":"t1","tool_call_id":"tc1","tool_name":"shell.exec"}`), // → agent_tool_calls
+		[]byte(`{"kind":"banana","tenant_id":"t1"}`),                                                  // dlq
+		[]byte(`{not valid json`),                                                                     // dlq
 	}
 	if err := p.Process(context.Background(), msgs); err != nil {
 		t.Fatalf("process: %v", err)
@@ -83,14 +83,17 @@ func TestProcessRoutesByKind(t *testing.T) {
 	if ins.count(TableAgentRuns) != 1 || ins.count(TableOutcomes) != 1 {
 		t.Errorf("agent_runs=%d outcomes=%d, want 1/1", ins.count(TableAgentRuns), ins.count(TableOutcomes))
 	}
+	if ins.count(TableAgentToolCalls) != 1 {
+		t.Errorf("agent_tool_calls inserted = %d, want 1", ins.count(TableAgentToolCalls))
+	}
 	if dlq.count() != 2 {
 		t.Errorf("dead-lettered = %d, want 2 (bad json + unknown kind)", dlq.count())
 	}
-	if m.Skipped.Load() != 1 {
-		t.Errorf("skipped = %d, want 1 (tool_call)", m.Skipped.Load())
+	if m.Skipped.Load() != 0 {
+		t.Errorf("skipped = %d, want 0 (tool_call now routes to agent_tool_calls)", m.Skipped.Load())
 	}
-	if m.Inserted.Load() != 4 {
-		t.Errorf("inserted metric = %d, want 4", m.Inserted.Load())
+	if m.Inserted.Load() != 5 {
+		t.Errorf("inserted metric = %d, want 5", m.Inserted.Load())
 	}
 }
 

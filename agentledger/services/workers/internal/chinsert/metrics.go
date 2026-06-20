@@ -9,7 +9,7 @@ import (
 // Metrics holds the worker's counters (atomic; updated from the consume loop).
 type Metrics struct {
 	Inserted     atomic.Int64 // rows successfully inserted into ClickHouse
-	Skipped      atomic.Int64 // valid events with no target table (tool_call)
+	Skipped      atomic.Int64 // valid events with no target table (none currently; defensive)
 	DeadLettered atomic.Int64 // poison events routed to the DLQ
 	InsertErrors atomic.Int64 // failed insert attempts (pre-retry/isolation)
 }

@@ -158,7 +158,30 @@ func (c *Collector) handleOTel(w http.ResponseWriter, r *http.Request) {
 		resAttrs := attrs(rs.Resource.Attributes)
 		for _, ss := range rs.ScopeSpans {
 			for i := range ss.Spans {
-				ev, ok := c.spanToEvent(&ss.Spans[i], resAttrs, headerTenant)
+				sp := &ss.Spans[i]
+
+				// Tool/MCP spans feed the agent-native risk engine. Claim them
+				// first so a tool span is never misread as an llm_call.
+				if isToolSpan(sp) {
+					ev, ok := c.spanToToolEvent(sp, resAttrs, headerTenant)
+					if !ok {
+						res.SpansSkipped++
+						c.metrics.OtelSpansSkipped.Add(1)
+						continue
+					}
+					switch c.produceValidated(ev) {
+					case outcomeAccepted:
+						res.Accepted++
+						c.metrics.OtelToolSpansConverted.Add(1)
+					case outcomeBackpressure:
+						res.RejectedBusy++
+					default:
+						res.RejectedBad++
+					}
+					continue
+				}
+
+				ev, ok := c.spanToEvent(sp, resAttrs, headerTenant)
 				if !ok {
 					res.SpansSkipped++
 					c.metrics.OtelSpansSkipped.Add(1)
@@ -223,6 +246,14 @@ func (c *Collector) spanToEvent(span *otelSpan, resAttrs map[string]otelAnyValue
 	system, hasSystem := get("gen_ai.system")
 	reqModel, hasReqModel := get("gen_ai.request.model")
 	opName, hasOp := get("gen_ai.operation.name")
+	// Tool/MCP spans are mapped by spanToToolEvent, never as llm_calls — even if
+	// they also carry a gen_ai.operation.name marker.
+	if opName == "execute_tool" {
+		return nil, false
+	}
+	if _, isTool := get("gen_ai.tool.name"); isTool {
+		return nil, false
+	}
 	// A span is an LLM call only if it carries GenAI markers. This is what lets
 	// callers POST whole traces and have us pick out the LLM spans.
 	if !hasSystem && !hasReqModel && !hasOp {
@@ -314,6 +345,93 @@ func (c *Collector) spanToEvent(span *otelSpan, resAttrs map[string]otelAnyValue
 		ev["status"] = "ok"
 	}
 
+	return ev, true
+}
+
+// isToolSpan reports whether an OTLP span is a tool/MCP invocation, per the OTel
+// GenAI conventions: a gen_ai.tool.name attribute or an execute_tool operation.
+func isToolSpan(span *otelSpan) bool {
+	for _, kv := range span.Attributes {
+		switch kv.Key {
+		case "gen_ai.tool.name":
+			if s, ok := kv.Value.str(); ok && s != "" {
+				return true
+			}
+		case "gen_ai.operation.name":
+			if s, ok := kv.Value.str(); ok && s == "execute_tool" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// spanToToolEvent maps one OTLP tool/MCP span to a canonical tool_call event for
+// the agent-native risk engine (agent_tool_calls). The caller must have confirmed
+// isToolSpan(span). It returns ok=false only when the span lacks a resolvable
+// tenant; a missing tool_call_id/tool_name is left to the validation boundary to
+// reject (so it is counted as a validation rejection, not silently dropped).
+func (c *Collector) spanToToolEvent(span *otelSpan, resAttrs map[string]otelAnyValue, headerTenant string) (map[string]any, bool) {
+	spanAttrs := attrs(span.Attributes)
+	get := func(keys ...string) (string, bool) {
+		for _, k := range keys {
+			if v, ok := spanAttrs[k]; ok {
+				if s, ok := v.str(); ok && s != "" {
+					return s, true
+				}
+			}
+			if v, ok := resAttrs[k]; ok {
+				if s, ok := v.str(); ok && s != "" {
+					return s, true
+				}
+			}
+		}
+		return "", false
+	}
+
+	tenant := c.resolveOtelTenant(spanAttrs, resAttrs, headerTenant)
+	if tenant == "" {
+		c.metrics.OtelSpansNoTenant.Add(1)
+		slog.Debug("otel tool span dropped: no tenant", "span", span.Name)
+		return nil, false
+	}
+
+	// tool_call_id is the agent_tool_calls dedup key: OTel's gen_ai.tool.call.id,
+	// else the span id (unique per call), else the trace id.
+	toolCallID, _ := get("gen_ai.tool.call.id")
+	if toolCallID == "" {
+		toolCallID = span.SpanID
+	}
+	if toolCallID == "" {
+		toolCallID = span.TraceID
+	}
+
+	// tool_name: the governed dimension; fall back to the span name.
+	toolName, _ := get("gen_ai.tool.name")
+	if toolName == "" {
+		toolName = span.Name
+	}
+
+	ev := map[string]any{
+		"kind":         "tool_call",
+		"tenant_id":    tenant,
+		"ts":           otelNanoToRFC3339(span.StartTimeUnixNano),
+		"tool_call_id": toolCallID,
+		"tool_name":    toolName,
+		"source":       "otel",
+	}
+	if v, ok := get("agentledger.mcp_server", "mcp.server.name"); ok {
+		ev["mcp_server"] = v
+	}
+	if v, ok := get("agentledger.agent_id", "gen_ai.agent.id"); ok {
+		ev["agent_id"] = v
+	}
+	// Run id: explicit attribute wins; otherwise the trace groups a run's spans.
+	if v, ok := get("agentledger.run_id"); ok {
+		ev["run_id"] = v
+	} else if span.TraceID != "" {
+		ev["run_id"] = span.TraceID
+	}
 	return ev, true
 }
 

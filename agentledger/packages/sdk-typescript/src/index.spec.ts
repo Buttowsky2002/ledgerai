@@ -55,13 +55,15 @@ describe('AgentLedger TS SDK', () => {
     const { calls } = mockFetch();
     init(CFG);
     const run = startRun('agent');
-    run.recordToolCall({ toolName: 'fetch_ticket', latencyMs: 12 });
+    run.recordToolCall({ toolName: 'fetch_ticket', latencyMs: 12, mcpServer: 'zendesk-mcp' });
     const outcomeId = run.recordOutcome({ outcomeType: 'ticket_resolved', sourceSystem: 'zendesk', ref: '4812', businessValueUsd: 18.5, attributionConfidence: 0.9 });
     await flush();
 
     expect(outcomeId).toMatch(/^out_[0-9a-f]{16}$/);
     const tool = bodyOf(calls[0]);
-    expect(tool).toMatchObject({ kind: 'tool_call', operation_name: 'execute_tool', tool_name: 'fetch_ticket', status: 'ok', latency_ms: 12, source: 'sdk' });
+    expect(tool).toMatchObject({ kind: 'tool_call', operation_name: 'execute_tool', tool_name: 'fetch_ticket', mcp_server: 'zendesk-mcp', status: 'ok', latency_ms: 12, source: 'sdk' });
+    // tool_call_id is the agent_tool_calls dedup key — it must always be set.
+    expect(tool.tool_call_id).toMatch(/^tool_[0-9a-f]{16}$/);
     const outcome = bodyOf(calls[1]);
     expect(outcome).toMatchObject({ kind: 'outcome', outcome_id: outcomeId, outcome_type: 'ticket_resolved', source_system: 'zendesk', ref: '4812', business_value_usd: 18.5, attribution_confidence: 0.9, completion_status: 'completed' });
   });
