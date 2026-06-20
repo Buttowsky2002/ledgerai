@@ -356,6 +356,38 @@ export interface paths {
         patch: operations["RoiTemplatesController_update"];
         trace?: never;
     };
+    "/v1/agent-tool-allowlist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AgentToolAllowlistController_list"];
+        put?: never;
+        post: operations["AgentToolAllowlistController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent-tool-allowlist/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["AgentToolAllowlistController_remove"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/allocation-rules": {
         parameters: {
             query?: never;
@@ -580,6 +612,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/analytics/agent-risk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AnalyticsController_agentRisk"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/analytics/agents/{agentId}": {
         parameters: {
             query?: never;
@@ -754,6 +802,11 @@ export interface components {
             sourceSystem?: "github" | "jira" | "zendesk" | "manual" | "api";
             valueFormula?: components["schemas"]["ValueFormulaDto"];
             attribution?: components["schemas"]["AttributionDto"];
+        };
+        CreateAllowDto: {
+            agentId: string;
+            toolName: string;
+            mcpServer?: string;
         };
         CreateAllocationRuleDto: {
             matchingLogic: Record<string, never>;
@@ -1691,6 +1744,66 @@ export interface operations {
             };
         };
     };
+    AgentToolAllowlistController_list: {
+        parameters: {
+            query: {
+                limit: string;
+                offset: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AgentToolAllowlistController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAllowDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AgentToolAllowlistController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     AllocationRulesController_list: {
         parameters: {
             query: {
@@ -2167,6 +2280,23 @@ export interface operations {
                 outcomeType?: string;
                 minConfidence?: number;
             };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AnalyticsController_agentRisk: {
+        parameters: {
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;

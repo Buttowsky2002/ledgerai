@@ -1027,6 +1027,82 @@
         ]
       }
     },
+    "/v1/agent-tool-allowlist": {
+      "get": {
+        "operationId": "AgentToolAllowlistController_list",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "AgentToolAllowlist"
+        ]
+      },
+      "post": {
+        "operationId": "AgentToolAllowlistController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAllowDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "AgentToolAllowlist"
+        ]
+      }
+    },
+    "/v1/agent-tool-allowlist/{id}": {
+      "delete": {
+        "operationId": "AgentToolAllowlistController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "AgentToolAllowlist"
+        ]
+      }
+    },
     "/v1/allocation-rules": {
       "get": {
         "operationId": "AllocationRulesController_list",
@@ -1721,6 +1797,20 @@
         ]
       }
     },
+    "/v1/analytics/agent-risk": {
+      "get": {
+        "operationId": "AnalyticsController_agentRisk",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Analytics"
+        ]
+      }
+    },
     "/v1/analytics/agents/{agentId}": {
       "get": {
         "operationId": "AnalyticsController_agentDetail",
@@ -2346,6 +2436,24 @@
             "$ref": "#/components/schemas/AttributionDto"
           }
         }
+      },
+      "CreateAllowDto": {
+        "type": "object",
+        "properties": {
+          "agentId": {
+            "type": "string"
+          },
+          "toolName": {
+            "type": "string"
+          },
+          "mcpServer": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "agentId",
+          "toolName"
+        ]
       },
       "CreateAllocationRuleDto": {
         "type": "object",

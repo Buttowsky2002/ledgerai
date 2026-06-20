@@ -52,6 +52,11 @@ export class AnalyticsController {
     return this.analytics.roi(q.from, q.to, q.outcomeType, q.minConfidence);
   }
 
+  @Roles('viewer') @Get('agent-risk')
+  agentRisk() {
+    return this.analytics.agentRisk();
+  }
+
   @Roles('viewer') @Get('agents/:agentId')
   agentDetail(@Param('agentId') agentId: string, @Query() q: RangeQueryDto) {
     return this.analytics.agentDetail(agentId, q.from, q.to);
