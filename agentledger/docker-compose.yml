@@ -112,6 +112,26 @@ services:
     depends_on:
       clickhouse: { condition: service_healthy }
 
+  # Semantic risk-enrichment tier (Phase 6, deferred from P5): LLM classifies
+  # per-run tool-call sequences for injection / data-egress / anomalous patterns
+  # → semantic_* risk_events. Opt-in and async (never inline): serves health only
+  # unless AGENTLEDGER_RISK_ENRICH_ENABLED=true AND ANTHROPIC_API_KEY is set.
+  risk-enrichment:
+    build:
+      context: ./services/workers
+      args: { CMD: risk-enrichment }
+    environment:
+      AGENTLEDGER_CLICKHOUSE_URL: http://clickhouse:8123
+      AGENTLEDGER_CLICKHOUSE_DB: agentledger
+      AGENTLEDGER_RISK_ENRICH_ENABLED: "${AGENTLEDGER_RISK_ENRICH_ENABLED:-false}"
+      AGENTLEDGER_RISK_ENRICH_INTERVAL_SEC: "3600"
+      AGENTLEDGER_RISK_ENRICH_MIN_CONFIDENCE: "0.5"
+      AGENTLEDGER_RISK_ENRICH_MODEL: "${AGENTLEDGER_RISK_ENRICH_MODEL:-claude-opus-4-8}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}" # env-var name only; never commit a key (rule 1)
+    ports: ["8100:8100"]
+    depends_on:
+      clickhouse: { condition: service_healthy }
+
   connector-sync:
     build:
       context: ./services/connectors
