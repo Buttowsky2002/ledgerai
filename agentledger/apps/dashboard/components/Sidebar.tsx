@@ -11,6 +11,7 @@ const NAV = [
   { href: '/roi-templates', label: 'ROI templates' },
   { href: '/cost-per-outcome', label: 'Cost per outcome' },
   { href: '/cfo', label: 'CFO view' },
+  { href: '/ciso', label: 'CISO view' },
   { href: '/risk', label: 'Risk events' },
   { href: '/settings', label: 'Settings' },
 ];
