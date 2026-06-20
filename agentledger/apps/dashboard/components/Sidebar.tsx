@@ -10,6 +10,7 @@ const NAV = [
   { href: '/budgets', label: 'Budgets' },
   { href: '/roi-templates', label: 'ROI templates' },
   { href: '/cost-per-outcome', label: 'Cost per outcome' },
+  { href: '/cfo', label: 'CFO view' },
   { href: '/risk', label: 'Risk events' },
   { href: '/settings', label: 'Settings' },
 ];

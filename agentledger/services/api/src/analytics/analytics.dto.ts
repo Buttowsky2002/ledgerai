@@ -20,3 +20,10 @@ export class UnitEconomicsQueryDto extends RangeQueryDto {
   // headline aggregates. Filtered server-side before aggregation (Phase 4 task 5).
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0) @Max(1) minConfidence?: number;
 }
+
+export class RoiQueryDto extends RangeQueryDto {
+  @IsOptional() @IsString() outcomeType?: string;
+  // Headline ROI excludes links below this confidence; defaults to 0.5 in the
+  // service when omitted.
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) @Max(1) minConfidence?: number;
+}

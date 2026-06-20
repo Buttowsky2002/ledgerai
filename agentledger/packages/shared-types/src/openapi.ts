@@ -564,6 +564,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/analytics/roi": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AnalyticsController_roi"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/analytics/agents/{agentId}": {
         parameters: {
             query?: never;
@@ -710,6 +726,11 @@ export interface components {
             hourly_rate: number;
             baseline_minutes: number;
             rework_pct?: number;
+            redeployment_factor?: number;
+            qa_cost_per_outcome?: number;
+            eval_cost_per_outcome?: number;
+            integration_cost_per_outcome?: number;
+            platform_overhead_pct?: number;
         };
         AttributionDto: {
             window_minutes?: number;
@@ -2117,6 +2138,28 @@ export interface operations {
         };
     };
     AnalyticsController_unitEconomics: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+                outcomeType?: string;
+                minConfidence?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AnalyticsController_roi: {
         parameters: {
             query?: {
                 from?: string;
