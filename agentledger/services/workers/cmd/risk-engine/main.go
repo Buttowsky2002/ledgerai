@@ -30,7 +30,11 @@ func main() {
 	)
 
 	metrics := &riskengine.Metrics{}
-	e := riskengine.New(ch, uint32(envInt("AGENTLEDGER_RISK_SPIKE_MIN", 5)), metrics)
+	spikeMin := envInt("AGENTLEDGER_RISK_SPIKE_MIN", 5)
+	if spikeMin < 0 {
+		spikeMin = 0
+	}
+	e := riskengine.New(ch, uint32(spikeMin), metrics) // #nosec G115 -- spikeMin is clamped non-negative above; operator-provided config
 	interval := time.Duration(envInt("AGENTLEDGER_RISK_INTERVAL_SEC", 3600)) * time.Second
 
 	ctx, cancel := context.WithCancel(context.Background())

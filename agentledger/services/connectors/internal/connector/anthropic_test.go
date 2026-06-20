@@ -48,7 +48,7 @@ func TestAnthropicFetchSinglePage(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	os.Setenv("ANTHROPIC_ADMIN_KEY_TEST", "sk-ant-admin-xxx")
+	_ = os.Setenv("ANTHROPIC_ADMIN_KEY_TEST", "sk-ant-admin-xxx")
 	c := NewAnthropicConnector()
 	c.now = fixedClock()
 	cfg := map[string]any{"base_url": srv.URL, "api_key_env": "ANTHROPIC_ADMIN_KEY_TEST"}
@@ -100,7 +100,7 @@ func TestAnthropicFetchPagination(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	os.Setenv("ANTHROPIC_ADMIN_KEY_TEST", "sk-ant")
+	_ = os.Setenv("ANTHROPIC_ADMIN_KEY_TEST", "sk-ant")
 	c := NewAnthropicConnector()
 	c.now = fixedClock()
 	cfg := map[string]any{"base_url": srv.URL, "api_key_env": "ANTHROPIC_ADMIN_KEY_TEST"}
@@ -125,7 +125,7 @@ func TestAnthropicFetchPagination(t *testing.T) {
 }
 
 func TestAnthropicFetchMissingKey(t *testing.T) {
-	os.Unsetenv("ANTHROPIC_ADMIN_KEY_ABSENT")
+	_ = os.Unsetenv("ANTHROPIC_ADMIN_KEY_ABSENT")
 	c := NewAnthropicConnector()
 	_, err := c.Fetch(context.Background(), map[string]any{"api_key_env": "ANTHROPIC_ADMIN_KEY_ABSENT"}, Cursor{})
 	if err == nil {
@@ -138,7 +138,7 @@ func TestAnthropicFetchErrorStatus(t *testing.T) {
 		http.Error(w, `{"type":"error","error":{"message":"invalid x-api-key"}}`, http.StatusUnauthorized)
 	}))
 	defer srv.Close()
-	os.Setenv("ANTHROPIC_ADMIN_KEY_TEST", "bad")
+	_ = os.Setenv("ANTHROPIC_ADMIN_KEY_TEST", "bad")
 	c := NewAnthropicConnector()
 	c.now = fixedClock()
 	_, err := c.Fetch(context.Background(), map[string]any{"base_url": srv.URL, "api_key_env": "ANTHROPIC_ADMIN_KEY_TEST"}, Cursor{})

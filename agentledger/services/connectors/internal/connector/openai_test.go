@@ -49,7 +49,7 @@ func TestOpenAIFetchSinglePage(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	os.Setenv("OPENAI_ADMIN_KEY_TEST", "sk-admin-xxx")
+	_ = os.Setenv("OPENAI_ADMIN_KEY_TEST", "sk-admin-xxx")
 	c := NewOpenAIConnector()
 	c.now = fixedClock()
 	cfg := map[string]any{"base_url": srv.URL, "api_key_env": "OPENAI_ADMIN_KEY_TEST"}
@@ -105,7 +105,7 @@ func TestOpenAIFetchPagination(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	os.Setenv("OPENAI_ADMIN_KEY_TEST", "sk-admin")
+	_ = os.Setenv("OPENAI_ADMIN_KEY_TEST", "sk-admin")
 	c := NewOpenAIConnector()
 	c.now = fixedClock()
 	cfg := map[string]any{"base_url": srv.URL, "api_key_env": "OPENAI_ADMIN_KEY_TEST"}
@@ -134,7 +134,7 @@ func TestOpenAIFetchPagination(t *testing.T) {
 }
 
 func TestOpenAIFetchMissingKey(t *testing.T) {
-	os.Unsetenv("OPENAI_ADMIN_KEY_ABSENT")
+	_ = os.Unsetenv("OPENAI_ADMIN_KEY_ABSENT")
 	c := NewOpenAIConnector()
 	_, err := c.Fetch(context.Background(), map[string]any{"api_key_env": "OPENAI_ADMIN_KEY_ABSENT"}, Cursor{})
 	if err == nil {
@@ -147,7 +147,7 @@ func TestOpenAIFetchErrorStatus(t *testing.T) {
 		http.Error(w, `{"error":{"message":"invalid admin key"}}`, http.StatusUnauthorized)
 	}))
 	defer srv.Close()
-	os.Setenv("OPENAI_ADMIN_KEY_TEST", "bad")
+	_ = os.Setenv("OPENAI_ADMIN_KEY_TEST", "bad")
 	c := NewOpenAIConnector()
 	c.now = fixedClock()
 	_, err := c.Fetch(context.Background(), map[string]any{"base_url": srv.URL, "api_key_env": "OPENAI_ADMIN_KEY_TEST"}, Cursor{})
@@ -164,7 +164,7 @@ func TestOpenAIDefaultWatermarkUsesLookback(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"data": []any{}, "has_more": false})
 	}))
 	defer srv.Close()
-	os.Setenv("OPENAI_ADMIN_KEY_TEST", "sk")
+	_ = os.Setenv("OPENAI_ADMIN_KEY_TEST", "sk")
 	c := NewOpenAIConnector()
 	c.now = fixedClock()
 	_, err := c.Fetch(context.Background(), map[string]any{"base_url": srv.URL, "api_key_env": "OPENAI_ADMIN_KEY_TEST", "lookback_days": float64(10)}, Cursor{})

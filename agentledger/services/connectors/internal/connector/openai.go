@@ -27,6 +27,7 @@ type OpenAIConnector struct {
 	now    func() time.Time
 }
 
+// NewOpenAIConnector constructs an OpenAIConnector with a default HTTP client.
 func NewOpenAIConnector() *OpenAIConnector {
 	return &OpenAIConnector{
 		client: &http.Client{Timeout: 30 * time.Second},
@@ -34,6 +35,7 @@ func NewOpenAIConnector() *OpenAIConnector {
 	}
 }
 
+// Kind returns the connector's stable identifier.
 func (c *OpenAIConnector) Kind() string { return "openai_usage" }
 
 type openAICostsResponse struct {
@@ -53,6 +55,7 @@ type openAICostsResponse struct {
 	NextPage string `json:"next_page"`
 }
 
+// Fetch imports one page of org-billed cost records for the given cursor.
 func (c *OpenAIConnector) Fetch(ctx context.Context, cfg map[string]any, cur Cursor) (Page, error) {
 	baseURL := cfgString(cfg, "base_url", "https://api.openai.com")
 	keyEnv := cfgString(cfg, "api_key_env", "OPENAI_ADMIN_KEY")
@@ -91,7 +94,7 @@ func (c *OpenAIConnector) Fetch(ctx context.Context, cfg map[string]any, cur Cur
 	if err != nil {
 		return Page{}, fmt.Errorf("openai costs request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
 		return Page{}, fmt.Errorf("openai costs status %d: %s", resp.StatusCode, strings.TrimSpace(string(msg)))

@@ -32,6 +32,7 @@ type VertexConnector struct {
 	now    func() time.Time
 }
 
+// NewVertexConnector constructs a VertexConnector with a default HTTP client.
 func NewVertexConnector() *VertexConnector {
 	return &VertexConnector{
 		client: &http.Client{Timeout: 60 * time.Second},
@@ -39,6 +40,7 @@ func NewVertexConnector() *VertexConnector {
 	}
 }
 
+// Kind returns the connector's stable identifier.
 func (c *VertexConnector) Kind() string { return "vertex" }
 
 var bqTablePattern = regexp.MustCompile(`^[A-Za-z0-9_.:-]+$`)
@@ -53,6 +55,7 @@ type bqQueryResponse struct {
 	PageToken string `json:"pageToken"`
 }
 
+// Fetch imports one page of org-billed cost records for the given cursor.
 func (c *VertexConnector) Fetch(ctx context.Context, cfg map[string]any, cur Cursor) (Page, error) {
 	baseURL := cfgString(cfg, "base_url", "https://bigquery.googleapis.com")
 	project := cfgString(cfg, "project_id", "")
@@ -112,7 +115,7 @@ func (c *VertexConnector) Fetch(ctx context.Context, cfg map[string]any, cur Cur
 	if err != nil {
 		return Page{}, fmt.Errorf("bigquery request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
 		return Page{}, fmt.Errorf("bigquery status %d: %s", resp.StatusCode, strings.TrimSpace(string(msg)))

@@ -18,6 +18,8 @@ type Consumer struct {
 	backoff  time.Duration
 }
 
+// NewConsumer creates a Kafka consumer for the given topic and group that commits
+// offsets explicitly, only after a batch is durably inserted.
 func NewConsumer(brokers []string, topic, group string, pipeline *Pipeline, backoff time.Duration) (*Consumer, error) {
 	cl, err := kgo.NewClient(
 		kgo.SeedBrokers(brokers...),
@@ -82,8 +84,10 @@ func (c *Consumer) Run(ctx context.Context) {
 	}
 }
 
+// Ping reports broker reachability for readiness checks.
 func (c *Consumer) Ping(ctx context.Context) error { return c.cl.Ping(ctx) }
 
+// Close shuts down the underlying Kafka client.
 func (c *Consumer) Close() { c.cl.Close() }
 
 // KafkaDLQ produces poison messages to the dead-letter topic, tagging each with
@@ -93,6 +97,8 @@ type KafkaDLQ struct {
 	topic string
 }
 
+// NewKafkaDLQ creates a producer for the dead-letter topic, enabling auto topic
+// creation so poison messages are never lost.
 func NewKafkaDLQ(brokers []string, topic string) (*KafkaDLQ, error) {
 	cl, err := kgo.NewClient(
 		kgo.SeedBrokers(brokers...),
@@ -104,6 +110,8 @@ func NewKafkaDLQ(brokers []string, topic string) (*KafkaDLQ, error) {
 	return &KafkaDLQ{cl: cl, topic: topic}, nil
 }
 
+// DeadLetter synchronously produces a poison message to the dead-letter topic,
+// tagging it with the failure reason in a header.
 func (d *KafkaDLQ) DeadLetter(ctx context.Context, raw []byte, reason string) error {
 	rec := &kgo.Record{
 		Topic:   d.topic,
@@ -113,4 +121,5 @@ func (d *KafkaDLQ) DeadLetter(ctx context.Context, raw []byte, reason string) er
 	return d.cl.ProduceSync(ctx, rec).FirstErr()
 }
 
+// Close shuts down the underlying Kafka client.
 func (d *KafkaDLQ) Close() { d.cl.Close() }

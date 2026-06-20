@@ -24,6 +24,8 @@ type Pipeline struct {
 	backoff  time.Duration
 }
 
+// NewPipeline builds a Pipeline that inserts batches via inserter, retrying up to
+// retries times before dead-lettering poison rows through dlq.
 func NewPipeline(inserter Inserter, dlq DeadLetterer, m *Metrics, retries int, backoff time.Duration) *Pipeline {
 	if m == nil {
 		m = &Metrics{}

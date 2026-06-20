@@ -79,10 +79,14 @@ type HTTPClient struct {
 	client   *http.Client
 }
 
+// NewHTTPClient builds an HTTPClient for the ClickHouse HTTP interface used by
+// the risk engine.
 func NewHTTPClient(baseURL, db, user, password string) *HTTPClient {
 	return &HTTPClient{baseURL: baseURL, db: db, user: user, password: password, client: &http.Client{Timeout: 60 * time.Second}}
 }
 
+// UnauthorizedTools returns observed tool calls that are not on any agent's
+// allowlist, with occurrence counts.
 func (h *HTTPClient) UnauthorizedTools(ctx context.Context) ([]UnauthorizedTool, error) {
 	body, err := h.queryRaw(ctx, fmt.Sprintf(`SELECT tenant_id, agent_id, tool_name, toString(first_seen) AS first_seen, occurrences
 		FROM %s.v_unauthorized_tools
@@ -94,6 +98,8 @@ func (h *HTTPClient) UnauthorizedTools(ctx context.Context) ([]UnauthorizedTool,
 	return rows, decodeLines(body, &rows)
 }
 
+// AgentExposure returns each agent's total vs unauthorized tool-call counts and
+// exposure percentage.
 func (h *HTTPClient) AgentExposure(ctx context.Context) ([]AgentExposure, error) {
 	body, err := h.queryRaw(ctx, fmt.Sprintf(`SELECT tenant_id, agent_id, total_calls, unauthorized_calls, exposure_pct
 		FROM %s.v_agent_tool_exposure
@@ -105,10 +111,12 @@ func (h *HTTPClient) AgentExposure(ctx context.Context) ([]AgentExposure, error)
 	return rows, decodeLines(body, &rows)
 }
 
+// WriteRiskEvents inserts generated risk events into ClickHouse.
 func (h *HTTPClient) WriteRiskEvents(ctx context.Context, events []RiskEvent) error {
 	return h.insert(ctx, "risk_events", toJSONL(events))
 }
 
+// WriteAgentRisk upserts per-agent risk-exposure rows consumed by the ROI engine.
 func (h *HTTPClient) WriteAgentRisk(ctx context.Context, rows []AgentRisk) error {
 	return h.insert(ctx, "agent_risk", toJSONL(rows))
 }
@@ -132,7 +140,7 @@ func (h *HTTPClient) queryRaw(ctx context.Context, q string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("clickhouse query: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("clickhouse query status %d: %s", resp.StatusCode, bytes.TrimSpace(body))
@@ -172,7 +180,7 @@ func (h *HTTPClient) insert(ctx context.Context, table string, body *bytes.Buffe
 	if err != nil {
 		return fmt.Errorf("clickhouse insert %s: %w", table, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
 		return fmt.Errorf("clickhouse insert %s status %d: %s", table, resp.StatusCode, bytes.TrimSpace(msg))
@@ -191,7 +199,7 @@ func (h *HTTPClient) Ping(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	_, _ = io.Copy(io.Discard, resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("clickhouse ping status %d", resp.StatusCode)

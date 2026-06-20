@@ -42,8 +42,8 @@ func TestBedrockFetchSinglePage(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	os.Setenv("AWS_ACCESS_KEY_ID", "AKIDEXAMPLE")
-	os.Setenv("AWS_SECRET_ACCESS_KEY", "secret")
+	_ = os.Setenv("AWS_ACCESS_KEY_ID", "AKIDEXAMPLE")
+	_ = os.Setenv("AWS_SECRET_ACCESS_KEY", "secret")
 	c := NewBedrockConnector()
 	c.now = fixedClock()
 	cfg := map[string]any{"base_url": srv.URL}
@@ -92,8 +92,8 @@ func TestBedrockFetchPagination(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	os.Setenv("AWS_ACCESS_KEY_ID", "AK")
-	os.Setenv("AWS_SECRET_ACCESS_KEY", "SK")
+	_ = os.Setenv("AWS_ACCESS_KEY_ID", "AK")
+	_ = os.Setenv("AWS_SECRET_ACCESS_KEY", "SK")
 	c := NewBedrockConnector()
 	c.now = fixedClock()
 	cfg := map[string]any{"base_url": srv.URL}
@@ -115,8 +115,8 @@ func TestBedrockFetchPagination(t *testing.T) {
 }
 
 func TestBedrockMissingCreds(t *testing.T) {
-	os.Unsetenv("AWS_ACCESS_KEY_ID")
-	os.Unsetenv("AWS_SECRET_ACCESS_KEY")
+	_ = os.Unsetenv("AWS_ACCESS_KEY_ID")
+	_ = os.Unsetenv("AWS_SECRET_ACCESS_KEY")
 	c := NewBedrockConnector()
 	_, err := c.Fetch(context.Background(), map[string]any{}, Cursor{})
 	if err == nil {

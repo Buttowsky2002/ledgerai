@@ -32,7 +32,7 @@ func TestVertexFetchSinglePage(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	os.Setenv("GCP_ACCESS_TOKEN", "ya29.token")
+	_ = os.Setenv("GCP_ACCESS_TOKEN", "ya29.token")
 	c := NewVertexConnector()
 	c.now = fixedClock()
 	cfg := map[string]any{
@@ -75,7 +75,7 @@ func TestVertexFetchSinglePage(t *testing.T) {
 }
 
 func TestVertexRejectsUnsafeTable(t *testing.T) {
-	os.Setenv("GCP_ACCESS_TOKEN", "tok")
+	_ = os.Setenv("GCP_ACCESS_TOKEN", "tok")
 	c := NewVertexConnector()
 	c.now = fixedClock()
 	_, err := c.Fetch(context.Background(), map[string]any{
@@ -88,7 +88,7 @@ func TestVertexRejectsUnsafeTable(t *testing.T) {
 }
 
 func TestVertexMissingConfig(t *testing.T) {
-	os.Setenv("GCP_ACCESS_TOKEN", "tok")
+	_ = os.Setenv("GCP_ACCESS_TOKEN", "tok")
 	c := NewVertexConnector()
 	_, err := c.Fetch(context.Background(), map[string]any{"project_id": "p"}, Cursor{})
 	if err == nil {
@@ -97,7 +97,7 @@ func TestVertexMissingConfig(t *testing.T) {
 }
 
 func TestVertexMissingToken(t *testing.T) {
-	os.Unsetenv("GCP_ACCESS_TOKEN")
+	_ = os.Unsetenv("GCP_ACCESS_TOKEN")
 	c := NewVertexConnector()
 	_, err := c.Fetch(context.Background(), map[string]any{"project_id": "p", "billing_table": "a.b.c"}, Cursor{})
 	if err == nil {

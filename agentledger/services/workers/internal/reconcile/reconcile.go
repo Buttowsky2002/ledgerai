@@ -24,6 +24,8 @@ type Reconciler struct {
 	now       func() time.Time
 }
 
+// New builds a Reconciler that diffs observed vs billed cost over the lookback
+// window and flags drift exceeding threshold.
 func New(ch CHClient, threshold float64, lookbackDays int, m *Metrics) *Reconciler {
 	if m == nil {
 		m = &Metrics{}

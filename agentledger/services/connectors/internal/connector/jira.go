@@ -35,10 +35,12 @@ type JiraConnector struct {
 	now    func() time.Time
 }
 
+// NewJiraConnector constructs a JiraConnector with a default HTTP client.
 func NewJiraConnector() *JiraConnector {
 	return &JiraConnector{client: &http.Client{Timeout: 30 * time.Second}, now: time.Now}
 }
 
+// Kind returns the connector's stable identifier.
 func (c *JiraConnector) Kind() string { return "jira" }
 
 // jiraTime is the timestamp layout Jira returns (millis + numeric offset, e.g.
@@ -64,6 +66,7 @@ type jiraSearch struct {
 	} `json:"issues"`
 }
 
+// Fetch imports one page of resolved issues for the given cursor.
 func (c *JiraConnector) Fetch(ctx context.Context, cfg map[string]any, cur Cursor) (OutcomePage, error) {
 	baseURL, _ := cfg["base_url"].(string)
 	emailEnv, _ := cfg["email_env"].(string)
@@ -108,7 +111,7 @@ func (c *JiraConnector) Fetch(ctx context.Context, cfg map[string]any, cur Curso
 	if err != nil {
 		return OutcomePage{}, fmt.Errorf("jira request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
 		return OutcomePage{}, fmt.Errorf("jira status %d: %s", resp.StatusCode, msg)

@@ -18,10 +18,11 @@ import (
 // dependency, mirroring the Bedrock/Vertex importers.
 //
 // Config (connectors.config JSON):
-//   repo          "owner/name"            (required)
-//   token_env     env var holding a PAT   (required; rule 1 — name, not value)
-//   lookback_days number (default 30)     trailing window re-scanned each pass
-//   base_url      override (default https://api.github.com; for tests)
+//
+//	repo          "owner/name"            (required)
+//	token_env     env var holding a PAT   (required; rule 1 — name, not value)
+//	lookback_days number (default 30)     trailing window re-scanned each pass
+//	base_url      override (default https://api.github.com; for tests)
 //
 // Cursor carries the in-pass page number; on completion it resets to empty so the
 // next pass re-scans the lookback window. Stable outcome_id + the outcomes
@@ -31,10 +32,12 @@ type GitHubConnector struct {
 	now    func() time.Time
 }
 
+// NewGitHubConnector constructs a GitHubConnector with a default HTTP client.
 func NewGitHubConnector() *GitHubConnector {
 	return &GitHubConnector{client: &http.Client{Timeout: 30 * time.Second}, now: time.Now}
 }
 
+// Kind returns the connector's stable identifier.
 func (c *GitHubConnector) Kind() string { return "github" }
 
 type ghPull struct {
@@ -47,6 +50,7 @@ type ghPull struct {
 	} `json:"user"`
 }
 
+// Fetch imports one page of merged pull requests for the given cursor.
 func (c *GitHubConnector) Fetch(ctx context.Context, cfg map[string]any, cur Cursor) (OutcomePage, error) {
 	repo, _ := cfg["repo"].(string)
 	tokenEnv, _ := cfg["token_env"].(string)
@@ -93,7 +97,7 @@ func (c *GitHubConnector) Fetch(ctx context.Context, cfg map[string]any, cur Cur
 	if err != nil {
 		return OutcomePage{}, fmt.Errorf("github request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
 		return OutcomePage{}, fmt.Errorf("github status %d: %s", resp.StatusCode, msg)

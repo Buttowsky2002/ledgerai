@@ -33,7 +33,7 @@ func main() {
 		slog.Error("postgres store init failed", "err", err)
 		os.Exit(1)
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	sink := connector.NewClickHouseOutcomeSink(
 		env("AGENTLEDGER_CLICKHOUSE_URL", "http://localhost:8123"),

@@ -30,6 +30,8 @@ type ClickHouseSink struct {
 	now      func() time.Time
 }
 
+// NewClickHouseSink builds a sink that writes provider_costs rows via the
+// ClickHouse HTTP interface.
 func NewClickHouseSink(baseURL, db, user, password string) *ClickHouseSink {
 	return &ClickHouseSink{
 		baseURL:  baseURL,
@@ -88,7 +90,7 @@ func (s *ClickHouseSink) Write(ctx context.Context, records []Record) error {
 	if err != nil {
 		return fmt.Errorf("clickhouse write: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
 		return fmt.Errorf("clickhouse write status %d: %s", resp.StatusCode, bytes.TrimSpace(msg))

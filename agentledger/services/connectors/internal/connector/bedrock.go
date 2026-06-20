@@ -27,6 +27,7 @@ type BedrockConnector struct {
 	now    func() time.Time
 }
 
+// NewBedrockConnector constructs a BedrockConnector with a default HTTP client.
 func NewBedrockConnector() *BedrockConnector {
 	return &BedrockConnector{
 		client: &http.Client{Timeout: 30 * time.Second},
@@ -34,6 +35,7 @@ func NewBedrockConnector() *BedrockConnector {
 	}
 }
 
+// Kind returns the connector's stable identifier.
 func (c *BedrockConnector) Kind() string { return "bedrock" }
 
 type ceResponse struct {
@@ -55,6 +57,7 @@ type ceResponse struct {
 	} `json:"ResultsByTime"`
 }
 
+// Fetch imports one page of org-billed cost records for the given cursor.
 func (c *BedrockConnector) Fetch(ctx context.Context, cfg map[string]any, cur Cursor) (Page, error) {
 	baseURL := cfgString(cfg, "base_url", "https://ce.us-east-1.amazonaws.com")
 	region := cfgString(cfg, "region", "us-east-1")
@@ -107,7 +110,7 @@ func (c *BedrockConnector) Fetch(ctx context.Context, cfg map[string]any, cur Cu
 	if err != nil {
 		return Page{}, fmt.Errorf("cost explorer request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
 		return Page{}, fmt.Errorf("cost explorer status %d: %s", resp.StatusCode, strings.TrimSpace(string(msg)))

@@ -1,6 +1,7 @@
 package connector
 
 import (
+	"context"
 	"net/http"
 	"testing"
 	"time"
@@ -12,7 +13,7 @@ import (
 // correct, so the Cost Explorer POST path (same algorithm with a body hash) is
 // trustworthy.
 func TestSigV4MatchesAWSVector(t *testing.T) {
-	req, _ := http.NewRequest(http.MethodGet,
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
 		"https://iam.amazonaws.com/?Action=ListUsers&Version=2010-05-08", nil)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=utf-8")
 
@@ -35,7 +36,7 @@ func TestSigV4MatchesAWSVector(t *testing.T) {
 }
 
 func TestSigV4AddsSessionToken(t *testing.T) {
-	req, _ := http.NewRequest(http.MethodPost, "https://ce.us-east-1.amazonaws.com/", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "https://ce.us-east-1.amazonaws.com/", nil)
 	signV4(req, []byte(`{"x":1}`), awsCreds{AccessKey: "AK", SecretKey: "SK", SessionToken: "TOKEN"}, "us-east-1", "ce", time.Unix(0, 0))
 	if req.Header.Get("X-Amz-Security-Token") != "TOKEN" {
 		t.Fatal("session token header not set")

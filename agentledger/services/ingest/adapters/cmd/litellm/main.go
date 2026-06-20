@@ -196,7 +196,7 @@ func (s *server) writeMetrics(w http.ResponseWriter, _ *http.Request) {
 		{"litellm_adapter_events_forwarded_total", "Events accepted by the collector.", m.forwarded.Load()},
 		{"litellm_adapter_forward_errors_total", "Failed forwards to the collector.", m.forwardErrors.Load()},
 	} {
-		fmt.Fprintf(w, "# HELP %s %s\n# TYPE %s counter\n%s %d\n", mt.name, mt.help, mt.name, mt.name, mt.val)
+		_, _ = fmt.Fprintf(w, "# HELP %s %s\n# TYPE %s counter\n%s %d\n", mt.name, mt.help, mt.name, mt.name, mt.val)
 	}
 }
 

@@ -27,6 +27,8 @@ type HTTPInserter struct {
 	client   *http.Client
 }
 
+// NewHTTPInserter builds an HTTPInserter targeting the given ClickHouse HTTP
+// endpoint, database, and credentials.
 func NewHTTPInserter(baseURL, db, user, password string) *HTTPInserter {
 	return &HTTPInserter{
 		baseURL:  baseURL,
@@ -37,6 +39,8 @@ func NewHTTPInserter(baseURL, db, user, password string) *HTTPInserter {
 	}
 }
 
+// Insert posts a batch of JSON rows to ClickHouse using FORMAT JSONEachRow. The
+// table must be in the fixed allowlist; unknown tables are refused.
 func (h *HTTPInserter) Insert(ctx context.Context, table string, rows [][]byte) error {
 	if !isKnownTable(table) {
 		return fmt.Errorf("refusing insert into unknown table %q", table)
@@ -74,7 +78,7 @@ func (h *HTTPInserter) Insert(ctx context.Context, table string, rows [][]byte) 
 	if err != nil {
 		return fmt.Errorf("clickhouse insert: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
 		return fmt.Errorf("clickhouse insert status %d: %s", resp.StatusCode, bytes.TrimSpace(msg))
@@ -93,7 +97,7 @@ func (h *HTTPInserter) Ping(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	_, _ = io.Copy(io.Discard, resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("clickhouse ping status %d", resp.StatusCode)

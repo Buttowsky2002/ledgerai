@@ -12,6 +12,8 @@ import (
 // The inline path only ever sees the request body transiently; the
 // emitted event carries category/severity/action — never raw content.
 
+// Finding is a single DLP classifier hit; it carries class/category/severity
+// metadata but never the raw matched content.
 type Finding struct {
 	Class      string  `json:"class"`    // e.g. "aws_access_key"
 	Category   string  `json:"category"` // credentials | pii | pci | source_code
@@ -29,12 +31,15 @@ type classifier struct {
 	validate func(string) bool // optional secondary validation (e.g. Luhn)
 }
 
+// DLPEngine applies deterministic classifier rules and per-policy actions to
+// request bodies on the inline path.
 type DLPEngine struct {
 	cfg         DLPConfig
 	classifiers []classifier
 	policies    map[string]DLPPolicy
 }
 
+// NewDLPEngine builds a DLPEngine from the given config, indexing policies by ID.
 func NewDLPEngine(cfg DLPConfig) *DLPEngine {
 	pol := map[string]DLPPolicy{}
 	for _, p := range cfg.Policies {
