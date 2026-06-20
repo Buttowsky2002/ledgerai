@@ -26,10 +26,10 @@ permissions:
 #   TS    — shared-types, api, dashboard, sdk-typescript
 #   + a compose-backed API e2e (RLS/RBAC/audit/analytics/ROI) and CodeQL.
 #
-# NOTE: golangci-lint is intentionally NOT run yet — the repo's .golangci.yml
-# configs need a v2-schema fix and the existing code carries a lint backlog
-# (errcheck/gosec/noctx/gofmt). Tracked as a separate cleanup; `go vet` is the
-# Go lint gate in the meantime.
+# golangci-lint runs per module as a BLOCKING gate (errcheck, gosec, staticcheck,
+# revive, bodyclose, noctx, sqlclosecheck, ineffassign, unused, govet, misspell;
+# gofmt via the formatters block). It rides on the already-required "Go — <module>"
+# checks, so no ruleset change is needed.
 # ---------------------------------------------------------------------------
 jobs:
 
@@ -85,6 +85,13 @@ jobs:
 
       - name: Test with race detector
         run: go test -race ./...
+
+      # Blocking. Runs after the build/test so the module cache is warm (golangci
+      # needs compiled deps for type info). Pinned to the version verified locally.
+      - name: golangci-lint
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b "$(go env GOPATH)/bin" v2.1.6
+          "$(go env GOPATH)/bin/golangci-lint" run ./...
 
       # Advisory: flags go1.22 stdlib CVEs fixed only in go1.23+ (the project pins
       # Go 1.22 per CLAUDE.md). Flip to blocking after a Go-toolchain bump.
