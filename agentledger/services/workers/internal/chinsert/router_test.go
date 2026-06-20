@@ -12,7 +12,7 @@ func TestRoute(t *testing.T) {
 		{"llm_call", TableLLMCalls, routeInsert},
 		{"agent_run", TableAgentRuns, routeInsert},
 		{"outcome", TableOutcomes, routeInsert},
-		{"tool_call", "", routeSkip},
+		{"tool_call", TableAgentToolCalls, routeInsert},
 		{"banana", "", routeDeadLetter},
 	}
 	for _, c := range cases {
@@ -24,7 +24,7 @@ func TestRoute(t *testing.T) {
 }
 
 func TestIsKnownTable(t *testing.T) {
-	for _, ok := range []string{TableLLMCalls, TableAgentRuns, TableOutcomes} {
+	for _, ok := range []string{TableLLMCalls, TableAgentRuns, TableOutcomes, TableAgentToolCalls} {
 		if !isKnownTable(ok) {
 			t.Errorf("%q should be known", ok)
 		}

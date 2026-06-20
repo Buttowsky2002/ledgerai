@@ -136,6 +136,8 @@ export interface ToolCall {
   toolName: string;
   status?: string;
   latencyMs?: number;
+  /** MCP server id, if the tool is served over MCP. */
+  mcpServer?: string;
 }
 
 export interface Outcome {
@@ -216,13 +218,17 @@ export class Run {
     this.toolCalls += 1;
     post({
       kind: 'tool_call',
+      // Stable, unique id — the agent_tool_calls dedup key (without it,
+      // ClickHouse's ReplacingMergeTree collapses an agent's tool calls).
+      tool_call_id: hexId('tool_'),
       ts: isoNow(),
       tenant_id: cfg.tenantId,
       run_id: this.runId,
       agent_id: this.agentId,
       step_id: this.nextStep(),
       operation_name: 'execute_tool', // gen_ai agent-span convention
-      tool_name: c.toolName,
+      tool_name: c.toolName, // gen_ai.tool.name
+      mcp_server: c.mcpServer ?? '', // MCP server id, if any
       status: c.status ?? 'ok',
       latency_ms: c.latencyMs ?? 0,
       source: 'sdk',

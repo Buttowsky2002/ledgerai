@@ -58,6 +58,47 @@ func TestValidatorRejectsAdditionalProperties(t *testing.T) {
 	}
 }
 
+func TestValidatorAcceptsToolCall(t *testing.T) {
+	v, _ := NewValidator(schemaPath)
+	ev := map[string]any{
+		"kind": "tool_call", "ts": "2026-06-16T12:00:00Z", "tenant_id": "t1",
+		"agent_id": "triage", "run_id": "run_1",
+		"tool_call_id": "tool_abc123", "tool_name": "shell.exec",
+		"operation_name": "execute_tool", "source": "sdk",
+	}
+	kind, err := v.Validate(ev)
+	if err != nil {
+		t.Fatalf("valid tool_call rejected: %v", err)
+	}
+	if kind != "tool_call" {
+		t.Fatalf("kind = %q, want tool_call", kind)
+	}
+}
+
+func TestValidatorRejectsToolCallMissingDedupKey(t *testing.T) {
+	v, _ := NewValidator(schemaPath)
+	// Without tool_call_id, agent_tool_calls' ReplacingMergeTree would collapse
+	// every tool call for an agent into a single row.
+	ev := map[string]any{
+		"kind": "tool_call", "ts": "2026-06-16T12:00:00Z", "tenant_id": "t1",
+		"agent_id": "triage", "tool_name": "shell.exec",
+	}
+	if _, err := v.Validate(ev); err == nil {
+		t.Fatal("tool_call without tool_call_id must be rejected")
+	}
+}
+
+func TestValidatorRejectsToolCallMissingToolName(t *testing.T) {
+	v, _ := NewValidator(schemaPath)
+	ev := map[string]any{
+		"kind": "tool_call", "ts": "2026-06-16T12:00:00Z", "tenant_id": "t1",
+		"agent_id": "triage", "tool_call_id": "tool_abc123",
+	}
+	if _, err := v.Validate(ev); err == nil {
+		t.Fatal("tool_call without tool_name must be rejected")
+	}
+}
+
 func TestValidatorRejectsNegativeTokens(t *testing.T) {
 	v, _ := NewValidator(schemaPath)
 	ev := map[string]any{

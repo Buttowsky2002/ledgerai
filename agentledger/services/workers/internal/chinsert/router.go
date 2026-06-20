@@ -4,16 +4,17 @@ package chinsert
 // from event data — table identifiers cannot be query-parameterized, so a
 // fixed allowlist is how we keep inserts injection-safe (CLAUDE.md rule 4).
 const (
-	TableLLMCalls  = "llm_calls"
-	TableAgentRuns = "agent_runs"
-	TableOutcomes  = "outcomes"
+	TableLLMCalls       = "llm_calls"
+	TableAgentRuns      = "agent_runs"
+	TableOutcomes       = "outcomes"
+	TableAgentToolCalls = "agent_tool_calls"
 )
 
 type routeDecision int
 
 const (
 	routeInsert     routeDecision = iota // insert into the returned table
-	routeSkip                            // valid event with no direct table (e.g. tool_call)
+	routeSkip                            // valid event with no direct table
 	routeDeadLetter                      // unknown/unroutable — poison
 )
 
@@ -28,8 +29,10 @@ func route(kind string) (table string, d routeDecision) {
 	case "outcome":
 		return TableOutcomes, routeInsert
 	case "tool_call":
-		// Tool calls roll up into agent_runs.tool_calls; no standalone table yet.
-		return "", routeSkip
+		// Observed tool/MCP invocations feed the agent-native risk engine
+		// (deny-by-default allowlist comparison). tool_call_id is the
+		// ReplacingMergeTree dedup key, enforced at the validation boundary.
+		return TableAgentToolCalls, routeInsert
 	default:
 		return "", routeDeadLetter
 	}
@@ -39,7 +42,7 @@ func route(kind string) (table string, d routeDecision) {
 // from route() — defense in depth for the injection-safety invariant.
 func isKnownTable(table string) bool {
 	switch table {
-	case TableLLMCalls, TableAgentRuns, TableOutcomes:
+	case TableLLMCalls, TableAgentRuns, TableOutcomes, TableAgentToolCalls:
 		return true
 	default:
 		return false
