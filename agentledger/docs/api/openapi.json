@@ -1103,6 +1103,153 @@
         ]
       }
     },
+    "/v1/agent-credentials": {
+      "get": {
+        "operationId": "AgentCredentialsController_list",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "AgentCredentials"
+        ]
+      },
+      "post": {
+        "operationId": "AgentCredentialsController_issue",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueCredentialDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "AgentCredentials"
+        ]
+      }
+    },
+    "/v1/agent-credentials/{id}/approve": {
+      "post": {
+        "operationId": "AgentCredentialsController_approve",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "AgentCredentials"
+        ]
+      }
+    },
+    "/v1/agent-credentials/{id}/revoke": {
+      "post": {
+        "operationId": "AgentCredentialsController_revoke",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "AgentCredentials"
+        ]
+      }
+    },
+    "/v1/agent-credentials/blast-radius": {
+      "get": {
+        "operationId": "AgentCredentialsController_blastRadius",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "AgentCredentials"
+        ]
+      }
+    },
+    "/v1/agent-credentials/decommission-dormant": {
+      "post": {
+        "operationId": "AgentCredentialsController_decommissionDormant",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecommissionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "AgentCredentials"
+        ]
+      }
+    },
     "/v1/allocation-rules": {
       "get": {
         "operationId": "AllocationRulesController_list",
@@ -2454,6 +2601,50 @@
           "agentId",
           "toolName"
         ]
+      },
+      "IssueCredentialDto": {
+        "type": "object",
+        "properties": {
+          "agentId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "ttlHours": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 8760
+          }
+        },
+        "required": [
+          "agentId",
+          "name"
+        ]
+      },
+      "RevokeDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "DecommissionDto": {
+        "type": "object",
+        "properties": {
+          "dormantDays": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 3650
+          }
+        }
       },
       "CreateAllocationRuleDto": {
         "type": "object",
