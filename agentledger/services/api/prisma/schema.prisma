@@ -99,6 +99,26 @@ model AgentToolAllowlist {
   @@map("agent_tool_allowlist")
 }
 
+model AgentCredential {
+  credentialId  String    @id @default(dbgenerated("gen_random_uuid()")) @map("credential_id") @db.Uuid
+  tenantId      String    @map("tenant_id") @db.Uuid
+  agentId       String    @map("agent_id") @db.Uuid
+  name          String
+  tokenHash     String    @map("token_hash")
+  scopes        String[]  @default([])
+  status        String    @default("pending")
+  expiresAt     DateTime? @map("expires_at") @db.Timestamptz
+  approvedBy    String?   @map("approved_by")
+  approvedAt    DateTime? @map("approved_at") @db.Timestamptz
+  revokedAt     DateTime? @map("revoked_at") @db.Timestamptz
+  revokedReason String?   @map("revoked_reason")
+  lastUsedAt    DateTime? @map("last_used_at") @db.Timestamptz
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([tenantId, tokenHash])
+  @@map("agent_credentials")
+}
+
 model VirtualKey {
   keyId            String    @id @default(dbgenerated("gen_random_uuid()")) @map("key_id") @db.Uuid
   tenantId         String    @map("tenant_id") @db.Uuid
