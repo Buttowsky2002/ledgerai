@@ -98,6 +98,8 @@ func main() {
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
 	mux.HandleFunc("GET /v1/usage", gw.handleUsage) // debug/ops endpoint
+	// Prometheus policy-overhead histogram + request counters.
+	mux.HandleFunc("GET /metrics", gw.handleMetrics)
 
 	srv := &http.Server{
 		Addr:              cfg.ListenAddr,
@@ -126,6 +128,12 @@ func main() {
 func (g *Gateway) handleUsage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(g.budgets.Snapshot())
+}
+
+// handleMetrics renders the Prometheus policy-overhead histogram + request counters.
+func (g *Gateway) handleMetrics(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+	g.metrics.WritePrometheus(w)
 }
 
 // withRequestID assigns a request ID used as call_id in emitted events.

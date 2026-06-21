@@ -1,4 +1,4 @@
-.PHONY: test test-go test-api test-sdk-typescript e2e build build-api build-shared-types build-sdk-typescript build-dashboard openapi delete-tenant up down lint lint-api lint-sdk-typescript api-install install-hooks security-check audit deps
+.PHONY: test test-go test-api test-sdk-typescript e2e load build build-api build-shared-types build-sdk-typescript build-dashboard openapi delete-tenant up down lint lint-api lint-sdk-typescript api-install install-hooks security-check audit deps
 
 GATEWAY_DIR      := services/gateway
 COLLECTOR_DIR    := services/collector
@@ -37,6 +37,13 @@ test-sdk-typescript:
 e2e:
 	docker compose up -d postgres pg-dev-init clickhouse
 	cd $(API_DIR) && npm run test:e2e
+
+# Advisory gateway load test (P6-F1): policy-overhead p95 < 75ms at ~1k RPS.
+# Needs a running gateway pointed at a near-zero-latency mock upstream + k6 on
+# PATH. NOT a blocking gate — see tests/load/README.md. Override GATEWAY_URL /
+# GATEWAY_KEY / RPS / DURATION via env.
+load:
+	k6 run tests/load/gateway.k6.js
 
 # ── Build ────────────────────────────────────────────────────────────────────
 build: build-api build-shared-types build-sdk-typescript build-dashboard
