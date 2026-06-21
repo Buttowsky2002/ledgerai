@@ -36,9 +36,22 @@ model Team {
   name         String
   costCenter   String? @map("cost_center")
   parentTeamId String? @map("parent_team_id") @db.Uuid
+  externalId   String? @map("external_id")
 
   @@unique([tenantId, name])
   @@map("teams")
+}
+
+model ScimToken {
+  tokenId    String    @id @default(dbgenerated("gen_random_uuid()")) @map("token_id") @db.Uuid
+  tenantId   String    @map("tenant_id") @db.Uuid
+  name       String
+  tokenHash  String    @map("token_hash")
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz
+
+  @@map("scim_tokens")
 }
 
 model Identity {
