@@ -27,3 +27,8 @@ export class RoiQueryDto extends RangeQueryDto {
   // service when omitted.
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0) @Max(1) minConfidence?: number;
 }
+
+export class FocusExportQueryDto extends RangeQueryDto {
+  // Response format: 'csv' (default — a FOCUS 1.2 download) or 'json'.
+  @IsOptional() @IsIn(['csv', 'json']) format?: 'csv' | 'json';
+}

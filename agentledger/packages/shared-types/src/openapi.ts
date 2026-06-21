@@ -916,6 +916,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/analytics/focus-export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AnalyticsController_focusExport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/analytics/agents/{agentId}": {
         parameters: {
             query?: never;
@@ -3219,6 +3235,27 @@ export interface operations {
     AnalyticsController_agentRisk: {
         parameters: {
             query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AnalyticsController_focusExport: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+                format?: "csv" | "json";
+            };
             header?: never;
             path?: never;
             cookie?: never;
