@@ -2550,6 +2550,49 @@
         ]
       }
     },
+    "/v1/analytics/pilot-report": {
+      "get": {
+        "operationId": "AnalyticsController_pilotReport",
+        "parameters": [
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "format",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "json",
+                "md"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Analytics"
+        ]
+      }
+    },
     "/v1/analytics/agents/{agentId}": {
       "get": {
         "operationId": "AnalyticsController_agentDetail",

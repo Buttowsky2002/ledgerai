@@ -5,12 +5,14 @@ import {
   AllocationQueryDto,
   BurndownQueryDto,
   FocusExportQueryDto,
+  PilotReportQueryDto,
   RangeQueryDto,
   RoiQueryDto,
   UnitEconomicsQueryDto,
 } from './analytics.dto';
 import { AnalyticsService } from './analytics.service';
 import { toCsv } from './focus.mapper';
+import { renderMarkdown } from './report.renderer';
 
 /**
  * Dashboard analytics — read-only, viewer+, tenant-scoped by injected param.
@@ -71,6 +73,18 @@ export class AnalyticsController {
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename="focus-1.2-export.csv"');
     res.send(toCsv(rows));
+  }
+
+  /** 30-day pilot report (ADR-036). JSON by default; ?format=md renders Markdown. */
+  @Roles('viewer') @Get('pilot-report')
+  async pilotReport(@Query() q: PilotReportQueryDto, @Res() res: Response): Promise<void> {
+    const report = await this.analytics.pilotReport(q.from, q.to);
+    if (q.format === 'md') {
+      res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+      res.send(renderMarkdown(report));
+      return;
+    }
+    res.json(report);
   }
 
   @Roles('viewer') @Get('agents/:agentId')

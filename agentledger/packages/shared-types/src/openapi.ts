@@ -932,6 +932,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/analytics/pilot-report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AnalyticsController_pilotReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/analytics/agents/{agentId}": {
         parameters: {
             query?: never;
@@ -3255,6 +3271,27 @@ export interface operations {
                 from?: string;
                 to?: string;
                 format?: "csv" | "json";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AnalyticsController_pilotReport: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+                format?: "json" | "md";
             };
             header?: never;
             path?: never;
