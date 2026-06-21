@@ -1,0 +1,55 @@
+name: load-nightly
+
+# Advisory gateway load test (P6-F1): policy-overhead p95 < 75ms at ~1k RPS.
+# NOT a required PR check — runs nightly and on manual dispatch against a
+# deployed gateway. Skips cleanly when no target is configured.
+
+on:
+  workflow_dispatch:
+    inputs:
+      gateway_url:
+        description: "Gateway base URL (overrides the LOAD_GATEWAY_URL repo variable)"
+        required: false
+        type: string
+      rps:
+        description: "Requests per second"
+        required: false
+        default: "1000"
+        type: string
+      duration:
+        description: "Test duration (k6 format, e.g. 30s)"
+        required: false
+        default: "30s"
+        type: string
+  schedule:
+    - cron: "0 7 * * *" # 07:00 UTC nightly
+
+permissions:
+  contents: read
+
+jobs:
+  k6:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve target
+        id: t
+        run: |
+          URL="${{ github.event.inputs.gateway_url || vars.LOAD_GATEWAY_URL }}"
+          if [ -z "$URL" ]; then
+            echo "::notice::No gateway target configured (set repo variable LOAD_GATEWAY_URL or dispatch with gateway_url). Skipping load run."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      - name: Run k6 load test
+        if: steps.t.outputs.skip != 'true'
+        uses: grafana/k6-action@v0.3.1
+        with:
+          filename: agentledger/tests/load/gateway.k6.js
+        env:
+          GATEWAY_URL: ${{ steps.t.outputs.url }}
+          GATEWAY_KEY: ${{ secrets.LOAD_GATEWAY_KEY }}
+          RPS: ${{ github.event.inputs.rps || '1000' }}
+          DURATION: ${{ github.event.inputs.duration || '30s' }}

@@ -24,6 +24,7 @@ type Gateway struct {
 	budgets   BudgetStore
 	sink      *EventSink
 	transport *http.Transport
+	metrics   *Metrics
 }
 
 // newGateway creates a Gateway with an initial snapshot built from cfg and pb.
@@ -32,6 +33,7 @@ func newGateway(cfg *Config, pb *PriceBook, budgets BudgetStore, sink *EventSink
 		budgets:   budgets,
 		sink:      sink,
 		transport: newUpstreamTransport(),
+		metrics:   NewMetrics(),
 	}
 	g.current.Store(newSnapshotFromCfg(cfg, pb))
 	return g
@@ -204,16 +206,20 @@ func (g *Gateway) serveCanonical(w http.ResponseWriter, r *http.Request, snap *g
 	}
 	ev.Provider = prov.Name
 
-	// 7. Proxy (response rendering depends on the client-facing format)
+	// 7. Proxy (response rendering depends on the client-facing format). The
+	// dispatch window [preDispatch, postDispatch] is the upstream round-trip and is
+	// subtracted from total inline time to yield policy overhead (stage 9).
 	var usage Usage
 	var status int
 	var respModel string
 	var err error
+	preDispatch := time.Now()
 	if format == formatAnthropic {
 		usage, status, respModel, err = g.proxyMessages(w, r, prov, body, req.Stream)
 	} else {
 		usage, status, respModel, err = g.proxyUpstream(w, r, prov, body, req.Stream)
 	}
+	postDispatch := time.Now()
 	ev.StatusCode = status
 	ev.ResponseModel = respModel
 	if err != nil {
@@ -235,6 +241,10 @@ func (g *Gateway) serveCanonical(w http.ResponseWriter, r *http.Request, snap *g
 	// 9. Emit canonical event (async, non-blocking)
 	ev.LatencyMs = time.Since(start).Milliseconds()
 	g.sink.Emit(*ev)
+
+	// Policy overhead = inline time minus the upstream round-trip.
+	overhead := preDispatch.Sub(start) + time.Since(postDispatch)
+	g.metrics.Observe(float64(overhead.Microseconds())/1000.0, statusClass(ev.Status))
 }
 
 // dispatchUpstream sends the canonical (OpenAI-format) request to the resolved
@@ -376,6 +386,9 @@ func (g *Gateway) authenticate(snap *gatewaySnapshot, r *http.Request) (*Virtual
 func (g *Gateway) finishFmt(w http.ResponseWriter, ev *LLMCallEvent, start time.Time, status int, code, msg string, format respFormat) {
 	ev.LatencyMs = time.Since(start).Milliseconds()
 	g.sink.Emit(*ev)
+	// An early rejection never reached the upstream, so the whole elapsed time is
+	// policy overhead.
+	g.metrics.Observe(float64(time.Since(start).Microseconds())/1000.0, statusClass(ev.Status))
 	writeErrFmt(w, format, status, code, msg)
 }
 
