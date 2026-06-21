@@ -21,6 +21,8 @@ import { PoliciesModule } from './policies/policies.module';
 import { PriceBookModule } from './price-book/price-book.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RoiTemplatesModule } from './roi-templates/roi-templates.module';
+import { ScimModule } from './scim/scim.module';
+import { ScimTokensModule } from './scim-tokens/scim-tokens.module';
 import { TeamsModule } from './teams/teams.module';
 import { TenantModule } from './tenant/tenant.module';
 import { TenantIdpConfigModule } from './tenant-idp-config/tenant-idp-config.module';
@@ -62,6 +64,8 @@ import { VirtualKeysModule } from './virtual-keys/virtual-keys.module';
     AgentToolAllowlistModule,
     AgentCredentialsModule,
     TenantIdpConfigModule,
+    ScimModule,
+    ScimTokensModule,
     AllocationRulesModule,
     VirtualKeysModule,
     PriceBookModule,
