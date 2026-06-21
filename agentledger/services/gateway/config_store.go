@@ -51,5 +51,6 @@ func reloadOnce(ctx context.Context, store ConfigStore, gw *Gateway) {
 	gw.current.Store(newSnapshotFromHashed(cfg, pb))
 	slog.Info("config hot-reloaded",
 		"virtual_keys", len(cfg.VirtualKeys),
-		"dlp_policies", len(cfg.DLP.Policies))
+		"dlp_policies", len(cfg.DLP.Policies),
+		"tool_allow_entries", len(cfg.AgentToolAllow))
 }

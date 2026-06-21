@@ -39,8 +39,9 @@
     "latency_ms": { "type": "integer", "minimum": 0 },
     "status_code": { "type": "integer", "minimum": 0, "maximum": 599 },
     "status": {
+      "description": "Call outcome. blocked_* are gateway policy rejections. 'blocked_tool' (additive enum, ADR-032) is an inline tool/MCP-governance rejection — existing producers/consumers are unaffected and the ClickHouse status column is LowCardinality(String) with the blocked% rollup already matching it, so no migration is required.",
       "type": "string",
-      "enum": ["ok", "upstream_error", "blocked_dlp", "blocked_budget", "blocked_rate", "blocked_policy"]
+      "enum": ["ok", "upstream_error", "blocked_dlp", "blocked_budget", "blocked_rate", "blocked_policy", "blocked_tool"]
     },
 
     "prompt_hash": { "type": "string", "maxLength": 64 },

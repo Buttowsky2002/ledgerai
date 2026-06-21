@@ -11,8 +11,9 @@ import (
 )
 
 // PGConfigStore implements ConfigStore against the AgentLedger Postgres schema.
-// It reloads virtual_keys and DLP policies on each Load call; static fields
-// (listen_addr, providers, events, redis) come from the base Config.
+// It reloads virtual_keys, DLP policies, and the per-agent tool/MCP allowlist on
+// each Load call; static fields (listen_addr, providers, events, redis) come
+// from the base Config.
 //
 // Keys are returned with VirtualKey.Key = key_hash (the SHA-256 hex stored in
 // Postgres), so callers must build a KeyStore via NewKeyStoreFromHashed.
@@ -52,6 +53,12 @@ func (s *PGConfigStore) Load(ctx context.Context) (*Config, error) {
 		FailMode: s.base.DLP.FailMode,
 		Policies: policies,
 	}
+
+	allow, err := s.loadToolAllowlist(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("tool allowlist: %w", err)
+	}
+	cfg.AgentToolAllow = allow
 
 	return &cfg, nil
 }
@@ -94,6 +101,32 @@ func (s *PGConfigStore) loadVirtualKeys(ctx context.Context) ([]VirtualKey, erro
 		}
 		vk.AllowedModels = []string(models)
 		out = append(out, vk)
+	}
+	return out, rows.Err()
+}
+
+// loadToolAllowlist reads the per-agent tool/MCP allowlist that tool governance
+// enforces inline (ADR-032). Cross-tenant by design: the gateway serves every
+// tenant, so it loads all rows (it connects as a BYPASSRLS role, as it already
+// does for virtual_keys and policies).
+func (s *PGConfigStore) loadToolAllowlist(ctx context.Context) ([]AgentToolAllowEntry, error) {
+	const q = `
+		SELECT tenant_id::text, agent_id::text, tool_name, COALESCE(mcp_server, '')
+		FROM agent_tool_allowlist`
+
+	rows, err := s.db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []AgentToolAllowEntry
+	for rows.Next() {
+		var e AgentToolAllowEntry
+		if err := rows.Scan(&e.TenantID, &e.AgentID, &e.ToolName, &e.MCPServer); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
 	}
 	return out, rows.Err()
 }

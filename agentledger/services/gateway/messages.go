@@ -44,6 +44,12 @@ type anthropicRequest struct {
 	Temperature   *float64           `json:"temperature,omitempty"`
 	TopP          *float64           `json:"top_p,omitempty"`
 	StopSequences []string           `json:"stop_sequences,omitempty"`
+	// Tools/MCPServers feed inline tool governance. Both are arrays of objects
+	// carrying a "name" (Anthropic tool defs: [{name, input_schema, ...}]; MCP
+	// servers: [{name, url, ...}]). We extract only the names for the allowlist
+	// check — the canonical body, not these, is what is forwarded upstream.
+	Tools      json.RawMessage `json:"tools,omitempty"`
+	MCPServers json.RawMessage `json:"mcp_servers,omitempty"`
 }
 
 type anthropicMessage struct {
@@ -119,7 +125,42 @@ func translateMessagesToCanonical(a anthropicRequest) []byte {
 	}
 	m["messages"] = msgs
 
+	// Carry tool/MCP identifiers into the canonical (OpenAI-shaped) body so the
+	// shared inline path's tool governance (proxy.go) sees them. Anthropic tools
+	// map to OpenAI function tools; MCP servers map to MCP-type tool entries.
+	var tools []map[string]any
+	for _, n := range rawObjectNames(a.Tools, "name") {
+		tools = append(tools, map[string]any{"type": "function", "function": map[string]any{"name": n}})
+	}
+	for _, n := range rawObjectNames(a.MCPServers, "name") {
+		tools = append(tools, map[string]any{"type": "mcp", "server_label": n})
+	}
+	if len(tools) > 0 {
+		m["tools"] = tools
+	}
+
 	out, _ := json.Marshal(m)
+	return out
+}
+
+// rawObjectNames extracts the string value of `field` from each object in a raw
+// JSON array, skipping entries that are not objects or lack the field. Used to
+// pull tool/MCP-server names out of an Anthropic request for governance.
+func rawObjectNames(raw json.RawMessage, field string) []string {
+	if len(raw) == 0 {
+		return nil
+	}
+	var arr []map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &arr); err != nil {
+		return nil
+	}
+	var out []string
+	for _, o := range arr {
+		var s string
+		if err := json.Unmarshal(o[field], &s); err == nil && s != "" {
+			out = append(out, s)
+		}
+	}
 	return out
 }
 

@@ -67,8 +67,9 @@ func main() {
 	gw := newGateway(cfg, priceBook, budgets, sink)
 
 	// Optional Postgres config hot-reload. When AGENTLEDGER_PG_DSN is set the
-	// gateway loads virtual_keys and DLP policies from Postgres and refreshes
-	// them every 30 s. On failure it serves the last-known-good snapshot.
+	// gateway loads virtual_keys, DLP policies, and the per-agent tool/MCP
+	// allowlist from Postgres and refreshes them every 30 s. On failure it
+	// serves the last-known-good snapshot.
 	if pgDSN := os.Getenv("AGENTLEDGER_PG_DSN"); pgDSN != "" {
 		cs, err := NewPGConfigStore(pgDSN, cfg)
 		if err != nil {

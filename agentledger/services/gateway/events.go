@@ -51,7 +51,7 @@ type LLMCallEvent struct {
 	// performance + outcome of the call itself
 	LatencyMs  int64  `json:"latency_ms"`
 	StatusCode int    `json:"status_code"`
-	Status     string `json:"status"` // ok | upstream_error | blocked_dlp | blocked_budget | blocked_rate
+	Status     string `json:"status"` // ok | upstream_error | blocked_dlp | blocked_budget | blocked_rate | blocked_policy | blocked_tool
 
 	// risk
 	PromptHash   string    `json:"prompt_hash"`
