@@ -1,5 +1,8 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ChParam, ClickHouseService } from '../clickhouse/clickhouse.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { getPrincipal, getTenantId } from '../tenant/tenant-context';
+import { FocusRow, SpendDailyRow, toFocusRow } from './focus.mapper';
 
 type Range = { from: string; to: string };
 
@@ -12,7 +15,54 @@ type Range = { from: string; to: string };
  */
 @Injectable()
 export class AnalyticsService {
-  constructor(private readonly ch: ClickHouseService) {}
+  constructor(
+    private readonly ch: ClickHouseService,
+    private readonly prisma: PrismaService,
+  ) {}
+
+  /**
+   * FOCUS 1.2 cost export (ADR-035) — one record per (day, team, app, provider,
+   * model) from spend_daily, mapped to FOCUS columns + x_ai_* extensions. The
+   * export is a data egress, so it is recorded in audit_log (rule 10).
+   */
+  async focusExport(from?: string, to?: string): Promise<FocusRow[]> {
+    const r = this.range(from, to);
+    const tenantId = getTenantId();
+    if (!tenantId) {
+      throw new BadRequestException('no tenant in context');
+    }
+    const rows = await this.ch.queryScoped<SpendDailyRow>(
+      `SELECT day, team_id, app_id, provider, model,
+              sum(input_tokens) AS input_tokens, sum(output_tokens) AS output_tokens,
+              sum(cached_tokens) AS cached_tokens, sum(cost_usd) AS cost_usd, sum(calls) AS calls
+       FROM spend_daily
+       WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date}
+       GROUP BY day, team_id, app_id, provider, model
+       ORDER BY day, team_id, app_id, provider, model`,
+      r as Record<string, ChParam>,
+    );
+    const focus = rows.map((row) => toFocusRow(row, { tenantId, from: r.from, to: r.to }));
+    await this.auditExport(tenantId, r, focus.length);
+    return focus;
+  }
+
+  // Records the export as an administrative data-egress event. Written inside an
+  // explicit tenant-bound transaction so RLS WITH CHECK passes (the analytics
+  // path has a request principal, but recordAudit's create/update/delete vocab
+  // doesn't cover 'export', so the row is written directly).
+  private async auditExport(tenantId: string, r: Range, rowCount: number): Promise<void> {
+    await this.prisma.withTenant(tenantId, (tx) =>
+      tx.auditLog.create({
+        data: {
+          tenantId,
+          actor: getPrincipal()?.userId ?? 'system',
+          action: 'export',
+          object: `focus-export:${r.from}:${r.to}`,
+          detail: { rows: rowCount, from: r.from, to: r.to },
+        },
+      }),
+    );
+  }
 
   /** Resolve an optional ISO-date range, defaulting to the last `days` days. */
   private range(from: string | undefined, to: string | undefined, days = 30): Range {

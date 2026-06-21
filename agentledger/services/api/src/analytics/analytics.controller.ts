@@ -1,13 +1,16 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query, Res } from '@nestjs/common';
+import { Response } from 'express';
 import { Roles } from '../auth/decorators';
 import {
   AllocationQueryDto,
   BurndownQueryDto,
+  FocusExportQueryDto,
   RangeQueryDto,
   RoiQueryDto,
   UnitEconomicsQueryDto,
 } from './analytics.dto';
 import { AnalyticsService } from './analytics.service';
+import { toCsv } from './focus.mapper';
 
 /**
  * Dashboard analytics — read-only, viewer+, tenant-scoped by injected param.
@@ -55,6 +58,19 @@ export class AnalyticsController {
   @Roles('viewer') @Get('agent-risk')
   agentRisk() {
     return this.analytics.agentRisk();
+  }
+
+  /** FOCUS 1.2 cost export (ADR-035). Default CSV download; ?format=json for rows. */
+  @Roles('viewer') @Get('focus-export')
+  async focusExport(@Query() q: FocusExportQueryDto, @Res() res: Response): Promise<void> {
+    const rows = await this.analytics.focusExport(q.from, q.to);
+    if (q.format === 'json') {
+      res.json(rows);
+      return;
+    }
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="focus-1.2-export.csv"');
+    res.send(toCsv(rows));
   }
 
   @Roles('viewer') @Get('agents/:agentId')

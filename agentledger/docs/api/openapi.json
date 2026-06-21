@@ -2507,6 +2507,49 @@
         ]
       }
     },
+    "/v1/analytics/focus-export": {
+      "get": {
+        "operationId": "AnalyticsController_focusExport",
+        "parameters": [
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "format",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "csv",
+                "json"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Analytics"
+        ]
+      }
+    },
     "/v1/analytics/agents/{agentId}": {
       "get": {
         "operationId": "AnalyticsController_agentDetail",
