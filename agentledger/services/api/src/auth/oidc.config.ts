@@ -38,6 +38,26 @@ const SPECS: ProviderEnvSpec[] = [
   },
 ];
 
+/** Base URL the IdP redirects back to (shared by global + per-tenant SSO flows). */
+export function redirectBase(): string {
+  return process.env.AGENTLEDGER_OIDC_REDIRECT_BASE ?? 'http://localhost:8094';
+}
+
+/** Redirect URI for the per-tenant SSO callback (P6-D1). */
+export function ssoRedirectUri(): string {
+  return `${redirectBase()}/auth/sso/callback`;
+}
+
+/**
+ * Resolve a tenant_idp_config.client_secret_ref to the secret value. The ref is a
+ * *name*, never the secret (rules 1 + 9) — same convention as connectors.secret_ref
+ * and the gateway's api_key_env. Today it resolves to an environment variable; a
+ * KMS/vault backend can be slotted in here without touching callers.
+ */
+export function resolveSecret(ref: string): string | undefined {
+  return process.env[ref];
+}
+
 export function loadOidcProviders(): OidcProviderConfig[] {
   const base = process.env.AGENTLEDGER_OIDC_REDIRECT_BASE ?? 'http://localhost:8094';
   const providers: OidcProviderConfig[] = [];

@@ -1,12 +1,20 @@
 import { BadRequestException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { Client, Issuer, generators } from 'openid-client';
-import { OidcProviderConfig, loadOidcProviders } from './oidc.config';
+import { OidcProviderConfig, loadOidcProviders, resolveSecret, ssoRedirectUri } from './oidc.config';
 
 export interface AuthRequest {
   url: string;
   state: string;
   nonce: string;
   codeVerifier: string;
+}
+
+/** A per-tenant OIDC IdP resolved from tenant_idp_config (P6-D1). */
+export interface TenantIdp {
+  idpId: string;
+  issuer: string;
+  clientId: string;
+  clientSecretRef: string;
 }
 
 /**
@@ -20,6 +28,8 @@ export class OidcService {
   private readonly logger = new Logger(OidcService.name);
   private readonly configs = new Map<string, OidcProviderConfig>();
   private readonly clients = new Map<string, Client>();
+  // Per-tenant IdP clients, cached by idp_id (discovery is network I/O).
+  private readonly tenantClients = new Map<string, Client>();
 
   constructor() {
     for (const p of loadOidcProviders()) {
@@ -48,15 +58,51 @@ export class OidcService {
     return { url, state, nonce, codeVerifier };
   }
 
-  /** Validate the callback and return the verified email. */
+  /** Validate the callback and return the verified email + subject. */
   async handleCallback(
     provider: string,
     params: Record<string, string>,
     expected: { state: string; nonce: string; codeVerifier: string },
-  ): Promise<{ email: string }> {
+  ): Promise<{ email: string; sub: string }> {
     const client = await this.clientFor(provider);
     const cfg = this.configs.get(provider)!;
-    const tokenSet = await client.callback(cfg.redirectUri, params, {
+    return this.exchange(client, cfg.redirectUri, params, expected);
+  }
+
+  /** Build an auth request for a per-tenant IdP (P6-D1 SSO). */
+  async buildTenantAuthRequest(idp: TenantIdp): Promise<AuthRequest> {
+    const client = await this.tenantClientFor(idp);
+    const state = generators.state();
+    const nonce = generators.nonce();
+    const codeVerifier = generators.codeVerifier();
+    const url = client.authorizationUrl({
+      scope: 'openid email profile',
+      state,
+      nonce,
+      code_challenge: generators.codeChallenge(codeVerifier),
+      code_challenge_method: 'S256',
+    });
+    return { url, state, nonce, codeVerifier };
+  }
+
+  /** Validate a per-tenant SSO callback and return the verified email + subject. */
+  async handleTenantCallback(
+    idp: TenantIdp,
+    params: Record<string, string>,
+    expected: { state: string; nonce: string; codeVerifier: string },
+  ): Promise<{ email: string; sub: string }> {
+    const client = await this.tenantClientFor(idp);
+    return this.exchange(client, ssoRedirectUri(), params, expected);
+  }
+
+  // Shared code→token exchange + verified-claim extraction for both flows.
+  private async exchange(
+    client: Client,
+    redirectUri: string,
+    params: Record<string, string>,
+    expected: { state: string; nonce: string; codeVerifier: string },
+  ): Promise<{ email: string; sub: string }> {
+    const tokenSet = await client.callback(redirectUri, params, {
       state: expected.state,
       nonce: expected.nonce,
       code_verifier: expected.codeVerifier,
@@ -65,7 +111,28 @@ export class OidcService {
     if (!claims.email || claims.email_verified === false) {
       throw new UnauthorizedException('email missing or unverified from provider');
     }
-    return { email: String(claims.email).toLowerCase() };
+    return { email: String(claims.email).toLowerCase(), sub: String(claims.sub) };
+  }
+
+  private async tenantClientFor(idp: TenantIdp): Promise<Client> {
+    const cached = this.tenantClients.get(idp.idpId);
+    if (cached) {
+      return cached;
+    }
+    const secret = resolveSecret(idp.clientSecretRef);
+    if (!secret) {
+      throw new BadRequestException(`IdP client secret unavailable (ref ${idp.clientSecretRef})`);
+    }
+    this.logger.log(`discovering OIDC issuer for tenant IdP ${idp.idpId}`);
+    const issuer = await Issuer.discover(idp.issuer);
+    const client = new issuer.Client({
+      client_id: idp.clientId,
+      client_secret: secret,
+      redirect_uris: [ssoRedirectUri()],
+      response_types: ['code'],
+    });
+    this.tenantClients.set(idp.idpId, client);
+    return client;
   }
 
   private async clientFor(provider: string): Promise<Client> {

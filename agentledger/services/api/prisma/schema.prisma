@@ -52,9 +52,27 @@ model Identity {
   apiRole     String @default("viewer") @map("api_role")
   source      String @default("manual")
   aliases     Json   @default("[]")
+  externalId  String? @map("external_id")
+  active      Boolean @default(true)
 
   @@unique([tenantId, email])
   @@map("identities")
+}
+
+model TenantIdpConfig {
+  idpId           String   @id @default(dbgenerated("gen_random_uuid()")) @map("idp_id") @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  protocol        String   @default("oidc")
+  issuer          String
+  clientId        String   @map("client_id")
+  clientSecretRef String   @map("client_secret_ref")
+  emailDomains    String[] @map("email_domains")
+  jitEnabled      Boolean  @default(true) @map("jit_enabled")
+  defaultApiRole  String   @default("viewer") @map("default_api_role")
+  enabled         Boolean  @default(true)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("tenant_idp_config")
 }
 
 model App {
