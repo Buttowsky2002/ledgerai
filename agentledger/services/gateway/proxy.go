@@ -58,6 +58,41 @@ type chatRequest struct {
 		Role    string          `json:"role"`
 		Content json.RawMessage `json:"content"`
 	} `json:"messages"`
+	// Tools are the tool/MCP definitions offered to the model. Function tools
+	// carry a name under "function"; MCP tools carry a "server_label". Both
+	// feed inline tool governance (declaredTools).
+	Tools []struct {
+		Type        string `json:"type"`
+		ServerLabel string `json:"server_label"` // MCP tool: governed server id
+		Function    struct {
+			Name string `json:"name"`
+		} `json:"function"`
+	} `json:"tools"`
+	// Functions is the legacy OpenAI function-calling field (pre-`tools`).
+	Functions []struct {
+		Name string `json:"name"`
+	} `json:"functions"`
+}
+
+// declaredTools returns the tool/MCP identifiers this request exposes to the
+// model: function tool names, MCP server labels, and legacy function names.
+// These are the identifiers tool governance checks against the agent allowlist.
+func (req chatRequest) declaredTools() []string {
+	var out []string
+	for _, t := range req.Tools {
+		if t.Function.Name != "" {
+			out = append(out, t.Function.Name)
+		}
+		if t.ServerLabel != "" {
+			out = append(out, t.ServerLabel)
+		}
+	}
+	for _, f := range req.Functions {
+		if f.Name != "" {
+			out = append(out, f.Name)
+		}
+	}
+	return out
 }
 
 func (g *Gateway) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
@@ -113,6 +148,18 @@ func (g *Gateway) serveCanonical(w http.ResponseWriter, r *http.Request, snap *g
 		ev.Status, ev.StatusCode = "blocked_policy", http.StatusForbidden
 		g.finishFmt(w, ev, start, http.StatusForbidden, "model_not_allowed",
 			fmt.Sprintf("model %q is not allowed for this key", req.Model), format)
+		return
+	}
+
+	// 3b. Tool/MCP governance — deny-by-default for agents that have an
+	// allowlist (ADR-032). Reads only the in-memory snapshot, so it adds zero
+	// I/O to the inline path (rule 12). Ungoverned agents and requests without
+	// an agent id fall through; the async risk-engine worker still scores them.
+	if bad := snap.tools.Disallowed(vk.TenantID, ev.AgentID, req.declaredTools()); len(bad) > 0 {
+		ev.Status, ev.StatusCode = "blocked_tool", http.StatusForbidden
+		ev.RiskSeverity = "high"
+		g.finishFmt(w, ev, start, http.StatusForbidden, "tool_not_allowed",
+			"request blocked: agent not permitted to use tool(s): "+strings.Join(bad, ", "), format)
 		return
 	}
 

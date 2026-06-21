@@ -7,6 +7,7 @@ type gatewaySnapshot struct {
 	cfg    *Config
 	keys   *KeyStore
 	dlp    *DLPEngine
+	tools  *ToolGovernor
 	prices *PriceBook
 }
 
@@ -17,6 +18,7 @@ func newSnapshotFromCfg(cfg *Config, pb *PriceBook) *gatewaySnapshot {
 		cfg:    cfg,
 		keys:   NewKeyStore(cfg.VirtualKeys),
 		dlp:    NewDLPEngine(cfg.DLP),
+		tools:  NewToolGovernor(cfg.AgentToolAllow),
 		prices: pb,
 	}
 }
@@ -28,6 +30,7 @@ func newSnapshotFromHashed(cfg *Config, pb *PriceBook) *gatewaySnapshot {
 		cfg:    cfg,
 		keys:   NewKeyStoreFromHashed(cfg.VirtualKeys),
 		dlp:    NewDLPEngine(cfg.DLP),
+		tools:  NewToolGovernor(cfg.AgentToolAllow),
 		prices: pb,
 	}
 }

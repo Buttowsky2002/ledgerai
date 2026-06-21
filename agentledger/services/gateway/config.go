@@ -20,6 +20,10 @@ type Config struct {
 	DLP           DLPConfig     `json:"dlp"`
 	Events        EventSinkCfg  `json:"events"`
 	Redis         RedisCfg      `json:"redis"`
+	// AgentToolAllow is the per-agent tool/MCP allowlist enforced inline by tool
+	// governance (ADR-032). From Postgres it is loaded from agent_tool_allowlist;
+	// in file config it can be set directly. Empty = no agent is governed inline.
+	AgentToolAllow []AgentToolAllowEntry `json:"agent_tool_allow,omitempty"`
 }
 
 // RedisCfg configures the optional Redis-backed BudgetStore.
