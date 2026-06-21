@@ -47,6 +47,43 @@
         ]
       }
     },
+    "/auth/sso/login": {
+      "get": {
+        "operationId": "AuthController_ssoLogin",
+        "parameters": [
+          {
+            "name": "email",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/sso/callback": {
+      "get": {
+        "operationId": "AuthController_ssoCallback",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
     "/auth/refresh": {
       "post": {
         "operationId": "AuthController_refresh",
@@ -1247,6 +1284,134 @@
         },
         "tags": [
           "AgentCredentials"
+        ]
+      }
+    },
+    "/v1/tenant-idp-config": {
+      "get": {
+        "operationId": "TenantIdpConfigController_list",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "TenantIdpConfig"
+        ]
+      },
+      "post": {
+        "operationId": "TenantIdpConfigController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTenantIdpDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "TenantIdpConfig"
+        ]
+      }
+    },
+    "/v1/tenant-idp-config/{id}": {
+      "get": {
+        "operationId": "TenantIdpConfigController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "TenantIdpConfig"
+        ]
+      },
+      "patch": {
+        "operationId": "TenantIdpConfigController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTenantIdpDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "TenantIdpConfig"
+        ]
+      },
+      "delete": {
+        "operationId": "TenantIdpConfigController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "TenantIdpConfig"
         ]
       }
     },
@@ -2643,6 +2808,86 @@
             "type": "number",
             "minimum": 1,
             "maximum": 3650
+          }
+        }
+      },
+      "CreateTenantIdpDto": {
+        "type": "object",
+        "properties": {
+          "issuer": {
+            "type": "string"
+          },
+          "clientId": {
+            "type": "string"
+          },
+          "clientSecretRef": {
+            "type": "string"
+          },
+          "emailDomains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "protocol": {
+            "type": "string",
+            "enum": [
+              "oidc"
+            ]
+          },
+          "jitEnabled": {
+            "type": "boolean"
+          },
+          "defaultApiRole": {
+            "type": "string",
+            "enum": [
+              "viewer",
+              "analyst",
+              "admin"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "issuer",
+          "clientId",
+          "clientSecretRef",
+          "emailDomains"
+        ]
+      },
+      "UpdateTenantIdpDto": {
+        "type": "object",
+        "properties": {
+          "issuer": {
+            "type": "string"
+          },
+          "clientId": {
+            "type": "string"
+          },
+          "clientSecretRef": {
+            "type": "string"
+          },
+          "emailDomains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "jitEnabled": {
+            "type": "boolean"
+          },
+          "defaultApiRole": {
+            "type": "string",
+            "enum": [
+              "viewer",
+              "analyst",
+              "admin"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
           }
         }
       },

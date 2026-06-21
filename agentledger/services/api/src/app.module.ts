@@ -23,6 +23,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { RoiTemplatesModule } from './roi-templates/roi-templates.module';
 import { TeamsModule } from './teams/teams.module';
 import { TenantModule } from './tenant/tenant.module';
+import { TenantIdpConfigModule } from './tenant-idp-config/tenant-idp-config.module';
 import { VirtualKeysModule } from './virtual-keys/virtual-keys.module';
 
 @Module({
@@ -60,6 +61,7 @@ import { VirtualKeysModule } from './virtual-keys/virtual-keys.module';
     RoiTemplatesModule,
     AgentToolAllowlistModule,
     AgentCredentialsModule,
+    TenantIdpConfigModule,
     AllocationRulesModule,
     VirtualKeysModule,
     PriceBookModule,
