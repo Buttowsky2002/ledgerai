@@ -3,8 +3,12 @@ import { ChParam, ClickHouseService } from '../clickhouse/clickhouse.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { getPrincipal, getTenantId } from '../tenant/tenant-context';
 import { FocusRow, SpendDailyRow, toFocusRow } from './focus.mapper';
+import { PilotReport } from './report.renderer';
 
 type Range = { from: string; to: string };
+
+/** Coerce a ClickHouse scalar (numbers may arrive as strings) to a number. */
+const n = (v: unknown): number => (typeof v === 'number' ? v : Number(v) || 0);
 
 /**
  * Read-only analytics over the ClickHouse materialized views — NEVER raw
@@ -267,5 +271,137 @@ export class AnalyticsService {
       ),
     ]);
     return { agentId, spend: spend[0] ?? {}, runs: runs[0] ?? {}, statusMix };
+  }
+
+  /**
+   * 30-day pilot report (ADR-036): a board-ready trial summary tracing spend →
+   * outcomes → risk-adjusted ROI for the tenant over a window. Each section reads
+   * the view it reports from and records that `source` so every figure traces
+   * back to source events. ROI + unit economics use the headline confidence bar
+   * (0.5). All sub-queries run concurrently.
+   */
+  async pilotReport(from?: string, to?: string): Promise<PilotReport> {
+    const days = 30;
+    const r = this.range(from, to, days);
+    const p = r as Record<string, ChParam>;
+    const HEADLINE = 0.5;
+
+    const [spendTotals, byProvider, agents, unit, roi, severity] = await Promise.all([
+      this.ch.queryScoped(
+        `SELECT sum(cost_usd) AS cost_usd, sum(calls) AS calls,
+                sum(input_tokens) AS input_tokens, sum(output_tokens) AS output_tokens,
+                sum(blocked_calls) AS blocked_calls, sum(error_calls) AS error_calls
+         FROM spend_daily WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date}`,
+        p,
+      ),
+      this.ch.queryScoped(
+        `SELECT provider, sum(cost_usd) AS cost_usd, sum(calls) AS calls
+         FROM spend_daily WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date}
+         GROUP BY provider ORDER BY cost_usd DESC`,
+        p,
+      ),
+      this.ch.queryScoped(
+        `SELECT agent_id, sum(cost_usd) AS cost_usd, sum(calls) AS calls
+         FROM spend_hourly_by_key
+         WHERE tenant_id = {tenant:String} AND toDate(hour) BETWEEN {from:Date} AND {to:Date} AND agent_id != ''
+         GROUP BY agent_id ORDER BY cost_usd DESC LIMIT 5`,
+        p,
+      ),
+      this.ch.queryScoped(
+        `SELECT count() AS outcomes, sum(r.total_cost_usd) AS ai_cost_usd,
+                sum(o.business_value_usd) AS business_value_usd,
+                sum(r.total_cost_usd) / nullIf(count(), 0) AS cost_per_outcome,
+                sum(o.business_value_usd) - sum(r.total_cost_usd) AS net_value_usd,
+                avg(o.attribution_confidence) AS avg_confidence
+         FROM agentledger.outcomes o FINAL
+         LEFT JOIN agentledger.agent_runs r FINAL ON r.tenant_id = o.tenant_id AND r.run_id = o.run_id
+         WHERE o.tenant_id = {tenant:String} AND toDate(o.ts) BETWEEN {from:Date} AND {to:Date}
+           AND o.attribution_confidence >= {minconf:Float32}`,
+        { ...p, minconf: HEADLINE },
+      ),
+      this.ch.queryScoped(
+        `SELECT count() AS outcomes, sum(value_usd) AS value_usd,
+                sum(fully_loaded_cost_usd) AS fully_loaded_cost_usd,
+                sum(expected_roi_usd) AS expected_roi_usd,
+                sum(risk_adjusted_roi_usd) AS risk_adjusted_roi_usd,
+                sum(roi_low_usd) AS roi_low_usd, sum(roi_high_usd) AS roi_high_usd,
+                avg(attribution_confidence) AS avg_confidence
+         FROM agentledger.v_roi
+         WHERE tenant_id = {tenant:String} AND toDate(outcome_ts) BETWEEN {from:Date} AND {to:Date}
+           AND attribution_confidence >= {minconf:Float32}`,
+        { ...p, minconf: HEADLINE },
+      ),
+      this.ch.queryScoped(
+        // Distinct alias for the sum — aliasing it to `events` would shadow the
+        // column and make the sibling sumIf()s nested aggregates (CH error 184).
+        `SELECT risk_severity AS severity, sum(events) AS total_events,
+                sumIf(events, dlp_action = 'block') AS dlp_block_events,
+                sumIf(events, risk_severity = 'high') AS high_events
+         FROM risk_daily WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date}
+         GROUP BY risk_severity ORDER BY total_events DESC`,
+        p,
+      ),
+    ]);
+
+    const st = (spendTotals[0] ?? {}) as Record<string, unknown>;
+    const ue = (unit[0] ?? {}) as Record<string, unknown>;
+    const ro = (roi[0] ?? {}) as Record<string, unknown>;
+    const sevRows = severity as Record<string, unknown>[];
+
+    return {
+      window: { from: r.from, to: r.to, days },
+      spend: {
+        source: 'spend_daily',
+        totalCostUsd: n(st.cost_usd),
+        calls: n(st.calls),
+        inputTokens: n(st.input_tokens),
+        outputTokens: n(st.output_tokens),
+        blockedCalls: n(st.blocked_calls),
+        errorCalls: n(st.error_calls),
+        byProvider: (byProvider as Record<string, unknown>[]).map((x) => ({
+          provider: String(x.provider),
+          costUsd: n(x.cost_usd),
+          calls: n(x.calls),
+        })),
+      },
+      topAgents: {
+        source: 'spend_hourly_by_key',
+        agents: (agents as Record<string, unknown>[]).map((x) => ({
+          agentId: String(x.agent_id),
+          costUsd: n(x.cost_usd),
+          calls: n(x.calls),
+        })),
+      },
+      unitEconomics: {
+        source: 'outcomes + agent_runs',
+        minConfidence: HEADLINE,
+        outcomes: n(ue.outcomes),
+        aiCostUsd: n(ue.ai_cost_usd),
+        businessValueUsd: n(ue.business_value_usd),
+        costPerOutcome: n(ue.cost_per_outcome),
+        netValueUsd: n(ue.net_value_usd),
+        avgConfidence: n(ue.avg_confidence),
+      },
+      roi: {
+        source: 'v_roi',
+        minConfidence: HEADLINE,
+        outcomes: n(ro.outcomes),
+        valueUsd: n(ro.value_usd),
+        fullyLoadedCostUsd: n(ro.fully_loaded_cost_usd),
+        expectedRoiUsd: n(ro.expected_roi_usd),
+        riskAdjustedRoiUsd: n(ro.risk_adjusted_roi_usd),
+        roiLowUsd: n(ro.roi_low_usd),
+        roiHighUsd: n(ro.roi_high_usd),
+        avgConfidence: n(ro.avg_confidence),
+      },
+      governance: {
+        source: 'risk_daily',
+        bySeverity: sevRows
+          .filter((x) => String(x.severity) !== '')
+          .map((x) => ({ severity: String(x.severity), events: n(x.total_events) })),
+        dlpBlockEvents: sevRows.reduce((s, x) => s + n(x.dlp_block_events), 0),
+        highSeverityEvents: sevRows.reduce((s, x) => s + n(x.high_events), 0),
+      },
+    };
   }
 }

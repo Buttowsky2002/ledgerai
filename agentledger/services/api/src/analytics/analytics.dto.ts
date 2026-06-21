@@ -32,3 +32,8 @@ export class FocusExportQueryDto extends RangeQueryDto {
   // Response format: 'csv' (default — a FOCUS 1.2 download) or 'json'.
   @IsOptional() @IsIn(['csv', 'json']) format?: 'csv' | 'json';
 }
+
+export class PilotReportQueryDto extends RangeQueryDto {
+  // Response format: 'json' (default — structured report) or 'md' (rendered text).
+  @IsOptional() @IsIn(['json', 'md']) format?: 'json' | 'md';
+}
