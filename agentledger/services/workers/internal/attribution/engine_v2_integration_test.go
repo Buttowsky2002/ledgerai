@@ -50,6 +50,7 @@ func TestEngineV2DeterministicIntegration(t *testing.T) {
 	pr := "github:" + tenant + "/repo#42"   // SDK-stamped to run r1
 	ticket := "jira:" + tenant + "-9"       // linked by Co-Authored-By evidence to r2
 	prob := "github:" + tenant + "/svc#123" // no hard link → scored probabilistically to r3
+	chain := "jira:" + tenant + "-7"        // 3 agents SDK-stamped → Shapley coalition
 
 	chInsert(t, chURL, "agent_runs", []map[string]any{
 		{"run_id": "r1", "tenant_id": tenant, "agent_id": "A1", "user_id": "u1",
@@ -64,6 +65,21 @@ func TestEngineV2DeterministicIntegration(t *testing.T) {
 			"started_at": "2026-06-10 11:00:00.000", "ended_at": "2026-06-10 11:40:00.000",
 			"status": "completed", "objective": "implement #123", "outcome_id": "",
 			"total_cost_usd": 5, "total_tokens": 600, "llm_calls": 4, "tool_calls": 1, "risk_events": 0},
+		// research → implement → review chain, all SDK-stamped to one ticket. Placed
+		// in its own afternoon window so the chain runs don't coincidentally score
+		// against the morning outcomes (and vice versa).
+		{"run_id": "r4", "tenant_id": tenant, "agent_id": "A4", "user_id": "u4",
+			"started_at": "2026-06-10 14:00:00.000", "ended_at": "2026-06-10 14:20:00.000",
+			"status": "completed", "objective": "research", "outcome_id": chain,
+			"total_cost_usd": 3, "total_tokens": 300, "llm_calls": 2, "tool_calls": 0, "risk_events": 0},
+		{"run_id": "r5", "tenant_id": tenant, "agent_id": "A5", "user_id": "u4",
+			"started_at": "2026-06-10 14:30:00.000", "ended_at": "2026-06-10 15:10:00.000",
+			"status": "completed", "objective": "implement", "outcome_id": chain,
+			"total_cost_usd": 9, "total_tokens": 900, "llm_calls": 6, "tool_calls": 2, "risk_events": 0},
+		{"run_id": "r6", "tenant_id": tenant, "agent_id": "A6", "user_id": "u4",
+			"started_at": "2026-06-10 15:20:00.000", "ended_at": "2026-06-10 15:50:00.000",
+			"status": "completed", "objective": "review", "outcome_id": chain,
+			"total_cost_usd": 2, "total_tokens": 200, "llm_calls": 1, "tool_calls": 0, "risk_events": 0},
 	})
 	chInsert(t, chURL, "outcomes", []map[string]any{
 		{"outcome_id": pr, "tenant_id": tenant, "ts": "2026-06-10 09:10:00.000",
@@ -78,6 +94,10 @@ func TestEngineV2DeterministicIntegration(t *testing.T) {
 			"source_system": "github", "outcome_type": "pr_merged", "team_id": "team1", "user_id": "u3",
 			"run_id": "", "business_value_usd": 250, "quality_score": 0.6,
 			"attribution_confidence": 0, "completion_status": "merged"},
+		{"outcome_id": chain, "tenant_id": tenant, "ts": "2026-06-10 16:00:00.000",
+			"source_system": "jira", "outcome_type": "ticket_resolved", "team_id": "team2", "user_id": "u4",
+			"run_id": "", "business_value_usd": 900, "quality_score": 0.8,
+			"attribution_confidence": 0, "completion_status": "done"},
 	})
 	chInsert(t, chURL, "outcome_evidence", []map[string]any{
 		{"tenant_id": tenant, "outcome_id": ticket, "evidence_type": "co_authored_by",
@@ -159,6 +179,35 @@ func TestEngineV2DeterministicIntegration(t *testing.T) {
 	var pc []Contribution
 	if err := json.Unmarshal([]byte(pContribs), &pc); err != nil || len(pc) != 5 {
 		t.Fatalf("probabilistic contributions = %s (err %v), want 5", pContribs, err)
+	}
+
+	// (d) The 3-agent chain → a coalition: three shapley edges whose value
+	// allocations sum to the outcome value, plus one persisted coalition row.
+	var members int
+	var valueSum float64
+	var coalID string
+	if err := db.QueryRow(`SELECT count(*), coalesce(sum(value_attributed),0), coalesce(max(coalition_id::text),'')
+	     FROM attribution_edges WHERE tenant_id = $1 AND outcome_id = $2 AND attribution_method = 'shapley'`,
+		tenant, chain).Scan(&members, &valueSum, &coalID); err != nil {
+		t.Fatalf("read coalition edges: %v", err)
+	}
+	if members != 3 {
+		t.Fatalf("coalition edges = %d, want 3", members)
+	}
+	if valueSum < 899.99 || valueSum > 900.01 {
+		t.Fatalf("coalition value allocations sum = %v, want 900", valueSum)
+	}
+	if coalID == "" {
+		t.Fatal("coalition edges missing coalition_id")
+	}
+	var colMembers, sampleCount int
+	var colMethod string
+	if err := db.QueryRow(`SELECT jsonb_array_length(members), method, sample_count
+	     FROM attribution_coalitions WHERE coalition_id = $1`, coalID).Scan(&colMembers, &colMethod, &sampleCount); err != nil {
+		t.Fatalf("read coalition row: %v", err)
+	}
+	if colMembers != 3 || colMethod != "exact" || sampleCount != 0 {
+		t.Fatalf("coalition row = %d members / %s / %d samples, want 3 / exact / 0", colMembers, colMethod, sampleCount)
 	}
 
 	// The decision log got both events (analytics path), tagged engine_version=v2.

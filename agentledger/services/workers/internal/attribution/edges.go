@@ -44,11 +44,12 @@ type ModelVersion struct {
 	Active  bool
 }
 
-// PGStore persists attribution edges, baselines, and model lineage to Postgres.
+// PGStore persists attribution edges, baselines, coalitions, and model lineage.
 type PGStore interface {
 	EnsureModelVersion(ctx context.Context, mv ModelVersion) error
 	UpsertEdges(ctx context.Context, tenantID string, edges []Edge) error
 	UpsertBaselines(ctx context.Context, tenantID string, baselines []Baseline) error
+	UpsertCoalitions(ctx context.Context, tenantID string, coalitions []Coalition) error
 	Ping(ctx context.Context) error
 	Close() error
 }
@@ -175,6 +176,43 @@ func (p *PG) UpsertBaselines(ctx context.Context, tenantID string, baselines []B
 			nullStr(b.WindowStart), nullStr(b.WindowEnd), b.TotalCount, checks, ModelVersionCounterfactual,
 		); err != nil {
 			return fmt.Errorf("upsert baseline %s/%s/%s: %w", b.Scope, b.SubjectID, b.OutcomeType, err)
+		}
+	}
+	return tx.Commit()
+}
+
+// UpsertCoalitions writes one tenant's multi-agent coalitions (members + Shapley
+// allocation). Must run BEFORE UpsertEdges so the edges' coalition_id FK resolves.
+// The coalition_id is deterministic per (tenant, outcome), so re-runs update in place.
+func (p *PG) UpsertCoalitions(ctx context.Context, tenantID string, coalitions []Coalition) error {
+	if len(coalitions) == 0 {
+		return nil
+	}
+	tx, err := p.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, `SELECT set_config('app.tenant_id', $1, true)`, tenantID); err != nil {
+		return fmt.Errorf("bind tenant: %w", err)
+	}
+	const q = `
+		INSERT INTO attribution_coalitions
+		    (coalition_id, tenant_id, outcome_id, members, method, sample_count)
+		VALUES ($1,$2,$3,$4,$5,$6)
+		ON CONFLICT (coalition_id) DO UPDATE SET
+		    members      = EXCLUDED.members,
+		    method       = EXCLUDED.method,
+		    sample_count = EXCLUDED.sample_count`
+	stmt, err := tx.PrepareContext(ctx, q)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = stmt.Close() }()
+	for _, c := range coalitions {
+		members, _ := json.Marshal(c.Members)
+		if _, err := stmt.ExecContext(ctx, c.CoalitionID, c.TenantID, c.OutcomeID, members, c.Method, c.SampleCount); err != nil {
+			return fmt.Errorf("upsert coalition %s: %w", c.OutcomeID, err)
 		}
 	}
 	return tx.Commit()

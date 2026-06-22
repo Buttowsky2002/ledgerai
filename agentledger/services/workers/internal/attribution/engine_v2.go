@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"sort"
 	"sync/atomic"
 	"time"
 )
@@ -36,6 +37,7 @@ type V2Metrics struct {
 	Examined      atomic.Int64 // outcomes considered
 	Deterministic atomic.Int64 // outcomes resolved to a deterministic link
 	Probabilistic atomic.Int64 // outcomes scored to a probabilistic link
+	Coalitions    atomic.Int64 // outcomes resolved to a multi-agent coalition
 	EdgesWritten  atomic.Int64 // attribution_edges rows upserted
 }
 
@@ -47,6 +49,9 @@ const ModelVersionDeterministic = "deterministic-v1"
 // ModelVersionCounterfactual is the lineage id for the baseline/counterfactual
 // estimator (3.4), referenced by attribution_baselines.
 const ModelVersionCounterfactual = "counterfactual-v1"
+
+// ModelVersionShapley is the lineage id stamped on coalition (multi-agent) edges (3.5).
+const ModelVersionShapley = "shapley-v1"
 
 // CHReaderV2 is the ClickHouse surface the V2 engine needs: the V1 reads/writes
 // plus the evidence read and the attribution_events append. HTTPClient implements it.
@@ -99,7 +104,7 @@ func (e *EngineV2) Process(ctx context.Context) error {
 	}
 
 	// Ensure all model lineages exist before any edge/baseline references them (FK).
-	for _, mv := range []ModelVersion{deterministicModelVersion(), scorerModelVersion(e.scorer), counterfactualModelVersion()} {
+	for _, mv := range []ModelVersion{deterministicModelVersion(), scorerModelVersion(e.scorer), counterfactualModelVersion(), shapleyModelVersion()} {
 		if err := e.pg.EnsureModelVersion(ctx, mv); err != nil {
 			return err
 		}
@@ -125,12 +130,45 @@ func (e *EngineV2) Process(ctx context.Context) error {
 	}
 	tents := make([]tentative, 0, len(outcomes))
 	treated := make(map[string]bool)
+	coalitionsByTenant := make(map[string][]Coalition)
 	nowTS := now.Format(chTime)
-	deterministic, probabilistic := 0, 0
+	deterministic, probabilistic, coalitions := 0, 0, 0
 
 	for _, o := range outcomes {
 		tRuns := runsByTenant[o.TenantID]
-		if link, ok := ResolveDeterministic(o, tRuns, evByOutcome[o.TenantID+"\x00"+o.OutcomeID]); ok {
+		ev := evByOutcome[o.TenantID+"\x00"+o.OutcomeID]
+
+		// Stage 0 — coalition: ≥2 distinct agents contributed → Shapley-allocate the
+		// value across them (one edge per member), instead of a single winner.
+		if contribs := e.gatherContributors(o, tRuns, ev); len(contribs) >= 2 {
+			coalitions++
+			col := ShapleyAllocate(contribs, shapleySeed(o.TenantID, o.OutcomeID))
+			col.TenantID, col.OutcomeID = o.TenantID, o.OutcomeID
+			col.CoalitionID = deterministicCoalitionID(o.TenantID, o.OutcomeID)
+			coalitionsByTenant[o.TenantID] = append(coalitionsByTenant[o.TenantID], col)
+			cid := col.CoalitionID
+			for _, m := range col.Members {
+				gross := o.BusinessValueUSD * m.ShapleyValue
+				cost := m.CostUSD
+				tents = append(tents, tentative{o: o, gross: gross,
+					edge: Edge{
+						TenantID: o.TenantID, OutcomeID: o.OutcomeID, RunID: m.RunID, AgentID: m.AgentID,
+						CoalitionID: &cid, Method: "shapley", ConfidenceRaw: m.Confidence, ConfidenceCalibrated: m.Confidence,
+						SignalContributions: contributorContribs(contribs, m.AgentID), CostAttributed: &cost,
+						ModelVersion: ModelVersionShapley,
+					},
+					event: AttributionEvent{
+						TS: nowTS, TenantID: o.TenantID, OutcomeID: o.OutcomeID, OutcomeType: o.OutcomeType,
+						RunID: m.RunID, AgentID: m.AgentID, CoalitionID: cid, Method: "shapley",
+						ConfidenceRaw: m.Confidence, ConfidenceCalibrated: m.Confidence, CostAttributed: cost,
+						ModelVersion: ModelVersionShapley, EngineVersion: "v2",
+					}})
+			}
+			treated[o.TenantID+"\x00"+o.OutcomeID] = true
+			continue
+		}
+
+		if link, ok := ResolveDeterministic(o, tRuns, ev); ok {
 			deterministic++
 			contributions, _ := json.Marshal(evidenceContributions(link.Evidence))
 			cost := costForRun(tRuns, link.RunID)
@@ -186,6 +224,12 @@ func (e *EngineV2) Process(ctx context.Context) error {
 			return err
 		}
 	}
+	// Coalitions BEFORE edges so the edges' coalition_id FK resolves.
+	for tenant, cols := range coalitionsByTenant {
+		if err := e.pg.UpsertCoalitions(ctx, tenant, cols); err != nil {
+			return err
+		}
+	}
 
 	written := 0
 	for tenant, edges := range edgesByTenant {
@@ -201,10 +245,11 @@ func (e *EngineV2) Process(ctx context.Context) error {
 	e.metrics.Examined.Add(int64(len(outcomes)))
 	e.metrics.Deterministic.Add(int64(deterministic))
 	e.metrics.Probabilistic.Add(int64(probabilistic))
+	e.metrics.Coalitions.Add(int64(coalitions))
 	e.metrics.EdgesWritten.Add(int64(written))
 	slog.Info("attribution v2 pass complete",
 		"examined", len(outcomes), "deterministic", deterministic, "probabilistic", probabilistic,
-		"baselines", len(baselines), "edges", written)
+		"coalitions", coalitions, "baselines", len(baselines), "edges", written)
 	return nil
 }
 
@@ -215,6 +260,80 @@ func counterfactualModelVersion() ModelVersion {
 		Params:  []byte(`{"method":"share_based","formula":"1 - baseline/total","min_sample":4}`),
 		Metrics: []byte(`{}`), Active: true,
 	}
+}
+
+// shapleyModelVersion is the lineage row for the coalition allocator.
+func shapleyModelVersion() ModelVersion {
+	return ModelVersion{
+		Version: ModelVersionShapley, Kind: "scorer",
+		Params:  []byte(`{"method":"shapley","characteristic":"noisy_or","exact_max":5,"mc_samples":20000}`),
+		Metrics: []byte(`{}`), Active: true,
+	}
+}
+
+// gatherContributors returns one best contributing run per agent for an outcome:
+// any hard link (SDK stamp or evidence naming a run), plus probabilistic candidates
+// clearing minConfidence. ≥2 distinct agents means a coalition (Shapley). Sorted by
+// agent_id for deterministic allocation order.
+func (e *EngineV2) gatherContributors(o OutcomeRow, runs []RunRow, evidence []EvidenceRow) []contributor {
+	best := make(map[string]contributor)
+	add := func(c contributor) {
+		if c.agentID == "" {
+			return
+		}
+		if ex, ok := best[c.agentID]; !ok || c.conf > ex.conf {
+			best[c.agentID] = c
+		}
+	}
+	ref := deriveOutcomeRef(o.OutcomeID, o.SourceSystem)
+	for _, r := range runs {
+		switch {
+		case r.OutcomeID != "" && r.OutcomeID == o.OutcomeID:
+			cj, _ := json.Marshal([]signalContribution{{Signal: "sdk_session_link", EvidenceRef: ref}})
+			add(contributor{r.AgentID, r.RunID, ConfSDKStamp, "deterministic", r.TotalCostUSD, cj})
+		case evidenceNamesRun(evidence, o.OutcomeID, r.RunID) != "":
+			et := evidenceNamesRun(evidence, o.OutcomeID, r.RunID)
+			cj, _ := json.Marshal([]signalContribution{{Signal: et, EvidenceRef: ref}})
+			add(contributor{r.AgentID, r.RunID, ConfHardEvidence, "deterministic", r.TotalCostUSD, cj})
+		default:
+			gap, ok := candidateGap(SignalInput{Outcome: o, Run: r})
+			if !ok || gap < 0 || gap > e.window {
+				continue
+			}
+			_, cal, contribs := e.scorer.Score(ExtractSignals(SignalInput{Outcome: o, Run: r, Config: e.config}))
+			if cal >= e.minConfidence {
+				cj, _ := json.Marshal(contribs)
+				add(contributor{r.AgentID, r.RunID, cal, "probabilistic", r.TotalCostUSD, cj})
+			}
+		}
+	}
+	out := make([]contributor, 0, len(best))
+	for _, c := range best {
+		out = append(out, c)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].agentID < out[j].agentID })
+	return out
+}
+
+// evidenceNamesRun returns the evidence_type when an evidence row concretely names
+// the given run for the outcome, else "".
+func evidenceNamesRun(evidence []EvidenceRow, outcomeID, runID string) string {
+	for _, ev := range evidence {
+		if ev.OutcomeID == outcomeID && ev.RunID == runID {
+			return ev.EvidenceType
+		}
+	}
+	return ""
+}
+
+// contributorContribs returns the signal_contributions JSON for a coalition member.
+func contributorContribs(contribs []contributor, agentID string) []byte {
+	for _, c := range contribs {
+		if c.agentID == agentID {
+			return c.contribs
+		}
+	}
+	return []byte("[]")
 }
 
 // scoreProbabilistic generates candidate runs for an outcome (recall-first: in the

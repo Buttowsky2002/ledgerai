@@ -152,6 +152,7 @@ func writeMetrics(w http.ResponseWriter, m *attribution.Metrics, v2 *attribution
 		{"attribution_v2_examined_total", "Outcomes considered by v2.", v2.Examined.Load()},
 		{"attribution_v2_deterministic_total", "Outcomes resolved to a deterministic link.", v2.Deterministic.Load()},
 		{"attribution_v2_probabilistic_total", "Outcomes scored to a probabilistic link.", v2.Probabilistic.Load()},
+		{"attribution_v2_coalitions_total", "Outcomes resolved to a multi-agent coalition.", v2.Coalitions.Load()},
 		{"attribution_v2_edges_written_total", "attribution_edges rows upserted by v2.", v2.EdgesWritten.Load()},
 	}
 	for _, mt := range rows {

@@ -30,13 +30,14 @@ func (f *fakeV2CH) WriteAttributionEvents(_ context.Context, e []AttributionEven
 
 // fakePG implements PGStore, recording what would be written.
 type fakePG struct {
-	ensured   []ModelVersion
-	edges     map[string][]Edge
-	baselines map[string][]Baseline
+	ensured    []ModelVersion
+	edges      map[string][]Edge
+	baselines  map[string][]Baseline
+	coalitions map[string][]Coalition
 }
 
 func newFakePG() *fakePG {
-	return &fakePG{edges: map[string][]Edge{}, baselines: map[string][]Baseline{}}
+	return &fakePG{edges: map[string][]Edge{}, baselines: map[string][]Baseline{}, coalitions: map[string][]Coalition{}}
 }
 func (p *fakePG) EnsureModelVersion(_ context.Context, mv ModelVersion) error {
 	p.ensured = append(p.ensured, mv)
@@ -48,6 +49,10 @@ func (p *fakePG) UpsertEdges(_ context.Context, tenant string, e []Edge) error {
 }
 func (p *fakePG) UpsertBaselines(_ context.Context, tenant string, b []Baseline) error {
 	p.baselines[tenant] = append(p.baselines[tenant], b...)
+	return nil
+}
+func (p *fakePG) UpsertCoalitions(_ context.Context, tenant string, c []Coalition) error {
+	p.coalitions[tenant] = append(p.coalitions[tenant], c...)
 	return nil
 }
 func (p *fakePG) Ping(context.Context) error { return nil }
@@ -125,6 +130,55 @@ func TestEngineV2ProcessDeterministic(t *testing.T) {
 		if e.EngineVersion != "v2" || e.Method != "deterministic" {
 			t.Fatalf("event = %+v, want v2/deterministic", e)
 		}
+	}
+}
+
+func TestEngineV2Coalition(t *testing.T) {
+	// A research → implement → review chain: three agents, three runs, all
+	// SDK-stamped to one ticket → a coalition whose value allocations sum to the
+	// outcome value.
+	ch := &fakeV2CH{
+		outcomes: []OutcomeRow{
+			{OutcomeID: "jira:PROJ-7", TenantID: "t1", TS: "2026-06-10 12:00:00.000",
+				SourceSystem: "jira", OutcomeType: "ticket_resolved", UserID: "u1", BusinessValueUSD: 900},
+		},
+		runs: []RunRow{
+			{RunID: "r1", TenantID: "t1", AgentID: "research", OutcomeID: "jira:PROJ-7", EndedAt: "2026-06-10 10:00:00.000", TotalCostUSD: 3},
+			{RunID: "r2", TenantID: "t1", AgentID: "implement", OutcomeID: "jira:PROJ-7", EndedAt: "2026-06-10 11:00:00.000", TotalCostUSD: 9},
+			{RunID: "r3", TenantID: "t1", AgentID: "review", OutcomeID: "jira:PROJ-7", EndedAt: "2026-06-10 11:45:00.000", TotalCostUSD: 2},
+		},
+	}
+	pg := newFakePG()
+	eng := NewEngineV2(ch, pg, 240*time.Minute, 30, nil)
+	eng.now = func() time.Time { return time.Date(2026, 6, 12, 0, 0, 0, 0, time.UTC) }
+	if err := eng.Process(context.Background()); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	edges := pg.edges["t1"]
+	if len(edges) != 3 {
+		t.Fatalf("edges = %d, want 3 coalition members", len(edges))
+	}
+	var totalValue float64
+	for _, e := range edges {
+		if e.Method != "shapley" || e.CoalitionID == nil || e.ModelVersion != ModelVersionShapley {
+			t.Fatalf("edge = %+v, want shapley + coalition_id + shapley model", e)
+		}
+		if e.ValueAttributed != nil {
+			totalValue += *e.ValueAttributed
+		}
+	}
+	// All three SDK-stamped (conf 1.0) ⇒ equal thirds; allocations sum to the value.
+	if !sigApprox(totalValue, 900) {
+		t.Fatalf("coalition value allocations sum = %v, want 900", totalValue)
+	}
+	// One coalition row persisted, three members, exact method.
+	cols := pg.coalitions["t1"]
+	if len(cols) != 1 || len(cols[0].Members) != 3 || cols[0].Method != "exact" {
+		t.Fatalf("coalitions = %+v, want one exact coalition of 3 members", cols)
+	}
+	if cols[0].CoalitionID != deterministicCoalitionID("t1", "jira:PROJ-7") {
+		t.Fatal("coalition id is not the deterministic id")
 	}
 }
 
