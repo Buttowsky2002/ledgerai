@@ -38,6 +38,20 @@ writes the score to `outcomes.attribution_confidence` (`1.0` for SDK/agent-stamp
 direct links; `<1.0` for probabilistic links). All other edges are structural and
 deterministic.
 
+## v1.1 — attribution engine v2 enrichment (additive, ADR-040)
+
+Schema **1.1.0** enriches the `produced` edge without breaking it:
+`attribution_confidence` stays required and now equals the **calibrated**
+confidence of the winning edge. The `produced` edge may additionally carry
+`attribution_method` (`deterministic` | `probabilistic` | `shapley`),
+`confidence_raw`, `signal_contributions` (the per-signal explanation),
+`counterfactual_delta`, `coalition_id` + `shapley_value`/`shapley_cost`, and
+`model_version`. These are realized in the Postgres **`attribution_edges`** table
+(the engine's rich source of truth), while the worker continues to stamp
+`outcomes.attribution_confidence` so `v_roi` / `v_outcome_graph` are untouched.
+`signal_contributions` hold evidence **references** (PR URL, ticket id,
+timestamps, overlap %) — never copied content (CLAUDE.md rule 2; build-plan §7).
+
 ## Querying the graph
 
 - **`v_outcome_graph`** (ClickHouse) — the end-to-end trace: one row per outcome
@@ -54,9 +68,13 @@ deterministic.
 
 ## Realizing migrations / code
 
-- Postgres: `deploy/postgres/005_identities_view.sql` (`v_identities`).
+- Postgres: `deploy/postgres/005_identities_view.sql` (`v_identities`);
+  `deploy/postgres/010_attribution_engine.sql` (v1.1 — `attribution_edges`,
+  `attribution_signals`, `attribution_baselines`, `attribution_coalitions`,
+  `attribution_priors`, `attribution_model_versions`).
 - ClickHouse: `deploy/clickhouse/005_outcome_graph.sql` (`v_outcome_graph`);
-  base tables + `v_unit_economics` in `001_events.sql`.
+  base tables + `v_unit_economics` in `001_events.sql`;
+  `deploy/clickhouse/008_attribution_events.sql` (v1.1 — decision log + daily MV).
 - Matcher: `services/workers/internal/attribution`.
 - Outcome connectors: `services/connectors/internal/connector` (github, jira,
   zendesk; CRM deferred — see `docs/ADRs/025-crm-connector-deferral.md`).

@@ -1,4 +1,4 @@
-.PHONY: test test-go test-api test-sdk-typescript e2e load helm-lint build build-api build-shared-types build-sdk-typescript build-dashboard openapi delete-tenant up down lint lint-api lint-sdk-typescript api-install install-hooks security-check audit deps
+.PHONY: test test-go test-api test-sdk-typescript e2e load helm-lint build build-api build-shared-types build-sdk-typescript build-dashboard openapi delete-tenant up down lint lint-api lint-sdk-typescript api-install install-hooks security-check audit deps attr-calibration
 
 GATEWAY_DIR      := services/gateway
 COLLECTOR_DIR    := services/collector
@@ -44,6 +44,13 @@ e2e:
 # GATEWAY_KEY / RPS / DURATION via env.
 load:
 	k6 run tests/load/gateway.k6.js
+
+# ── Attribution calibration scaffolding (build-plan §6) ──────────────────────
+# Prints the V1 heuristic's calibration baseline (ECE / AUC / precision@0.9) on
+# the synthetic golden set — the bar the V2 attribution engine must beat. Advisory
+# in sub-phase 3.0; becomes a blocking CI gate in 3.3 once the V2 scorer exists.
+attr-calibration:
+	cd $(WORKERS_DIR) && go test -v -run 'TestV1Baseline|Calibration|TestAUC|TestPrecision|TestReliability' ./internal/attribution/
 
 # ── Deploy (Helm) ─────────────────────────────────────────────────────────────
 HELM_CHART := deploy/helm/agentledger
