@@ -2631,6 +2631,113 @@
           "Analytics"
         ]
       }
+    },
+    "/v1/attribution/edges": {
+      "get": {
+        "operationId": "AttributionController_edges",
+        "parameters": [
+          {
+            "name": "outcomeId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agentId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "minConfidence",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 0,
+              "maximum": 1,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Attribution"
+        ]
+      }
+    },
+    "/v1/attribution/coalitions/{coalitionId}": {
+      "get": {
+        "operationId": "AttributionController_coalition",
+        "parameters": [
+          {
+            "name": "coalitionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Attribution"
+        ]
+      }
+    },
+    "/v1/attribution/baselines": {
+      "get": {
+        "operationId": "AttributionController_baselines",
+        "parameters": [
+          {
+            "name": "scope",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "identity",
+                "team"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "subjectId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "outcomeType",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Attribution"
+        ]
+      }
     }
   },
   "info": {

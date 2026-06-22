@@ -12,6 +12,7 @@ import { AgentToolAllowlistModule } from './agent-tool-allowlist/agent-tool-allo
 import { AllocationRulesModule } from './allocation-rules/allocation-rules.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AppsModule } from './apps/apps.module';
+import { AttributionModule } from './attribution/attribution.module';
 import { BudgetsModule } from './budgets/budgets.module';
 import { ClickHouseModule } from './clickhouse/clickhouse.module';
 import { HealthModule } from './health/health.module';
@@ -71,6 +72,7 @@ import { VirtualKeysModule } from './virtual-keys/virtual-keys.module';
     PriceBookModule,
     TenantModule,
     AnalyticsModule,
+    AttributionModule,
   ],
   providers: [
     // Guard order matters: rate-limit → authenticate → authorize.
