@@ -74,9 +74,13 @@ func TestEngineV2ProcessDeterministic(t *testing.T) {
 		t.Fatalf("process: %v", err)
 	}
 
-	// Model lineage ensured before edges.
-	if len(pg.ensured) != 1 || pg.ensured[0].Version != ModelVersionDeterministic {
-		t.Fatalf("ensured = %+v, want one deterministic model version", pg.ensured)
+	// Both model lineages ensured before edges (deterministic + the active scorer).
+	ensured := map[string]bool{}
+	for _, mv := range pg.ensured {
+		ensured[mv.Version] = true
+	}
+	if !ensured[ModelVersionDeterministic] || !ensured[DefaultScorerModel().Version] {
+		t.Fatalf("ensured = %+v, want both deterministic + scorer versions", pg.ensured)
 	}
 
 	edges := pg.edges["t1"]
@@ -114,5 +118,52 @@ func TestEngineV2ProcessDeterministic(t *testing.T) {
 		if e.EngineVersion != "v2" || e.Method != "deterministic" {
 			t.Fatalf("event = %+v, want v2/deterministic", e)
 		}
+	}
+}
+
+func TestEngineV2ProcessProbabilistic(t *testing.T) {
+	// No deterministic link (run carries no outcome_id, no evidence), but strong
+	// signals: same user, close in time, token in objective → a probabilistic edge.
+	ch := &fakeV2CH{
+		outcomes: []OutcomeRow{
+			{OutcomeID: "github:acme/web#7", TenantID: "t1", TS: "2026-06-10 10:00:00.000",
+				SourceSystem: "github", OutcomeType: "pr_merged", UserID: "alice", BusinessValueUSD: 400},
+		},
+		runs: []RunRow{
+			{RunID: "r1", TenantID: "t1", AgentID: "a1", UserID: "alice",
+				EndedAt: "2026-06-10 09:50:00.000", Objective: "implement acme/web#7", TotalCostUSD: 6},
+			// a weaker, earlier candidate by a different user
+			{RunID: "r2", TenantID: "t1", AgentID: "a2", UserID: "bob",
+				EndedAt: "2026-06-10 07:00:00.000", Objective: "unrelated", TotalCostUSD: 3},
+		},
+	}
+	pg := newFakePG()
+	eng := NewEngineV2(ch, pg, 240*time.Minute, 30, nil)
+	eng.now = func() time.Time { return time.Date(2026, 6, 12, 0, 0, 0, 0, time.UTC) }
+	if err := eng.Process(context.Background()); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	edges := pg.edges["t1"]
+	if len(edges) != 1 {
+		t.Fatalf("edges = %d, want 1 probabilistic", len(edges))
+	}
+	e := edges[0]
+	if e.Method != "probabilistic" || e.RunID != "r1" || e.AgentID != "a1" {
+		t.Fatalf("edge = %+v, want probabilistic/r1/a1 (the stronger candidate)", e)
+	}
+	if e.ConfidenceCalibrated <= 0 || e.ConfidenceCalibrated > 1 {
+		t.Fatalf("calibrated confidence %v out of (0,1]", e.ConfidenceCalibrated)
+	}
+	if e.ModelVersion != DefaultScorerModel().Version {
+		t.Fatalf("model version = %s, want %s", e.ModelVersion, DefaultScorerModel().Version)
+	}
+	// signal_contributions present and well-formed (the explanation).
+	var contribs []Contribution
+	if err := json.Unmarshal(e.SignalContributions, &contribs); err != nil || len(contribs) != 5 {
+		t.Fatalf("contributions = %s (err %v), want 5", e.SignalContributions, err)
+	}
+	if len(ch.events) != 1 || ch.events[0].Method != "probabilistic" {
+		t.Fatalf("events = %+v, want one probabilistic", ch.events)
 	}
 }

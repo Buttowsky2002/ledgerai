@@ -19,12 +19,15 @@ import (
 // on pilot data and the flag is flipped. Probabilistic (3.3), counterfactual
 // (3.4), and Shapley (3.5) stages slot in after deterministic here.
 type EngineV2 struct {
-	ch           CHReaderV2
-	pg           PGStore
-	window       time.Duration
-	lookbackDays int
-	metrics      *V2Metrics
-	now          func() time.Time
+	ch            CHReaderV2
+	pg            PGStore
+	window        time.Duration
+	lookbackDays  int
+	scorer        ScorerModel  // probabilistic stage (3.3)
+	config        SignalConfig // signal-extraction config (3.2)
+	minConfidence float64      // below this a probabilistic edge is not written
+	metrics       *V2Metrics
+	now           func() time.Time
 }
 
 // V2Metrics counts the shadow-mode V2 pass (atomic).
@@ -32,6 +35,7 @@ type V2Metrics struct {
 	Passes        atomic.Int64 // V2 passes executed
 	Examined      atomic.Int64 // outcomes considered
 	Deterministic atomic.Int64 // outcomes resolved to a deterministic link
+	Probabilistic atomic.Int64 // outcomes scored to a probabilistic link
 	EdgesWritten  atomic.Int64 // attribution_edges rows upserted
 }
 
@@ -48,12 +52,26 @@ type CHReaderV2 interface {
 	WriteAttributionEvents(ctx context.Context, events []AttributionEvent) error
 }
 
-// NewEngineV2 builds the V2 engine over the given ClickHouse + Postgres stores.
+// NewEngineV2 builds the V2 engine over the given ClickHouse + Postgres stores,
+// with the hand-set scorer prior + default signal config (the worker may swap in a
+// fitted model via WithScorer).
 func NewEngineV2(ch CHReaderV2, pg PGStore, window time.Duration, lookbackDays int, m *V2Metrics) *EngineV2 {
 	if m == nil {
 		m = &V2Metrics{}
 	}
-	return &EngineV2{ch: ch, pg: pg, window: window, lookbackDays: lookbackDays, metrics: m, now: time.Now}
+	return &EngineV2{
+		ch: ch, pg: pg, window: window, lookbackDays: lookbackDays,
+		scorer: DefaultScorerModel(), config: DefaultSignalConfig(), minConfidence: 0.3,
+		metrics: m, now: time.Now,
+	}
+}
+
+// WithScorer swaps in a fitted scorer model and the minimum calibrated confidence
+// below which a probabilistic edge is not written.
+func (e *EngineV2) WithScorer(model ScorerModel, minConfidence float64) *EngineV2 {
+	e.scorer = model
+	e.minConfidence = minConfidence
+	return e
 }
 
 // Process runs one deterministic attribution pass over the lookback window.
@@ -76,8 +94,11 @@ func (e *EngineV2) Process(ctx context.Context) error {
 		return err
 	}
 
-	// Ensure the deterministic model lineage exists before any edge references it.
+	// Ensure both model lineages exist before any edge references them (FK).
 	if err := e.pg.EnsureModelVersion(ctx, deterministicModelVersion()); err != nil {
+		return err
+	}
+	if err := e.pg.EnsureModelVersion(ctx, scorerModelVersion(e.scorer)); err != nil {
 		return err
 	}
 
@@ -94,39 +115,39 @@ func (e *EngineV2) Process(ctx context.Context) error {
 	edgesByTenant := make(map[string][]Edge)
 	events := make([]AttributionEvent, 0)
 	nowTS := now.Format(chTime)
-	deterministic := 0
+	deterministic, probabilistic := 0, 0
 
 	for _, o := range outcomes {
-		link, ok := ResolveDeterministic(o, runsByTenant[o.TenantID], evByOutcome[o.TenantID+"\x00"+o.OutcomeID])
-		if !ok {
+		tRuns := runsByTenant[o.TenantID]
+
+		// Stage 1 — deterministic: a hard link wins and skips scoring.
+		if link, ok := ResolveDeterministic(o, tRuns, evByOutcome[o.TenantID+"\x00"+o.OutcomeID]); ok {
+			deterministic++
+			contributions, _ := json.Marshal(evidenceContributions(link.Evidence))
+			value := o.BusinessValueUSD
+			cost := costForRun(tRuns, link.RunID)
+			edgesByTenant[o.TenantID] = append(edgesByTenant[o.TenantID], Edge{
+				TenantID: o.TenantID, OutcomeID: o.OutcomeID, RunID: link.RunID, AgentID: link.AgentID,
+				Method: "deterministic", ConfidenceRaw: link.Confidence, ConfidenceCalibrated: link.Confidence,
+				SignalContributions: contributions, ValueAttributed: &value, CostAttributed: cost,
+				ModelVersion: ModelVersionDeterministic,
+			})
+			events = append(events, AttributionEvent{
+				TS: nowTS, TenantID: o.TenantID, OutcomeID: o.OutcomeID, OutcomeType: o.OutcomeType,
+				RunID: link.RunID, AgentID: link.AgentID, Method: "deterministic",
+				ConfidenceRaw: link.Confidence, ConfidenceCalibrated: link.Confidence,
+				ValueAttributed: value, CostAttributed: derefOr0(cost),
+				ModelVersion: ModelVersionDeterministic, EngineVersion: "v2",
+			})
 			continue
 		}
-		deterministic++
 
-		contributions, _ := json.Marshal(evidenceContributions(link.Evidence))
-		value := o.BusinessValueUSD
-		cost := costForRun(runsByTenant[o.TenantID], link.RunID)
-
-		edgesByTenant[o.TenantID] = append(edgesByTenant[o.TenantID], Edge{
-			TenantID:             o.TenantID,
-			OutcomeID:            o.OutcomeID,
-			RunID:                link.RunID,
-			AgentID:              link.AgentID,
-			Method:               "deterministic",
-			ConfidenceRaw:        link.Confidence,
-			ConfidenceCalibrated: link.Confidence, // deterministic: calibration is identity
-			SignalContributions:  contributions,
-			ValueAttributed:      &value, // gross; 3.4 scales by the incremental share
-			CostAttributed:       cost,
-			ModelVersion:         ModelVersionDeterministic,
-		})
-		events = append(events, AttributionEvent{
-			TS: nowTS, TenantID: o.TenantID, OutcomeID: o.OutcomeID, OutcomeType: o.OutcomeType,
-			RunID: link.RunID, AgentID: link.AgentID, Method: "deterministic",
-			ConfidenceRaw: link.Confidence, ConfidenceCalibrated: link.Confidence,
-			ValueAttributed: value, CostAttributed: derefOr0(cost),
-			ModelVersion: ModelVersionDeterministic, EngineVersion: "v2",
-		})
+		// Stage 2 — probabilistic: score the candidate runs, keep the best edge.
+		if edge, ev, ok := e.scoreProbabilistic(o, tRuns, nowTS); ok {
+			probabilistic++
+			edgesByTenant[o.TenantID] = append(edgesByTenant[o.TenantID], edge)
+			events = append(events, ev)
+		}
 	}
 
 	written := 0
@@ -142,10 +163,61 @@ func (e *EngineV2) Process(ctx context.Context) error {
 
 	e.metrics.Examined.Add(int64(len(outcomes)))
 	e.metrics.Deterministic.Add(int64(deterministic))
+	e.metrics.Probabilistic.Add(int64(probabilistic))
 	e.metrics.EdgesWritten.Add(int64(written))
-	slog.Info("attribution v2 deterministic pass complete",
-		"examined", len(outcomes), "deterministic", deterministic, "edges", written)
+	slog.Info("attribution v2 pass complete",
+		"examined", len(outcomes), "deterministic", deterministic, "probabilistic", probabilistic, "edges", written)
 	return nil
+}
+
+// scoreProbabilistic generates candidate runs for an outcome (recall-first: in the
+// tenant, ending within [0, window] before the outcome), extracts signals, scores
+// each with the model, and returns the single best edge when its calibrated
+// confidence clears minConfidence. The signal_contributions on the edge are the
+// score's explanation (3.3, non-negotiable).
+func (e *EngineV2) scoreProbabilistic(o OutcomeRow, runs []RunRow, nowTS string) (Edge, AttributionEvent, bool) {
+	bestCal, bestRaw := 0.0, 0.0
+	var bestRun RunRow
+	var bestContribs []Contribution
+	found := false
+	for _, r := range runs {
+		gap, ok := candidateGap(SignalInput{Outcome: o, Run: r})
+		if !ok || gap < 0 || gap > e.window {
+			continue
+		}
+		sigs := ExtractSignals(SignalInput{Outcome: o, Run: r, Config: e.config})
+		raw, cal, contribs := e.scorer.Score(sigs)
+		if !found || cal > bestCal {
+			bestCal, bestRaw, bestRun, bestContribs, found = cal, raw, r, contribs, true
+		}
+	}
+	if !found || bestCal < e.minConfidence {
+		return Edge{}, AttributionEvent{}, false
+	}
+	contribJSON, _ := json.Marshal(bestContribs)
+	value := o.BusinessValueUSD
+	cost := bestRun.TotalCostUSD
+	edge := Edge{
+		TenantID: o.TenantID, OutcomeID: o.OutcomeID, RunID: bestRun.RunID, AgentID: bestRun.AgentID,
+		Method: "probabilistic", ConfidenceRaw: bestRaw, ConfidenceCalibrated: bestCal,
+		SignalContributions: contribJSON, ValueAttributed: &value, CostAttributed: &cost,
+		ModelVersion: e.scorer.Version,
+	}
+	ev := AttributionEvent{
+		TS: nowTS, TenantID: o.TenantID, OutcomeID: o.OutcomeID, OutcomeType: o.OutcomeType,
+		RunID: bestRun.RunID, AgentID: bestRun.AgentID, Method: "probabilistic",
+		ConfidenceRaw: bestRaw, ConfidenceCalibrated: bestCal,
+		ValueAttributed: value, CostAttributed: cost,
+		ModelVersion: e.scorer.Version, EngineVersion: "v2",
+	}
+	return edge, ev, true
+}
+
+// scorerModelVersion builds the attribution_model_versions row for a scorer model
+// (its full params JSON, so any score is reproducible — rule 10).
+func scorerModelVersion(m ScorerModel) ModelVersion {
+	params, _ := json.Marshal(m)
+	return ModelVersion{Version: m.Version, Kind: "scorer", Params: params, Metrics: []byte(`{}`), Active: true}
 }
 
 // deterministicModelVersion is the lineage row registered for deterministic edges.

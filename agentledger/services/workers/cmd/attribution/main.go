@@ -148,9 +148,10 @@ func writeMetrics(w http.ResponseWriter, m *attribution.Metrics, v2 *attribution
 		{"attribution_attributed_total", "Outcomes matched to a run.", m.Attributed.Load()},
 		{"attribution_updated_total", "Outcome rows re-inserted with new attribution.", m.Updated.Load()},
 		// Engine v2 (shadow) — deterministic stage (sub-phase 3.1).
-		{"attribution_v2_passes_total", "Attribution v2 deterministic passes executed.", v2.Passes.Load()},
+		{"attribution_v2_passes_total", "Attribution v2 passes executed.", v2.Passes.Load()},
 		{"attribution_v2_examined_total", "Outcomes considered by v2.", v2.Examined.Load()},
 		{"attribution_v2_deterministic_total", "Outcomes resolved to a deterministic link.", v2.Deterministic.Load()},
+		{"attribution_v2_probabilistic_total", "Outcomes scored to a probabilistic link.", v2.Probabilistic.Load()},
 		{"attribution_v2_edges_written_total", "attribution_edges rows upserted by v2.", v2.EdgesWritten.Load()},
 	}
 	for _, mt := range rows {

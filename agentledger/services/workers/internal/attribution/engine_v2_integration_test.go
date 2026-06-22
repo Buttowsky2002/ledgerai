@@ -47,8 +47,9 @@ func TestEngineV2DeterministicIntegration(t *testing.T) {
 	}
 	t.Cleanup(func() { _, _ = db.Exec(`DELETE FROM tenants WHERE tenant_id = $1`, tenant) })
 
-	pr := "github:" + tenant + "/repo#42" // SDK-stamped to run r1
-	ticket := "jira:" + tenant + "-9"     // linked by Co-Authored-By evidence to r2
+	pr := "github:" + tenant + "/repo#42"   // SDK-stamped to run r1
+	ticket := "jira:" + tenant + "-9"       // linked by Co-Authored-By evidence to r2
+	prob := "github:" + tenant + "/svc#123" // no hard link → scored probabilistically to r3
 
 	chInsert(t, chURL, "agent_runs", []map[string]any{
 		{"run_id": "r1", "tenant_id": tenant, "agent_id": "A1", "user_id": "u1",
@@ -59,6 +60,10 @@ func TestEngineV2DeterministicIntegration(t *testing.T) {
 			"started_at": "2026-06-10 10:00:00.000", "ended_at": "2026-06-10 10:10:00.000",
 			"status": "completed", "objective": "resolve ticket", "outcome_id": "",
 			"total_cost_usd": 4, "total_tokens": 500, "llm_calls": 3, "tool_calls": 1, "risk_events": 0},
+		{"run_id": "r3", "tenant_id": tenant, "agent_id": "A3", "user_id": "u3",
+			"started_at": "2026-06-10 11:00:00.000", "ended_at": "2026-06-10 11:40:00.000",
+			"status": "completed", "objective": "implement #123", "outcome_id": "",
+			"total_cost_usd": 5, "total_tokens": 600, "llm_calls": 4, "tool_calls": 1, "risk_events": 0},
 	})
 	chInsert(t, chURL, "outcomes", []map[string]any{
 		{"outcome_id": pr, "tenant_id": tenant, "ts": "2026-06-10 09:10:00.000",
@@ -69,6 +74,10 @@ func TestEngineV2DeterministicIntegration(t *testing.T) {
 			"source_system": "jira", "outcome_type": "ticket_resolved", "team_id": "team1", "user_id": "u2",
 			"run_id": "", "business_value_usd": 300, "quality_score": 0.7,
 			"attribution_confidence": 0, "completion_status": "done"},
+		{"outcome_id": prob, "tenant_id": tenant, "ts": "2026-06-10 11:50:00.000",
+			"source_system": "github", "outcome_type": "pr_merged", "team_id": "team1", "user_id": "u3",
+			"run_id": "", "business_value_usd": 250, "quality_score": 0.6,
+			"attribution_confidence": 0, "completion_status": "merged"},
 	})
 	chInsert(t, chURL, "outcome_evidence", []map[string]any{
 		{"tenant_id": tenant, "outcome_id": ticket, "evidence_type": "co_authored_by",
@@ -129,6 +138,27 @@ func TestEngineV2DeterministicIntegration(t *testing.T) {
 	}
 	if labels != 2 {
 		t.Fatalf("deterministic labels = %d, want 2", labels)
+	}
+
+	// (c) The no-hard-link outcome → a probabilistic edge to r3, scored by the
+	// model, with a contribution breakdown and the scorer model version.
+	var pMethod, pRun, pModel, pContribs string
+	var pConf float64
+	if err := db.QueryRow(`SELECT attribution_method, run_id, model_version, confidence_calibrated,
+	       signal_contributions::text
+	     FROM attribution_edges WHERE tenant_id = $1 AND outcome_id = $2`, tenant, prob).
+		Scan(&pMethod, &pRun, &pModel, &pConf, &pContribs); err != nil {
+		t.Fatalf("read probabilistic edge: %v", err)
+	}
+	if pMethod != "probabilistic" || pRun != "r3" || pModel != DefaultScorerModel().Version {
+		t.Fatalf("probabilistic edge = %s/%s/%s, want probabilistic/r3/%s", pMethod, pRun, pModel, DefaultScorerModel().Version)
+	}
+	if pConf <= 0 || pConf > 1 {
+		t.Fatalf("probabilistic confidence %v out of (0,1]", pConf)
+	}
+	var pc []Contribution
+	if err := json.Unmarshal([]byte(pContribs), &pc); err != nil || len(pc) != 5 {
+		t.Fatalf("probabilistic contributions = %s (err %v), want 5", pContribs, err)
 	}
 
 	// The decision log got both events (analytics path), tagged engine_version=v2.
