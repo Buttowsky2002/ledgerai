@@ -2,7 +2,10 @@ module github.com/agentledger/workers
 
 go 1.22
 
-require github.com/twmb/franz-go v1.18.0
+require (
+	github.com/lib/pq v1.12.3
+	github.com/twmb/franz-go v1.18.0
+)
 
 require (
 	github.com/klauspost/compress v1.17.11 // indirect
