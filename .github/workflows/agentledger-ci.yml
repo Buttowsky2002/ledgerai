@@ -115,7 +115,7 @@ jobs:
         working-directory: agentledger/packages/shared-types
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: npm
@@ -133,7 +133,7 @@ jobs:
         working-directory: agentledger/services/api
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: npm
@@ -156,7 +156,7 @@ jobs:
     needs: gitleaks
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: npm
@@ -186,7 +186,7 @@ jobs:
         working-directory: agentledger/packages/sdk-typescript
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: npm
@@ -209,7 +209,7 @@ jobs:
     needs: gitleaks
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: npm
@@ -276,7 +276,7 @@ jobs:
     needs: gitleaks
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 20
       - name: Validate llm_call.schema.json is well-formed
