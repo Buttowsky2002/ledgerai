@@ -1,0 +1,9 @@
+# Terraform state can contain secrets — never commit it (CLAUDE.md rule 1).
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfvars
+crash.log
+override.tf
+override.tf.json

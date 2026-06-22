@@ -1,0 +1,119 @@
+{{- $root := . -}}
+{{- range $name, $svc := .Values.services }}
+{{- if $svc.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "agentledger.svcName" (dict "root" $root "name" $name) }}
+  labels:
+    {{- include "agentledger.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+spec:
+  replicas: {{ $svc.replicas | default $root.Values.defaults.replicas }}
+  selector:
+    matchLabels:
+      {{- include "agentledger.selectorLabels" (dict "root" $root "name" $name) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "agentledger.selectorLabels" (dict "root" $root "name" $name) | nindent 8 }}
+      {{- if eq $name "gateway" }}
+      annotations:
+        checksum/config: {{ $root.Values.gateway.config | toJson | sha256sum }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "agentledger.serviceAccountName" $root }}
+      {{- with $root.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml $root.Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ $name }}
+          image: {{ include "agentledger.image" (dict "root" $root "name" $name "svc" $svc) }}
+          imagePullPolicy: {{ $root.Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml $root.Values.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ $svc.port }}
+          env:
+            {{- if $svc.clickhouse }}
+            - name: AGENTLEDGER_CLICKHOUSE_URL
+              value: {{ $root.Values.externalServices.clickhouse.url | quote }}
+            - name: AGENTLEDGER_CLICKHOUSE_DB
+              value: {{ $root.Values.externalServices.clickhouse.database | quote }}
+            {{- end }}
+            {{- if $svc.redpanda }}
+            - name: AGENTLEDGER_KAFKA_BROKERS
+              value: {{ $root.Values.externalServices.redpanda.brokers | quote }}
+            - name: AGENTLEDGER_KAFKA_TOPIC
+              value: {{ $root.Values.externalServices.redpanda.topic | quote }}
+            - name: AGENTLEDGER_KAFKA_DLQ_TOPIC
+              value: {{ $root.Values.externalServices.redpanda.dlqTopic | quote }}
+            {{- end }}
+            {{- range $k, $v := $svc.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+            {{- if $root.Values.secrets.existingSecret }}
+            {{- range $svc.secretEnv }}
+            - name: {{ . }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $root.Values.secrets.existingSecret }}
+                  key: {{ . }}
+                  optional: true
+            {{- end }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: {{ $svc.livenessPath | default $root.Values.defaults.livenessPath }}
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: {{ $svc.readinessPath | default $root.Values.defaults.readinessPath }}
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml ($svc.resources | default $root.Values.defaults.resources) | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- if eq $name "gateway" }}
+            - name: gateway-config
+              mountPath: /etc/agentledger/config.json
+              subPath: config.json
+              readOnly: true
+            - name: pricebook
+              mountPath: /etc/agentledger/pricing
+              readOnly: true
+            {{- end }}
+            {{- if eq $name "collector" }}
+            - name: event-schemas
+              mountPath: /etc/agentledger/schemas/events
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- if eq $name "gateway" }}
+        - name: gateway-config
+          configMap:
+            name: {{ include "agentledger.fullname" $root }}-gateway-config
+        - name: pricebook
+          configMap:
+            name: {{ $root.Values.gateway.priceBookConfigMap }}
+        {{- end }}
+        {{- if eq $name "collector" }}
+        - name: event-schemas
+          configMap:
+            name: {{ $root.Values.collector.eventSchemaConfigMap }}
+        {{- end }}
+{{- end }}
+{{- end }}

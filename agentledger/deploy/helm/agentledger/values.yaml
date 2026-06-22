@@ -1,0 +1,250 @@
+# Default values for the AgentLedger chart.
+# This chart deploys APPLICATION workloads only. Stateful infrastructure
+# (PostgreSQL, ClickHouse, Redpanda/Kafka, Redis) must be provisioned externally
+# (managed services — see deploy/terraform) and referenced under
+# `externalServices` + the Secret named by `secrets.existingSecret`.
+
+# ── Images ──────────────────────────────────────────────────────────────────
+# Each service's image defaults to "{registry}/{repository}-{serviceKey}:{tag}".
+# The release pipeline builds one image per service (the workers/connectors share
+# a Dockerfile but are built per-CMD into distinct images). Override per service
+# under `services.<name>.image`.
+image:
+  registry: ghcr.io/agentledger
+  repository: agentledger
+  tag: "" # defaults to .Chart.AppVersion when empty
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# ── Pod / container hardening (CLAUDE.md rule 7) ─────────────────────────────
+# All images are distroless:nonroot (uid 65532). Root FS is read-only; services
+# that need scratch space get an emptyDir /tmp via `defaults.tmpVolume`.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+# ── External, operator-provisioned infrastructure ───────────────────────────
+# Only NON-secret coordinates live here. Credentials (Postgres DSN, ClickHouse
+# password, Redis password) come from `secrets.existingSecret` (rule 1).
+externalServices:
+  clickhouse:
+    url: http://clickhouse:8123
+    database: agentledger
+  redpanda:
+    brokers: redpanda:9092
+    topic: events.raw
+    dlqTopic: events.dlq
+  redis:
+    addr: "" # e.g. redis:6379 — empty disables the gateway Redis budget store
+
+# Name of a pre-created Kubernetes Secret holding all sensitive env values. The
+# chart NEVER contains secret material (rule 1) — see secret.example.yaml for the
+# expected keys. Leave empty only for a dry run; services that consume a secret
+# key stay un-ready until it is provided.
+secrets:
+  existingSecret: ""
+
+# ── Ingress (optional; off by default) ───────────────────────────────────────
+# Routes external traffic to the `gateway` and `api` web services.
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: agentledger.local
+      paths:
+        - { path: /, pathType: Prefix, service: gateway }
+  tls: []
+
+# ── Prometheus Operator ServiceMonitor (optional; off by default) ────────────
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  labels: {}
+
+# ── Per-service defaults (overridable per service) ───────────────────────────
+defaults:
+  replicas: 1
+  livenessPath: /healthz
+  readinessPath: /readyz # overridden to /healthz for services without /readyz
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { cpu: "1", memory: 512Mi }
+
+# Gateway runtime config (rendered to /etc/agentledger/config.json via a
+# ConfigMap). NON-secret only: provider API keys are referenced by env-var NAME
+# (api_key_env), and virtual_keys + per-agent tool allowlist + DLP policies are
+# loaded from Postgres at runtime via AGENTLEDGER_PG_DSN (ADR-032) — so none of
+# them appear here. Override wholesale to suit your deployment.
+gateway:
+  # Operator-supplied ConfigMap holding pricebook.json (single source of truth is
+  # repo pricing/pricebook.json):
+  #   kubectl create configmap agentledger-pricebook \
+  #     --from-file=pricebook.json=pricing/pricebook.json
+  priceBookConfigMap: agentledger-pricebook
+  config:
+    listen_addr: ":8080"
+    price_book_path: "/etc/agentledger/pricing/pricebook.json"
+    providers:
+      - name: openai
+        base_url: "https://api.openai.com"
+        api_key_env: OPENAI_API_KEY
+        model_prefixes: ["gpt-", "o3", "o4"]
+      - name: anthropic
+        base_url: "https://api.anthropic.com"
+        api_key_env: ANTHROPIC_API_KEY
+        model_prefixes: ["claude-"]
+    dlp:
+      fail_mode: open
+      policies:
+        - { id: default-redact, action: redact, classes: ["credentials", "pci"] }
+        - { id: strict-block, action: block, classes: ["credentials", "pci", "pii"] }
+    # Gateway emits events via the "http" sink = direct ClickHouse JSONEachRow
+    # insert. Keep this URL in sync with externalServices.clickhouse.
+    events:
+      type: http
+      url: "http://clickhouse:8123/?query=INSERT%20INTO%20agentledger.llm_calls%20FORMAT%20JSONEachRow"
+      flush_ms: 500
+      buffer_size: 4096
+    redis:
+      addr: ""
+      password_env: AGENTLEDGER_REDIS_PASSWORD
+      db: 0
+
+# Collector needs the canonical event JSON Schema mounted. Operator-supplied
+# ConfigMap (single source of truth is repo schemas/events):
+#   kubectl create configmap agentledger-event-schemas \
+#     --from-file=llm_call.schema.json=schemas/events/llm_call.schema.json
+collector:
+  eventSchemaConfigMap: agentledger-event-schemas
+
+# ── Services ─────────────────────────────────────────────────────────────────
+# The deployment/service templates range over this map. Per service:
+#   enabled       deploy it (default true)
+#   port          container + Service port (admin/metrics for workers)
+#   image         override the derived "{repository}-{name}" image name
+#   replicas      override defaults.replicas
+#   readinessPath override defaults.readinessPath (use /healthz where no /readyz)
+#   env           map of NON-secret env vars
+#   secretEnv     list of env-var names sourced from secrets.existingSecret
+#   clickhouse    inject AGENTLEDGER_CLICKHOUSE_URL/_DB from externalServices
+#   redpanda      inject AGENTLEDGER_KAFKA_BROKERS/_TOPIC/_DLQ_TOPIC
+#   web           true for externally-routable services (Ingress targets)
+services:
+  gateway:
+    enabled: true
+    web: true
+    port: 8080
+    readinessPath: /healthz # gateway exposes /healthz only
+    secretEnv: [OPENAI_API_KEY, ANTHROPIC_API_KEY, AGENTLEDGER_REDIS_PASSWORD, AGENTLEDGER_PG_DSN]
+    env:
+      AGENTLEDGER_CONFIG: /etc/agentledger/config.json
+
+  api:
+    enabled: true
+    web: true
+    port: 8094
+    clickhouse: true
+    secretEnv: [AGENTLEDGER_PG_DSN, AGENTLEDGER_JWT_SECRET]
+    env:
+      AGENTLEDGER_API_ADDR: ":8094"
+
+  collector:
+    enabled: true
+    web: true
+    port: 8090
+    redpanda: true
+    env:
+      AGENTLEDGER_EVENT_SCHEMA: /etc/agentledger/schemas/events/llm_call.schema.json
+
+  litellm-adapter:
+    enabled: true
+    web: true
+    port: 8097
+    env:
+      AGENTLEDGER_COLLECTOR_URL: http://collector:8090/v1/events
+
+  ch-insert:
+    enabled: true
+    port: 8091
+    clickhouse: true
+    redpanda: true
+
+  reconcile:
+    enabled: true
+    port: 8093
+    clickhouse: true
+    env:
+      AGENTLEDGER_RECONCILE_THRESHOLD: "0.02"
+      AGENTLEDGER_RECONCILE_INTERVAL_SEC: "86400"
+
+  risk-engine:
+    enabled: true
+    port: 8099
+    clickhouse: true
+    env:
+      AGENTLEDGER_RISK_INTERVAL_SEC: "3600"
+      AGENTLEDGER_RISK_SPIKE_MIN: "5"
+
+  risk-enrichment:
+    enabled: true
+    port: 8100
+    clickhouse: true
+    secretEnv: [ANTHROPIC_API_KEY]
+    env:
+      AGENTLEDGER_RISK_ENRICH_ENABLED: "false"
+      AGENTLEDGER_RISK_ENRICH_INTERVAL_SEC: "3600"
+      AGENTLEDGER_RISK_ENRICH_MIN_CONFIDENCE: "0.5"
+      AGENTLEDGER_RISK_ENRICH_MODEL: claude-opus-4-8
+
+  slack-alerter:
+    enabled: true
+    port: 8101
+    clickhouse: true
+    secretEnv: [AGENTLEDGER_PG_DSN, AGENTLEDGER_SLACK_WEBHOOK_URL]
+    env:
+      AGENTLEDGER_SLACK_ALERT_INTERVAL_SEC: "300"
+
+  connector-sync:
+    enabled: true
+    port: 8092
+    clickhouse: true
+    readinessPath: /healthz # connectors expose /healthz only
+    secretEnv: [AGENTLEDGER_PG_DSN]
+    env:
+      AGENTLEDGER_SYNC_INTERVAL_SEC: "3600"
+
+  outcome-sync:
+    enabled: true
+    port: 8095
+    clickhouse: true
+    readinessPath: /healthz # connectors expose /healthz only
+    secretEnv: [AGENTLEDGER_PG_DSN, GITHUB_TOKEN]
+    env:
+      AGENTLEDGER_OUTCOME_SYNC_INTERVAL_SEC: "3600"
+
+  # Attribution matcher (P3). Exists as a worker but is not in docker-compose;
+  # enable to run it as a scheduled background matcher.
+  attribution:
+    enabled: false
+    port: 8096
+    clickhouse: true
+    env:
+      AGENTLEDGER_ATTR_INTERVAL_SEC: "900"

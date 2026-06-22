@@ -1,0 +1,15 @@
+{{- if (index .Values.services "gateway").enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "agentledger.fullname" . }}-gateway-config
+  labels:
+    {{- include "agentledger.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gateway
+data:
+  # Rendered from .Values.gateway.config. NON-secret only — provider keys are
+  # referenced by env-var NAME (api_key_env); virtual_keys, DLP policies, and the
+  # per-agent tool allowlist are loaded from Postgres at runtime (ADR-032).
+  config.json: |
+    {{- .Values.gateway.config | toPrettyJson | nindent 4 }}
+{{- end }}
