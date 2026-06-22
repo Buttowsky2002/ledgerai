@@ -44,6 +44,18 @@ type ModelVersion struct {
 	Active  bool
 }
 
+// Prior is one attribution_priors row — an anonymized cross-customer aggregate
+// (flywheel, 3.6). It carries NO tenant_id by construction (§7); MinCustomerN is
+// the number of distinct tenants it was derived from (the privacy gate).
+type Prior struct {
+	PriorType    string
+	OutcomeType  string
+	Segment      string
+	Value        []byte // JSON distribution/constant
+	MinCustomerN int
+	ModelVersion string
+}
+
 // PGStore persists attribution edges, baselines, coalitions, and model lineage.
 type PGStore interface {
 	EnsureModelVersion(ctx context.Context, mv ModelVersion) error
@@ -216,6 +228,52 @@ func (p *PG) UpsertCoalitions(ctx context.Context, tenantID string, coalitions [
 		}
 	}
 	return tx.Commit()
+}
+
+// UpsertPriors writes anonymized cross-customer priors (flywheel, 3.6). This is a
+// GLOBAL table (no tenant_id, no RLS — §7), so there is no tenant binding; the
+// caller must have already enforced the min_customer_n gate and opt-out.
+func (p *PG) UpsertPriors(ctx context.Context, priors []Prior) error {
+	if len(priors) == 0 {
+		return nil
+	}
+	const q = `
+		INSERT INTO attribution_priors (prior_type, outcome_type, segment, value, min_customer_n, model_version)
+		VALUES ($1,$2,$3,$4,$5,$6)
+		ON CONFLICT (prior_type, outcome_type, segment) DO UPDATE SET
+		    value          = EXCLUDED.value,
+		    min_customer_n = EXCLUDED.min_customer_n,
+		    model_version  = EXCLUDED.model_version,
+		    computed_at    = now()`
+	for _, pr := range priors {
+		if _, err := p.db.ExecContext(ctx, q, pr.PriorType, pr.OutcomeType, pr.Segment,
+			jsonOr(pr.Value, "{}"), pr.MinCustomerN, nullStr(pr.ModelVersion)); err != nil {
+			return fmt.Errorf("upsert prior %s/%s: %w", pr.PriorType, pr.OutcomeType, err)
+		}
+	}
+	return nil
+}
+
+// ListOptedInTenants returns the tenant ids that have NOT opted out of the
+// attribution flywheel (tenants.compliance_flags->>'attribution_prior_optout' is
+// not true). The flywheel aggregates only these tenants' data (§7 — opt-out honored).
+func (p *PG) ListOptedInTenants(ctx context.Context) ([]string, error) {
+	const q = `SELECT tenant_id::text FROM tenants
+	    WHERE coalesce((compliance_flags->>'attribution_prior_optout')::boolean, false) = false`
+	rows, err := p.db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
 }
 
 // Ping reports Postgres reachability for readiness checks.
