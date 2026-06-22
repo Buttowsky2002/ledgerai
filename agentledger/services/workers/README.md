@@ -138,3 +138,56 @@ go run ./cmd/attribution   # reads/writes ClickHouse at :8123, admin on :8096
 | `AGENTLEDGER_WORKER_ADDR` | `:8096` | Admin/metrics listen address. |
 
 See `docs/ADRs/018-attribution-matcher.md` for the design rationale.
+
+## slack-alerter
+
+Polls budget definitions (Postgres `budgets`) + spend (ClickHouse `spend_daily` /
+`spend_hourly_by_key`) for `alert_pcts` crossings, and `risk_events` with
+`severity='high'`, then posts each to a Slack incoming webhook.
+
+```
+budgets (PG) ┐
+spend (CH) ──┼─▶ [slack-alerter] ─▶ Slack webhook
+risk_events ─┘
+```
+
+- **Budget alert** fires when month-to-date spend for a budget's scope crosses its
+  highest configured `alert_pcts` threshold; deduped on `(budget_id, YYYY-MM)`
+  storing the highest pct sent, so each threshold fires once per month and a higher
+  crossing still alerts.
+- **Risk alert** fires once per new `severity=high` event via a `detected_at`
+  high-water mark.
+- Dedupe state is **in-memory per process** and re-arms from "now" on restart, so a
+  redeploy does not replay the backlog (ADR-038). No table or migration.
+- **Disabled by default:** unset `AGENTLEDGER_SLACK_WEBHOOK_URL` ⇒ every pass is a
+  no-op (the worker still serves health/metrics). The URL is an env-var name only —
+  never commit a webhook (rule 1).
+- Reads cross-tenant with a role that bypasses RLS (same convention as the gateway's
+  config reads). All ClickHouse scope/date values are bound as query parameters.
+
+### Run
+
+```bash
+cd services/workers
+go run ./cmd/slack-alerter   # reads PG + ClickHouse, admin on :8101
+```
+
+### Endpoints (admin server, default `:8101`)
+
+| Path        | Purpose                                       |
+|-------------|-----------------------------------------------|
+| `/healthz`  | Liveness.                                     |
+| `/readyz`   | Readiness — pings ClickHouse and Postgres.    |
+| `/metrics`  | Prometheus text exposition (alert counters).  |
+
+### Environment variables
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `AGENTLEDGER_PG_DSN` | `postgres://agentledger:…@localhost:5432/agentledger?sslmode=disable` | Postgres DSN for budget reads. |
+| `AGENTLEDGER_CLICKHOUSE_URL` / `_DB` / `_USER` / `_PASSWORD` | `http://localhost:8123` / `agentledger` / `default` / _(empty)_ | ClickHouse connection. |
+| `AGENTLEDGER_SLACK_WEBHOOK_URL` | _(empty)_ | Slack incoming-webhook URL. **Unset = alerting disabled** (no-op). Secret — env only. |
+| `AGENTLEDGER_SLACK_ALERT_INTERVAL_SEC` | `300` | Seconds between detection passes. |
+| `AGENTLEDGER_WORKER_ADDR` | `:8101` | Admin/metrics listen address. |
+
+See `docs/ADRs/038-slack-alerter.md` for the design rationale.
