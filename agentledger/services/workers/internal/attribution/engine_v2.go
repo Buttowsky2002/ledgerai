@@ -44,6 +44,10 @@ type V2Metrics struct {
 // (3.3) and calibrator (3.7) register their own versions.
 const ModelVersionDeterministic = "deterministic-v1"
 
+// ModelVersionCounterfactual is the lineage id for the baseline/counterfactual
+// estimator (3.4), referenced by attribution_baselines.
+const ModelVersionCounterfactual = "counterfactual-v1"
+
 // CHReaderV2 is the ClickHouse surface the V2 engine needs: the V1 reads/writes
 // plus the evidence read and the attribution_events append. HTTPClient implements it.
 type CHReaderV2 interface {
@@ -94,12 +98,11 @@ func (e *EngineV2) Process(ctx context.Context) error {
 		return err
 	}
 
-	// Ensure both model lineages exist before any edge references them (FK).
-	if err := e.pg.EnsureModelVersion(ctx, deterministicModelVersion()); err != nil {
-		return err
-	}
-	if err := e.pg.EnsureModelVersion(ctx, scorerModelVersion(e.scorer)); err != nil {
-		return err
+	// Ensure all model lineages exist before any edge/baseline references them (FK).
+	for _, mv := range []ModelVersion{deterministicModelVersion(), scorerModelVersion(e.scorer), counterfactualModelVersion()} {
+		if err := e.pg.EnsureModelVersion(ctx, mv); err != nil {
+			return err
+		}
 	}
 
 	runsByTenant := make(map[string][]RunRow, len(runs))
@@ -112,41 +115,75 @@ func (e *EngineV2) Process(ctx context.Context) error {
 		evByOutcome[k] = append(evByOutcome[k], ev)
 	}
 
-	edgesByTenant := make(map[string][]Edge)
-	events := make([]AttributionEvent, 0)
+	// Phase 1 — resolve a tentative edge per attributable outcome (GROSS value),
+	// and record which outcomes were treated (for the counterfactual baseline).
+	type tentative struct {
+		o     OutcomeRow
+		edge  Edge
+		event AttributionEvent
+		gross float64
+	}
+	tents := make([]tentative, 0, len(outcomes))
+	treated := make(map[string]bool)
 	nowTS := now.Format(chTime)
 	deterministic, probabilistic := 0, 0
 
 	for _, o := range outcomes {
 		tRuns := runsByTenant[o.TenantID]
-
-		// Stage 1 — deterministic: a hard link wins and skips scoring.
 		if link, ok := ResolveDeterministic(o, tRuns, evByOutcome[o.TenantID+"\x00"+o.OutcomeID]); ok {
 			deterministic++
 			contributions, _ := json.Marshal(evidenceContributions(link.Evidence))
-			value := o.BusinessValueUSD
 			cost := costForRun(tRuns, link.RunID)
-			edgesByTenant[o.TenantID] = append(edgesByTenant[o.TenantID], Edge{
-				TenantID: o.TenantID, OutcomeID: o.OutcomeID, RunID: link.RunID, AgentID: link.AgentID,
-				Method: "deterministic", ConfidenceRaw: link.Confidence, ConfidenceCalibrated: link.Confidence,
-				SignalContributions: contributions, ValueAttributed: &value, CostAttributed: cost,
-				ModelVersion: ModelVersionDeterministic,
-			})
-			events = append(events, AttributionEvent{
-				TS: nowTS, TenantID: o.TenantID, OutcomeID: o.OutcomeID, OutcomeType: o.OutcomeType,
-				RunID: link.RunID, AgentID: link.AgentID, Method: "deterministic",
-				ConfidenceRaw: link.Confidence, ConfidenceCalibrated: link.Confidence,
-				ValueAttributed: value, CostAttributed: derefOr0(cost),
-				ModelVersion: ModelVersionDeterministic, EngineVersion: "v2",
-			})
+			tents = append(tents, tentative{o: o, gross: o.BusinessValueUSD,
+				edge: Edge{
+					TenantID: o.TenantID, OutcomeID: o.OutcomeID, RunID: link.RunID, AgentID: link.AgentID,
+					Method: "deterministic", ConfidenceRaw: link.Confidence, ConfidenceCalibrated: link.Confidence,
+					SignalContributions: contributions, CostAttributed: cost, ModelVersion: ModelVersionDeterministic,
+				},
+				event: AttributionEvent{
+					TS: nowTS, TenantID: o.TenantID, OutcomeID: o.OutcomeID, OutcomeType: o.OutcomeType,
+					RunID: link.RunID, AgentID: link.AgentID, Method: "deterministic",
+					ConfidenceRaw: link.Confidence, ConfidenceCalibrated: link.Confidence,
+					CostAttributed: derefOr0(cost), ModelVersion: ModelVersionDeterministic, EngineVersion: "v2",
+				}})
+			treated[o.TenantID+"\x00"+o.OutcomeID] = true
 			continue
 		}
-
-		// Stage 2 — probabilistic: score the candidate runs, keep the best edge.
 		if edge, ev, ok := e.scoreProbabilistic(o, tRuns, nowTS); ok {
 			probabilistic++
-			edgesByTenant[o.TenantID] = append(edgesByTenant[o.TenantID], edge)
-			events = append(events, ev)
+			tents = append(tents, tentative{o: o, gross: o.BusinessValueUSD, edge: edge, event: ev})
+			treated[o.TenantID+"\x00"+o.OutcomeID] = true
+		}
+	}
+
+	// Phase 2 — counterfactual baselines from the full outcome set + treated marks.
+	baselines := ComputeBaselines(outcomes, treated)
+
+	// Phase 3 — scale each edge's value to the INCREMENTAL share (§3.4) and stamp
+	// counterfactual_delta. value_attributed = gross × delta; ROI consumes this
+	// (incremental, confidence-weighted) at cutover (ADR-040/042).
+	edgesByTenant := make(map[string][]Edge)
+	events := make([]AttributionEvent, 0, len(tents))
+	for _, t := range tents {
+		delta, _, _ := deltaFor(baselines, t.o)
+		incremental := t.gross * delta
+		t.edge.CounterfactualDelta = &delta
+		t.edge.ValueAttributed = &incremental
+		t.event.CounterfactualDelta = delta
+		t.event.ValueAttributed = incremental
+		edgesByTenant[t.edge.TenantID] = append(edgesByTenant[t.edge.TenantID], t.edge)
+		events = append(events, t.event)
+	}
+
+	// Persist baselines (per tenant), stamped with the pass window.
+	baselinesByTenant := make(map[string][]Baseline)
+	for _, b := range baselines {
+		b.WindowStart, b.WindowEnd = outcomeSince, nowTS
+		baselinesByTenant[b.TenantID] = append(baselinesByTenant[b.TenantID], b)
+	}
+	for tenant, bs := range baselinesByTenant {
+		if err := e.pg.UpsertBaselines(ctx, tenant, bs); err != nil {
+			return err
 		}
 	}
 
@@ -166,8 +203,18 @@ func (e *EngineV2) Process(ctx context.Context) error {
 	e.metrics.Probabilistic.Add(int64(probabilistic))
 	e.metrics.EdgesWritten.Add(int64(written))
 	slog.Info("attribution v2 pass complete",
-		"examined", len(outcomes), "deterministic", deterministic, "probabilistic", probabilistic, "edges", written)
+		"examined", len(outcomes), "deterministic", deterministic, "probabilistic", probabilistic,
+		"baselines", len(baselines), "edges", written)
 	return nil
+}
+
+// counterfactualModelVersion is the lineage row for the baseline estimator.
+func counterfactualModelVersion() ModelVersion {
+	return ModelVersion{
+		Version: ModelVersionCounterfactual, Kind: "baseline",
+		Params:  []byte(`{"method":"share_based","formula":"1 - baseline/total","min_sample":4}`),
+		Metrics: []byte(`{}`), Active: true,
+	}
 }
 
 // scoreProbabilistic generates candidate runs for an outcome (recall-first: in the

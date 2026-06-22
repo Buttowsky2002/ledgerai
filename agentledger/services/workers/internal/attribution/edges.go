@@ -3,6 +3,7 @@ package attribution
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -43,10 +44,11 @@ type ModelVersion struct {
 	Active  bool
 }
 
-// PGStore persists attribution edges and model lineage to Postgres.
+// PGStore persists attribution edges, baselines, and model lineage to Postgres.
 type PGStore interface {
 	EnsureModelVersion(ctx context.Context, mv ModelVersion) error
 	UpsertEdges(ctx context.Context, tenantID string, edges []Edge) error
+	UpsertBaselines(ctx context.Context, tenantID string, baselines []Baseline) error
 	Ping(ctx context.Context) error
 	Close() error
 }
@@ -133,6 +135,51 @@ func (p *PG) UpsertEdges(ctx context.Context, tenantID string, edges []Edge) err
 	return tx.Commit()
 }
 
+// UpsertBaselines writes one tenant's counterfactual baselines, refreshing in
+// place. Same per-tenant RLS binding as UpsertEdges. confounder_checks is the
+// validity-caveat JSON the audit UI surfaces (never silent).
+func (p *PG) UpsertBaselines(ctx context.Context, tenantID string, baselines []Baseline) error {
+	if len(baselines) == 0 {
+		return nil
+	}
+	tx, err := p.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, `SELECT set_config('app.tenant_id', $1, true)`, tenantID); err != nil {
+		return fmt.Errorf("bind tenant: %w", err)
+	}
+	const q = `
+		INSERT INTO attribution_baselines
+		    (tenant_id, scope, subject_id, outcome_type, baseline_rate,
+		     window_start, window_end, sample_size, confounder_checks, model_version)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+		ON CONFLICT (tenant_id, scope, subject_id, outcome_type) DO UPDATE SET
+		    baseline_rate     = EXCLUDED.baseline_rate,
+		    window_start      = EXCLUDED.window_start,
+		    window_end        = EXCLUDED.window_end,
+		    sample_size       = EXCLUDED.sample_size,
+		    confounder_checks = EXCLUDED.confounder_checks,
+		    model_version     = EXCLUDED.model_version,
+		    computed_at       = now()`
+	stmt, err := tx.PrepareContext(ctx, q)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = stmt.Close() }()
+	for _, b := range baselines {
+		checks, _ := json.Marshal(b.Checks)
+		if _, err := stmt.ExecContext(ctx,
+			b.TenantID, b.Scope, b.SubjectID, b.OutcomeType, b.BaselineRate(),
+			nullStr(b.WindowStart), nullStr(b.WindowEnd), b.TotalCount, checks, ModelVersionCounterfactual,
+		); err != nil {
+			return fmt.Errorf("upsert baseline %s/%s/%s: %w", b.Scope, b.SubjectID, b.OutcomeType, err)
+		}
+	}
+	return tx.Commit()
+}
+
 // Ping reports Postgres reachability for readiness checks.
 func (p *PG) Ping(ctx context.Context) error { return p.db.PingContext(ctx) }
 
@@ -146,4 +193,13 @@ func jsonOr(b []byte, def string) string {
 		return def
 	}
 	return string(b)
+}
+
+// nullStr maps "" → SQL NULL so an empty timestamp string is not coerced into an
+// invalid TIMESTAMPTZ.
+func nullStr(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }

@@ -30,17 +30,24 @@ func (f *fakeV2CH) WriteAttributionEvents(_ context.Context, e []AttributionEven
 
 // fakePG implements PGStore, recording what would be written.
 type fakePG struct {
-	ensured []ModelVersion
-	edges   map[string][]Edge
+	ensured   []ModelVersion
+	edges     map[string][]Edge
+	baselines map[string][]Baseline
 }
 
-func newFakePG() *fakePG { return &fakePG{edges: map[string][]Edge{}} }
+func newFakePG() *fakePG {
+	return &fakePG{edges: map[string][]Edge{}, baselines: map[string][]Baseline{}}
+}
 func (p *fakePG) EnsureModelVersion(_ context.Context, mv ModelVersion) error {
 	p.ensured = append(p.ensured, mv)
 	return nil
 }
 func (p *fakePG) UpsertEdges(_ context.Context, tenant string, e []Edge) error {
 	p.edges[tenant] = append(p.edges[tenant], e...)
+	return nil
+}
+func (p *fakePG) UpsertBaselines(_ context.Context, tenant string, b []Baseline) error {
+	p.baselines[tenant] = append(p.baselines[tenant], b...)
 	return nil
 }
 func (p *fakePG) Ping(context.Context) error { return nil }
