@@ -1,0 +1,47 @@
+AgentLedger {{ .Chart.AppVersion }} deployed as release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
+
+This chart deploys APPLICATION workloads only. It expects external, managed
+infrastructure (PostgreSQL, ClickHouse, Redpanda/Kafka, Redis) — see
+deploy/terraform and the chart README.
+
+Enabled services:
+{{- range $name, $svc := .Values.services }}
+{{- if $svc.enabled }}
+  - {{ $name }} (:{{ $svc.port }})
+{{- end }}
+{{- end }}
+
+PRE-REQUISITES the chart references but does NOT create:
+
+  1. Secret with sensitive env values (rule 1 — no secrets in the chart):
+{{- if .Values.secrets.existingSecret }}
+       configured: {{ .Values.secrets.existingSecret }}
+{{- else }}
+       NOT SET. Create one and set `secrets.existingSecret`. Expected keys
+       include: AGENTLEDGER_PG_DSN, AGENTLEDGER_JWT_SECRET, OPENAI_API_KEY,
+       ANTHROPIC_API_KEY, AGENTLEDGER_SLACK_WEBHOOK_URL, GITHUB_TOKEN,
+       AGENTLEDGER_REDIS_PASSWORD. See secret.example.yaml.
+{{- end }}
+
+  2. Gateway price book ConfigMap "{{ .Values.gateway.priceBookConfigMap }}":
+       kubectl -n {{ .Release.Namespace }} create configmap {{ .Values.gateway.priceBookConfigMap }} \
+         --from-file=pricebook.json=pricing/pricebook.json
+
+  3. Collector event-schema ConfigMap "{{ .Values.collector.eventSchemaConfigMap }}":
+       kubectl -n {{ .Release.Namespace }} create configmap {{ .Values.collector.eventSchemaConfigMap }} \
+         --from-file=llm_call.schema.json=schemas/events/llm_call.schema.json
+
+Check rollout:
+  kubectl -n {{ .Release.Namespace }} get pods -l app.kubernetes.io/instance={{ .Release.Name }}
+
+{{- if .Values.ingress.enabled }}
+
+Gateway/API are exposed via Ingress at:
+{{- range .Values.ingress.hosts }}
+  http://{{ .host }}
+{{- end }}
+{{- else }}
+
+Ingress is disabled. Reach a service in-cluster via its ClusterIP Service, e.g.:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "agentledger.fullname" . }}-gateway 8080:8080
+{{- end }}

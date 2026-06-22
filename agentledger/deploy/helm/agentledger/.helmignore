@@ -1,0 +1,9 @@
+# Patterns to ignore when packaging the chart.
+.DS_Store
+.git/
+.gitignore
+*.tmp
+*.bak
+*.orig
+# Example manifests are documentation, not part of the rendered release.
+secret.example.yaml

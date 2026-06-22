@@ -1,4 +1,4 @@
-.PHONY: test test-go test-api test-sdk-typescript e2e load build build-api build-shared-types build-sdk-typescript build-dashboard openapi delete-tenant up down lint lint-api lint-sdk-typescript api-install install-hooks security-check audit deps
+.PHONY: test test-go test-api test-sdk-typescript e2e load helm-lint build build-api build-shared-types build-sdk-typescript build-dashboard openapi delete-tenant up down lint lint-api lint-sdk-typescript api-install install-hooks security-check audit deps
 
 GATEWAY_DIR      := services/gateway
 COLLECTOR_DIR    := services/collector
@@ -44,6 +44,21 @@ e2e:
 # GATEWAY_KEY / RPS / DURATION via env.
 load:
 	k6 run tests/load/gateway.k6.js
+
+# ── Deploy (Helm) ─────────────────────────────────────────────────────────────
+HELM_CHART := deploy/helm/agentledger
+
+# Lint + render the Helm chart. Uses a local helm if present, else a container
+# (mirrors the Go-in-Docker convention). Rendering with default values proves the
+# templates produce valid manifests; it does not require a live cluster.
+helm-lint:
+	@if command -v helm >/dev/null 2>&1; then \
+		helm lint $(HELM_CHART) && helm template agentledger $(HELM_CHART) >/dev/null && echo "helm OK"; \
+	else \
+		echo "helm not found — running via container"; \
+		docker run --rm -v "$(CURDIR):/w" -w /w alpine/helm:3.16.2 lint $(HELM_CHART) && \
+		docker run --rm -v "$(CURDIR):/w" -w /w alpine/helm:3.16.2 template agentledger $(HELM_CHART) >/dev/null && echo "helm OK"; \
+	fi
 
 # ── Build ────────────────────────────────────────────────────────────────────
 build: build-api build-shared-types build-sdk-typescript build-dashboard
