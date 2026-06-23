@@ -644,6 +644,45 @@
         ]
       }
     },
+    "/v1/agents/{id}/lari": {
+      "get": {
+        "operationId": "AgentsController_lariRoi",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Agents"
+        ]
+      }
+    },
     "/v1/agents/{id}": {
       "get": {
         "operationId": "AgentsController_get",

@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { IsArray, IsOptional, IsString, IsUUID } from 'class-validator';
 import { AgentRoiService } from './agent-roi.service';
+import { LariService } from '../lari/lari.service';
 import { Roles } from '../auth/decorators';
 import { CrudService } from '../common/crud.service';
 import { parsePagination } from '../common/pagination';
@@ -34,6 +35,7 @@ export class AgentsController {
   constructor(
     prisma: PrismaService,
     private readonly agentRoi: AgentRoiService,
+    private readonly lari: LariService,
   ) {
     this.crud = new CrudService(prisma, { model: 'agent', idField: 'agentId', object: 'agent' });
   }
@@ -48,6 +50,12 @@ export class AgentsController {
   @Roles('viewer') @Get(':id/roi')
   roi(@Param('id') id: string, @Query('from') from?: string, @Query('to') to?: string) {
     return this.agentRoi.agentRoi(id, from, to);
+  }
+
+  // LARI — risk-adjusted incremental ROI with confidence + recommendation + ledger.
+  @Roles('viewer') @Get(':id/lari')
+  lariRoi(@Param('id') id: string, @Query('from') from?: string, @Query('to') to?: string) {
+    return this.lari.computeForAgent(id, from, to);
   }
 
   @Roles('viewer') @Get(':id')
