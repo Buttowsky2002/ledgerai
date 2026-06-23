@@ -1,4 +1,4 @@
-// AgentLedger control-plane Prisma schema.
+// LedgerAI control-plane Prisma schema.
 //
 // IMPORTANT: This schema is a *typed query client only*. The source of truth for
 // the database structure is the forward-only SQL in deploy/postgres/*.sql
@@ -14,7 +14,9 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("AGENTLEDGER_PG_DSN")
+  // The running API overrides this at runtime via PrismaService, preferring
+  // LEDGERAI_PG_DSN and falling back to the legacy AGENTLEDGER_PG_DSN alias.
+  url      = env("LEDGERAI_PG_DSN")
 }
 
 model Tenant {
@@ -264,4 +266,16 @@ model AuditLog {
   at     DateTime @default(now()) @db.Timestamptz
 
   @@map("audit_log")
+}
+
+// Idempotency ledger for POST /v1/import/events (migration 011). A re-import with
+// a previously-seen (tenant_id, idempotency_key) is skipped — no double counting.
+// Tenant-scoped + RLS like every other control-plane table.
+model ImportIdempotency {
+  tenantId       String   @map("tenant_id") @db.Uuid
+  idempotencyKey String   @map("idempotency_key")
+  importedAt     DateTime @default(now()) @map("imported_at") @db.Timestamptz
+
+  @@id([tenantId, idempotencyKey])
+  @@map("import_idempotency")
 }

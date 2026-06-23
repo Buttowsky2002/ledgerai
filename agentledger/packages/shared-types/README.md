@@ -1,6 +1,6 @@
 # @agentledger/shared-types
 
-Generated TypeScript types and a typed client for the AgentLedger control-plane API.
+Generated TypeScript types and a typed client for the LedgerAI control-plane API.
 Consumed by the dashboard (and any other TS consumer) so request/response shapes stay in
 lockstep with the API.
 

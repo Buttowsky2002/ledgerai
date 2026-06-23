@@ -4,6 +4,8 @@
  * provider whose client id/secret env vars are unset is simply omitted (unavailable),
  * so a deployment enables only the providers it has credentials for.
  */
+import { env } from '../env';
+
 export interface OidcProviderConfig {
   name: string;
   issuer: string;
@@ -40,7 +42,7 @@ const SPECS: ProviderEnvSpec[] = [
 
 /** Base URL the IdP redirects back to (shared by global + per-tenant SSO flows). */
 export function redirectBase(): string {
-  return process.env.AGENTLEDGER_OIDC_REDIRECT_BASE ?? 'http://localhost:8094';
+  return env('LEDGERAI_OIDC_REDIRECT_BASE') ?? 'http://localhost:8094';
 }
 
 /** Redirect URI for the per-tenant SSO callback (P6-D1). */
@@ -59,7 +61,7 @@ export function resolveSecret(ref: string): string | undefined {
 }
 
 export function loadOidcProviders(): OidcProviderConfig[] {
-  const base = process.env.AGENTLEDGER_OIDC_REDIRECT_BASE ?? 'http://localhost:8094';
+  const base = env('LEDGERAI_OIDC_REDIRECT_BASE') ?? 'http://localhost:8094';
   const providers: OidcProviderConfig[] = [];
   for (const spec of SPECS) {
     const clientId = process.env[spec.clientIdEnv];

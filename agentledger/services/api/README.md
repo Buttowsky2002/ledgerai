@@ -12,7 +12,12 @@ in the next task.
 
 ## OpenAPI / typed client
 
-- Swagger UI: **`/docs`** · spec JSON: **`/docs-json`** (both public).
+- Swagger UI: **`/docs`** · spec JSON: **`/docs-json`**. **Environment-gated:**
+  served outside production by default; **not exposed in production** unless
+  `LEDGERAI_EXPOSE_DOCS=true`, in which case production additionally requires a
+  `LEDGERAI_DOCS_TOKEN` and the endpoints are gated behind
+  `Authorization: Bearer <token>` (opting in without a token fails closed — docs
+  stay off). A startup log line reports whether docs are enabled.
 - Published spec: `docs/api/openapi.json` (committed). Regenerate with
   `npm run generate:openapi` (uses Nest preview mode — no DB needed).
 - Typed client + types: `packages/shared-types` (`@agentledger/shared-types`) — generated from
@@ -126,6 +131,31 @@ default last 30 days).
 | `/analytics/unit-economics?outcomeType=` | `v_unit_economics` | Cost per outcome. |
 | `/analytics/agents/:agentId` | `spend_hourly_by_key` + `agent_runs` | Agent detail. |
 
+## Import (bulk backfill)
+
+`POST /v1/import/events`, **`admin` only** (ADR-045). Backfills historical/offline
+activity into the canonical ClickHouse tables (`llm_calls` / `outcomes` /
+`agent_tool_calls` / `risk_events`). Body: `{ "events": [ <row>, … ], "dryRun"?: bool }`
+(batch capped at 1000 rows; chunk larger imports). Each flat row may carry usage,
+an outcome, a tool call, and/or a risk signal — every present signal becomes its
+own event. Per **rule 2** rows carry no content, only cost/usage/attribution
+dimensions.
+
+- **Idempotent:** a row with an `idempotency_key` is recorded in the tenant-scoped
+  `import_idempotency` table; re-importing a seen key is **skipped** (no double
+  counting). Keys repeated within a batch collapse to one. Rows without a key are
+  always imported.
+- **All-or-nothing:** one invalid row → `400` with the offending line numbers;
+  nothing is written.
+- **Tenant-stamped:** `tenant_id` comes from the JWT principal, never request input.
+- `dryRun: true` validates and reports the plan (`{received, imported, skipped,
+  events, byTable}`) without writing. Each applied import writes an `audit_log` row.
+
+Supported row fields: `idempotency_key`, `timestamp`, `team_id`, `user_id`,
+`agent_id`, `run_id`, `provider`, `model`, `input_tokens`, `output_tokens`,
+`cost_usd`, `tool_name`, `outcome_type`, `outcome_value_usd`,
+`attribution_confidence`, `risk_severity` (`low|medium|high|critical`).
+
 ## Environment variables
 
 | Variable | Default | Purpose |
@@ -141,6 +171,8 @@ default last 30 days).
 | `AGENTLEDGER_OIDC_GOOGLE_CLIENT_ID` / `_CLIENT_SECRET` | _(unset)_ | Google OIDC client; unset → provider unavailable. |
 | `AGENTLEDGER_OIDC_MICROSOFT_CLIENT_ID` / `_CLIENT_SECRET` | _(unset)_ | Microsoft OIDC client; unset → provider unavailable. |
 | `AGENTLEDGER_DEV_TRUST_HEADER` | _(unset)_ | **Dev only.** When `true`, an `x-tenant-id` header (no Bearer) binds a dev `admin` principal. |
+| `LEDGERAI_EXPOSE_DOCS` | _(unset)_ | Expose `/docs` + `/docs-json`. Auto-on outside production; in production set `true` to opt in (then a token is required). |
+| `LEDGERAI_DOCS_TOKEN` | _(unset)_ | Bearer token required to view docs **in production**. Without it, a production opt-in fails closed (docs stay off). |
 
 ## Test
 

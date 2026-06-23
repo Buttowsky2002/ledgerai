@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../app.module';
 import { ClickHouseService } from '../clickhouse/clickhouse.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { env } from '../env';
 
 /**
  * Tenant data-deletion job (security rule 14): erase a tenant from both stores.
@@ -27,7 +28,7 @@ const CH_TABLES = [
 ];
 
 async function main(): Promise<void> {
-  const tenantId = process.argv[2] ?? process.env.AGENTLEDGER_DELETE_TENANT_ID;
+  const tenantId = process.argv[2] ?? env('LEDGERAI_DELETE_TENANT_ID');
   if (!tenantId) {
     process.stderr.write('usage: delete-tenant <tenant-uuid>\n');
     process.exit(2);

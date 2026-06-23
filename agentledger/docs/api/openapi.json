@@ -2738,6 +2738,30 @@
           "Attribution"
         ]
       }
+    },
+    "/v1/import/events": {
+      "post": {
+        "operationId": "ImportController_importEvents",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportEventsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Import"
+        ]
+      }
     }
   },
   "info": {
@@ -3728,6 +3752,26 @@
             "type": "object"
           }
         }
+      },
+      "ImportEventsDto": {
+        "type": "object",
+        "properties": {
+          "events": {
+            "minItems": 1,
+            "maxItems": 1000,
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "dryRun": {
+            "type": "boolean",
+            "description": "When true, validate + report what WOULD be imported without writing."
+          }
+        },
+        "required": [
+          "events"
+        ]
       }
     }
   },

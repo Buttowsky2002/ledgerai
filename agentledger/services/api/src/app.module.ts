@@ -17,6 +17,7 @@ import { BudgetsModule } from './budgets/budgets.module';
 import { ClickHouseModule } from './clickhouse/clickhouse.module';
 import { HealthModule } from './health/health.module';
 import { IdentitiesModule } from './identities/identities.module';
+import { ImportModule } from './import/import.module';
 import { MetricsModule } from './metrics/metrics.module';
 import { PoliciesModule } from './policies/policies.module';
 import { PriceBookModule } from './price-book/price-book.module';
@@ -73,6 +74,8 @@ import { VirtualKeysModule } from './virtual-keys/virtual-keys.module';
     TenantModule,
     AnalyticsModule,
     AttributionModule,
+    // Bulk data ingestion (admin-only write into the analytics store).
+    ImportModule,
   ],
   providers: [
     // Guard order matters: rate-limit → authenticate → authorize.

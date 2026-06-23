@@ -1,5 +1,6 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Prisma, PrismaClient } from '@prisma/client';
+import { env } from '../env';
 
 /**
  * Prisma client wired for Postgres row-level security.
@@ -17,6 +18,15 @@ import { Prisma, PrismaClient } from '@prisma/client';
  */
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+  constructor() {
+    // Resolve the connection string at runtime, preferring the new LEDGERAI_PG_DSN
+    // and falling back to the legacy AGENTLEDGER_PG_DSN alias (deprecated). This
+    // override is the backwards-compatible source of truth — Prisma's own env()
+    // in schema.prisma has no alias fallback.
+    const url = env('LEDGERAI_PG_DSN');
+    super(url ? { datasources: { db: { url } } } : {});
+  }
+
   async onModuleInit(): Promise<void> {
     await this.$connect();
   }

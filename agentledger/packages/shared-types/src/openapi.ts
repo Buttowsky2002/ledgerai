@@ -1012,6 +1012,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/import/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ImportController_importEvents"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1285,6 +1301,11 @@ export interface components {
             /** @enum {string} */
             contentCapture?: "metadata_only" | "redacted" | "full";
             complianceFlags?: Record<string, never>;
+        };
+        ImportEventsDto: {
+            events: Record<string, never>[];
+            /** @description When true, validate + report what WOULD be imported without writing. */
+            dryRun?: boolean;
         };
     };
     responses: never;
@@ -3431,6 +3452,27 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ImportController_importEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportEventsDto"];
+            };
+        };
+        responses: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };

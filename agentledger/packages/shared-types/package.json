@@ -2,7 +2,7 @@
   "name": "@agentledger/shared-types",
   "version": "0.1.0",
   "private": true,
-  "description": "Generated TypeScript types (OpenAPI + event JSON Schema) and a typed client for the AgentLedger control-plane API.",
+  "description": "Generated TypeScript types (OpenAPI + event JSON Schema) and a typed client for the LedgerAI control-plane API.",
   "license": "UNLICENSED",
   "type": "module",
   "main": "dist/index.js",
