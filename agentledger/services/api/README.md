@@ -131,6 +131,23 @@ default last 30 days).
 | `/analytics/unit-economics?outcomeType=` | `v_unit_economics` | Cost per outcome. |
 | `/analytics/agents/:agentId` | `spend_hourly_by_key` + `agent_runs` | Agent detail. |
 
+## Outcome Graph (runs, outcomes, agent ROI)
+
+The cost→outcome evidence chain (ADR-046), all tenant-scoped via the JWT-bound
+`tenant_id` filter (ClickHouse has no RLS); all inputs parameterized.
+
+| Path | Method | Role | Backs |
+|------|--------|------|-------|
+| `/v1/agents/:id/roi?from=&to=` | GET | `viewer` | `v_roi` + `v_agent_daily_unit_economics` — per-agent cost/value/net/cost-per-success/risk-adjusted ROI + daily series. |
+| `/v1/runs/:id` | GET | `viewer` | `agent_runs` + `outcomes` + `agent_tool_calls` — single run with its outcomes and tool calls (the run node of the evidence chain); 404 if absent. |
+| `/v1/outcomes?outcomeType=&source=&agentId=&minConfidence=&from=&to=` | GET | `viewer` | `outcomes` ⋈ `agent_runs` — outcomes with their run's AI cost. |
+| `/v1/outcomes` | POST | `analyst` | Creates one outcome directly in ClickHouse (`source='api'`), audited. Body: `{ outcomeType, valueUsd, runId?, userId?, teamId?, source?, confidence?, occurredAt?, completionStatus?, qualityScore? }`. `tenant_id` is stamped from the principal; no content field (rules 2/3). |
+
+The per-agent daily rollup view `v_agent_daily_unit_economics` (ClickHouse migration
+010) aggregates `v_roi` to `(tenant_id, agent_id, day)`: `cost_usd`, `outcomes_count`,
+`value_usd`, `net_value_usd`, `cost_per_success`, `attribution_confidence_avg`,
+`risk_adjusted_roi`.
+
 ## Import (bulk backfill)
 
 `POST /v1/import/events`, **`admin` only** (ADR-045). Backfills historical/offline

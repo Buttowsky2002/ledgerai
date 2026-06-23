@@ -19,10 +19,12 @@ import { HealthModule } from './health/health.module';
 import { IdentitiesModule } from './identities/identities.module';
 import { ImportModule } from './import/import.module';
 import { MetricsModule } from './metrics/metrics.module';
+import { OutcomesModule } from './outcomes/outcomes.module';
 import { PoliciesModule } from './policies/policies.module';
 import { PriceBookModule } from './price-book/price-book.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RoiTemplatesModule } from './roi-templates/roi-templates.module';
+import { RunsModule } from './runs/runs.module';
 import { ScimModule } from './scim/scim.module';
 import { ScimTokensModule } from './scim-tokens/scim-tokens.module';
 import { TeamsModule } from './teams/teams.module';
@@ -74,6 +76,9 @@ import { VirtualKeysModule } from './virtual-keys/virtual-keys.module';
     TenantModule,
     AnalyticsModule,
     AttributionModule,
+    // Outcome Graph MVP: single-run detail + outcomes read/write (ADR-046).
+    RunsModule,
+    OutcomesModule,
     // Bulk data ingestion (admin-only write into the analytics store).
     ImportModule,
   ],
