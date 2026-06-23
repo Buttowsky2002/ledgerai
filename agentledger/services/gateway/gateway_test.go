@@ -46,13 +46,13 @@ func testGateway(t *testing.T, upstreamURL string) *Gateway {
 	cfg := &Config{
 		Providers: []ProviderCfg{{Name: "openai", BaseURL: upstreamURL, APIKeyEnv: "TEST_UPSTREAM_KEY", ModelPrefixes: []string{"gpt-"}}},
 		VirtualKeys: []VirtualKey{
-			{Key: "alk_test", TenantID: "t1", TeamID: "eng", UserID: "u1", AppID: "app1",
+			{KeyPlaintext: "alk_test", TenantID: "t1", TeamID: "eng", UserID: "u1", AppID: "app1",
 				Environment: "test", MonthlyBudget: 100, DLPPolicyID: "default"},
-			{Key: "alk_block", TenantID: "t1", TeamID: "sec", UserID: "u2", AppID: "app1",
+			{KeyPlaintext: "alk_block", TenantID: "t1", TeamID: "sec", UserID: "u2", AppID: "app1",
 				Environment: "test", DLPPolicyID: "strict"},
-			{Key: "alk_redact", TenantID: "t1", TeamID: "fin", UserID: "u3", AppID: "app1",
+			{KeyPlaintext: "alk_redact", TenantID: "t1", TeamID: "fin", UserID: "u3", AppID: "app1",
 				Environment: "test", DLPPolicyID: "redactor"},
-			{Key: "alk_broke", TenantID: "t1", TeamID: "x", UserID: "u4", AppID: "app1",
+			{KeyPlaintext: "alk_broke", TenantID: "t1", TeamID: "x", UserID: "u4", AppID: "app1",
 				Environment: "test", MonthlyBudget: 0.000001},
 		},
 		DLP: DLPConfig{Policies: []DLPPolicy{

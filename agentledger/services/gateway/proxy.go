@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -25,6 +26,8 @@ type Gateway struct {
 	sink      *EventSink
 	transport *http.Transport
 	metrics   *Metrics
+	ops       opsAuthConfig // auth for /v1/usage and /metrics (set in main)
+	budgetCfg budgetConfig  // budget reservation tunables (set in main)
 }
 
 // newGateway creates a Gateway with an initial snapshot built from cfg and pb.
@@ -34,6 +37,8 @@ func newGateway(cfg *Config, pb *PriceBook, budgets BudgetStore, sink *EventSink
 		sink:      sink,
 		transport: newUpstreamTransport(),
 		metrics:   NewMetrics(),
+		// Sensible default; main() overrides from the environment via loadBudgetConfig.
+		budgetCfg: budgetConfig{defaultReserveUSD: defaultReserveFallbackUSD},
 	}
 	g.current.Store(newSnapshotFromCfg(cfg, pb))
 	return g
@@ -54,9 +59,10 @@ func newUpstreamTransport() *http.Transport {
 // chatRequest captures the fields the gateway needs; everything else is
 // passed through untouched.
 type chatRequest struct {
-	Model    string `json:"model"`
-	Stream   bool   `json:"stream"`
-	Messages []struct {
+	Model     string `json:"model"`
+	Stream    bool   `json:"stream"`
+	MaxTokens int    `json:"max_tokens"` // upper bound on output tokens; feeds the budget estimate
+	Messages  []struct {
 		Role    string          `json:"role"`
 		Content json.RawMessage `json:"content"`
 	} `json:"messages"`
@@ -131,7 +137,7 @@ func buildEvent(callID string, start time.Time, vk *VirtualKey, r *http.Request,
 	return LLMCallEvent{
 		CallID: callID, Timestamp: start.UTC(),
 		TenantID: vk.TenantID, TeamID: vk.TeamID, UserID: vk.UserID,
-		AppID: vk.AppID, Environment: vk.Environment, VirtualKey: vk.Key,
+		AppID: vk.AppID, Environment: vk.Environment, VirtualKey: vk.KeyID,
 		AgentID:      r.Header.Get("X-AgentLedger-Agent-Id"),
 		RunID:        r.Header.Get("X-AgentLedger-Run-Id"),
 		StepID:       r.Header.Get("X-AgentLedger-Step-Id"),
@@ -165,20 +171,8 @@ func (g *Gateway) serveCanonical(w http.ResponseWriter, r *http.Request, snap *g
 		return
 	}
 
-	// 4. Budget + rate limit precheck
-	if ok, reason := g.budgets.CheckAndCount(vk); !ok {
-		status := http.StatusTooManyRequests
-		ev.Status = "blocked_rate"
-		if reason == "monthly_budget_exceeded" {
-			status = http.StatusPaymentRequired
-			ev.Status = "blocked_budget"
-		}
-		ev.StatusCode = status
-		g.finishFmt(w, ev, start, status, reason, "request rejected by AgentLedger policy: "+reason, format)
-		return
-	}
-
-	// 5. DLP precheck on message content
+	// 4. DLP precheck on message content. Runs before any budget hold so a
+	// blocked request never reserves budget.
 	promptText := extractText(req)
 	ev.PromptHash = hashContent(promptText)
 	findings := snap.dlp.Classify(promptText)
@@ -196,7 +190,7 @@ func (g *Gateway) serveCanonical(w http.ResponseWriter, r *http.Request, snap *g
 		body = redactBody(snap.dlp, body)
 	}
 
-	// 6. Resolve upstream provider
+	// 5. Resolve upstream provider (needed to price the reservation estimate).
 	prov, ok := snap.cfg.resolveProvider(req.Model)
 	if !ok {
 		ev.Status, ev.StatusCode = "blocked_policy", http.StatusBadGateway
@@ -205,6 +199,25 @@ func (g *Gateway) serveCanonical(w http.ResponseWriter, r *http.Request, snap *g
 		return
 	}
 	ev.Provider = prov.Name
+
+	// 6. Budget reservation: hold a conservative estimate before the upstream
+	// call. Committed to the actual cost on success, released if no billable
+	// call occurred. Reserve also enforces the per-minute rate limit.
+	estimate := g.estimateReserveUSD(snap, prov, req.Model, req.MaxTokens, len(promptText), start)
+	res, ok, reason := g.budgets.Reserve(vk, estimate)
+	if !ok {
+		status := http.StatusTooManyRequests
+		ev.Status = "blocked_rate"
+		switch reason {
+		case "monthly_budget_exceeded":
+			status, ev.Status = http.StatusPaymentRequired, "blocked_budget"
+		case "budget_unavailable":
+			status, ev.Status = http.StatusServiceUnavailable, "blocked_budget"
+		}
+		ev.StatusCode = status
+		g.finishFmt(w, ev, start, status, reason, "request rejected by AgentLedger policy: "+reason, format)
+		return
+	}
 
 	// 7. Proxy (response rendering depends on the client-facing format). The
 	// dispatch window [preDispatch, postDispatch] is the upstream round-trip and is
@@ -222,21 +235,29 @@ func (g *Gateway) serveCanonical(w http.ResponseWriter, r *http.Request, snap *g
 	postDispatch := time.Now()
 	ev.StatusCode = status
 	ev.ResponseModel = respModel
-	if err != nil {
-		ev.Status = "upstream_error"
-	} else {
-		ev.Status = "ok"
-	}
 	ev.InputTokens, ev.OutputTokens = usage.InputTokens, usage.OutputTokens
 	ev.CacheReadTokens, ev.CacheWriteTokens = usage.CacheReadTokens, usage.CacheWriteTokens
 
-	// 8. Cost accounting (response model preferred for pricing accuracy)
-	priceModel := respModel
-	if priceModel == "" {
-		priceModel = req.Model
+	// 8. Settle the reservation: commit to the realized cost on success, or
+	// release the hold when the upstream call produced no billable usage.
+	if err != nil {
+		// A failed client write is the gateway's egress fault, not the upstream's;
+		// distinguish it so events are diagnosable.
+		if errors.Is(err, errClientWrite) {
+			ev.Status = "client_error"
+		} else {
+			ev.Status = "upstream_error"
+		}
+		g.budgets.Release(res)
+	} else {
+		ev.Status = "ok"
+		priceModel := respModel
+		if priceModel == "" {
+			priceModel = req.Model
+		}
+		ev.CostUSD = snap.prices.Cost(prov.Name, priceModel, usage, start)
+		g.budgets.Commit(res, ev.CostUSD)
 	}
-	ev.CostUSD = snap.prices.Cost(prov.Name, priceModel, usage, start)
-	g.budgets.AddSpend(vk.Key, ev.CostUSD)
 
 	// 9. Emit canonical event (async, non-blocking)
 	ev.LatencyMs = time.Since(start).Milliseconds()
@@ -245,6 +266,23 @@ func (g *Gateway) serveCanonical(w http.ResponseWriter, r *http.Request, snap *g
 	// Policy overhead = inline time minus the upstream round-trip.
 	overhead := preDispatch.Sub(start) + time.Since(postDispatch)
 	g.metrics.Observe(float64(overhead.Microseconds())/1000.0, statusClass(ev.Status))
+}
+
+// estimateReserveUSD computes a conservative budget hold for a request. With a
+// max_tokens cap it prices those as output tokens (the most expensive rate) plus
+// a rough estimate of the prompt's input tokens (~4 chars/token). Without
+// max_tokens it falls back to the configured default reserve.
+func (g *Gateway) estimateReserveUSD(snap *gatewaySnapshot, prov *ProviderCfg, model string, maxTokens, promptChars int, at time.Time) float64 {
+	if maxTokens <= 0 {
+		return g.budgetCfg.defaultReserveUSD
+	}
+	outRate, _ := snap.prices.Rate(prov.Name, model, "output", at)
+	inRate, _ := snap.prices.Rate(prov.Name, model, "input", at)
+	est := outRate*float64(maxTokens)/1_000_000 + inRate*float64(promptChars/4)/1_000_000
+	if est <= 0 {
+		return g.budgetCfg.defaultReserveUSD
+	}
+	return est
 }
 
 // dispatchUpstream sends the canonical (OpenAI-format) request to the resolved
@@ -284,8 +322,8 @@ func (g *Gateway) proxyUpstream(w http.ResponseWriter, r *http.Request, prov *Pr
 	w.WriteHeader(resp.StatusCode)
 
 	if stream && resp.StatusCode == http.StatusOK {
-		model := streamPassthrough(w, resp.Body, &u)
-		return u, resp.StatusCode, model, nil
+		model, serr := streamPassthrough(w, resp.Body, &u)
+		return u, resp.StatusCode, model, serr
 	}
 
 	respBody, err := io.ReadAll(resp.Body)
@@ -300,27 +338,47 @@ func (g *Gateway) proxyUpstream(w http.ResponseWriter, r *http.Request, prov *Pr
 	return u, resp.StatusCode, model, nil
 }
 
-// streamPassthrough copies SSE chunks to the client while scanning for
-// the usage object in the final chunk. Returns the response model.
-func streamPassthrough(w http.ResponseWriter, body io.Reader, u *Usage) string {
+// Streaming copy errors, surfaced so the gateway event reflects the failure.
+var (
+	errUpstreamRead = errors.New("upstream stream read error")
+	errClientWrite  = errors.New("client stream write error")
+)
+
+// streamPassthrough copies SSE chunks from the upstream body to the client,
+// capturing usage from data chunks. It returns the response model and an error:
+//   - nil when the stream completes normally (upstream EOF);
+//   - errUpstreamRead if reading the upstream failed mid-stream (not EOF);
+//   - errClientWrite if writing to the client failed.
+//
+// It reads with bufio.Reader.ReadBytes('\n') rather than bufio.Scanner so an
+// arbitrarily long SSE line never trips a scanner token-size limit.
+func streamPassthrough(w http.ResponseWriter, body io.Reader, u *Usage) (string, error) {
 	flusher, _ := w.(http.Flusher)
-	scanner := bufio.NewScanner(body)
-	scanner.Buffer(make([]byte, 64*1024), 4<<20)
+	reader := bufio.NewReader(body)
 	model := ""
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		_, _ = w.Write(line)
-		_, _ = w.Write([]byte("\n"))
-		if flusher != nil {
-			flusher.Flush()
-		}
-		if data, found := bytes.CutPrefix(line, []byte("data: ")); found && !bytes.Equal(data, []byte("[DONE]")) {
-			if m := parseUsage(data, u); m != "" {
-				model = m
+	for {
+		line, readErr := reader.ReadBytes('\n')
+		if len(line) > 0 {
+			// Forward the bytes exactly as received (newline included).
+			if _, werr := w.Write(line); werr != nil {
+				return model, fmt.Errorf("%w: %w", errClientWrite, werr)
+			}
+			if flusher != nil {
+				flusher.Flush()
+			}
+			if data, found := bytes.CutPrefix(bytes.TrimRight(line, "\r\n"), []byte("data: ")); found && !bytes.Equal(data, []byte("[DONE]")) {
+				if m := parseUsage(data, u); m != "" {
+					model = m
+				}
 			}
 		}
+		if readErr != nil {
+			if readErr == io.EOF {
+				return model, nil // normal end of stream
+			}
+			return model, fmt.Errorf("%w: %w", errUpstreamRead, readErr)
+		}
 	}
-	return model
 }
 
 // parseUsage extracts usage and model fields from an OpenAI-compatible
@@ -392,12 +450,27 @@ func (g *Gateway) finishFmt(w http.ResponseWriter, ev *LLMCallEvent, start time.
 	writeErrFmt(w, format, status, code, msg)
 }
 
+// modelAllowed reports whether model is permitted for vk. An empty allowlist
+// permits everything. Each pattern is whitespace-trimmed; blank patterns are
+// ignored. A pattern ending in "*" matches by prefix (the text before the "*");
+// any other pattern requires an exact match — so an exact entry like "gpt-4o"
+// never accidentally admits "gpt-4o-mini".
 func modelAllowed(vk *VirtualKey, model string) bool {
 	if len(vk.AllowedModels) == 0 {
 		return true
 	}
-	for _, m := range vk.AllowedModels {
-		if m == model || strings.HasPrefix(model, strings.TrimSuffix(m, "*")) {
+	for _, raw := range vk.AllowedModels {
+		pat := strings.TrimSpace(raw)
+		if pat == "" {
+			continue // ignore empty / whitespace-only patterns
+		}
+		if prefix, isWildcard := strings.CutSuffix(pat, "*"); isWildcard {
+			if strings.HasPrefix(model, prefix) {
+				return true
+			}
+			continue
+		}
+		if pat == model {
 			return true
 		}
 	}
@@ -430,29 +503,110 @@ func extractText(req chatRequest) string {
 	return sb.String()
 }
 
+// redactBody rewrites sensitive spans in an OpenAI-style chat body in place,
+// covering the same content shapes the detector (extractText) reads: a message's
+// `content` may be a plain string or an array of parts, where only `text` parts
+// are redacted and every other part (e.g. image_url) is preserved byte-for-byte.
+// Valid JSON structure is preserved. If the body cannot be parsed it is returned
+// unchanged, with a debug-level note that carries no raw content.
 func redactBody(d *DLPEngine, body []byte) []byte {
-	var m map[string]json.RawMessage
-	if err := json.Unmarshal(body, &m); err != nil {
+	var top map[string]json.RawMessage
+	if err := json.Unmarshal(body, &top); err != nil {
+		slog.Debug("dlp redact skipped: request body is not a JSON object; passing through unredacted")
 		return body
 	}
-	var msgs []map[string]json.RawMessage
-	if err := json.Unmarshal(m["messages"], &msgs); err != nil {
+	rawMsgs, ok := top["messages"]
+	if !ok {
 		return body
 	}
-	for _, msg := range msgs {
-		var s string
-		if err := json.Unmarshal(msg["content"], &s); err == nil {
-			red, _ := json.Marshal(d.Redact(s))
-			msg["content"] = red
+	var msgs []json.RawMessage
+	if err := json.Unmarshal(rawMsgs, &msgs); err != nil {
+		slog.Debug("dlp redact skipped: messages is not a JSON array; passing through unredacted")
+		return body
+	}
+
+	changed := false
+	for i, rawMsg := range msgs {
+		var msg map[string]json.RawMessage
+		if err := json.Unmarshal(rawMsg, &msg); err != nil {
+			continue // leave a malformed message untouched
+		}
+		content, ok := msg["content"]
+		if !ok {
+			continue
+		}
+		newContent, ok := redactContent(d, content)
+		if !ok {
+			continue
+		}
+		msg["content"] = newContent
+		if remarshaled, err := json.Marshal(msg); err == nil {
+			msgs[i] = remarshaled
+			changed = true
 		}
 	}
-	if raw, err := json.Marshal(msgs); err == nil {
-		m["messages"] = raw
+	if !changed {
+		return body
 	}
-	if out, err := json.Marshal(m); err == nil {
+	if raw, err := json.Marshal(msgs); err == nil {
+		top["messages"] = raw
+	}
+	if out, err := json.Marshal(top); err == nil {
 		return out
 	}
 	return body
+}
+
+// redactContent redacts a message's `content`, which may be a plain string or an
+// array of content parts. Non-text parts are preserved unchanged. It returns the
+// new content and whether it should replace the original (false = leave as-is).
+func redactContent(d *DLPEngine, content json.RawMessage) (json.RawMessage, bool) {
+	// Case 1: content is a plain string.
+	var s string
+	if err := json.Unmarshal(content, &s); err == nil {
+		red, err := json.Marshal(d.Redact(s))
+		if err != nil {
+			return nil, false
+		}
+		return red, true
+	}
+
+	// Case 2: content is an array of parts.
+	var parts []json.RawMessage
+	if err := json.Unmarshal(content, &parts); err != nil {
+		return nil, false // neither string nor array — leave unchanged
+	}
+	changed := false
+	for i, rawPart := range parts {
+		var part map[string]json.RawMessage
+		if err := json.Unmarshal(rawPart, &part); err != nil {
+			continue // not an object — preserve unchanged
+		}
+		var typ string
+		if err := json.Unmarshal(part["type"], &typ); err != nil || typ != "text" {
+			continue // non-text part (e.g. image_url) preserved unchanged
+		}
+		var txt string
+		if err := json.Unmarshal(part["text"], &txt); err != nil {
+			continue // missing/non-string text — preserve unchanged
+		}
+		red, err := json.Marshal(d.Redact(txt))
+		if err != nil {
+			continue
+		}
+		part["text"] = red
+		if remarshaled, err := json.Marshal(part); err == nil {
+			parts[i] = remarshaled // only this part changes; others keep their bytes
+			changed = true
+		}
+	}
+	if !changed {
+		return nil, false
+	}
+	if raw, err := json.Marshal(parts); err == nil {
+		return raw, true
+	}
+	return nil, false
 }
 
 func hashContent(s string) string {

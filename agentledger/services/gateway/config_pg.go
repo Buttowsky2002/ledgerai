@@ -15,8 +15,9 @@ import (
 // each Load call; static fields (listen_addr, providers, events, redis) come
 // from the base Config.
 //
-// Keys are returned with VirtualKey.Key = key_hash (the SHA-256 hex stored in
-// Postgres), so callers must build a KeyStore via NewKeyStoreFromHashed.
+// Keys are returned with VirtualKey.KeyHash = key_hash (the SHA-256 hex stored
+// in Postgres); KeyID is derived during key-store construction. Callers build a
+// KeyStore via NewKeyStoreFromHashed.
 type PGConfigStore struct {
 	db   *sql.DB
 	base *Config
@@ -93,7 +94,7 @@ func (s *PGConfigStore) loadVirtualKeys(ctx context.Context) ([]VirtualKey, erro
 		var vk VirtualKey
 		var models pq.StringArray
 		if err := rows.Scan(
-			&vk.Key, &vk.TenantID, &vk.TeamID, &vk.UserID, &vk.AppID,
+			&vk.KeyHash, &vk.TenantID, &vk.TeamID, &vk.UserID, &vk.AppID,
 			&vk.Environment, &models,
 			&vk.MonthlyBudget, &vk.RateLimitRPM, &vk.DLPPolicyID,
 		); err != nil {

@@ -20,9 +20,18 @@ func (m *mockStore) Close() error                            { return nil }
 
 func testPB() *PriceBook { return &PriceBook{} }
 
+// testCfgWithKey builds a file-style config whose key is a plaintext bearer token.
 func testCfgWithKey(key string) *Config {
 	return &Config{
-		VirtualKeys: []VirtualKey{{Key: key, TenantID: "t1", MonthlyBudget: 10}},
+		VirtualKeys: []VirtualKey{{KeyPlaintext: key, TenantID: "t1", MonthlyBudget: 10}},
+		DLP:         DLPConfig{FailMode: "open"},
+	}
+}
+
+// testCfgWithHash builds a Postgres-style config whose key is a SHA-256 hash.
+func testCfgWithHash(hash string) *Config {
+	return &Config{
+		VirtualKeys: []VirtualKey{{KeyHash: hash, TenantID: "t1", MonthlyBudget: 10}},
 		DLP:         DLPConfig{FailMode: "open"},
 	}
 }
@@ -37,7 +46,7 @@ func TestHotReloadSwapsSnapshot(t *testing.T) {
 
 	// Postgres store returns keys as hashes (Postgres key_hash convention).
 	newHash := sha256hex("alk_new")
-	newCfg := testCfgWithKey(newHash)
+	newCfg := testCfgWithHash(newHash)
 	store := &mockStore{cfg: newCfg}
 
 	ctx, cancel := context.WithCancel(context.Background())
