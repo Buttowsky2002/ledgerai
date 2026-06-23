@@ -148,6 +148,40 @@ The per-agent daily rollup view `v_agent_daily_unit_economics` (ClickHouse migra
 `value_usd`, `net_value_usd`, `cost_per_success`, `attribution_confidence_avg`,
 `risk_adjusted_roi`.
 
+## LARI — Risk-Adjusted Incremental ROI
+
+`GET /v1/agents/:id/lari?from=&to=`, `viewer`+ (ADR-047). An explainable,
+**deterministic** per-agent ROI: it nets incrementality, fully-loaded cost,
+expected risk loss, and an evidence-uncertainty reserve, scores confidence, and
+recommends an action — with an audit ledger behind every figure.
+
+```
+LARI = ( AttributedIncrementalValue
+         − FullyLoadedAgentCost
+         − ExpectedRiskLoss
+         − UncertaintyReserve )
+       / max(FullyLoadedAgentCost, epsilon)
+```
+
+- **AttributedIncrementalValue** = Σ grossValue × attributionConfidence × incrementalityFactor (both ∈ [0,1], so manual/low-confidence outcomes are discounted).
+- **FullyLoadedAgentCost** = token + human review + infra + amortized build.
+- **ExpectedRiskLoss** = valueAtRisk × incidentProbability (more risk ⇒ lower ROI).
+- **UncertaintyReserve** = positiveValue × (1 − confidence/100) × factor (weak evidence ⇒ lower ROI).
+- **epsilon** floors the denominator so zero cost never divides by zero.
+
+**ConfidenceScore** (0–100) = 100 × (0.25·evidenceQuality + 0.20·attributionStrength + 0.20·causalStrength + 0.15·costCompleteness + 0.10·outcomeVerification + 0.10·recency).
+
+**Recommendation** ∈ `scale` · `maintain` · `optimize` · `improve_evidence` · `require_approval` · `investigate` · `pause` · `retire` (critical risk gates first → require_approval / pause; then negative ROI → retire / investigate; then low confidence → improve_evidence; then scale / optimize / maintain).
+
+The engine (`src/lari/`) is pure and framework-free — **no LLM ever decides a
+financial figure, and no raw prompt/response content is required** (rules 2/7/8).
+The endpoint's `LariService` assembles the input from `v_roi` (value + loaded
+costs + confidence), `spend_hourly_by_key` (token spend), `risk_events`
+(severity), `outcomes` (provenance), and Postgres `attribution_edges` (the
+counterfactual delta) — all tenant-scoped. Every result echoes an evidence ledger
+(value/cost/risk drivers, confidence factors, attribution reasons, baseline
+method, limitations).
+
 ## Import (bulk backfill)
 
 `POST /v1/import/events`, **`admin` only** (ADR-045). Backfills historical/offline
