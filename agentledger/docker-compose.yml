@@ -245,6 +245,10 @@ services:
       AGENTLEDGER_CLICKHOUSE_URL: http://clickhouse:8123
       AGENTLEDGER_CLICKHOUSE_DB: agentledger
       AGENTLEDGER_API_ADDR: ":8094"
+      # This is the DEV/demo stack. The image defaults to NODE_ENV=production; override
+      # it here so dev auth is permitted. (In production the API refuses to start if a
+      # dev trust header is enabled — see assertDevTrustHeaderNotInProduction.)
+      NODE_ENV: development
       # Session-JWT signing secret (dev placeholder; prod injects via secret manager).
       AGENTLEDGER_JWT_SECRET: dev_only_change_me_jwt
       # DEV ONLY: trust x-tenant-id header (dev admin principal) alongside real JWT auth.

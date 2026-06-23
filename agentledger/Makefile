@@ -1,4 +1,4 @@
-.PHONY: test test-go test-api test-sdk-typescript e2e load helm-lint build build-api build-shared-types build-sdk-typescript build-dashboard openapi delete-tenant up down lint lint-api lint-sdk-typescript api-install install-hooks security-check audit deps attr-calibration
+.PHONY: test test-go test-api test-sdk-typescript e2e load helm-lint build build-api build-shared-types build-sdk-typescript build-dashboard openapi delete-tenant up down lint lint-api lint-sdk-typescript api-install install-hooks security-check audit deps attr-calibration demo seed-demo reset-demo smoke
 
 GATEWAY_DIR      := services/gateway
 COLLECTOR_DIR    := services/collector
@@ -113,6 +113,40 @@ up:
 
 down:
 	docker compose down
+
+# ── Demo mode (no provider keys required) ────────────────────────────────────
+# Brings up the analytics backend, seeds a demo tenant with synthetic activity,
+# and prints how to start the dashboard. See docs/DEPLOYMENT.md.
+DEMO_TENANT := 00000000-0000-4000-8000-000000000001
+
+demo:
+	docker compose up -d postgres pg-dev-init clickhouse api
+	@echo "==> waiting for the API to become healthy ..."
+	@for i in $$(seq 1 60); do curl -fsS http://localhost:8094/healthz >/dev/null 2>&1 && break; sleep 2; done
+	$(MAKE) seed-demo
+	@echo ""
+	@echo "Demo backend is up and seeded (tenant $(DEMO_TENANT)) — no provider keys needed."
+	@echo "Start the dashboard:"
+	@echo "  (cd $(SHARED_TYPES_DIR) && npm ci && npm run build)"
+	@echo "  (cd $(DASHBOARD_DIR) && npm ci && \\"
+	@echo "     LEDGERAI_API_URL=http://localhost:8094 LEDGERAI_DEV_TENANT_ID=$(DEMO_TENANT) \\"
+	@echo "     LEDGERAI_DEMO_MODE=true npm run dev)"
+	@echo "  → open http://localhost:3000  (a 'Demo mode' banner confirms seeded data)"
+	@echo "  Clear demo data later with: make reset-demo"
+
+# Seed (or re-seed) the demo tenant into ClickHouse + Postgres. Idempotent.
+# Requires the stack to be up (`make demo` does this first).
+seed-demo:
+	LEDGERAI_DEMO_TENANT=$(DEMO_TENANT) bash deploy/demo/seed-demo.sh
+
+# Clear the demo tenant's data (no reseed). `docker compose down -v` is the full reset.
+reset-demo:
+	LEDGERAI_DEMO_TENANT=$(DEMO_TENANT) LEDGERAI_DEMO_RESET=1 bash deploy/demo/seed-demo.sh
+
+# Gateway smoke test: runs the real gateway against a built-in MOCK upstream
+# (no real provider key) and asserts the full inline path. Needs Go + python3.
+smoke:
+	python3 $(GATEWAY_DIR)/smoke_test.py
 
 # ── Lint ─────────────────────────────────────────────────────────────────────
 lint: lint-api lint-sdk-typescript
