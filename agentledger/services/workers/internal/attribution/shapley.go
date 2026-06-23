@@ -1,7 +1,7 @@
 package attribution
 
 import (
-	"crypto/sha1"
+	"crypto/sha1" //nolint:gosec // G505: required for RFC-4122 UUIDv5 derivation below, not used as a security primitive
 	"fmt"
 	"hash/fnv"
 	"math"
@@ -152,7 +152,7 @@ func shapleyMonteCarlo(conf []float64, samples int, seed int64) (phi, ci []float
 	n := len(conf)
 	phi = make([]float64, n)
 	sumSq := make([]float64, n)
-	rng := rand.New(rand.NewSource(seed))
+	rng := rand.New(rand.NewSource(seed)) //nolint:gosec // G404: deterministic seeded RNG for reproducible Monte-Carlo sampling, not security-sensitive
 	perm := make([]int, n)
 	for i := range perm {
 		perm[i] = i
@@ -188,13 +188,13 @@ func shapleyMonteCarlo(conf []float64, samples int, seed int64) (phi, ci []float
 func shapleySeed(tenantID, outcomeID string) int64 {
 	h := fnv.New64a()
 	_, _ = h.Write([]byte(tenantID + "\x00" + outcomeID))
-	return int64(h.Sum64())
+	return int64(h.Sum64()) //nolint:gosec // G115: hash bits intentionally reinterpreted as a deterministic seed; wraparound is harmless
 }
 
 // deterministicCoalitionID maps (tenant, outcome) to a stable UUID so re-runs
 // upsert the same coalition row (and edges' coalition_id always match the FK).
 func deterministicCoalitionID(tenantID, outcomeID string) string {
-	h := sha1.Sum([]byte("attribution-coalition\x00" + tenantID + "\x00" + outcomeID))
+	h := sha1.Sum([]byte("attribution-coalition\x00" + tenantID + "\x00" + outcomeID)) //nolint:gosec // G401: SHA-1 used for RFC-4122 UUIDv5 derivation, not as a security primitive
 	var b [16]byte
 	copy(b[:], h[:16])
 	b[6] = (b[6] & 0x0f) | 0x50 // version 5

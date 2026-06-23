@@ -66,7 +66,7 @@ type EvidenceRow struct {
 
 // AttributionEvent is one row appended to the ClickHouse attribution_events
 // decision log (migration 008) — analytics/backtesting only, never read by ROI.
-type AttributionEvent struct {
+type AttributionEvent struct { //nolint:revive // name kept stable across the attribution package, ADRs (040–044), and the ClickHouse schema
 	TS                   string  `json:"ts"`
 	TenantID             string  `json:"tenant_id"`
 	OutcomeID            string  `json:"outcome_id"`

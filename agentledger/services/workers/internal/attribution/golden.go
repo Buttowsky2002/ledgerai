@@ -55,7 +55,7 @@ func GenerateGolden(seed int64, opts GoldenOptions) []LabeledPair {
 	if opts.Scale < 1 {
 		opts.Scale = 1
 	}
-	rng := rand.New(rand.NewSource(seed))
+	rng := rand.New(rand.NewSource(seed)) //nolint:gosec // G404: deterministic seeded RNG for reproducible synthetic calibration data, not security-sensitive
 	var pairs []LabeledPair
 
 	// Per-scenario base counts (×scale). Positives ≈ negatives overall.

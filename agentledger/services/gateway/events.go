@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -243,7 +244,7 @@ func (s *EventSink) flushHTTP(payload []byte, n int) error {
 		if attempt > 0 {
 			time.Sleep(flushBackoff(attempt))
 		}
-		req, err := http.NewRequest(http.MethodPost, s.cfg.URL, bytes.NewReader(payload))
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, s.cfg.URL, bytes.NewReader(payload))
 		if err != nil {
 			return err // malformed request — not retryable
 		}
@@ -289,7 +290,9 @@ func (s *EventSink) spool(payload []byte) {
 	}
 	name := filepath.Join(s.spoolDir,
 		fmt.Sprintf("events-%d-%d.ndjson", time.Now().UTC().UnixNano(), spoolSeq.Add(1)))
-	f, err := os.OpenFile(name, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	// name is built from the operator-configured spoolDir plus a generated
+	// filename; it is never derived from request/user input.
+	f, err := os.OpenFile(name, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600) //nolint:gosec // G304: path from operator config, not user input
 	if err != nil {
 		slog.Error("event spool open failed", "err", err)
 		return
