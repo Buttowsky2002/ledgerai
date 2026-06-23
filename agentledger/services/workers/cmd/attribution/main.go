@@ -28,7 +28,7 @@ func main() {
 		env("AGENTLEDGER_CLICKHOUSE_URL", "http://localhost:8123"),
 		env("AGENTLEDGER_CLICKHOUSE_DB", "agentledger"),
 		env("AGENTLEDGER_CLICKHOUSE_USER", "default"),
-		os.Getenv("AGENTLEDGER_CLICKHOUSE_PASSWORD"),
+		lookupEnv("AGENTLEDGER_CLICKHOUSE_PASSWORD"),
 	)
 
 	metrics := &attribution.Metrics{}
@@ -45,7 +45,7 @@ func main() {
 	var pg *attribution.PG
 	v2metrics := &attribution.V2Metrics{}
 	if envBool("ATTRIBUTION_ENGINE_V2", false) {
-		dsn := os.Getenv("AGENTLEDGER_PG_DSN")
+		dsn := lookupEnv("AGENTLEDGER_PG_DSN")
 		if dsn == "" {
 			slog.Warn("ATTRIBUTION_ENGINE_V2 set but AGENTLEDGER_PG_DSN empty — v2 disabled")
 		} else {
@@ -161,15 +161,28 @@ func writeMetrics(w http.ResponseWriter, m *attribution.Metrics, v2 *attribution
 	}
 }
 
+// lookupEnv resolves an environment variable, preferring the new LEDGERAI_*
+// name and falling back to the legacy AGENTLEDGER_* alias (deprecated; kept for
+// backwards compatibility — see the README "Renaming to LedgerAI" note).
+func lookupEnv(name string) string {
+	const legacy = "AGENTLEDGER_"
+	if len(name) > len(legacy) && name[:len(legacy)] == legacy {
+		if v := os.Getenv("LEDGERAI_" + name[len(legacy):]); v != "" {
+			return v
+		}
+	}
+	return os.Getenv(name)
+}
+
 func env(key, def string) string {
-	if v := os.Getenv(key); v != "" {
+	if v := lookupEnv(key); v != "" {
 		return v
 	}
 	return def
 }
 
 func envInt(key string, def int64) int64 {
-	if v := os.Getenv(key); v != "" {
+	if v := lookupEnv(key); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
 			return n
 		}
@@ -178,7 +191,7 @@ func envInt(key string, def int64) int64 {
 }
 
 func envFloat(key string, def float64) float64 {
-	if v := os.Getenv(key); v != "" {
+	if v := lookupEnv(key); v != "" {
 		if f, err := strconv.ParseFloat(v, 64); err == nil {
 			return f
 		}
@@ -187,7 +200,7 @@ func envFloat(key string, def float64) float64 {
 }
 
 func envBool(key string, def bool) bool {
-	if v := os.Getenv(key); v != "" {
+	if v := lookupEnv(key); v != "" {
 		if b, err := strconv.ParseBool(v); err == nil {
 			return b
 		}

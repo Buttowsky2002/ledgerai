@@ -31,11 +31,11 @@ func main() {
 		env("AGENTLEDGER_CLICKHOUSE_URL", "http://localhost:8123"),
 		env("AGENTLEDGER_CLICKHOUSE_DB", "agentledger"),
 		env("AGENTLEDGER_CLICKHOUSE_USER", "default"),
-		os.Getenv("AGENTLEDGER_CLICKHOUSE_PASSWORD"),
+		lookupEnv("AGENTLEDGER_CLICKHOUSE_PASSWORD"),
 	)
 
 	metrics := &riskenrich.Metrics{}
-	enabled := os.Getenv("AGENTLEDGER_RISK_ENRICH_ENABLED") == "true"
+	enabled := lookupEnv("AGENTLEDGER_RISK_ENRICH_ENABLED") == "true"
 	apiKey := os.Getenv("ANTHROPIC_API_KEY")
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -133,15 +133,28 @@ func writeMetrics(w http.ResponseWriter, m *riskenrich.Metrics) {
 	}
 }
 
+// lookupEnv resolves an environment variable, preferring the new LEDGERAI_*
+// name and falling back to the legacy AGENTLEDGER_* alias (deprecated; kept for
+// backwards compatibility — see the README "Renaming to LedgerAI" note).
+func lookupEnv(name string) string {
+	const legacy = "AGENTLEDGER_"
+	if len(name) > len(legacy) && name[:len(legacy)] == legacy {
+		if v := os.Getenv("LEDGERAI_" + name[len(legacy):]); v != "" {
+			return v
+		}
+	}
+	return os.Getenv(name)
+}
+
 func env(key, def string) string {
-	if v := os.Getenv(key); v != "" {
+	if v := lookupEnv(key); v != "" {
 		return v
 	}
 	return def
 }
 
 func envInt(key string, def int64) int64 {
-	if v := os.Getenv(key); v != "" {
+	if v := lookupEnv(key); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
 			return n
 		}
@@ -150,7 +163,7 @@ func envInt(key string, def int64) int64 {
 }
 
 func envFloat(key string, def float64) float64 {
-	if v := os.Getenv(key); v != "" {
+	if v := lookupEnv(key); v != "" {
 		if f, err := strconv.ParseFloat(v, 64); err == nil {
 			return f
 		}

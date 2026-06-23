@@ -1,6 +1,6 @@
 # Collector
 
-HTTP ingest service for AgentLedger events — the gateway-agnostic **front door**
+HTTP ingest service for LedgerAI events — the gateway-agnostic **front door**
 (ARCHITECTURE_PIVOT.md, Pillar 1). Validates incoming SDK, gateway, and OTel
 GenAI telemetry against the canonical schema and produces it to the event bus
 (Redpanda topic `events.raw`), keyed by tenant. The collector is stateless,

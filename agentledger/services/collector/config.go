@@ -36,19 +36,32 @@ func LoadConfig() Config {
 		MaxInflight:  int(envInt64("AGENTLEDGER_MAX_INFLIGHT", 8192)),
 
 		OtelTenantAttr:    env("AGENTLEDGER_OTEL_TENANT_ATTR", otelTenantAttrDefault),
-		OtelDefaultTenant: os.Getenv("AGENTLEDGER_OTEL_DEFAULT_TENANT"),
+		OtelDefaultTenant: lookupEnv("AGENTLEDGER_OTEL_DEFAULT_TENANT"),
 	}
 }
 
+// lookupEnv resolves an environment variable, preferring the new LEDGERAI_*
+// name and falling back to the legacy AGENTLEDGER_* alias (deprecated; kept for
+// backwards compatibility — see the README "Renaming to LedgerAI" note).
+func lookupEnv(name string) string {
+	const legacy = "AGENTLEDGER_"
+	if len(name) > len(legacy) && name[:len(legacy)] == legacy {
+		if v := os.Getenv("LEDGERAI_" + name[len(legacy):]); v != "" {
+			return v
+		}
+	}
+	return os.Getenv(name)
+}
+
 func env(key, def string) string {
-	if v := os.Getenv(key); v != "" {
+	if v := lookupEnv(key); v != "" {
 		return v
 	}
 	return def
 }
 
 func envInt64(key string, def int64) int64 {
-	if v := os.Getenv(key); v != "" {
+	if v := lookupEnv(key); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
 			return n
 		}
