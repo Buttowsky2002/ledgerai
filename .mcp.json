@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "go-docs": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "mcp-server-fetch"
+      ],
+      "env": {}
+    }
+  }
+}

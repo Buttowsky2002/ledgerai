@@ -218,8 +218,8 @@ func (g *Gateway) proxyMessages(w http.ResponseWriter, r *http.Request, prov *Pr
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Cache-Control", "no-cache")
 		w.WriteHeader(http.StatusOK)
-		model := translateStreamOpenAIToAnthropic(w, resp.Body, &u)
-		return u, http.StatusOK, model, nil
+		model, serr := translateStreamOpenAIToAnthropic(w, resp.Body, &u)
+		return u, http.StatusOK, model, serr
 	}
 
 	respBody, err := io.ReadAll(resp.Body)
@@ -281,18 +281,26 @@ func translateResponseOpenAIToAnthropic(openaiResp []byte, u Usage, model string
 // tokens in message_start; we therefore emit input_tokens=0 at start and the
 // authoritative full usage in the closing message_delta. The gateway's own
 // cost accounting always uses the captured final usage, so billing is exact.
-func translateStreamOpenAIToAnthropic(w http.ResponseWriter, body io.Reader, u *Usage) string {
+func translateStreamOpenAIToAnthropic(w http.ResponseWriter, body io.Reader, u *Usage) (string, error) {
 	flusher, _ := w.(http.Flusher)
+	var writeErr error
 	emit := func(event string, payload any) {
+		if writeErr != nil {
+			return // a prior client write failed; stop emitting
+		}
 		b, _ := json.Marshal(payload)
-		_, _ = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, b)
+		if _, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, b); err != nil {
+			writeErr = err
+			return
+		}
 		if flusher != nil {
 			flusher.Flush()
 		}
 	}
 
-	scanner := bufio.NewScanner(body)
-	scanner.Buffer(make([]byte, 64*1024), 4<<20)
+	// bufio.Reader (not Scanner) so arbitrarily long SSE lines never trip a
+	// scanner token-size limit.
+	reader := bufio.NewReader(body)
 
 	model, msgID, stopReason := "", "", "end_turn"
 	started := false
@@ -318,51 +326,66 @@ func translateStreamOpenAIToAnthropic(w http.ResponseWriter, body io.Reader, u *
 		})
 	}
 
-	for scanner.Scan() {
-		data, ok := bytes.CutPrefix(scanner.Bytes(), []byte("data: "))
-		if !ok {
-			continue
+	var readErr error
+	for {
+		line, rerr := reader.ReadBytes('\n')
+		done := false
+		if len(line) > 0 {
+			if data, ok := bytes.CutPrefix(bytes.TrimRight(line, "\r\n"), []byte("data: ")); ok {
+				if bytes.Equal(bytes.TrimSpace(data), []byte("[DONE]")) {
+					done = true
+				} else {
+					var chunk struct {
+						ID      string `json:"id"`
+						Model   string `json:"model"`
+						Choices []struct {
+							Delta struct {
+								Content string `json:"content"`
+							} `json:"delta"`
+							FinishReason *string `json:"finish_reason"`
+						} `json:"choices"`
+					}
+					if err := json.Unmarshal(data, &chunk); err == nil {
+						if chunk.Model != "" {
+							model = chunk.Model
+						}
+						if chunk.ID != "" && msgID == "" {
+							msgID = anthropicID(chunk.ID)
+						}
+						parseUsage(data, u) // fold usage from whichever chunk carries it
+						if len(chunk.Choices) > 0 {
+							c := chunk.Choices[0]
+							if c.Delta.Content != "" {
+								ensureStarted()
+								emit("content_block_delta", map[string]any{
+									"type": "content_block_delta", "index": 0,
+									"delta": map[string]any{"type": "text_delta", "text": c.Delta.Content},
+								})
+							}
+							if c.FinishReason != nil && *c.FinishReason != "" {
+								stopReason = mapStopReason(*c.FinishReason)
+							}
+						}
+					}
+				}
+			}
 		}
-		if bytes.Equal(bytes.TrimSpace(data), []byte("[DONE]")) {
+		if done {
 			break
 		}
-		var chunk struct {
-			ID      string `json:"id"`
-			Model   string `json:"model"`
-			Choices []struct {
-				Delta struct {
-					Content string `json:"content"`
-				} `json:"delta"`
-				FinishReason *string `json:"finish_reason"`
-			} `json:"choices"`
-		}
-		if err := json.Unmarshal(data, &chunk); err != nil {
-			continue
-		}
-		if chunk.Model != "" {
-			model = chunk.Model
-		}
-		if chunk.ID != "" && msgID == "" {
-			msgID = anthropicID(chunk.ID)
-		}
-		parseUsage(data, u) // fold usage from whichever chunk carries it
-
-		if len(chunk.Choices) > 0 {
-			c := chunk.Choices[0]
-			if c.Delta.Content != "" {
-				ensureStarted()
-				emit("content_block_delta", map[string]any{
-					"type": "content_block_delta", "index": 0,
-					"delta": map[string]any{"type": "text_delta", "text": c.Delta.Content},
-				})
+		if rerr != nil {
+			if rerr != io.EOF {
+				readErr = rerr
 			}
-			if c.FinishReason != nil && *c.FinishReason != "" {
-				stopReason = mapStopReason(*c.FinishReason)
-			}
+			break
+		}
+		if writeErr != nil {
+			break
 		}
 	}
 
-	// Close out the message even if the completion was empty.
+	// Close out the message even if the completion was empty (no-ops if a client
+	// write already failed).
 	ensureStarted()
 	emit("content_block_stop", map[string]any{"type": "content_block_stop", "index": 0})
 	emit("message_delta", map[string]any{
@@ -371,7 +394,14 @@ func translateStreamOpenAIToAnthropic(w http.ResponseWriter, body io.Reader, u *
 		"usage": anthropicUsageMap(*u),
 	})
 	emit("message_stop", map[string]any{"type": "message_stop"})
-	return model
+
+	if writeErr != nil {
+		return model, fmt.Errorf("%w: %w", errClientWrite, writeErr)
+	}
+	if readErr != nil {
+		return model, fmt.Errorf("%w: %w", errUpstreamRead, readErr)
+	}
+	return model, nil
 }
 
 // ---------- helpers ----------

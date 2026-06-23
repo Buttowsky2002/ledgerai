@@ -12,7 +12,12 @@ in the next task.
 
 ## OpenAPI / typed client
 
-- Swagger UI: **`/docs`** · spec JSON: **`/docs-json`** (both public).
+- Swagger UI: **`/docs`** · spec JSON: **`/docs-json`**. **Environment-gated:**
+  served outside production by default; **not exposed in production** unless
+  `LEDGERAI_EXPOSE_DOCS=true`, in which case production additionally requires a
+  `LEDGERAI_DOCS_TOKEN` and the endpoints are gated behind
+  `Authorization: Bearer <token>` (opting in without a token fails closed — docs
+  stay off). A startup log line reports whether docs are enabled.
 - Published spec: `docs/api/openapi.json` (committed). Regenerate with
   `npm run generate:openapi` (uses Nest preview mode — no DB needed).
 - Typed client + types: `packages/shared-types` (`@agentledger/shared-types`) — generated from
@@ -126,6 +131,82 @@ default last 30 days).
 | `/analytics/unit-economics?outcomeType=` | `v_unit_economics` | Cost per outcome. |
 | `/analytics/agents/:agentId` | `spend_hourly_by_key` + `agent_runs` | Agent detail. |
 
+## Outcome Graph (runs, outcomes, agent ROI)
+
+The cost→outcome evidence chain (ADR-046), all tenant-scoped via the JWT-bound
+`tenant_id` filter (ClickHouse has no RLS); all inputs parameterized.
+
+| Path | Method | Role | Backs |
+|------|--------|------|-------|
+| `/v1/agents/:id/roi?from=&to=` | GET | `viewer` | `v_roi` + `v_agent_daily_unit_economics` — per-agent cost/value/net/cost-per-success/risk-adjusted ROI + daily series. |
+| `/v1/runs/:id` | GET | `viewer` | `agent_runs` + `outcomes` + `agent_tool_calls` — single run with its outcomes and tool calls (the run node of the evidence chain); 404 if absent. |
+| `/v1/outcomes?outcomeType=&source=&agentId=&minConfidence=&from=&to=` | GET | `viewer` | `outcomes` ⋈ `agent_runs` — outcomes with their run's AI cost. |
+| `/v1/outcomes` | POST | `analyst` | Creates one outcome directly in ClickHouse (`source='api'`), audited. Body: `{ outcomeType, valueUsd, runId?, userId?, teamId?, source?, confidence?, occurredAt?, completionStatus?, qualityScore? }`. `tenant_id` is stamped from the principal; no content field (rules 2/3). |
+
+The per-agent daily rollup view `v_agent_daily_unit_economics` (ClickHouse migration
+010) aggregates `v_roi` to `(tenant_id, agent_id, day)`: `cost_usd`, `outcomes_count`,
+`value_usd`, `net_value_usd`, `cost_per_success`, `attribution_confidence_avg`,
+`risk_adjusted_roi`.
+
+## LARI — Risk-Adjusted Incremental ROI
+
+`GET /v1/agents/:id/lari?from=&to=`, `viewer`+ (ADR-047). An explainable,
+**deterministic** per-agent ROI: it nets incrementality, fully-loaded cost,
+expected risk loss, and an evidence-uncertainty reserve, scores confidence, and
+recommends an action — with an audit ledger behind every figure.
+
+```
+LARI = ( AttributedIncrementalValue
+         − FullyLoadedAgentCost
+         − ExpectedRiskLoss
+         − UncertaintyReserve )
+       / max(FullyLoadedAgentCost, epsilon)
+```
+
+- **AttributedIncrementalValue** = Σ grossValue × attributionConfidence × incrementalityFactor (both ∈ [0,1], so manual/low-confidence outcomes are discounted).
+- **FullyLoadedAgentCost** = token + human review + infra + amortized build.
+- **ExpectedRiskLoss** = valueAtRisk × incidentProbability (more risk ⇒ lower ROI).
+- **UncertaintyReserve** = positiveValue × (1 − confidence/100) × factor (weak evidence ⇒ lower ROI).
+- **epsilon** floors the denominator so zero cost never divides by zero.
+
+**ConfidenceScore** (0–100) = 100 × (0.25·evidenceQuality + 0.20·attributionStrength + 0.20·causalStrength + 0.15·costCompleteness + 0.10·outcomeVerification + 0.10·recency).
+
+**Recommendation** ∈ `scale` · `maintain` · `optimize` · `improve_evidence` · `require_approval` · `investigate` · `pause` · `retire` (critical risk gates first → require_approval / pause; then negative ROI → retire / investigate; then low confidence → improve_evidence; then scale / optimize / maintain).
+
+The engine (`src/lari/`) is pure and framework-free — **no LLM ever decides a
+financial figure, and no raw prompt/response content is required** (rules 2/7/8).
+The endpoint's `LariService` assembles the input from `v_roi` (value + loaded
+costs + confidence), `spend_hourly_by_key` (token spend), `risk_events`
+(severity), `outcomes` (provenance), and Postgres `attribution_edges` (the
+counterfactual delta) — all tenant-scoped. Every result echoes an evidence ledger
+(value/cost/risk drivers, confidence factors, attribution reasons, baseline
+method, limitations).
+
+## Import (bulk backfill)
+
+`POST /v1/import/events`, **`admin` only** (ADR-045). Backfills historical/offline
+activity into the canonical ClickHouse tables (`llm_calls` / `outcomes` /
+`agent_tool_calls` / `risk_events`). Body: `{ "events": [ <row>, … ], "dryRun"?: bool }`
+(batch capped at 1000 rows; chunk larger imports). Each flat row may carry usage,
+an outcome, a tool call, and/or a risk signal — every present signal becomes its
+own event. Per **rule 2** rows carry no content, only cost/usage/attribution
+dimensions.
+
+- **Idempotent:** a row with an `idempotency_key` is recorded in the tenant-scoped
+  `import_idempotency` table; re-importing a seen key is **skipped** (no double
+  counting). Keys repeated within a batch collapse to one. Rows without a key are
+  always imported.
+- **All-or-nothing:** one invalid row → `400` with the offending line numbers;
+  nothing is written.
+- **Tenant-stamped:** `tenant_id` comes from the JWT principal, never request input.
+- `dryRun: true` validates and reports the plan (`{received, imported, skipped,
+  events, byTable}`) without writing. Each applied import writes an `audit_log` row.
+
+Supported row fields: `idempotency_key`, `timestamp`, `team_id`, `user_id`,
+`agent_id`, `run_id`, `provider`, `model`, `input_tokens`, `output_tokens`,
+`cost_usd`, `tool_name`, `outcome_type`, `outcome_value_usd`,
+`attribution_confidence`, `risk_severity` (`low|medium|high|critical`).
+
 ## Environment variables
 
 | Variable | Default | Purpose |
@@ -141,6 +222,8 @@ default last 30 days).
 | `AGENTLEDGER_OIDC_GOOGLE_CLIENT_ID` / `_CLIENT_SECRET` | _(unset)_ | Google OIDC client; unset → provider unavailable. |
 | `AGENTLEDGER_OIDC_MICROSOFT_CLIENT_ID` / `_CLIENT_SECRET` | _(unset)_ | Microsoft OIDC client; unset → provider unavailable. |
 | `AGENTLEDGER_DEV_TRUST_HEADER` | _(unset)_ | **Dev only.** When `true`, an `x-tenant-id` header (no Bearer) binds a dev `admin` principal. |
+| `LEDGERAI_EXPOSE_DOCS` | _(unset)_ | Expose `/docs` + `/docs-json`. Auto-on outside production; in production set `true` to opt in (then a token is required). |
+| `LEDGERAI_DOCS_TOKEN` | _(unset)_ | Bearer token required to view docs **in production**. Without it, a production opt-in fails closed (docs stay off). |
 
 ## Test
 

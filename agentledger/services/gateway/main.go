@@ -19,11 +19,26 @@ import (
 	"time"
 )
 
+// lookupEnv resolves an environment variable, preferring the new LEDGERAI_*
+// name and falling back to the legacy AGENTLEDGER_* alias (deprecated; kept for
+// backwards compatibility — see the README "Renaming to LedgerAI" note). Used
+// only for the gateway's own config env vars; operator-named env vars (Redis
+// password, provider API keys) are read by their exact configured name.
+func lookupEnv(name string) string {
+	const legacy = "AGENTLEDGER_"
+	if len(name) > len(legacy) && name[:len(legacy)] == legacy {
+		if v := os.Getenv("LEDGERAI_" + name[len(legacy):]); v != "" {
+			return v
+		}
+	}
+	return os.Getenv(name)
+}
+
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
-	cfgPath := os.Getenv("AGENTLEDGER_CONFIG")
+	cfgPath := lookupEnv("AGENTLEDGER_CONFIG")
 	if cfgPath == "" {
 		cfgPath = "config.json"
 	}
@@ -39,6 +54,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	budgetCfg := loadBudgetConfig()
+	slog.Info("budget config",
+		"default_reserve_usd", budgetCfg.defaultReserveUSD,
+		"fail_mode", failModeLabel(budgetCfg.failClosed))
+
 	var budgets BudgetStore
 	if cfg.Redis.Addr != "" {
 		password := ""
@@ -48,7 +68,7 @@ func main() {
 		rb, err := NewRedisBudgetStore(cfg.Redis.Addr, password, cfg.Redis.DB, cfg.VirtualKeys,
 			func(key, month string, usd float64) {
 				slog.Info("budget.drain", "key", key, "month", month, "spend_usd", usd)
-			})
+			}, budgetCfg.failClosed)
 		if err != nil {
 			slog.Error("redis budget store init failed", "err", err)
 			os.Exit(1)
@@ -61,16 +81,25 @@ func main() {
 	}
 	defer func() { _ = budgets.Close() }()
 
+	// Event sink: optional disk spool + fail mode come from the environment
+	// (secrets-free config); both default to the safe, observe-only behavior.
+	if v := lookupEnv("AGENTLEDGER_EVENT_SPOOL_DIR"); v != "" {
+		cfg.Events.SpoolDir = v
+	}
+	if v := lookupEnv("AGENTLEDGER_EVENT_FAIL_MODE"); v != "" {
+		cfg.Events.FailMode = v
+	}
 	sink := NewEventSink(cfg.Events)
 	defer sink.Close()
 
 	gw := newGateway(cfg, priceBook, budgets, sink)
+	gw.budgetCfg = budgetCfg
 
 	// Optional Postgres config hot-reload. When AGENTLEDGER_PG_DSN is set the
 	// gateway loads virtual_keys, DLP policies, and the per-agent tool/MCP
 	// allowlist from Postgres and refreshes them every 30 s. On failure it
 	// serves the last-known-good snapshot.
-	if pgDSN := os.Getenv("AGENTLEDGER_PG_DSN"); pgDSN != "" {
+	if pgDSN := lookupEnv("AGENTLEDGER_PG_DSN"); pgDSN != "" {
 		cs, err := NewPGConfigStore(pgDSN, cfg)
 		if err != nil {
 			slog.Error("pg config store init failed", "err", err)
@@ -90,6 +119,11 @@ func main() {
 		slog.Info("config hot-reload enabled", "interval", "30s")
 	}
 
+	// Ops endpoints (/v1/usage, /metrics) expose spend/usage internals — gate them
+	// behind a bearer token. Secret comes from the environment, never config files.
+	gw.ops = loadOpsAuthConfig()
+	logOpsAuthStartup(gw.ops)
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/chat/completions", gw.handleChatCompletions)
 	mux.HandleFunc("POST /v1/messages", gw.handleMessages) // Anthropic Messages API
@@ -97,9 +131,10 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
-	mux.HandleFunc("GET /v1/usage", gw.handleUsage) // debug/ops endpoint
+	// Ops/debug endpoints require the ops token (see guardOps).
+	mux.HandleFunc("GET /v1/usage", gw.guardOps(false, gw.handleUsage))
 	// Prometheus policy-overhead histogram + request counters.
-	mux.HandleFunc("GET /metrics", gw.handleMetrics)
+	mux.HandleFunc("GET /metrics", gw.guardOps(true, gw.handleMetrics))
 
 	srv := &http.Server{
 		Addr:              cfg.ListenAddr,
@@ -124,16 +159,28 @@ func main() {
 	slog.Info("gateway stopped")
 }
 
+// failModeLabel renders the budget fail mode for logging.
+func failModeLabel(failClosed bool) string {
+	if failClosed {
+		return "closed"
+	}
+	return "open"
+}
+
 // handleUsage exposes in-memory budget counters for ops/debug.
 func (g *Gateway) handleUsage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(g.budgets.Snapshot())
 }
 
-// handleMetrics renders the Prometheus policy-overhead histogram + request counters.
+// handleMetrics renders the Prometheus policy-overhead histogram + request
+// counters, plus event-sink reliability counters.
 func (g *Gateway) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 	g.metrics.WritePrometheus(w)
+	if g.sink != nil {
+		g.sink.WriteMetrics(w)
+	}
 }
 
 // withRequestID assigns a request ID used as call_id in emitted events.

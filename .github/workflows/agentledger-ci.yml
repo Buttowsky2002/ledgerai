@@ -143,8 +143,10 @@ jobs:
       - run: npm run lint
       - run: npm run build
       - run: npm test
-      # Advisory only: pre-existing transitive advisories (NestJS deps). Flip to
-      # blocking after a dependency-cleanup pass. Dependabot tracks upgrades.
+      # TODO(security): make this a BLOCKING gate — remove `continue-on-error: true`
+      # once the pre-existing NestJS transitive advisories are cleared. Tracked by a
+      # "make npm audit blocking" issue; Dependabot opens the upgrade PRs
+      # (see .github/dependabot.yml). Advisory-only until then.
       - name: Dependency audit
         continue-on-error: true
         run: npm audit --audit-level=high
@@ -170,7 +172,8 @@ jobs:
           npm ci
           npm run lint
           npm run build
-      # Advisory only (see node-api). Next.js transitive advisories need a major bump.
+      # TODO(security): make blocking (drop `continue-on-error`) once the Next.js
+      # transitive advisories are resolved (needs a major bump). See node-api.
       - name: Dependency audit
         continue-on-error: true
         working-directory: agentledger/apps/dashboard
@@ -195,7 +198,8 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
-      # Advisory only (see node-api); the SDK ships zero runtime deps.
+      # TODO(security): the SDK ships zero runtime deps, so this can become blocking
+      # (drop `continue-on-error`) after a devDependency audit pass. See node-api.
       - name: Dependency audit
         continue-on-error: true
         run: npm audit --audit-level=high

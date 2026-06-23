@@ -12,7 +12,7 @@ type gatewaySnapshot struct {
 }
 
 // newSnapshotFromCfg builds a snapshot from file-based Config where
-// VirtualKey.Key holds plaintext bearer tokens.
+// VirtualKey.KeyPlaintext holds the bearer token (hashed + cleared on load).
 func newSnapshotFromCfg(cfg *Config, pb *PriceBook) *gatewaySnapshot {
 	return &gatewaySnapshot{
 		cfg:    cfg,
@@ -23,7 +23,7 @@ func newSnapshotFromCfg(cfg *Config, pb *PriceBook) *gatewaySnapshot {
 	}
 }
 
-// newSnapshotFromHashed builds a snapshot where VirtualKey.Key already holds
+// newSnapshotFromHashed builds a snapshot where VirtualKey.KeyHash already holds
 // the SHA-256 hex hash of the bearer token (Postgres virtual_keys.key_hash).
 func newSnapshotFromHashed(cfg *Config, pb *PriceBook) *gatewaySnapshot {
 	return &gatewaySnapshot{

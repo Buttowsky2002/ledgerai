@@ -1,7 +1,13 @@
 version: 2
 updates:
+  # Go modules — one go.mod per service under agentledger/services/*.
   - package-ecosystem: gomod
-    directory: "/"
+    directories:
+      - "/agentledger/services/collector"
+      - "/agentledger/services/connectors"
+      - "/agentledger/services/gateway"
+      - "/agentledger/services/ingest/adapters"
+      - "/agentledger/services/workers"
     schedule:
       interval: weekly
       day: monday
@@ -13,8 +19,13 @@ updates:
     commit-message:
       prefix: "chore(deps)"
 
+  # Node packages — control-plane API, dashboard, and the published TS packages.
   - package-ecosystem: npm
-    directory: "/api"
+    directories:
+      - "/agentledger/services/api"
+      - "/agentledger/apps/dashboard"
+      - "/agentledger/packages/shared-types"
+      - "/agentledger/packages/sdk-typescript"
     schedule:
       interval: weekly
       day: monday
@@ -26,44 +37,27 @@ updates:
     commit-message:
       prefix: "chore(deps)"
 
-  - package-ecosystem: npm
-    directory: "/apps/dashboard"
-    schedule:
-      interval: weekly
-      day: monday
-      time: "08:00"
-    open-pull-requests-limit: 5
-    labels:
-      - dependencies
-      - frontend
-    commit-message:
-      prefix: "chore(deps)"
-
-  - package-ecosystem: pip
-    directory: "/workers"
-    schedule:
-      interval: weekly
-      day: monday
-      time: "08:00"
-    open-pull-requests-limit: 5
-    labels:
-      - dependencies
-      - python
-    commit-message:
-      prefix: "chore(deps)"
-
+  # Container base images — one Dockerfile per service.
   - package-ecosystem: docker
-    directory: "/"
+    directories:
+      - "/agentledger/services/api"
+      - "/agentledger/services/collector"
+      - "/agentledger/services/connectors"
+      - "/agentledger/services/gateway"
+      - "/agentledger/services/ingest/adapters"
+      - "/agentledger/services/workers"
     schedule:
       interval: weekly
       day: monday
       time: "08:00"
+    open-pull-requests-limit: 5
     labels:
       - dependencies
       - docker
     commit-message:
       prefix: "chore(deps)"
 
+  # GitHub Actions used by the workflows.
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
@@ -75,3 +69,7 @@ updates:
       - github-actions
     commit-message:
       prefix: "chore(deps)"
+
+  # NOTE: no `pip` ecosystem. The only Python package (packages/sdk-python) is
+  # stdlib-only — it has no requirements.txt / pyproject dependency file to track.
+  # Re-add a pip entry pointing at that file if the SDK ever takes a dependency.

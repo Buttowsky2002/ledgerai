@@ -32,11 +32,11 @@ func main() {
 		env("AGENTLEDGER_CLICKHOUSE_URL", "http://localhost:8123"),
 		env("AGENTLEDGER_CLICKHOUSE_DB", "agentledger"),
 		env("AGENTLEDGER_CLICKHOUSE_USER", "default"),
-		os.Getenv("AGENTLEDGER_CLICKHOUSE_PASSWORD"),
+		lookupEnv("AGENTLEDGER_CLICKHOUSE_PASSWORD"),
 	)
 
 	// Webhook URL by env-var NAME only (rule 1); unset → alerting disabled.
-	slack := slackalert.NewSlackNotifier(os.Getenv("AGENTLEDGER_SLACK_WEBHOOK_URL"))
+	slack := slackalert.NewSlackNotifier(lookupEnv("AGENTLEDGER_SLACK_WEBHOOK_URL"))
 	if !slack.Enabled() {
 		slog.Warn("AGENTLEDGER_SLACK_WEBHOOK_URL unset — alerting disabled (no-op passes)")
 	}
@@ -125,15 +125,28 @@ func writeMetrics(w http.ResponseWriter, m *slackalert.Metrics) {
 	}
 }
 
+// lookupEnv resolves an environment variable, preferring the new LEDGERAI_*
+// name and falling back to the legacy AGENTLEDGER_* alias (deprecated; kept for
+// backwards compatibility — see the README "Renaming to LedgerAI" note).
+func lookupEnv(name string) string {
+	const legacy = "AGENTLEDGER_"
+	if len(name) > len(legacy) && name[:len(legacy)] == legacy {
+		if v := os.Getenv("LEDGERAI_" + name[len(legacy):]); v != "" {
+			return v
+		}
+	}
+	return os.Getenv(name)
+}
+
 func env(key, def string) string {
-	if v := os.Getenv(key); v != "" {
+	if v := lookupEnv(key); v != "" {
 		return v
 	}
 	return def
 }
 
 func envInt(key string, def int64) int64 {
-	if v := os.Getenv(key); v != "" {
+	if v := lookupEnv(key); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
 			return n
 		}

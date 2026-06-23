@@ -605,6 +605,84 @@
         ]
       }
     },
+    "/v1/agents/{id}/roi": {
+      "get": {
+        "operationId": "AgentsController_roi",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Agents"
+        ]
+      }
+    },
+    "/v1/agents/{id}/lari": {
+      "get": {
+        "operationId": "AgentsController_lariRoi",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Agents"
+        ]
+      }
+    },
     "/v1/agents/{id}": {
       "get": {
         "operationId": "AgentsController_get",
@@ -2631,6 +2709,263 @@
           "Analytics"
         ]
       }
+    },
+    "/v1/attribution/edges": {
+      "get": {
+        "operationId": "AttributionController_edges",
+        "parameters": [
+          {
+            "name": "outcomeId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agentId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "minConfidence",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 0,
+              "maximum": 1,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Attribution"
+        ]
+      }
+    },
+    "/v1/attribution/coalitions/{coalitionId}": {
+      "get": {
+        "operationId": "AttributionController_coalition",
+        "parameters": [
+          {
+            "name": "coalitionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Attribution"
+        ]
+      }
+    },
+    "/v1/attribution/baselines": {
+      "get": {
+        "operationId": "AttributionController_baselines",
+        "parameters": [
+          {
+            "name": "scope",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "identity",
+                "team"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "subjectId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "outcomeType",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Attribution"
+        ]
+      }
+    },
+    "/v1/runs/{id}": {
+      "get": {
+        "operationId": "RunsController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Runs"
+        ]
+      }
+    },
+    "/v1/outcomes": {
+      "get": {
+        "operationId": "OutcomesController_list",
+        "parameters": [
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "outcomeType",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "source",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agentId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "minConfidence",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 0,
+              "maximum": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Outcomes"
+        ]
+      },
+      "post": {
+        "operationId": "OutcomesController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateOutcomeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Outcomes"
+        ]
+      }
+    },
+    "/v1/import/events": {
+      "post": {
+        "operationId": "ImportController_importEvents",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportEventsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Import"
+        ]
+      }
     }
   },
   "info": {
@@ -3621,6 +3956,81 @@
             "type": "object"
           }
         }
+      },
+      "CreateOutcomeDto": {
+        "type": "object",
+        "properties": {
+          "outcomeType": {
+            "type": "string"
+          },
+          "valueUsd": {
+            "type": "number",
+            "description": "Business value of the outcome in USD (>= 0).",
+            "minimum": 0
+          },
+          "runId": {
+            "type": "string",
+            "description": "The agent run that produced this outcome (the cost side of the chain)."
+          },
+          "userId": {
+            "type": "string"
+          },
+          "teamId": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "description": "Business source system; defaults to 'api' for manual/API-created outcomes."
+          },
+          "confidence": {
+            "type": "number",
+            "description": "Attribution confidence in [0,1]; defaults to 1.0 (operator-asserted).",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "occurredAt": {
+            "type": "string",
+            "description": "ISO timestamp the outcome occurred; defaults to now."
+          },
+          "completionStatus": {
+            "type": "string",
+            "enum": [
+              "completed",
+              "partial",
+              "failed"
+            ]
+          },
+          "qualityScore": {
+            "type": "number",
+            "description": "Optional quality score in [0,1].",
+            "minimum": 0,
+            "maximum": 1
+          }
+        },
+        "required": [
+          "outcomeType",
+          "valueUsd"
+        ]
+      },
+      "ImportEventsDto": {
+        "type": "object",
+        "properties": {
+          "events": {
+            "minItems": 1,
+            "maxItems": 1000,
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "dryRun": {
+            "type": "boolean",
+            "description": "When true, validate + report what WOULD be imported without writing."
+          }
+        },
+        "required": [
+          "events"
+        ]
       }
     }
   },

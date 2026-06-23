@@ -38,15 +38,50 @@ type OutcomeRow struct {
 	CompletionStatus      string  `json:"completion_status"`
 }
 
-// RunRow carries the agent_runs fields used for correlation.
+// RunRow carries the agent_runs fields used for correlation. AgentID and
+// TotalCostUSD are read for the attribution engine v2 edges (the agent the edge
+// attributes to, and its AI cost); the V1 matcher ignores them.
 type RunRow struct {
-	RunID     string `json:"run_id"`
-	TenantID  string `json:"tenant_id"`
-	UserID    string `json:"user_id"`
-	EndedAt   string `json:"ended_at"` // YYYY-MM-DD HH:MM:SS.000 (UTC)
-	Status    string `json:"status"`
-	Objective string `json:"objective"`
-	OutcomeID string `json:"outcome_id"` // SDK-asserted direct link, if any
+	RunID        string  `json:"run_id"`
+	TenantID     string  `json:"tenant_id"`
+	AgentID      string  `json:"agent_id"`
+	UserID       string  `json:"user_id"`
+	EndedAt      string  `json:"ended_at"` // YYYY-MM-DD HH:MM:SS.000 (UTC)
+	Status       string  `json:"status"`
+	Objective    string  `json:"objective"`
+	OutcomeID    string  `json:"outcome_id"`     // SDK-asserted direct link, if any
+	TotalCostUSD float64 `json:"total_cost_usd"` // AI cost of the run (v2 cost_attributed)
+}
+
+// EvidenceRow is one deterministic-link evidence record (outcome_evidence,
+// migration 009): a connector-discovered hard link that may name a concrete run.
+type EvidenceRow struct {
+	TenantID     string `json:"tenant_id"`
+	OutcomeID    string `json:"outcome_id"`
+	EvidenceType string `json:"evidence_type"`
+	RunID        string `json:"run_id"`
+	AgentID      string `json:"agent_id"`
+	Ref          string `json:"evidence_ref"`
+}
+
+// AttributionEvent is one row appended to the ClickHouse attribution_events
+// decision log (migration 008) — analytics/backtesting only, never read by ROI.
+type AttributionEvent struct { //nolint:revive // name kept stable across the attribution package, ADRs (040–044), and the ClickHouse schema
+	TS                   string  `json:"ts"`
+	TenantID             string  `json:"tenant_id"`
+	OutcomeID            string  `json:"outcome_id"`
+	OutcomeType          string  `json:"outcome_type"`
+	RunID                string  `json:"run_id"`
+	AgentID              string  `json:"agent_id"`
+	CoalitionID          string  `json:"coalition_id"`
+	Method               string  `json:"attribution_method"`
+	ConfidenceRaw        float64 `json:"confidence_raw"`
+	ConfidenceCalibrated float64 `json:"confidence_calibrated"`
+	CounterfactualDelta  float64 `json:"counterfactual_delta"`
+	ValueAttributed      float64 `json:"value_attributed"`
+	CostAttributed       float64 `json:"cost_attributed"`
+	ModelVersion         string  `json:"model_version"`
+	EngineVersion        string  `json:"engine_version"`
 }
 
 // CHClient reads outcomes + runs and writes attributed outcomes. Abstracted so
@@ -104,8 +139,8 @@ func (h *HTTPClient) FetchOutcomes(ctx context.Context, since string) ([]Outcome
 func (h *HTTPClient) FetchRuns(ctx context.Context, since string) ([]RunRow, error) {
 	// Subquery so the WHERE sees the real ended_at column, not the toString alias
 	// (see FetchOutcomes).
-	q := fmt.Sprintf(`SELECT run_id, tenant_id, user_id, toString(ended_at) AS ended_at,
-		status, objective, outcome_id
+	q := fmt.Sprintf(`SELECT run_id, tenant_id, agent_id, user_id, toString(ended_at) AS ended_at,
+		status, objective, outcome_id, total_cost_usd
 		FROM (SELECT * FROM %s.agent_runs FINAL WHERE ended_at >= {since:DateTime64(3)} AND status = 'completed')
 		FORMAT JSONEachRow`, h.db)
 	var rows []RunRow
@@ -113,6 +148,57 @@ func (h *HTTPClient) FetchRuns(ctx context.Context, since string) ([]RunRow, err
 		return nil, err
 	}
 	return rows, nil
+}
+
+// FetchEvidence reads deterministic-link evidence (outcome_evidence FINAL) since
+// the given timestamp — feeds the deterministic resolver (sub-phase 3.1).
+func (h *HTTPClient) FetchEvidence(ctx context.Context, since string) ([]EvidenceRow, error) {
+	q := fmt.Sprintf(`SELECT tenant_id, outcome_id, evidence_type, run_id, agent_id, evidence_ref
+		FROM (SELECT * FROM %s.outcome_evidence FINAL WHERE ts >= {since:DateTime64(3)})
+		FORMAT JSONEachRow`, h.db)
+	var rows []EvidenceRow
+	if err := h.query(ctx, q, since, &rows); err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
+// WriteAttributionEvents appends decision rows to the attribution_events log
+// (append-only MergeTree; one row per decision, feeds the daily MV).
+func (h *HTTPClient) WriteAttributionEvents(ctx context.Context, events []AttributionEvent) error {
+	if len(events) == 0 {
+		return nil
+	}
+	var body bytes.Buffer
+	enc := json.NewEncoder(&body)
+	for _, e := range events {
+		if err := enc.Encode(e); err != nil {
+			return err
+		}
+	}
+	params := url.Values{}
+	params.Set("query", fmt.Sprintf("INSERT INTO %s.attribution_events FORMAT JSONEachRow", h.db))
+	params.Set("input_format_skip_unknown_fields", "1")
+	params.Set("date_time_input_format", "best_effort")
+	endpoint := h.baseURL + "/?" + params.Encode()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, &body)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/x-ndjson")
+	h.auth(req)
+	resp, err := h.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("clickhouse insert events: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return fmt.Errorf("clickhouse insert events status %d: %s", resp.StatusCode, bytes.TrimSpace(msg))
+	}
+	_, _ = io.Copy(io.Discard, resp.Body)
+	return nil
 }
 
 // query issues a SELECT with a single {since:DateTime64(3)} bound parameter and
@@ -221,6 +307,14 @@ func decodeJSONEachRow(body []byte, out any) error {
 			var r RunRow
 			if err := json.Unmarshal(line, &r); err != nil {
 				return fmt.Errorf("decode run row: %w", err)
+			}
+			*dst = append(*dst, r)
+		}
+	case *[]EvidenceRow:
+		for _, line := range splitNonEmpty(body) {
+			var r EvidenceRow
+			if err := json.Unmarshal(line, &r); err != nil {
+				return fmt.Errorf("decode evidence row: %w", err)
 			}
 			*dst = append(*dst, r)
 		}

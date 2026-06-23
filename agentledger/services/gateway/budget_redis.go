@@ -32,6 +32,9 @@ type RedisBudgetStore struct {
 	rdb    *redis.Client
 	limits map[string]*VirtualKey
 
+	// failClosed: on a Redis error during Reserve, reject (true) or allow (false).
+	failClosed bool
+
 	drainFn   SpendDrainFn
 	stopCh    chan struct{}
 	drainDone sync.WaitGroup
@@ -71,6 +74,47 @@ redis.call('EXPIRE', key, window + 10)
 return 1
 `)
 
+// reserveScript atomically checks the monthly budget and, if not already at/over
+// the cap, holds the estimate via INCRBYFLOAT — so concurrent reservers across
+// replicas can exceed the cap by at most one hold. Returns 1 if reserved, 0 if
+// rejected (already at/over budget).
+//
+// KEYS[1] — budget key (al:budget:{keyID}:{YYYY-MM})
+// ARGV[1] — monthly budget USD (0 = unlimited)
+// ARGV[2] — estimated USD to hold
+// ARGV[3] — key TTL in seconds (set only if the key has none)
+var reserveScript = redis.NewScript(`
+local bkey    = KEYS[1]
+local monthly = tonumber(ARGV[1])
+local est     = tonumber(ARGV[2])
+local ttl     = tonumber(ARGV[3])
+
+local cur = tonumber(redis.call('GET', bkey) or '0')
+if monthly > 0 and cur >= monthly then
+  return 0
+end
+redis.call('INCRBYFLOAT', bkey, est)
+if tonumber(redis.call('TTL', bkey)) < 0 then
+  redis.call('EXPIRE', bkey, ttl)
+end
+return 1
+`)
+
+// releaseScript returns a held amount via INCRBYFLOAT(-amt), clamping the key at
+// zero so a release can never drive month-to-date spend negative.
+//
+// KEYS[1] — budget key
+// ARGV[1] — amount to return
+var releaseScript = redis.NewScript(`
+local bkey = KEYS[1]
+local amt  = tonumber(ARGV[1])
+local nv = tonumber(redis.call('INCRBYFLOAT', bkey, -amt))
+if nv < 0 then
+  redis.call('SET', bkey, '0')
+end
+return 1
+`)
+
 // NewRedisBudgetStore dials Redis and returns a ready RedisBudgetStore.
 //
 //   - addr        — "host:port"
@@ -79,7 +123,8 @@ return 1
 //   - db          — Redis DB index (0 = default)
 //   - keys        — virtual keys for limit enforcement
 //   - drainFn     — called every 5 min with MTD spend; nil disables draining
-func NewRedisBudgetStore(addr, password string, db int, keys []VirtualKey, drainFn SpendDrainFn) (*RedisBudgetStore, error) {
+//   - failClosed  — on a Redis error during Reserve, reject (true) or allow (false)
+func NewRedisBudgetStore(addr, password string, db int, keys []VirtualKey, drainFn SpendDrainFn, failClosed bool) (*RedisBudgetStore, error) {
 	rdb := redis.NewClient(&redis.Options{
 		Addr:         addr,
 		Password:     password,
@@ -100,14 +145,15 @@ func NewRedisBudgetStore(addr, password string, db int, keys []VirtualKey, drain
 
 	limits := make(map[string]*VirtualKey, len(keys))
 	for i := range keys {
-		limits[keys[i].Key] = &keys[i]
+		limits[keys[i].KeyID] = &keys[i]
 	}
 
 	s := &RedisBudgetStore{
-		rdb:     rdb,
-		limits:  limits,
-		drainFn: drainFn,
-		stopCh:  make(chan struct{}),
+		rdb:        rdb,
+		limits:     limits,
+		failClosed: failClosed,
+		drainFn:    drainFn,
+		stopCh:     make(chan struct{}),
 	}
 
 	if drainFn != nil {
@@ -118,65 +164,115 @@ func NewRedisBudgetStore(addr, password string, db int, keys []VirtualKey, drain
 	return s, nil
 }
 
-// CheckAndCount enforces monthly budget and per-minute rate limit pre-flight.
+// Reserve atomically checks the monthly budget + rate limit and holds the
+// estimate. Internal Redis keys use the non-secret KeyID — never the plaintext
+// token — so neither keys nor these log lines can leak a bearer.
 //
-// Budget check is a single GET (no atomic increment — AddSpend handles that
-// post-flight once cost is known). Rate-limit check-and-record uses a Lua
-// script for atomicity. Both operations fail-open: a Redis error yields
-// (true, "") with a slog.Warn — the gateway keeps serving and the provider
-// billing reconciliation backstops cost accuracy.
-func (s *RedisBudgetStore) CheckAndCount(vk *VirtualKey) (bool, string) {
+// On a Redis error the configured fail mode applies: fail-open returns a no-op
+// reservation (the gateway keeps serving; provider-billing reconciliation
+// backstops accuracy), fail-closed rejects with "budget_unavailable".
+func (s *RedisBudgetStore) Reserve(vk *VirtualKey, est float64) (*BudgetReservation, bool, string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 
-	// 1. Monthly budget check.
-	if vk.MonthlyBudget > 0 {
-		month := time.Now().UTC().Format("2006-01")
-		val, err := s.rdb.Get(ctx, budgetKey(vk.Key, month)).Float64()
-		if err != nil && err != redis.Nil {
-			slog.Warn("budget check redis error — failing open", "key", vk.Key, "err", err)
-		} else if val >= vk.MonthlyBudget {
-			return false, "monthly_budget_exceeded"
+	if est < 0 {
+		est = 0
+	}
+	now := time.Now().UTC()
+	month := now.Format("2006-01")
+
+	// 1. Atomic budget check + hold (only when there is a cap to enforce or an
+	// estimate to hold).
+	held := false
+	if vk.MonthlyBudget > 0 || est > 0 {
+		ttl := int(monthKeyTTL(now).Seconds())
+		res, err := reserveScript.Run(ctx, s.rdb, []string{budgetKey(vk.KeyID, month)},
+			vk.MonthlyBudget, est, ttl).Int()
+		if err != nil {
+			if s.failClosed {
+				slog.Warn("budget reserve redis error — failing closed", "key_id", vk.KeyID, "err", err)
+				return nil, false, "budget_unavailable"
+			}
+			slog.Warn("budget reserve redis error — failing open", "key_id", vk.KeyID, "err", err)
+			return &BudgetReservation{keyID: vk.KeyID, month: month, amount: est, noop: true}, true, ""
 		}
+		if res == 0 {
+			return nil, false, "monthly_budget_exceeded"
+		}
+		held = true
 	}
 
 	// 2. Rate-limit check-and-record (atomic Lua script, server-side time).
 	if vk.RateLimitRPM > 0 {
-		member := strconv.FormatInt(time.Now().UnixNano(), 10) + "." +
+		member := strconv.FormatInt(now.UnixNano(), 10) + "." +
 			strconv.FormatInt(rateSeq.Add(1), 10)
 
 		res, err := rateLimitScript.Run(ctx, s.rdb,
-			[]string{rateKey(vk.Key)},
+			[]string{rateKey(vk.KeyID)},
 			60.0, vk.RateLimitRPM, member,
 		).Int()
 		if err != nil {
-			slog.Warn("rate limit redis error — failing open", "key", vk.Key, "err", err)
+			if s.failClosed {
+				if held {
+					s.releaseRedis(vk.KeyID, month, est)
+				}
+				slog.Warn("rate limit redis error — failing closed", "key_id", vk.KeyID, "err", err)
+				return nil, false, "budget_unavailable"
+			}
+			slog.Warn("rate limit redis error — failing open", "key_id", vk.KeyID, "err", err)
 		} else if res == 0 {
-			return false, "rate_limit_exceeded"
+			if held {
+				s.releaseRedis(vk.KeyID, month, est) // don't strand the budget hold
+			}
+			return nil, false, "rate_limit_exceeded"
 		}
 	}
 
-	return true, ""
+	return &BudgetReservation{keyID: vk.KeyID, month: month, amount: est}, true, ""
 }
 
-// AddSpend records realized cost post-flight using INCRBYFLOAT.
-// ExpireNX sets the TTL on first write (no-op on subsequent writes within
-// the same month), ensuring the key expires for the reconciliation window.
-func (s *RedisBudgetStore) AddSpend(key string, usd float64) {
-	if usd == 0 {
+// Commit adjusts the held estimate to the realized cost (INCRBYFLOAT of the
+// delta) and ensures the key's reconciliation-window TTL is set.
+func (s *RedisBudgetStore) Commit(res *BudgetReservation, actual float64) {
+	if res == nil || res.noop || res.applied {
 		return
+	}
+	res.applied = true
+	if actual < 0 {
+		actual = 0
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 
-	now := time.Now().UTC()
-	bKey := budgetKey(key, now.Format("2006-01"))
-
+	bKey := budgetKey(res.keyID, res.month)
 	pipe := s.rdb.Pipeline()
-	pipe.IncrByFloat(ctx, bKey, usd)
-	pipe.ExpireNX(ctx, bKey, monthKeyTTL(now))
+	if delta := actual - res.amount; delta != 0 {
+		pipe.IncrByFloat(ctx, bKey, delta)
+	}
+	pipe.ExpireNX(ctx, bKey, monthKeyTTL(time.Now().UTC()))
 	if _, err := pipe.Exec(ctx); err != nil {
-		slog.Warn("spend increment failed", "key", key, "usd", usd, "err", err)
+		slog.Warn("budget commit failed", "key_id", res.keyID, "err", err)
+	}
+}
+
+// Release returns the held estimate in full.
+func (s *RedisBudgetStore) Release(res *BudgetReservation) {
+	if res == nil || res.noop || res.applied || res.amount <= 0 {
+		return
+	}
+	res.applied = true
+	s.releaseRedis(res.keyID, res.month, res.amount)
+}
+
+// releaseRedis returns amt to the month's budget key, clamped at zero.
+func (s *RedisBudgetStore) releaseRedis(keyID, month string, amt float64) {
+	if amt <= 0 {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	if err := releaseScript.Run(ctx, s.rdb, []string{budgetKey(keyID, month)}, amt).Err(); err != nil {
+		slog.Warn("budget release failed", "key_id", keyID, "err", err)
 	}
 }
 
@@ -205,7 +301,8 @@ func (s *RedisBudgetStore) Snapshot() map[string]any {
 			// key = al:budget:{virtualKey}:{YYYY-MM}
 			parts := strings.SplitN(k, ":", 4)
 			if len(parts) == 4 {
-				spend[parts[2]] = val
+				// Expose a redacted key id only — never the plaintext bearer token.
+				spend[redactKey(parts[2])] += val
 			}
 		}
 		cursor = next

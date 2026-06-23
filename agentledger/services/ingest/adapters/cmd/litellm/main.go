@@ -41,7 +41,7 @@ func loadConfig() config {
 	return config{
 		addr:          env("AGENTLEDGER_LITELLM_ADAPTER_ADDR", ":8097"),
 		collectorURL:  env("AGENTLEDGER_COLLECTOR_URL", "http://localhost:8090/v1/events"),
-		defaultTenant: os.Getenv("AGENTLEDGER_ADAPTER_TENANT"),
+		defaultTenant: lookupEnv("AGENTLEDGER_ADAPTER_TENANT"),
 		tenantMetaKey: env("AGENTLEDGER_ADAPTER_TENANT_META_KEY", "agentledger_tenant_id"),
 		maxBodyBytes:  envInt64("AGENTLEDGER_MAX_BODY_BYTES", 8<<20),
 	}
@@ -206,15 +206,28 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
+// lookupEnv resolves an environment variable, preferring the new LEDGERAI_*
+// name and falling back to the legacy AGENTLEDGER_* alias (deprecated; kept for
+// backwards compatibility — see the README "Renaming to LedgerAI" note).
+func lookupEnv(name string) string {
+	const legacy = "AGENTLEDGER_"
+	if len(name) > len(legacy) && name[:len(legacy)] == legacy {
+		if v := os.Getenv("LEDGERAI_" + name[len(legacy):]); v != "" {
+			return v
+		}
+	}
+	return os.Getenv(name)
+}
+
 func env(key, def string) string {
-	if v := os.Getenv(key); v != "" {
+	if v := lookupEnv(key); v != "" {
 		return v
 	}
 	return def
 }
 
 func envInt64(key string, def int64) int64 {
-	if v := os.Getenv(key); v != "" {
+	if v := lookupEnv(key); v != "" {
 		var n int64
 		if _, err := fmt.Sscanf(v, "%d", &n); err == nil {
 			return n

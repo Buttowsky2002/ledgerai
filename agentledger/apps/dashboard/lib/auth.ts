@@ -1,4 +1,6 @@
-const API_URL = process.env.AGENTLEDGER_API_URL ?? 'http://localhost:8094';
+import { env } from './env';
+
+const API_URL = env('LEDGERAI_API_URL') ?? 'http://localhost:8094';
 
 export type OidcProvider = 'google' | 'microsoft';
 
@@ -9,7 +11,7 @@ export function loginUrl(provider: OidcProvider): string {
 
 /** Dev mode = the API is trusted to accept x-tenant-id and a dev tenant is set. */
 export function isDevMode(): boolean {
-  return Boolean(process.env.AGENTLEDGER_DEV_TENANT_ID);
+  return Boolean(env('LEDGERAI_DEV_TENANT_ID'));
 }
 
 /** Common date-range default for analytics pages: trailing 30 days (UTC ISO dates). */

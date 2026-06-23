@@ -12,14 +12,18 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import { Request, Response } from 'express';
 import { getPrincipal } from '../tenant/tenant-context';
+import { env } from '../env';
 import { AuthService } from './auth.service';
 import { Public } from './decorators';
 import { JwtService } from './jwt.service';
 import { OidcService } from './oidc.service';
 
+const ACCESS_COOKIE = 'al_access';
 const REFRESH_COOKIE = 'al_refresh';
 const OIDC_TX_COOKIE = 'al_oidc_tx';
 const ACCESS_TTL_SECONDS = 15 * 60;
+const ACCESS_COOKIE_MAX_AGE_MS = ACCESS_TTL_SECONDS * 1000; // 15 minutes
+const REFRESH_COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 // Classify the IdP issuer into an identities.source label (manual|scim|okta|
 // entra|hris|oidc). Best-effort — purely informational provenance.
@@ -34,14 +38,46 @@ function sourceFromIssuer(issuer: string): string {
   return 'oidc';
 }
 
-function cookieOpts(maxAgeMs?: number) {
+type SameSite = 'strict' | 'lax' | 'none';
+
+/**
+ * sameSite for the session cookies — defaults to 'strict' (security requirement:
+ * the browser never sends them on cross-site requests). A cross-site deployment,
+ * where the dashboard and API live on different registrable domains, can document
+ * and set LEDGERAI_COOKIE_SAMESITE=lax|none so the cookies survive the cross-site
+ * navigation. 'none' is meaningless without Secure, so we force secure=true then.
+ */
+export function cookieSameSite(): SameSite {
+  const v = (env('LEDGERAI_COOKIE_SAMESITE') ?? 'strict').toLowerCase();
+  return v === 'lax' || v === 'none' ? v : 'strict';
+}
+
+export function cookieOpts(maxAgeMs?: number) {
+  const sameSite = cookieSameSite();
   return {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict' as const,
+    httpOnly: true, // never readable by browser JavaScript — tokens stay off the page
+    secure: process.env.NODE_ENV === 'production' || sameSite === 'none',
+    sameSite,
     path: '/',
     ...(maxAgeMs ? { maxAge: maxAgeMs } : {}),
   };
+}
+
+/** Dashboard base URL to redirect to after a successful interactive login. */
+export function dashboardUrl(): string {
+  return env('LEDGERAI_DASHBOARD_URL') ?? 'http://localhost:3000';
+}
+
+/**
+ * Interactive (browser) login redirects to the dashboard by default. An API
+ * client can opt into the JSON token response with `?response=json` or an
+ * explicit `Accept: application/json` (browser navigations don't send that).
+ */
+export function wantsJsonResponse(req: Request): boolean {
+  if (req.query.response === 'json') {
+    return true;
+  }
+  return (req.get('accept') ?? '').includes('application/json');
 }
 
 @Controller('auth')
@@ -53,6 +89,22 @@ export class AuthController {
     private readonly auth: AuthService,
     private readonly jwt: JwtService,
   ) {}
+
+  /**
+   * Finish an interactive login: set the httpOnly session cookies (al_access +
+   * al_refresh) and, by default, redirect the browser to the dashboard. An API
+   * client that asked for JSON gets the access token in the body instead — the
+   * cookies are set either way so the dashboard BFF works without parsing JSON.
+   */
+  private completeLogin(req: Request, res: Response, accessToken: string, refreshToken: string): void {
+    res.cookie(ACCESS_COOKIE, accessToken, cookieOpts(ACCESS_COOKIE_MAX_AGE_MS));
+    res.cookie(REFRESH_COOKIE, refreshToken, cookieOpts(REFRESH_COOKIE_MAX_AGE_MS));
+    if (wantsJsonResponse(req)) {
+      res.json({ access_token: accessToken, token_type: 'Bearer', expires_in: ACCESS_TTL_SECONDS });
+      return;
+    }
+    res.redirect(dashboardUrl());
+  }
 
   /** Begin OIDC login: redirect to the provider with state+nonce+PKCE. */
   @Public()
@@ -87,9 +139,7 @@ export class AuthController {
     });
     const { accessToken, refreshToken } = await this.auth.loginByEmail(email);
     res.clearCookie(OIDC_TX_COOKIE, cookieOpts());
-    res.cookie(REFRESH_COOKIE, refreshToken, cookieOpts(7 * 24 * 60 * 60_000));
-    // No dashboard yet (task 6 will redirect into the SPA); return the access token.
-    res.json({ access_token: accessToken, token_type: 'Bearer', expires_in: ACCESS_TTL_SECONDS });
+    this.completeLogin(req, res, accessToken, refreshToken);
   }
 
   /**
@@ -156,11 +206,14 @@ export class AuthController {
       defaultApiRole: idp.default_api_role,
     });
     res.clearCookie(OIDC_TX_COOKIE, cookieOpts());
-    res.cookie(REFRESH_COOKIE, refreshToken, cookieOpts(7 * 24 * 60 * 60_000));
-    res.json({ access_token: accessToken, token_type: 'Bearer', expires_in: ACCESS_TTL_SECONDS });
+    this.completeLogin(req, res, accessToken, refreshToken);
   }
 
-  /** Mint a fresh access token from the refresh cookie. */
+  /**
+   * Renew the access token from the refresh cookie and rotate the al_access
+   * cookie. The token is returned only in the httpOnly cookie — the JSON body
+   * carries no token, just liveness + lifetime for the caller's refresh timer.
+   */
   @Public()
   @Post('refresh')
   async refresh(@Req() req: Request, @Res() res: Response): Promise<void> {
@@ -169,14 +222,16 @@ export class AuthController {
       throw new UnauthorizedException('no refresh token');
     }
     const { accessToken } = await this.auth.refresh(refreshToken);
+    res.cookie(ACCESS_COOKIE, accessToken, cookieOpts(ACCESS_COOKIE_MAX_AGE_MS));
     // Explicit 200 (no resource created) — Nest defaults POST to 201.
-    res.status(200).json({ access_token: accessToken, token_type: 'Bearer', expires_in: ACCESS_TTL_SECONDS });
+    res.status(200).json({ ok: true, expires_in: ACCESS_TTL_SECONDS });
   }
 
-  /** Clear the refresh cookie. */
+  /** Clear both session cookies (access + refresh). */
   @Public()
   @Post('logout')
   logout(@Res() res: Response): void {
+    res.clearCookie(ACCESS_COOKIE, cookieOpts());
     res.clearCookie(REFRESH_COOKIE, cookieOpts());
     res.status(204).send();
   }

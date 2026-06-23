@@ -1,131 +1,155 @@
-import { flush, init, startRun, withRun } from './index';
+import { LedgerAI } from './index';
 
-type Captured = { url: string; init: RequestInit };
+type Captured = { url: string; headers: Record<string, string>; body: string };
 
-function mockFetch(): { calls: Captured[] } {
+// A controllable fetch mock that records requests.
+function mockFetch(opts: { status?: number; reject?: boolean } = {}): {
+  fetch: typeof fetch;
+  calls: Captured[];
+} {
   const calls: Captured[] = [];
-  global.fetch = jest.fn((url: string | URL | Request, reqInit?: RequestInit) => {
-    calls.push({ url: String(url), init: reqInit ?? {} });
-    return Promise.resolve(new Response(null, { status: 202 }));
-  }) as unknown as typeof fetch;
-  return { calls };
+  const fn = jest.fn(async (url: string | URL | Request, init?: RequestInit) => {
+    calls.push({
+      url: String(url),
+      headers: (init?.headers as Record<string, string>) ?? {},
+      body: String(init?.body ?? ''),
+    });
+    if (opts.reject) throw new Error('network down');
+    return new Response(null, { status: opts.status ?? 202 });
+  });
+  return { fetch: fn as unknown as typeof fetch, calls };
 }
 
-const bodyOf = (c: Captured): Record<string, unknown> => JSON.parse(String(c.init.body));
+const lines = (body: string) => body.split('\n').filter((l) => l.trim() !== '');
 
-const CFG = { collectorUrl: 'http://collector.test/v1/events', tenantId: 't1', appId: 'app-x', apiKey: 'secret-key' };
-
-describe('AgentLedger TS SDK', () => {
-  // Runs first, before any init() below, so module-level config is still null.
-  it('startRun before init() throws', () => {
-    expect(() => startRun('a')).toThrow(/init/);
+// A large flush interval keeps the background timer from firing mid-test; we
+// drive flushing explicitly. maxBatch high so enqueue does not auto-flush.
+const base = (fetchImpl: typeof fetch, extra = {}) =>
+  new LedgerAI({
+    apiKey: 'test-key',
+    baseUrl: 'http://collector.test',
+    tenantId: 't-demo',
+    flushIntervalMs: 1_000_000,
+    maxBatch: 1000,
+    maxRetries: 0,
+    fetch: fetchImpl,
+    ...extra,
   });
 
-  it('recordLlmCall posts an llm_call with auth + counters', async () => {
-    const { calls } = mockFetch();
-    init(CFG);
-    const run = startRun('ticket-triage', 'triage #1');
-    run.recordLlmCall({ provider: 'openai', model: 'gpt-4o', inputTokens: 100, outputTokens: 50, costUsd: 0.0012, cacheReadTokens: 10 });
-    await flush();
+describe('LedgerAI SDK', () => {
+  it('sends buffered events to {baseUrl}/v1/events with auth, and emits the run record', async () => {
+    const { fetch, calls } = mockFetch();
+    const ledger = base(fetch);
+
+    await ledger.run({ agentId: 'support-bot' }, async (run) => {
+      await run.llmCall({ provider: 'openai', model: 'gpt-4o', inputTokens: 100, outputTokens: 50, costUsd: 0.0012 });
+      await run.toolCall({ tool: 'search_kb' });
+      await run.outcome({ type: 'ticket_resolved', sourceSystem: 'zendesk', valueUsd: 18.5, attributionConfidence: 0.9 });
+    });
+    await ledger.flush();
 
     expect(calls).toHaveLength(1);
-    expect(calls[0].url).toBe(CFG.collectorUrl);
-    expect((calls[0].init.headers as Record<string, string>).Authorization).toBe('Bearer secret-key');
-    const b = bodyOf(calls[0]);
-    expect(b.kind).toBe('llm_call');
-    expect(String(b.call_id)).toMatch(/^call_[0-9a-f]{16}$/);
-    expect(b).toMatchObject({
-      tenant_id: 't1',
-      app_id: 'app-x',
-      agent_id: 'ticket-triage',
-      run_id: run.runId,
-      step_id: 'step_1',
+    expect(calls[0].url).toBe('http://collector.test/v1/events');
+    expect(calls[0].headers.Authorization).toBe('Bearer test-key');
+
+    const evs = lines(calls[0].body).map((l) => JSON.parse(l));
+    const kinds = evs.map((e) => e.kind);
+    expect(kinds).toEqual(['llm_call', 'tool_call', 'outcome', 'agent_run']);
+
+    const llm = evs[0];
+    expect(llm).toMatchObject({
+      kind: 'llm_call',
+      tenant_id: 't-demo',
       provider: 'openai',
       request_model: 'gpt-4o',
-      operation_name: 'chat',
       input_tokens: 100,
       output_tokens: 50,
-      cache_read_tokens: 10,
       status: 'ok',
       source: 'sdk',
     });
+    expect(String(llm.call_id)).toMatch(/^call_/);
+    expect(evs[3]).toMatchObject({ kind: 'agent_run', status: 'completed', llm_calls: 1, tool_calls: 1 });
+
+    await ledger.shutdown();
   });
 
-  it('recordToolCall + recordOutcome shapes; outcome returns an id', async () => {
-    const { calls } = mockFetch();
-    init(CFG);
-    const run = startRun('agent');
-    run.recordToolCall({ toolName: 'fetch_ticket', latencyMs: 12, mcpServer: 'zendesk-mcp' });
-    const outcomeId = run.recordOutcome({ outcomeType: 'ticket_resolved', sourceSystem: 'zendesk', ref: '4812', businessValueUsd: 18.5, attributionConfidence: 0.9 });
-    await flush();
-
-    expect(outcomeId).toMatch(/^out_[0-9a-f]{16}$/);
-    const tool = bodyOf(calls[0]);
-    expect(tool).toMatchObject({ kind: 'tool_call', operation_name: 'execute_tool', tool_name: 'fetch_ticket', mcp_server: 'zendesk-mcp', status: 'ok', latency_ms: 12, source: 'sdk' });
-    // tool_call_id is the agent_tool_calls dedup key — it must always be set.
-    expect(tool.tool_call_id).toMatch(/^tool_[0-9a-f]{16}$/);
-    const outcome = bodyOf(calls[1]);
-    expect(outcome).toMatchObject({ kind: 'outcome', outcome_id: outcomeId, outcome_type: 'ticket_resolved', source_system: 'zendesk', ref: '4812', business_value_usd: 18.5, attribution_confidence: 0.9, completion_status: 'completed' });
+  it('fail-open (default) does not throw when the sink is unreachable', async () => {
+    const { fetch } = mockFetch({ reject: true });
+    const ledger = base(fetch); // failOpen defaults to true
+    ledger.llmCall({ provider: 'openai', model: 'gpt-4o', agentId: 'a', runId: 'r' });
+    await expect(ledger.flush()).resolves.toBeUndefined();
+    await ledger.shutdown();
   });
 
-  it('end() emits agent_run with rolled-up counters and incrementing steps', async () => {
-    const { calls } = mockFetch();
-    init(CFG);
-    const run = startRun('agent', 'do work');
-    run.recordLlmCall({ provider: 'openai', model: 'gpt-4o', inputTokens: 10, outputTokens: 5, costUsd: 1.0 });
-    run.recordLlmCall({ provider: 'openai', model: 'gpt-4o', inputTokens: 20, outputTokens: 5, costUsd: 2.0 });
-    run.recordToolCall({ toolName: 't' });
-    run.end();
-    await flush();
-
-    // step_id increments across calls (two llm + one tool => steps 1,2,3).
-    expect(bodyOf(calls[0]).step_id).toBe('step_1');
-    expect(bodyOf(calls[1]).step_id).toBe('step_2');
-    expect(bodyOf(calls[2]).step_id).toBe('step_3');
-
-    const close = bodyOf(calls[3]);
-    expect(close).toMatchObject({
-      kind: 'agent_run',
-      run_id: run.runId,
-      status: 'completed',
-      llm_calls: 2,
-      tool_calls: 1,
-      total_cost_usd: 3.0,
-      total_tokens: 40,
-    });
-    expect(String(close.ts)).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+  it('fail-closed surfaces the transport error from flush()', async () => {
+    const { fetch } = mockFetch({ reject: true });
+    const ledger = base(fetch, { failOpen: false });
+    ledger.llmCall({ provider: 'openai', model: 'gpt-4o', agentId: 'a', runId: 'r' });
+    await expect(ledger.flush()).rejects.toThrow(/network down/);
   });
 
-  it('withRun closes on success and marks failed + rethrows on error', async () => {
-    const { calls } = mockFetch();
-    init(CFG);
+  it('fail-closed surfaces a non-2xx response', async () => {
+    const { fetch } = mockFetch({ status: 422 });
+    const ledger = base(fetch, { failOpen: false });
+    ledger.toolCall({ tool: 't', agentId: 'a', runId: 'r' });
+    await expect(ledger.flush()).rejects.toThrow(/422/);
+  });
 
-    await withRun('agent', 'ok-run', async (run) => {
-      run.recordToolCall({ toolName: 't' });
-    });
-    await flush();
-    expect(bodyOf(calls[calls.length - 1])).toMatchObject({ kind: 'agent_run', status: 'completed' });
+  it('batches multiple events into a single request', async () => {
+    const { fetch, calls } = mockFetch();
+    const ledger = base(fetch);
+    for (let i = 0; i < 5; i++) {
+      ledger.toolCall({ tool: `t${i}`, agentId: 'a', runId: 'r' });
+    }
+    await ledger.flush();
+    expect(calls).toHaveLength(1);
+    expect(lines(calls[0].body)).toHaveLength(5);
+    await ledger.shutdown();
+  });
 
-    const before = calls.length;
+  it('flushes remaining events on shutdown', async () => {
+    const { fetch, calls } = mockFetch();
+    const ledger = base(fetch);
+    ledger.outcome({ type: 'pr_merged', sourceSystem: 'github', valueUsd: 250, agentId: 'a', runId: 'r' });
+    expect(calls).toHaveLength(0); // nothing sent yet
+    await ledger.shutdown();
+    expect(calls).toHaveLength(1);
+    expect(lines(calls[0].body)).toHaveLength(1);
+  });
+
+  it('never sends raw content unless contentCapture is explicitly enabled', async () => {
+    // Default: content keys are stripped.
+    const off = mockFetch();
+    const a = base(off.fetch);
+    a.trackAction({ action: 'summarize', agentId: 'a', runId: 'r', attributes: { prompt: 'SECRET PROMPT', content: 'SECRET', tool_version: 2 } });
+    await a.flush();
+    expect(off.calls[0].body).not.toContain('SECRET');
+    const ev = JSON.parse(lines(off.calls[0].body)[0]);
+    expect(ev.prompt).toBeUndefined();
+    expect(ev.content).toBeUndefined();
+    expect(ev.tool_version).toBe(2); // non-content attributes pass through
+    await a.shutdown();
+
+    // Explicit opt-in: content is included.
+    const on = mockFetch();
+    const b = base(on.fetch, { contentCapture: true });
+    b.trackAction({ action: 'summarize', agentId: 'a', runId: 'r', attributes: { prompt: 'SECRET PROMPT' } });
+    await b.flush();
+    expect(on.calls[0].body).toContain('SECRET PROMPT');
+    await b.shutdown();
+  });
+
+  it('the user error from run() propagates while the run record is still emitted (failed)', async () => {
+    const { fetch, calls } = mockFetch();
+    const ledger = base(fetch);
     await expect(
-      withRun('agent', 'bad-run', async () => {
-        throw new TypeError('boom');
+      ledger.run({ agentId: 'a' }, async () => {
+        throw new Error('boom');
       }),
     ).rejects.toThrow('boom');
-    await flush();
-    const close = bodyOf(calls[calls.length - 1]);
-    expect(close.kind).toBe('agent_run');
-    expect(close.status).toBe('failed');
-    expect(String(close.objective)).toContain('[failed: TypeError]');
-    expect(calls.length).toBeGreaterThan(before);
-  });
-
-  it('swallows transport errors (never throws into the host)', async () => {
-    mockFetch();
-    (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('network down'));
-    init(CFG);
-    const run = startRun('agent');
-    expect(() => run.recordLlmCall({ provider: 'p', model: 'm', inputTokens: 1, outputTokens: 1 })).not.toThrow();
-    await expect(flush()).resolves.toBeUndefined();
+    await ledger.flush();
+    const evs = lines(calls[0].body).map((l) => JSON.parse(l));
+    expect(evs[evs.length - 1]).toMatchObject({ kind: 'agent_run', status: 'failed' });
+    await ledger.shutdown();
   });
 });

@@ -29,6 +29,8 @@ title = "AgentLedger gitleaks configuration"
   paths = [
     '''agentledger/services/gateway/config\.example\.json''',
     '''agentledger/docker-compose\.yml''',
+    # Example env file — placeholders only (CHANGE_ME_*), never real secrets.
+    '''agentledger/\.env\.example''',
   ]
 
 # ---------------------------------------------------------------------------

@@ -1,13 +1,13 @@
-"""AgentLedger Python SDK (MVP).
+"""LedgerAI Python SDK (MVP).
 
 Stdlib-only tracing for agents and workflows. Emits events aligned with
 the OpenTelemetry GenAI semantic conventions (gen_ai.* attribute names)
-and AgentLedger's canonical schema, so the same data lands cleanly in
+and LedgerAI's canonical schema, so the same data lands cleanly in
 ClickHouse and any OTel-compatible backend.
 
 Two integration paths:
 
-1. Route LLM traffic through the AgentLedger gateway and use this SDK
+1. Route LLM traffic through the LedgerAI gateway and use this SDK
    only for run/step/outcome context (headers propagate run identity):
 
        import agentledger as al
@@ -55,7 +55,8 @@ def init(collector_url: str, tenant_id: str, app_id: str,
             app_id=app_id,
             user_id=user_id or os.getenv("USER", ""),
             environment=environment,
-            api_key=api_key or os.getenv("AGENTLEDGER_API_KEY", ""),
+            # Prefer LEDGERAI_API_KEY; fall back to the legacy AGENTLEDGER_API_KEY alias.
+            api_key=api_key or os.getenv("LEDGERAI_API_KEY") or os.getenv("AGENTLEDGER_API_KEY", ""),
         )
 
 

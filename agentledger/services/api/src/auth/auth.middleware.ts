@@ -2,6 +2,7 @@ import { Injectable, NestMiddleware } from '@nestjs/common';
 import { NextFunction, Request, Response } from 'express';
 import { Principal, runWithTenant } from '../tenant/tenant-context';
 import { JwtService } from './jwt.service';
+import { isUuid, shouldTrustDevTenantHeader } from './dev-trust';
 
 const ANONYMOUS: Principal = { tenantId: null, userId: null, role: null };
 
@@ -11,9 +12,11 @@ const ANONYMOUS: Principal = { tenantId: null, userId: null, role: null };
  *
  * Order of resolution:
  *  1. `Authorization: Bearer <access JWT>` → verified principal.
- *  2. Dev fallback (only when AGENTLEDGER_DEV_TRUST_HEADER=true and no Bearer):
- *     `x-tenant-id` header → dev admin principal, so local dev / the task-1
- *     isolation suite keep working without real login.
+ *  2. Dev fallback (only when shouldTrustDevTenantHeader() — i.e. NOT production
+ *     and the dev-trust flag is set — and no Bearer): a *UUID* `x-tenant-id`
+ *     header → dev admin principal, so local dev / the isolation suite keep
+ *     working without real login. A malformed header is ignored (stays
+ *     anonymous), and this branch is unreachable in production.
  *  3. Otherwise anonymous → AuthGuard 401s any non-@Public route.
  *
  * An invalid/expired Bearer token resolves to anonymous (→ 401 at the guard)
@@ -21,8 +24,6 @@ const ANONYMOUS: Principal = { tenantId: null, userId: null, role: null };
  */
 @Injectable()
 export class AuthMiddleware implements NestMiddleware {
-  private readonly trustHeader = process.env.AGENTLEDGER_DEV_TRUST_HEADER === 'true';
-
   constructor(private readonly jwt: JwtService) {}
 
   async use(req: Request, _res: Response, next: NextFunction): Promise<void> {
@@ -35,11 +36,14 @@ export class AuthMiddleware implements NestMiddleware {
       } catch {
         principal = ANONYMOUS;
       }
-    } else if (this.trustHeader) {
+    } else if (shouldTrustDevTenantHeader()) {
+      // Dev-only, never in production (gated inside shouldTrustDevTenantHeader).
       const header = req.headers['x-tenant-id'];
-      if (typeof header === 'string' && header.trim() !== '') {
-        principal = { tenantId: header.trim(), userId: null, role: 'admin' };
+      const tenantId = typeof header === 'string' ? header.trim() : '';
+      if (isUuid(tenantId)) {
+        principal = { tenantId, userId: null, role: 'admin' };
       }
+      // Malformed/absent header → stays anonymous (never grant admin on a bad header).
     }
 
     runWithTenant(principal, () => next());

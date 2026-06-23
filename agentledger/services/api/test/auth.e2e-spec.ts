@@ -53,6 +53,13 @@ describe('Auth + RBAC', () => {
 
   const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 
+  // Set-Cookie helpers: find an entry by name and pull its value.
+  const setCookies = (res: request.Response): string[] =>
+    (res.headers['set-cookie'] as unknown as string[] | undefined) ?? [];
+  const findCookie = (res: request.Response, name: string): string | undefined =>
+    setCookies(res).find((c) => c.startsWith(`${name}=`));
+  const cookieValue = (entry: string): string => entry.split(';')[0].split('=').slice(1).join('=');
+
   it('rejects an unauthenticated request (401)', async () => {
     const res = await request(app.getHttpServer()).get('/v1/teams');
     expect(res.status).toBe(401);
@@ -103,16 +110,41 @@ describe('Auth + RBAC', () => {
     expect(res.body).toMatchObject({ userId, tenantId: tenantA, role: 'admin' });
   });
 
-  it('POST /auth/refresh mints a fresh access token from the refresh cookie', async () => {
+  it('POST /auth/refresh renews the al_access cookie and returns {ok, expires_in}', async () => {
     const refresh = await jwt.mintRefresh({ userId: randomUUID(), tenantId: tenantA, role: 'analyst' });
     const res = await request(app.getHttpServer())
       .post('/auth/refresh')
       .set('Cookie', `al_refresh=${refresh}`);
     expect(res.status).toBe(200); // @Res() + res.json() → Express default 200
-    expect(res.body.access_token).toBeDefined();
-    // The minted access token works on a protected route.
-    const probe = await request(app.getHttpServer()).get('/auth/me').set(bearer(res.body.access_token));
+    expect(res.body).toMatchObject({ ok: true, expires_in: 15 * 60 });
+    expect(res.body.access_token).toBeUndefined(); // token lives only in the httpOnly cookie
+
+    const accessEntry = findCookie(res, 'al_access');
+    expect(accessEntry).toBeDefined();
+    expect(accessEntry).toMatch(/HttpOnly/i);
+    expect(accessEntry).toMatch(/SameSite=Strict/i);
+    expect(accessEntry).toMatch(/Path=\//i);
+
+    // The renewed access token (from the cookie) authorizes a protected route.
+    const probe = await request(app.getHttpServer()).get('/auth/me').set(bearer(cookieValue(accessEntry!)));
     expect(probe.status).toBe(200);
+  });
+
+  it('POST /auth/refresh without a refresh cookie is 401', async () => {
+    const res = await request(app.getHttpServer()).post('/auth/refresh');
+    expect(res.status).toBe(401);
+  });
+
+  it('POST /auth/logout clears both al_access and al_refresh', async () => {
+    const res = await request(app.getHttpServer()).post('/auth/logout');
+    expect(res.status).toBe(204);
+    const access = findCookie(res, 'al_access');
+    const refresh = findCookie(res, 'al_refresh');
+    // Both are cleared: empty value + an expiry in the past.
+    expect(access).toMatch(/^al_access=;/);
+    expect(refresh).toMatch(/^al_refresh=;/);
+    expect(access).toMatch(/Expires=Thu, 01 Jan 1970/i);
+    expect(refresh).toMatch(/Expires=Thu, 01 Jan 1970/i);
   });
 
   it('rate-limits auth endpoints (429 after the per-minute cap)', async () => {

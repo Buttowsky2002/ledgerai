@@ -2,7 +2,7 @@
   "name": "@agentledger/sdk-typescript",
   "version": "0.1.0",
   "private": true,
-  "description": "AgentLedger TypeScript SDK — dependency-free agent run/LLM/tool/outcome tracing to the collector (mirrors the Python SDK).",
+  "description": "LedgerAI TypeScript SDK — dependency-free agent run/LLM/tool/outcome tracing to the collector (mirrors the Python SDK).",
   "license": "UNLICENSED",
   "engines": {
     "node": ">=20"
@@ -16,12 +16,13 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist", "src"],
+  "files": ["dist", "src", "examples"],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "lint": "eslint \"{src,test}/**/*.ts\"",
     "format:check": "prettier --check \"{src,test}/**/*.ts\"",
     "test": "jest --config jest.config.js",
+    "typecheck:examples": "tsc -p tsconfig.examples.json",
     "prepublishOnly": "npm run build"
   },
   "devDependencies": {

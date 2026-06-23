@@ -40,7 +40,7 @@ func statusClass(status string) string {
 	switch status {
 	case "ok":
 		return "ok"
-	case "upstream_error":
+	case "upstream_error", "client_error":
 		return "error"
 	default:
 		return "blocked" // blocked_policy | blocked_tool | blocked_dlp | blocked_budget | blocked_rate

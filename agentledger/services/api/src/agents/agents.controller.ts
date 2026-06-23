@@ -1,5 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { IsArray, IsOptional, IsString, IsUUID } from 'class-validator';
+import { AgentRoiService } from './agent-roi.service';
+import { LariService } from '../lari/lari.service';
 import { Roles } from '../auth/decorators';
 import { CrudService } from '../common/crud.service';
 import { parsePagination } from '../common/pagination';
@@ -30,13 +32,30 @@ class UpdateAgentDto {
 @Controller('v1/agents')
 export class AgentsController {
   private readonly crud: CrudService;
-  constructor(prisma: PrismaService) {
+  constructor(
+    prisma: PrismaService,
+    private readonly agentRoi: AgentRoiService,
+    private readonly lari: LariService,
+  ) {
     this.crud = new CrudService(prisma, { model: 'agent', idField: 'agentId', object: 'agent' });
   }
 
   @Roles('viewer') @Get()
   list(@Query('limit') limit?: string, @Query('offset') offset?: string) {
     return this.crud.list(parsePagination(limit, offset));
+  }
+
+  // Per-agent finance-grade ROI (cost → outcome economics). Declared before
+  // ':id' is irrelevant for distinct sub-paths, but ':id/roi' is a separate route.
+  @Roles('viewer') @Get(':id/roi')
+  roi(@Param('id') id: string, @Query('from') from?: string, @Query('to') to?: string) {
+    return this.agentRoi.agentRoi(id, from, to);
+  }
+
+  // LARI — risk-adjusted incremental ROI with confidence + recommendation + ledger.
+  @Roles('viewer') @Get(':id/lari')
+  lariRoi(@Param('id') id: string, @Query('from') from?: string, @Query('to') to?: string) {
+    return this.lari.computeForAgent(id, from, to);
   }
 
   @Roles('viewer') @Get(':id')

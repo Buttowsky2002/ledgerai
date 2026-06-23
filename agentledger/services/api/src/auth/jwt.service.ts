@@ -1,6 +1,7 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JWTPayload, SignJWT, jwtVerify } from 'jose';
 import { Principal } from '../tenant/tenant-context';
+import { env } from '../env';
 
 const ISSUER = 'agentledger';
 const AUDIENCE = 'agentledger-api';
@@ -13,7 +14,7 @@ export interface AccessClaims {
 
 /**
  * Mints and verifies the API's own session JWTs (HS256, secret from
- * AGENTLEDGER_JWT_SECRET). Two token types, distinguished by `typ`: a short-lived
+ * LEDGERAI_JWT_SECRET). Two token types, distinguished by `typ`: a short-lived
  * access token (sent as `Authorization: Bearer`) and a longer-lived refresh token
  * (httpOnly cookie). Verification pins issuer + audience + the expected `typ`, so
  * a refresh token can never be replayed as an access token.
@@ -25,13 +26,13 @@ export class JwtService {
   private readonly refreshTtl: string;
 
   constructor() {
-    const raw = process.env.AGENTLEDGER_JWT_SECRET;
+    const raw = env('LEDGERAI_JWT_SECRET');
     if (!raw) {
-      throw new Error('AGENTLEDGER_JWT_SECRET is required');
+      throw new Error('LEDGERAI_JWT_SECRET (or legacy AGENTLEDGER_JWT_SECRET) is required');
     }
     this.secret = new TextEncoder().encode(raw);
-    this.accessTtl = process.env.AGENTLEDGER_JWT_ACCESS_TTL ?? '15m';
-    this.refreshTtl = process.env.AGENTLEDGER_JWT_REFRESH_TTL ?? '7d';
+    this.accessTtl = env('LEDGERAI_JWT_ACCESS_TTL') ?? '15m';
+    this.refreshTtl = env('LEDGERAI_JWT_REFRESH_TTL') ?? '7d';
   }
 
   async mintAccess(p: AccessClaims): Promise<string> {

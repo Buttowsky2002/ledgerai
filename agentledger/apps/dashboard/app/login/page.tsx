@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 export default function LoginPage() {
   return (
     <div className="mx-auto max-w-md py-16">
-      <h1 className="mb-2 text-xl font-semibold">Sign in to AgentLedger</h1>
+      <h1 className="mb-2 text-xl font-semibold">Sign in to LedgerAI</h1>
       <p className="mb-6 text-sm text-muted">Single sign-on via your identity provider.</p>
       <div className="space-y-3">
         <a
@@ -24,7 +24,7 @@ export default function LoginPage() {
       {isDevMode() && (
         <p className="mt-6 rounded border border-edge bg-panel p-3 text-xs text-muted">
           Dev mode: requests use <code className="text-accent">x-tenant-id</code> from
-          <code className="text-accent"> AGENTLEDGER_DEV_TENANT_ID</code>; SSO is wired but needs
+          <code className="text-accent"> LEDGERAI_DEV_TENANT_ID</code>; SSO is wired but needs
           provider credentials.
         </p>
       )}

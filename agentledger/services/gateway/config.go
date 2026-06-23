@@ -49,8 +49,22 @@ type ProviderCfg struct {
 
 // VirtualKey is the attribution anchor: every request maps to a tenant,
 // team, user, and app through the key that made it.
+//
+// The bearer token never lives in memory in plaintext. KeyPlaintext is accepted
+// only as file-config *input* (json:"key") and is hashed then cleared by
+// normalizeKey before the VirtualKey is stored. KeyHash (SHA-256 hex) is the
+// lookup + budget anchor; KeyID is the non-secret public identifier surfaced in
+// events and snapshots.
 type VirtualKey struct {
-	Key           string   `json:"key"` // "alk_..." issued by control plane
+	// KeyPlaintext is the "alk_..." token from file config input only. It is
+	// hashed into KeyHash and cleared during key-store construction — never
+	// retained, emitted, or logged. (Postgres config never sets this.)
+	KeyPlaintext string `json:"key,omitempty"`
+	// KeyHash is the SHA-256 hex of the bearer token (Postgres virtual_keys.key_hash).
+	KeyHash string `json:"key_hash,omitempty"`
+	// KeyID is the stable, non-secret public id: provided by the control plane,
+	// else derived as "vk_" + KeyHash[:16].
+	KeyID         string   `json:"key_id,omitempty"`
 	TenantID      string   `json:"tenant_id"`
 	TeamID        string   `json:"team_id"`
 	UserID        string   `json:"user_id"`
@@ -84,6 +98,18 @@ type EventSinkCfg struct {
 	URL        string `json:"url,omitempty"`
 	FlushMs    int    `json:"flush_ms,omitempty"`
 	BufferSize int    `json:"buffer_size,omitempty"`
+	// TimeoutMs bounds each HTTP flush request (default 30000).
+	TimeoutMs int `json:"timeout_ms,omitempty"`
+	// Retries is the number of extra HTTP flush attempts on transport error / 5xx
+	// (bounded backoff between attempts). 0 = no retry.
+	Retries int `json:"retries,omitempty"`
+	// SpoolDir, when set, persists failed flush batches as ndjson (content-free)
+	// for later replay. From LEDGERAI_EVENT_SPOOL_DIR.
+	SpoolDir string `json:"spool_dir,omitempty"`
+	// FailMode: "observe_only" (default — drop on a full buffer, measured) or
+	// "strict" (apply bounded backpressure to minimize loss). From
+	// LEDGERAI_EVENT_FAIL_MODE.
+	FailMode string `json:"fail_mode,omitempty"`
 }
 
 // LoadConfig reads and parses the gateway configuration from a JSON file.
@@ -104,6 +130,17 @@ func LoadConfig(path string) (*Config, error) {
 	}
 	if c.Events.BufferSize == 0 {
 		c.Events.BufferSize = 4096
+	}
+	if c.Events.TimeoutMs == 0 {
+		c.Events.TimeoutMs = 30000
+	}
+	if c.Events.Retries == 0 {
+		c.Events.Retries = 2
+	}
+	// Hash + clear plaintext bearer tokens and derive key ids at load time, so the
+	// plaintext never propagates to the budget store, snapshot, events, or logs.
+	for i := range c.VirtualKeys {
+		normalizeKey(&c.VirtualKeys[i])
 	}
 	return &c, nil
 }

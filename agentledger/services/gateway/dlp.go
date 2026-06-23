@@ -64,7 +64,9 @@ func NewDLPEngine(cfg DLPConfig) *DLPEngine {
 			{"email_address", "pii", "low", 0.95,
 				regexp.MustCompile(`\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b`), nil},
 			{"ipv4_address", "pii", "low", 0.6,
-				regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}\b`), nil},
+				// Each octet 0–255 only, so invalid addresses like 999.999.999.999
+				// don't match.
+				regexp.MustCompile(`\b(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\b`), nil},
 		},
 	}
 }

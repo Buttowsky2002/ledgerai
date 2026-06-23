@@ -37,6 +37,8 @@ describe('Enterprise SSO + JIT', () => {
     process.env.AGENTLEDGER_PG_DSN =
       process.env.AGENTLEDGER_PG_DSN ??
       'postgres://agentledger_api:dev_only_change_me@localhost:5432/agentledger?sslmode=disable';
+    // Known dashboard target so the default (browser) callback redirect is assertable.
+    process.env.LEDGERAI_DASHBOARD_URL = 'https://dash.example';
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(OidcService)
@@ -79,7 +81,12 @@ describe('Enterprise SSO + JIT', () => {
   });
 
   // Drive /sso/login (to mint the tx cookie) then /sso/callback with that cookie.
-  async function ssoLogin(email: string): Promise<request.Response> {
+  // Defaults to JSON mode so the body-based assertions below work; pass
+  // { json: false } to exercise the default browser redirect + cookie path.
+  async function ssoLogin(
+    email: string,
+    opts: { json?: boolean } = { json: true },
+  ): Promise<request.Response> {
     const login = await request(app.getHttpServer()).get('/auth/sso/login').query({ email });
     const txCookie = (login.headers['set-cookie'] as unknown as string[])?.find((c) =>
       c.startsWith('al_oidc_tx='),
@@ -87,7 +94,11 @@ describe('Enterprise SSO + JIT', () => {
     if (!txCookie) {
       return login; // login failed (e.g. no IdP) — return for assertion
     }
-    return request(app.getHttpServer()).get('/auth/sso/callback').set('Cookie', txCookie);
+    const cb = request(app.getHttpServer()).get('/auth/sso/callback').set('Cookie', txCookie);
+    if (opts.json !== false) {
+      cb.query({ response: 'json' });
+    }
+    return cb;
   }
 
   it('JIT-provisions a new identity on first SSO login', async () => {
@@ -142,5 +153,34 @@ describe('Enterprise SSO + JIT', () => {
       tx.identity.findMany({ where: { email: 'carol@acme-a.com' } }),
     );
     expect(inA).toHaveLength(1);
+  });
+
+  it('default callback sets al_access + al_refresh and redirects to the dashboard', async () => {
+    verified = { email: 'dave@acme-a.com', sub: 'sub-dave' };
+    const res = await ssoLogin('dave@acme-a.com', { json: false });
+
+    // Browser flow: redirect to the configured dashboard, no JSON body, no token leaked.
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe('https://dash.example');
+    expect(res.body.access_token).toBeUndefined();
+
+    const cookies = (res.headers['set-cookie'] as unknown as string[]) ?? [];
+    const access = cookies.find((c) => c.startsWith('al_access='));
+    const refresh = cookies.find((c) => c.startsWith('al_refresh='));
+    expect(access).toBeDefined();
+    expect(refresh).toBeDefined();
+    for (const c of [access!, refresh!]) {
+      expect(c).toMatch(/HttpOnly/i);
+      expect(c).toMatch(/SameSite=Strict/i);
+      expect(c).toMatch(/Path=\//i);
+    }
+
+    // The al_access cookie's token authorizes a protected API route (the dashboard BFF flow).
+    const token = access!.split(';')[0].split('=').slice(1).join('=');
+    const probe = await request(app.getHttpServer())
+      .get('/auth/me')
+      .set('Authorization', `Bearer ${token}`);
+    expect(probe.status).toBe(200);
+    expect(probe.body).toMatchObject({ tenantId: tenantA });
   });
 });

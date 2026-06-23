@@ -2,7 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://agentledger.ai/schemas/graph/outcome_graph.schema.json",
   "title": "AgentLedger Agent Outcome Graph",
-  "description": "Formal contract for the Agent Outcome Graph (CLAUDE.md Phase 3): the moat that makes cost -> agent -> outcome -> value queryable with an attribution confidence on every edge. Nodes are identities (human AND non-human/agent), agent runs, and business outcomes; edges connect them and ALWAYS carry an attribution_confidence in [0,1] (1.0 for deterministic/agent-stamped links, <1.0 for probabilistic links from the attribution matcher). This document is the abstract serialization; its physical realization is the Postgres + ClickHouse tables/views described in README.md (identities/agents -> v_identities, agent_runs, outcomes, v_outcome_graph). SECURITY: nodes carry identifiers and categorical/financial attributes only — never raw prompt/completion content (CLAUDE.md rule 2).",
+  "version": "1.1.0",
+  "description": "Formal contract for the Agent Outcome Graph (CLAUDE.md Phase 3): the moat that makes cost -> agent -> outcome -> value queryable with an attribution confidence on every edge. Nodes are identities (human AND non-human/agent), agent runs, and business outcomes; edges connect them and ALWAYS carry an attribution_confidence in [0,1] (1.0 for deterministic/agent-stamped links, <1.0 for probabilistic links from the attribution matcher). This document is the abstract serialization; its physical realization is the Postgres + ClickHouse tables/views described in README.md (identities/agents -> v_identities, agent_runs, outcomes, v_outcome_graph). VERSION 1.1.0 (additive, non-breaking — ADR-040): the `produced` edge may now also carry the attribution engine v2 enrichment (attribution_method, confidence_calibrated, signal_contributions, counterfactual_delta, coalition_id, shapley_value/cost, model_version), realized in Postgres attribution_edges. attribution_confidence remains required and equals confidence_calibrated of the winning edge. SECURITY: nodes carry identifiers and categorical/financial attributes only — never raw prompt/completion content (CLAUDE.md rule 2); signal_contributions hold evidence REFERENCES (PR URL, ticket id, timestamps, overlap %), never copied content (§7).",
   "type": "object",
   "additionalProperties": false,
   "required": ["tenant_id", "nodes", "edges"],
@@ -26,6 +27,19 @@
       "minimum": 0,
       "maximum": 1,
       "description": "Attribution confidence in [0,1]. 1.0 == deterministic (SDK/agent-stamped); <1.0 == probabilistic (attribution matcher, time/identity/token signals)."
+    },
+    "signalContribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["signal", "weighted_log_odds"],
+      "description": "One signal's contribution to a probabilistic edge's score — the explanation that makes the confidence auditable (attribution engine v2, sub-phase 3.3).",
+      "properties": {
+        "signal": { "type": "string", "description": "Signal name, e.g. temporal_proximity | identity_match | artifact_overlap | content_match | behavioral." },
+        "signal_type": { "enum": ["temporal", "identity", "artifact", "content", "behavioral"] },
+        "value": { "type": "number", "description": "Normalized signal value in [0,1]." },
+        "weighted_log_odds": { "type": "number", "description": "signal_weight x value — this signal's additive contribution to the log-odds." },
+        "evidence_ref": { "type": ["string", "null"], "description": "Reference to the raw evidence (PR URL, ticket id, timestamp, file-overlap %) — NEVER copied prompt/completion content (CLAUDE.md rule 2; §7)." }
+      }
     },
     "node": {
       "type": "object",
@@ -99,6 +113,43 @@
         "deterministic": {
           "type": "boolean",
           "description": "True when the link is asserted (agent-stamped/SDK/structural), implying attribution_confidence == 1.0."
+        },
+        "attribution_method": {
+          "enum": ["deterministic", "probabilistic", "shapley"],
+          "description": "v1.1 — how the `produced` edge was scored. deterministic: ground-truth link (trailer/session-id/API-close). probabilistic: log-linear scorer over signals. shapley: a coalition member's marginal-contribution allocation."
+        },
+        "confidence_calibrated": {
+          "$ref": "#/$defs/confidence",
+          "description": "v1.1 — post-calibration confidence (isotonic/Platt). Equals attribution_confidence; the calibrated number a 0.8 of which means ~80% precision."
+        },
+        "confidence_raw": {
+          "$ref": "#/$defs/confidence",
+          "description": "v1.1 — pre-calibration model output, kept for backtesting."
+        },
+        "signal_contributions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/signalContribution" },
+          "description": "v1.1 — the per-signal breakdown behind a probabilistic confidence. Empty for deterministic edges."
+        },
+        "counterfactual_delta": {
+          "type": ["number", "null"],
+          "description": "v1.1 — incremental fraction of the outcome above the identity/team baseline (sub-phase 3.4); value_attributed is scaled by this, not the gross."
+        },
+        "coalition_id": {
+          "type": ["string", "null"],
+          "description": "v1.1 — set when this edge is one member of a multi-agent coalition (sub-phase 3.5)."
+        },
+        "shapley_value": {
+          "type": ["number", "null"],
+          "description": "v1.1 — this member's Shapley-allocated share of the outcome value (coalition edges only)."
+        },
+        "shapley_cost": {
+          "type": ["number", "null"],
+          "description": "v1.1 — this member's Shapley-allocated share of the cost (coalition edges only)."
+        },
+        "model_version": {
+          "type": ["string", "null"],
+          "description": "v1.1 — attribution_model_versions.version that produced this edge, so any historical score is reproducible (CLAUDE.md rule 10)."
         }
       }
     }
