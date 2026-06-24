@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const NAV = [
-  { href: '/', label: 'Executive spend' },
+  { href: '/', label: 'Overview' },
   { href: '/allocation', label: 'Allocation' },
   { href: '/model-mix', label: 'Model mix' },
   { href: '/budgets', label: 'Budgets' },

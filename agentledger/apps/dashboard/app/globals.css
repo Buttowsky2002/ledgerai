@@ -7,7 +7,39 @@
 }
 
 body {
-  @apply bg-ink text-gray-100;
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  /* Subtle atmosphere: a cool wash bleeding from the top-left so the flat ink
+     background reads as depth, not a void. Fixed so it doesn't scroll away. */
+  background-color: #0b0e14;
+  background-image: radial-gradient(120% 80% at 0% 0%, rgba(79, 140, 255, 0.07), transparent 55%);
+  background-attachment: fixed;
+  @apply text-gray-100 antialiased;
+}
+
+/* Monospaced, tabular figures — the house style for every number on the surface. */
+.num {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1, 'zero' 1;
+  letter-spacing: -0.01em;
+}
+
+::selection {
+  background: rgba(79, 140, 255, 0.3);
+}
+
+/* Slim, unobtrusive scrollbars that match the panel palette. */
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #1e2530;
+  border-radius: 8px;
+  border: 2px solid #0b0e14;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #2a3340;
 }
 
 /* Dense, data-first table defaults. */
@@ -15,11 +47,17 @@ body {
   @apply w-full text-sm border-collapse;
 }
 .table th {
-  @apply text-left font-medium text-muted px-3 py-2 border-b border-edge;
+  @apply text-left text-[11px] font-semibold uppercase tracking-wider text-muted px-3 py-2.5 border-b border-edge;
 }
 .table td {
-  @apply px-3 py-2 border-b border-edge/60 tabular-nums;
+  @apply px-3 py-2.5 border-b border-edge/50;
 }
-.table tr:hover td {
-  @apply bg-white/5;
+.table tbody tr {
+  @apply transition-colors;
+}
+.table tbody tr:hover td {
+  @apply bg-white/[0.035];
+}
+.table tbody tr:last-child td {
+  @apply border-b-0;
 }

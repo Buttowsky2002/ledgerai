@@ -1,7 +1,20 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ChParam, ClickHouseService } from '../clickhouse/clickhouse.service';
+import { LariService } from '../lari/lari.service';
+import { Recommendation } from '../lari/lari.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { getPrincipal, getTenantId } from '../tenant/tenant-context';
+
+/** One row of the per-agent economics rollup (GET /v1/analytics/agent-economics). */
+export interface AgentEconomicsRow {
+  agentId: string;
+  cost_usd: number;
+  value_usd: number;
+  risk_adjusted_roi: number;
+  lari: number;
+  confidenceScore: number;
+  recommendation: Recommendation;
+}
 import { FocusRow, SpendDailyRow, toFocusRow } from './focus.mapper';
 import { PilotReport } from './report.renderer';
 
@@ -19,9 +32,12 @@ const n = (v: unknown): number => (typeof v === 'number' ? v : Number(v) || 0);
  */
 @Injectable()
 export class AnalyticsService {
+  private readonly logger = new Logger(AnalyticsService.name);
+
   constructor(
     private readonly ch: ClickHouseService,
     private readonly prisma: PrismaService,
+    private readonly lari: LariService,
   ) {}
 
   /**
@@ -77,8 +93,17 @@ export class AnalyticsService {
     return { from: from ?? iso(start), to: to ?? iso(today) };
   }
 
-  spend(from?: string, to?: string) {
+  /** Optional team filter: returns the SQL fragment and stamps the param. */
+  private teamFilter(team: string | undefined, params: Record<string, ChParam>, col = 'team_id'): string {
+    if (!team) return '';
+    params.team = team;
+    return `AND ${col} = {team:String}`;
+  }
+
+  spend(from?: string, to?: string, team?: string) {
     const r = this.range(from, to);
+    const params = { ...r } as Record<string, ChParam>;
+    const tf = this.teamFilter(team, params);
     // Select `day` directly (don't alias an expression to the column name — that
     // shadows it and breaks the BETWEEN in WHERE). ClickHouse renders Date as
     // 'YYYY-MM-DD' in JSON.
@@ -87,9 +112,9 @@ export class AnalyticsService {
               sum(input_tokens + output_tokens) AS tokens,
               sum(blocked_calls) AS blocked_calls, sum(error_calls) AS error_calls
        FROM spend_daily
-       WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date}
+       WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date} ${tf}
        GROUP BY day ORDER BY day`,
-      r as Record<string, ChParam>,
+      params,
     );
   }
 
@@ -144,14 +169,16 @@ export class AnalyticsService {
     );
   }
 
-  risk(from?: string, to?: string) {
+  risk(from?: string, to?: string, team?: string) {
     const r = this.range(from, to);
+    const params = { ...r } as Record<string, ChParam>;
+    const tf = this.teamFilter(team, params);
     return this.ch.queryScoped(
       `SELECT day, dlp_action, risk_severity, sum(events) AS events
        FROM risk_daily
-       WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date}
+       WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date} ${tf}
        GROUP BY day, dlp_action, risk_severity ORDER BY day`,
-      r as Record<string, ChParam>,
+      params,
     );
   }
 
@@ -161,13 +188,14 @@ export class AnalyticsService {
   // cost_per_outcome ratio stays correct. FINAL collapses the attribution
   // matcher's re-inserted rows (same approach as agentDetail's agent_runs FINAL).
   // minConfidence defaults to 0 (include all, incl. unattributed outcomes).
-  unitEconomics(from?: string, to?: string, outcomeType?: string, minConfidence = 0) {
+  unitEconomics(from?: string, to?: string, outcomeType?: string, minConfidence = 0, team?: string) {
     const r = this.range(from, to, 365);
     const filter = outcomeType ? 'AND o.outcome_type = {otype:String}' : '';
     const params: Record<string, ChParam> = { ...r, minconf: minConfidence };
     if (outcomeType) {
       params.otype = outcomeType;
     }
+    const tf = this.teamFilter(team, params, 'o.team_id');
     return this.ch.queryScoped(
       `SELECT toStartOfMonth(o.ts) AS month, o.outcome_type AS outcome_type, o.team_id AS team_id,
               count() AS outcomes,
@@ -181,7 +209,7 @@ export class AnalyticsService {
          ON r.tenant_id = o.tenant_id AND r.run_id = o.run_id
        WHERE o.tenant_id = {tenant:String}
          AND toStartOfMonth(o.ts) BETWEEN toStartOfMonth(toDate({from:Date})) AND toStartOfMonth(toDate({to:Date}))
-         AND o.attribution_confidence >= {minconf:Float32} ${filter}
+         AND o.attribution_confidence >= {minconf:Float32} ${filter} ${tf}
        GROUP BY month, outcome_type, team_id ORDER BY month`,
       params,
     );
@@ -191,13 +219,14 @@ export class AnalyticsService {
   // confidence-weighted + risk-adjusted ROI). Aggregated per month/outcome_type.
   // Headline excludes low-confidence links by default (minConfidence 0.5) per the
   // Phase 4 acceptance bar; callers can pass 0 to see everything.
-  roi(from?: string, to?: string, outcomeType?: string, minConfidence = 0.5) {
+  roi(from?: string, to?: string, outcomeType?: string, minConfidence = 0.5, team?: string) {
     const r = this.range(from, to, 365);
     const filter = outcomeType ? 'AND outcome_type = {otype:String}' : '';
     const params: Record<string, ChParam> = { ...r, minconf: minConfidence };
     if (outcomeType) {
       params.otype = outcomeType;
     }
+    const tf = this.teamFilter(team, params); // v_roi exposes team_id (migration 011)
     return this.ch.queryScoped(
       `SELECT toStartOfMonth(outcome_ts) AS month, outcome_type AS outcome_type,
               count() AS outcomes,
@@ -211,10 +240,48 @@ export class AnalyticsService {
        FROM agentledger.v_roi
        WHERE tenant_id = {tenant:String}
          AND toDate(outcome_ts) BETWEEN {from:Date} AND {to:Date}
-         AND attribution_confidence >= {minconf:Float32} ${filter}
+         AND attribution_confidence >= {minconf:Float32} ${filter} ${tf}
        GROUP BY month, outcome_type ORDER BY month`,
       params,
     );
+  }
+
+  /**
+   * Per-agent economics rollup powering the overview's recommendations panel and
+   * unit-economics table. For each agent that produced outcomes in the window it
+   * runs the LARI engine, so the recommendation/confidence match /v1/agents/:id/lari.
+   * Capped at the top 25 agents by attributed value (logged when capped — never a
+   * silent truncation); the per-agent LARI rollup is not team-scoped.
+   */
+  async agentEconomics(from?: string, to?: string): Promise<AgentEconomicsRow[]> {
+    const r = this.range(from, to, 365);
+    const agents = await this.ch.queryScoped<{ agent_id: string }>(
+      `SELECT agent_id, sum(value_usd) AS value_usd
+       FROM agentledger.v_agent_daily_unit_economics
+       WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date}
+       GROUP BY agent_id ORDER BY value_usd DESC`,
+      r as Record<string, ChParam>,
+    );
+    const CAP = 25;
+    const capped = agents.slice(0, CAP);
+    if (agents.length > CAP) {
+      this.logger.warn(`agent-economics: showing top ${CAP} of ${agents.length} agents by value`);
+    }
+    const rows = await Promise.all(
+      capped.map(async (a): Promise<AgentEconomicsRow> => {
+        const result = await this.lari.computeForAgent(a.agent_id, r.from, r.to);
+        return {
+          agentId: a.agent_id,
+          cost_usd: result.fullyLoadedCostUsd,
+          value_usd: result.attributedIncrementalValueUsd,
+          risk_adjusted_roi: result.netValueUsd,
+          lari: result.lari,
+          confidenceScore: result.confidenceScore,
+          recommendation: result.recommendation,
+        };
+      }),
+    );
+    return rows.sort((x, y) => y.risk_adjusted_roi - x.risk_adjusted_roi);
   }
 
   // CISO agent risk register (Phase 5): per agent, its risk_exposure_pct plus the

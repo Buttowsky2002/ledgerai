@@ -1,7 +1,11 @@
 import { Module } from '@nestjs/common';
-import { LariService } from '../lari/lari.service';
+import { LariModule } from '../lari/lari.module';
 import { AgentRoiService } from './agent-roi.service';
 import { AgentsController } from './agents.controller';
 
-@Module({ controllers: [AgentsController], providers: [AgentRoiService, LariService] })
+@Module({
+  imports: [LariModule],
+  controllers: [AgentsController],
+  providers: [AgentRoiService],
+})
 export class AgentsModule {}

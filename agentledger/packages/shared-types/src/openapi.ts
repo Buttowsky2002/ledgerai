@@ -932,6 +932,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/analytics/agent-economics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AnalyticsController_agentEconomics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/analytics/agent-risk": {
         parameters: {
             query?: never;
@@ -3303,6 +3319,8 @@ export interface operations {
             query?: {
                 from?: string;
                 to?: string;
+                /** @description Optional team_id filter (cost/value/risk reads honor it; ignored elsewhere). */
+                team?: string;
             };
             header?: never;
             path?: never;
@@ -3323,6 +3341,8 @@ export interface operations {
             query: {
                 from?: string;
                 to?: string;
+                /** @description Optional team_id filter (cost/value/risk reads honor it; ignored elsewhere). */
+                team?: string;
                 dimension: "team" | "app" | "agent";
             };
             header?: never;
@@ -3344,6 +3364,8 @@ export interface operations {
             query?: {
                 from?: string;
                 to?: string;
+                /** @description Optional team_id filter (cost/value/risk reads honor it; ignored elsewhere). */
+                team?: string;
             };
             header?: never;
             path?: never;
@@ -3364,6 +3386,8 @@ export interface operations {
             query?: {
                 from?: string;
                 to?: string;
+                /** @description Optional team_id filter (cost/value/risk reads honor it; ignored elsewhere). */
+                team?: string;
                 virtualKeyId?: string;
             };
             header?: never;
@@ -3385,6 +3409,8 @@ export interface operations {
             query?: {
                 from?: string;
                 to?: string;
+                /** @description Optional team_id filter (cost/value/risk reads honor it; ignored elsewhere). */
+                team?: string;
             };
             header?: never;
             path?: never;
@@ -3405,6 +3431,8 @@ export interface operations {
             query?: {
                 from?: string;
                 to?: string;
+                /** @description Optional team_id filter (cost/value/risk reads honor it; ignored elsewhere). */
+                team?: string;
                 outcomeType?: string;
                 minConfidence?: number;
             };
@@ -3427,8 +3455,32 @@ export interface operations {
             query?: {
                 from?: string;
                 to?: string;
+                /** @description Optional team_id filter (cost/value/risk reads honor it; ignored elsewhere). */
+                team?: string;
                 outcomeType?: string;
                 minConfidence?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AnalyticsController_agentEconomics: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+                /** @description Optional team_id filter (cost/value/risk reads honor it; ignored elsewhere). */
+                team?: string;
             };
             header?: never;
             path?: never;
@@ -3466,6 +3518,8 @@ export interface operations {
             query?: {
                 from?: string;
                 to?: string;
+                /** @description Optional team_id filter (cost/value/risk reads honor it; ignored elsewhere). */
+                team?: string;
                 format?: "csv" | "json";
             };
             header?: never;
@@ -3487,6 +3541,8 @@ export interface operations {
             query?: {
                 from?: string;
                 to?: string;
+                /** @description Optional team_id filter (cost/value/risk reads honor it; ignored elsewhere). */
+                team?: string;
                 format?: "json" | "md";
             };
             header?: never;
@@ -3508,6 +3564,8 @@ export interface operations {
             query?: {
                 from?: string;
                 to?: string;
+                /** @description Optional team_id filter (cost/value/risk reads honor it; ignored elsewhere). */
+                team?: string;
             };
             header?: never;
             path: {

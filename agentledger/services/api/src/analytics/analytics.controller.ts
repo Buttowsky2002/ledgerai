@@ -24,7 +24,7 @@ export class AnalyticsController {
 
   @Roles('viewer') @Get('spend')
   spend(@Query() q: RangeQueryDto) {
-    return this.analytics.spend(q.from, q.to);
+    return this.analytics.spend(q.from, q.to, q.team);
   }
 
   @Roles('viewer') @Get('allocation')
@@ -44,17 +44,23 @@ export class AnalyticsController {
 
   @Roles('viewer') @Get('risk')
   risk(@Query() q: RangeQueryDto) {
-    return this.analytics.risk(q.from, q.to);
+    return this.analytics.risk(q.from, q.to, q.team);
   }
 
   @Roles('viewer') @Get('unit-economics')
   unitEconomics(@Query() q: UnitEconomicsQueryDto) {
-    return this.analytics.unitEconomics(q.from, q.to, q.outcomeType, q.minConfidence);
+    return this.analytics.unitEconomics(q.from, q.to, q.outcomeType, q.minConfidence, q.team);
   }
 
   @Roles('viewer') @Get('roi')
   roi(@Query() q: RoiQueryDto) {
-    return this.analytics.roi(q.from, q.to, q.outcomeType, q.minConfidence);
+    return this.analytics.roi(q.from, q.to, q.outcomeType, q.minConfidence, q.team);
+  }
+
+  // Per-agent economics + LARI recommendation (overview recommendations + table).
+  @Roles('viewer') @Get('agent-economics')
+  agentEconomics(@Query() q: RangeQueryDto) {
+    return this.analytics.agentEconomics(q.from, q.to);
   }
 
   @Roles('viewer') @Get('agent-risk')

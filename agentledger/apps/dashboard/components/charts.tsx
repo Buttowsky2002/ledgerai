@@ -1,6 +1,8 @@
 'use client';
 
 import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -14,9 +16,48 @@ import {
 
 const AXIS = '#8b95a5';
 const GRID = '#1e2530';
-const TOOLTIP = { background: '#11151d', border: '1px solid #1e2530', borderRadius: 6, fontSize: 12 };
+const ACCENT = '#4f8cff';
+const TOOLTIP = {
+  background: '#151b25',
+  border: '1px solid #1e2530',
+  borderRadius: 8,
+  fontSize: 12,
+  boxShadow: '0 8px 24px -12px rgba(0,0,0,0.7)',
+};
 
 type Row = Record<string, unknown>;
+
+/** Filled area chart — the headline trend treatment (gradient fade to the axis). */
+export function AreaChartClient({ data, xKey, yKey }: { data: Row[]; xKey: string; yKey: string }) {
+  return (
+    <ResponsiveContainer width="100%" height={280}>
+      <AreaChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+        <defs>
+          <linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={ACCENT} stopOpacity={0.35} />
+            <stop offset="100%" stopColor={ACCENT} stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid stroke={GRID} vertical={false} />
+        <XAxis dataKey={xKey} stroke={AXIS} fontSize={11} tickLine={false} axisLine={false} minTickGap={28} />
+        <YAxis stroke={AXIS} fontSize={11} tickLine={false} axisLine={false} width={52} />
+        <Tooltip contentStyle={TOOLTIP} cursor={{ stroke: GRID }} />
+        <Area type="monotone" dataKey={yKey} stroke={ACCENT} strokeWidth={2} fill="url(#areaFill)" />
+      </AreaChart>
+    </ResponsiveContainer>
+  );
+}
+
+/** Axis-less micro line for KPI cards. */
+export function Sparkline({ data, yKey, height = 40 }: { data: Row[]; yKey: string; height?: number }) {
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <LineChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
+        <Line type="monotone" dataKey={yKey} stroke={ACCENT} strokeWidth={1.75} dot={false} />
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
 
 export function LineChartClient({ data, xKey, yKey }: { data: Row[]; xKey: string; yKey: string }) {
   return (

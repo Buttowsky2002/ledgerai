@@ -18,7 +18,7 @@ ch() { docker compose exec -T clickhouse clickhouse-client "$@"; }
 pg() { docker compose exec -T postgres psql -U agentledger -d agentledger -v ON_ERROR_STOP=1 "$@"; }
 pg_up() { [ -n "$(docker compose ps -q postgres 2>/dev/null)" ]; }
 
-CH_TABLES="llm_calls spend_daily spend_hourly_by_key risk_daily agent_runs outcomes agent_tool_calls risk_events agent_risk"
+CH_TABLES="llm_calls spend_daily spend_hourly_by_key risk_daily agent_runs outcomes roi_rates agent_tool_calls risk_events agent_risk"
 
 echo "Waiting for ClickHouse ..."
 for _ in $(seq 1 60); do

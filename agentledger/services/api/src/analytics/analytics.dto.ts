@@ -4,6 +4,8 @@ import { IsDateString, IsIn, IsNumber, IsOptional, IsString, Max, Min } from 'cl
 export class RangeQueryDto {
   @IsOptional() @IsDateString() from?: string;
   @IsOptional() @IsDateString() to?: string;
+  /** Optional team_id filter (cost/value/risk reads honor it; ignored elsewhere). */
+  @IsOptional() @IsString() team?: string;
 }
 
 export class AllocationQueryDto extends RangeQueryDto {

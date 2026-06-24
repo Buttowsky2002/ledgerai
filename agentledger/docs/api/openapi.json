@@ -2316,6 +2316,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "team",
+            "required": false,
+            "in": "query",
+            "description": "Optional team_id filter (cost/value/risk reads honor it; ignored elsewhere).",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -2344,6 +2353,15 @@
             "name": "to",
             "required": false,
             "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "team",
+            "required": false,
+            "in": "query",
+            "description": "Optional team_id filter (cost/value/risk reads honor it; ignored elsewhere).",
             "schema": {
               "type": "string"
             }
@@ -2391,6 +2409,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "team",
+            "required": false,
+            "in": "query",
+            "description": "Optional team_id filter (cost/value/risk reads honor it; ignored elsewhere).",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -2419,6 +2446,15 @@
             "name": "to",
             "required": false,
             "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "team",
+            "required": false,
+            "in": "query",
+            "description": "Optional team_id filter (cost/value/risk reads honor it; ignored elsewhere).",
             "schema": {
               "type": "string"
             }
@@ -2461,6 +2497,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "team",
+            "required": false,
+            "in": "query",
+            "description": "Optional team_id filter (cost/value/risk reads honor it; ignored elsewhere).",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -2489,6 +2534,15 @@
             "name": "to",
             "required": false,
             "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "team",
+            "required": false,
+            "in": "query",
+            "description": "Optional team_id filter (cost/value/risk reads honor it; ignored elsewhere).",
             "schema": {
               "type": "string"
             }
@@ -2543,6 +2597,15 @@
             }
           },
           {
+            "name": "team",
+            "required": false,
+            "in": "query",
+            "description": "Optional team_id filter (cost/value/risk reads honor it; ignored elsewhere).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "outcomeType",
             "required": false,
             "in": "query",
@@ -2558,6 +2621,46 @@
               "minimum": 0,
               "maximum": 1,
               "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Analytics"
+        ]
+      }
+    },
+    "/v1/analytics/agent-economics": {
+      "get": {
+        "operationId": "AnalyticsController_agentEconomics",
+        "parameters": [
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "team",
+            "required": false,
+            "in": "query",
+            "description": "Optional team_id filter (cost/value/risk reads honor it; ignored elsewhere).",
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -2606,6 +2709,15 @@
             }
           },
           {
+            "name": "team",
+            "required": false,
+            "in": "query",
+            "description": "Optional team_id filter (cost/value/risk reads honor it; ignored elsewhere).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "format",
             "required": false,
             "in": "query",
@@ -2644,6 +2756,15 @@
             "name": "to",
             "required": false,
             "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "team",
+            "required": false,
+            "in": "query",
+            "description": "Optional team_id filter (cost/value/risk reads honor it; ignored elsewhere).",
             "schema": {
               "type": "string"
             }
@@ -2695,6 +2816,15 @@
             "name": "to",
             "required": false,
             "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "team",
+            "required": false,
+            "in": "query",
+            "description": "Optional team_id filter (cost/value/risk reads honor it; ignored elsewhere).",
             "schema": {
               "type": "string"
             }
