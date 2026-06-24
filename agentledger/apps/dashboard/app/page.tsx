@@ -88,7 +88,11 @@ export default async function OverviewPage({ searchParams }: { searchParams: { t
   const netRoi = economics.reduce((s, r) => s + Number(r.risk_adjusted_roi), 0);
   const actions = economics.filter((r) => REC[r.recommendation]?.action);
 
-  const teamLabel = team ? teams.find((t) => t.id === team)?.name ?? team : 'all teams';
+  // team_id is a free-form string label on the canonical event (not a UUID FK), so
+  // the filter value is the team name — that's what producers stamp and what the
+  // spend/risk dimensions store. Chips are deduped by name.
+  const teamLabel = team || 'all teams';
+  const teamNames = [...new Set(teams.map((t) => t.name))];
 
   return (
     <>
@@ -96,7 +100,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: { t
         title="Overview"
         subtitle={`${teamLabel} · ${from} → ${to}`}
         actions={
-          teams.length > 0 ? (
+          teamNames.length > 0 ? (
             <div className="flex flex-wrap gap-2">
               <Link
                 href="/"
@@ -106,15 +110,15 @@ export default async function OverviewPage({ searchParams }: { searchParams: { t
               >
                 All teams
               </Link>
-              {teams.map((t) => (
+              {teamNames.map((name) => (
                 <Link
-                  key={t.id}
-                  href={`/?team=${encodeURIComponent(t.id)}`}
+                  key={name}
+                  href={`/?team=${encodeURIComponent(name)}`}
                   className={`rounded px-3 py-1.5 text-sm ${
-                    team === t.id ? 'bg-accent/20 text-white' : 'border border-edge text-muted hover:bg-white/5'
+                    team === name ? 'bg-accent/20 text-white' : 'border border-edge text-muted hover:bg-white/5'
                   }`}
                 >
-                  {t.name}
+                  {name}
                 </Link>
               ))}
             </div>
