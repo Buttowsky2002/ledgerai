@@ -1,6 +1,6 @@
 import Link from 'next/link';
-import { LineChartClient } from '../components/charts';
-import { Card, DataTable, PageHeader, Stat, num, usd } from '../components/ui';
+import { AreaChartClient, Sparkline } from '../components/charts';
+import { Badge, BadgeTone, Card, DataTable, PageHeader, Stat, num, usd } from '../components/ui';
 import { apiClient, fetchData } from '../lib/api';
 import { defaultRange } from '../lib/auth';
 
@@ -37,25 +37,48 @@ type AgentEconomicsRow = {
   recommendation: Recommendation;
 };
 
-// Presentation for each LARI recommendation: label, badge color, and whether it
-// is an action item worth surfacing in the "Recommended actions" panel.
-const REC: Record<Recommendation, { label: string; cls: string; action: boolean }> = {
-  scale: { label: 'Scale', cls: 'bg-emerald-500/15 text-emerald-400', action: true },
-  maintain: { label: 'Maintain', cls: 'bg-white/5 text-muted', action: false },
-  optimize: { label: 'Optimize', cls: 'bg-amber-500/15 text-amber-400', action: true },
-  improve_evidence: { label: 'Improve evidence', cls: 'bg-sky-500/15 text-sky-400', action: true },
-  require_approval: { label: 'Require approval', cls: 'bg-amber-500/15 text-amber-400', action: true },
-  investigate: { label: 'Investigate', cls: 'bg-orange-500/15 text-orange-400', action: true },
-  pause: { label: 'Pause', cls: 'bg-rose-500/15 text-rose-400', action: true },
-  retire: { label: 'Retire', cls: 'bg-rose-500/15 text-rose-400', action: true },
+// Presentation + triage metadata for each LARI recommendation. `priority` orders
+// the action queue (0 = most urgent); `action` decides whether it surfaces there;
+// `hint` is a content-free rationale for why the engine flagged it.
+const REC: Record<
+  Recommendation,
+  { label: string; tone: BadgeTone; action: boolean; priority: number; hint: string }
+> = {
+  pause: { label: 'Pause', tone: 'neg', action: true, priority: 0, hint: 'Negative net return — halt spend' },
+  retire: { label: 'Retire', tone: 'neg', action: true, priority: 0, hint: 'No attributable value — decommission' },
+  investigate: { label: 'Investigate', tone: 'warn', action: true, priority: 1, hint: 'Anomalous cost or risk signal' },
+  require_approval: { label: 'Require approval', tone: 'warn', action: true, priority: 1, hint: 'Governance gate before scaling' },
+  optimize: { label: 'Optimize', tone: 'warn', action: true, priority: 2, hint: 'High cost relative to value' },
+  improve_evidence: { label: 'Improve evidence', tone: 'info', action: true, priority: 3, hint: 'Attribution confidence below threshold' },
+  scale: { label: 'Scale', tone: 'pos', action: true, priority: 4, hint: 'Strong return — expand deployment' },
+  maintain: { label: 'Maintain', tone: 'neutral', action: false, priority: 5, hint: 'Healthy — no action needed' },
 };
 
-function RecBadge({ rec }: { rec: Recommendation }) {
-  const r = REC[rec] ?? REC.maintain;
-  return <span className={`rounded px-2 py-0.5 text-xs font-medium ${r.cls}`}>{r.label}</span>;
-}
+const BAR_BG: Record<BadgeTone, string> = {
+  neg: 'bg-neg',
+  warn: 'bg-warn',
+  info: 'bg-accent',
+  pos: 'bg-pos',
+  neutral: 'bg-edge',
+};
 
-const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
+const meta = (rec: Recommendation) => REC[rec] ?? REC.maintain;
+const roiTone = (v: number) => (v > 0 ? 'text-pos' : v < 0 ? 'text-neg' : 'text-gray-200');
+const fmtLari = (v: number) => `${num(Math.round(Number(v)))}×`;
+
+// Inline confidence meter (0–100): a numeric read plus a slim track.
+function ConfMeter({ score }: { score: number }) {
+  const pct = Math.max(0, Math.min(100, Math.round(score)));
+  const tone = pct >= 67 ? 'bg-pos' : pct >= 34 ? 'bg-warn' : 'bg-neg';
+  return (
+    <span className="inline-flex items-center justify-end gap-2">
+      <span className="num text-gray-300">{pct}</span>
+      <span className="h-1.5 w-12 overflow-hidden rounded-full bg-edge">
+        <span className={`block h-full rounded-full ${tone}`} style={{ width: `${pct}%` }} />
+      </span>
+    </span>
+  );
+}
 
 export default async function OverviewPage({ searchParams }: { searchParams: { team?: string } }) {
   const { from, to } = defaultRange();
@@ -83,10 +106,19 @@ export default async function OverviewPage({ searchParams }: { searchParams: { t
   const totalCost = spend.reduce((s, r) => s + Number(r.cost_usd), 0);
   const totalCalls = spend.reduce((s, r) => s + Number(r.calls), 0);
   const blocked = spend.reduce((s, r) => s + Number(r.blocked_calls), 0);
-  const chart = spend.map((r) => ({ day: r.day, cost_usd: Number(r.cost_usd) }));
+  const chart = spend.map((r) => ({ day: String(r.day).slice(5), cost_usd: Number(r.cost_usd) }));
 
   const netRoi = economics.reduce((s, r) => s + Number(r.risk_adjusted_roi), 0);
-  const actions = economics.filter((r) => REC[r.recommendation]?.action);
+  const totalValue = economics.reduce((s, r) => s + Number(r.value_usd), 0);
+
+  // Action queue: actionable recommendations, most urgent first, ties broken by
+  // risk-adjusted ROI magnitude (biggest dollars first).
+  const actions = economics
+    .filter((r) => meta(r.recommendation).action)
+    .sort((a, b) => {
+      const p = meta(a.recommendation).priority - meta(b.recommendation).priority;
+      return p !== 0 ? p : Math.abs(b.risk_adjusted_roi) - Math.abs(a.risk_adjusted_roi);
+    });
 
   // team_id is a free-form string label on the canonical event (not a UUID FK), so
   // the filter value is the team name — that's what producers stamp and what the
@@ -97,15 +129,16 @@ export default async function OverviewPage({ searchParams }: { searchParams: { t
   return (
     <>
       <PageHeader
+        eyebrow="FinOps control plane"
         title="Overview"
         subtitle={`${teamLabel} · ${from} → ${to}`}
         actions={
           teamNames.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5">
               <Link
                 href="/"
-                className={`rounded px-3 py-1.5 text-sm ${
-                  !team ? 'bg-accent/20 text-white' : 'border border-edge text-muted hover:bg-white/5'
+                className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
+                  !team ? 'bg-accent/15 text-accent ring-1 ring-inset ring-accent/30' : 'text-muted hover:bg-white/5'
                 }`}
               >
                 All teams
@@ -114,8 +147,10 @@ export default async function OverviewPage({ searchParams }: { searchParams: { t
                 <Link
                   key={name}
                   href={`/?team=${encodeURIComponent(name)}`}
-                  className={`rounded px-3 py-1.5 text-sm ${
-                    team === name ? 'bg-accent/20 text-white' : 'border border-edge text-muted hover:bg-white/5'
+                  className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
+                    team === name
+                      ? 'bg-accent/15 text-accent ring-1 ring-inset ring-accent/30'
+                      : 'text-muted hover:bg-white/5'
                   }`}
                 >
                   {name}
@@ -126,51 +161,80 @@ export default async function OverviewPage({ searchParams }: { searchParams: { t
         }
       />
 
-      <div className="mb-6 grid grid-cols-4 gap-4">
-        <Stat label="Total spend" value={usd(totalCost)} sub={team ? teamLabel : undefined} />
-        <Stat label="Calls" value={num(totalCalls)} />
-        <Stat label="Blocked calls" value={num(blocked)} />
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Stat
+          label="Total spend"
+          value={usd(totalCost)}
+          accent
+          sub={team ? teamLabel : `${num(totalCalls)} calls`}
+          chart={chart.length > 1 ? <Sparkline data={chart} yKey="cost_usd" /> : undefined}
+        />
         <Stat
           label="Net risk-adjusted ROI"
           value={usd(netRoi)}
-          sub={`${num(economics.length)} agents · portfolio-wide`}
+          tone={netRoi >= 0 ? 'pos' : 'neg'}
+          sub={`on ${usd(totalValue)} attributed value`}
+        />
+        <Stat
+          label="Action items"
+          value={num(actions.length)}
+          tone={actions.length > 0 ? 'warn' : 'pos'}
+          sub={`${num(economics.length)} agents tracked`}
+        />
+        <Stat
+          label="Blocked calls"
+          value={num(blocked)}
+          tone={blocked > 0 ? 'warn' : 'default'}
+          sub="policy + DLP enforcement"
         />
       </div>
 
-      <Card title="Daily spend (USD)">
-        <LineChartClient data={chart} xKey="day" yKey="cost_usd" />
+      <Card title="Daily spend" subtitle={`USD · ${teamLabel}`}>
+        <AreaChartClient data={chart} xKey="day" yKey="cost_usd" />
       </Card>
 
-      <Card title="Recommended actions">
+      <Card
+        title="Recommended actions"
+        subtitle="LARI engine · portfolio-wide"
+        actions={<Badge tone={actions.length > 0 ? 'warn' : 'pos'}>{num(actions.length)} flagged</Badge>}
+      >
         {actions.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted">
+          <p className="py-8 text-center text-sm text-muted">
             No action items — every tracked agent is recommended to maintain.
           </p>
         ) : (
-          <DataTable
-            columns={[
-              { key: 'agent', label: 'Agent' },
-              { key: 'rec', label: 'Recommendation' },
-              { key: 'roi', label: 'Risk-adj ROI', align: 'right' },
-              { key: 'lari', label: 'LARI', align: 'right' },
-              { key: 'conf', label: 'Confidence', align: 'right' },
-            ]}
-            rows={actions.map((r) => ({
-              agent: (
-                <Link className="text-sky-600 hover:underline" href={`/agents/${encodeURIComponent(r.agentId)}`}>
-                  {r.agentId}
-                </Link>
-              ),
-              rec: <RecBadge rec={r.recommendation} />,
-              roi: usd(r.risk_adjusted_roi),
-              lari: Number(r.lari).toFixed(2),
-              conf: `${Math.round(Number(r.confidenceScore))}/100`,
-            }))}
-          />
+          <div className="divide-y divide-edge/60">
+            {actions.map((r) => {
+              const m = meta(r.recommendation);
+              return (
+                <div key={r.agentId} className="flex items-center gap-4 py-3 first:pt-0 last:pb-0">
+                  <span className={`h-9 w-1 shrink-0 rounded-full ${BAR_BG[m.tone]}`} />
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      href={`/agents/${encodeURIComponent(r.agentId)}`}
+                      className="num text-sm font-medium text-gray-100 hover:text-accent"
+                    >
+                      {r.agentId}
+                    </Link>
+                    <div className="mt-0.5 text-xs text-muted">{m.hint}</div>
+                  </div>
+                  <Badge tone={m.tone} dot>
+                    {m.label}
+                  </Badge>
+                  <div className="w-32 text-right">
+                    <div className={`num text-sm font-medium ${roiTone(r.risk_adjusted_roi)}`}>
+                      {usd(r.risk_adjusted_roi)}
+                    </div>
+                    <div className="text-[11px] uppercase tracking-wide text-muted">risk-adj ROI</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
       </Card>
 
-      <Card title="Agent economics">
+      <Card title="Agent economics" subtitle="Per-agent cost, value, and LARI">
         <DataTable
           columns={[
             { key: 'agent', label: 'Agent' },
@@ -181,19 +245,29 @@ export default async function OverviewPage({ searchParams }: { searchParams: { t
             { key: 'conf', label: 'Confidence', align: 'right' },
             { key: 'rec', label: 'Recommendation' },
           ]}
-          rows={economics.map((r) => ({
-            agent: (
-              <Link className="text-sky-600 hover:underline" href={`/agents/${encodeURIComponent(r.agentId)}`}>
-                {r.agentId}
-              </Link>
-            ),
-            cost: usd(r.cost_usd),
-            value: usd(r.value_usd),
-            roi: usd(r.risk_adjusted_roi),
-            lari: Number(r.lari).toFixed(2),
-            conf: `${Math.round(Number(r.confidenceScore))}/100`,
-            rec: <RecBadge rec={r.recommendation} />,
-          }))}
+          rows={economics.map((r) => {
+            const m = meta(r.recommendation);
+            return {
+              agent: (
+                <Link
+                  className="num text-gray-100 hover:text-accent"
+                  href={`/agents/${encodeURIComponent(r.agentId)}`}
+                >
+                  {r.agentId}
+                </Link>
+              ),
+              cost: usd(r.cost_usd),
+              value: usd(r.value_usd),
+              roi: <span className={roiTone(r.risk_adjusted_roi)}>{usd(r.risk_adjusted_roi)}</span>,
+              lari: fmtLari(r.lari),
+              conf: <ConfMeter score={r.confidenceScore} />,
+              rec: (
+                <Badge tone={m.tone} dot>
+                  {m.label}
+                </Badge>
+              ),
+            };
+          })}
         />
       </Card>
     </>
