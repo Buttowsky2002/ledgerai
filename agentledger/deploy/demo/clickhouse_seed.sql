@@ -1,14 +1,22 @@
 -- LedgerAI demo seed — analytics plane (ClickHouse).
 --
 -- Synthetic, content-free activity for one demo tenant across 8 named agents,
--- engineered to tell a coherent story on the dashboard WITHOUT any provider keys:
---   • InvoiceReviewAgent (Finance) — STRONG ROI: low cost, high-value outcomes.
---   • DataCleanupAgent (Security)  — RUNAWAY COST: dominates spend, no outcomes.
---   • SOC-TriageAgent (Security)   — HIGH RISK: blocked/redacted calls + risk events.
+-- engineered so the LARI engine returns a FULL SPREAD of recommendations on the
+-- overview — a portfolio a FinOps lead would actually have to triage — WITHOUT any
+-- provider keys. Each agent is tuned (value, attribution confidence, fully-loaded
+-- cost via roi_rates, and risk severity) to land on a distinct recommendation:
+--   • InvoiceReviewAgent      → SCALE            (high value, low cost, deterministic attribution)
+--   • CodeReviewAgent         → MAINTAIN         (confident, solid mid-range ROI)
+--   • ContractSummarizerAgent → OPTIMIZE         (confident but thin margin — squeeze cost)
+--   • SupportBot              → IMPROVE_EVIDENCE (profitable but attribution too weak to trust)
+--   • RefundApprovalAgent     → INVESTIGATE      (loses money once human review is loaded in)
+--   • DataCleanupAgent        → RETIRE           (runaway cost, ~no attributable value)
+--   • SOC-TriageAgent         → PAUSE            (critical risk + negative return)
+--   • SalesResearchAgent      → REQUIRE_APPROVAL (positive ROI gated behind critical risk)
 --
 -- Inserting llm_calls auto-populates the spend_daily / spend_hourly_by_key /
--- risk_daily materialized views; agent_runs + outcomes drive unit economics and
--- v_roi; agent_tool_calls + risk_events + agent_risk drive the CISO risk view.
+-- risk_daily materialized views; agent_runs + outcomes + roi_rates drive v_roi and
+-- the LARI rollup; agent_tool_calls + risk_events + agent_risk drive the CISO view.
 --
 -- Idempotent: the DELETEs run synchronously (mutations_sync=2) before the INSERTs.
 -- Tenant id is passed as {tenant:String} (a valid UUID — the API validates the
@@ -20,6 +28,7 @@ ALTER TABLE agentledger.spend_hourly_by_key DELETE WHERE tenant_id = {tenant:Str
 ALTER TABLE agentledger.risk_daily          DELETE WHERE tenant_id = {tenant:String} SETTINGS mutations_sync = 2;
 ALTER TABLE agentledger.agent_runs          DELETE WHERE tenant_id = {tenant:String} SETTINGS mutations_sync = 2;
 ALTER TABLE agentledger.outcomes            DELETE WHERE tenant_id = {tenant:String} SETTINGS mutations_sync = 2;
+ALTER TABLE agentledger.roi_rates           DELETE WHERE tenant_id = {tenant:String} SETTINGS mutations_sync = 2;
 ALTER TABLE agentledger.agent_tool_calls    DELETE WHERE tenant_id = {tenant:String} SETTINGS mutations_sync = 2;
 ALTER TABLE agentledger.risk_events         DELETE WHERE tenant_id = {tenant:String} SETTINGS mutations_sync = 2;
 ALTER TABLE agentledger.agent_risk          DELETE WHERE tenant_id = {tenant:String} SETTINGS mutations_sync = 2;
@@ -83,8 +92,9 @@ FROM (
   FROM numbers(1000)
 );
 
--- ── 50 agent runs. Runs 0–29 are ROI producers (low cost, linked to outcomes);
---    runs 30–49 are the cost/risk problem agents (high cost, no outcomes). ─────
+-- ── 40 agent runs, one outcome each, round-robin across all 8 agents (slot =
+--    number % 8) so every agent has attributed outcomes the LARI engine can score.
+--    Run cost is modest for the producers and runs away for DataCleanupAgent. ───
 INSERT INTO agentledger.agent_runs
 (run_id, tenant_id, agent_id, app_id, user_id, started_at, ended_at, status,
  objective, outcome_id, total_cost_usd, total_tokens, llm_calls, tool_calls, risk_events)
@@ -98,25 +108,29 @@ SELECT
   now() - toIntervalHour(number * 6) + toIntervalSecond(30 + number % 240),
   if(number % 13 = 0, 'failed', 'completed'),
   'demo objective',
-  if(number < 30, concat('out_', toString(number)), ''),
-  cost,
+  concat('out_', toString(number)),
+  run_cost,
   toUInt64(1500 + number % 6000),
   toUInt32(1 + number % 8),
   toUInt32(number % 5),
-  toUInt32(if(agent = 'SOC-TriageAgent', 2, 0))
+  toUInt32(if(agent IN ('SOC-TriageAgent', 'DataCleanupAgent'), 2, 0))
 FROM (
   SELECT
     number,
-    if(number < 30,
-       arrayElement(['InvoiceReviewAgent', 'SupportBot', 'CodeReviewAgent', 'RefundApprovalAgent', 'ContractSummarizerAgent'], toInt32(number % 5) + 1),
-       arrayElement(['DataCleanupAgent', 'SOC-TriageAgent'], toInt32(number % 2) + 1)) AS agent,
-    if(number < 30,
-       round(arrayElement([0.45, 0.20, 0.90, 0.30, 0.65], toInt32(number % 5) + 1) + (number % 5) * 0.03, 4),
-       if(agent = 'DataCleanupAgent', round(25.0 + (number % 20) * 1.8, 2), round(4.0 + (number % 10) * 0.5, 2))) AS cost
-  FROM numbers(50)
+    toInt32(number % 8) + 1 AS slot,
+    arrayElement(['InvoiceReviewAgent', 'CodeReviewAgent', 'ContractSummarizerAgent', 'SupportBot',
+                  'RefundApprovalAgent', 'DataCleanupAgent', 'SOC-TriageAgent', 'SalesResearchAgent'], slot) AS agent,
+    -- Modest per-run cost for everyone except the runaway DataCleanupAgent. (This is
+    -- the run's direct AI cost; the LARI token cost comes from spend_hourly_by_key.)
+    if(agent = 'DataCleanupAgent',
+       round(22.0 + (number % 20) * 1.5, 2),
+       round(arrayElement([0.5, 0.9, 0.7, 0.2, 0.4, 0.0, 0.3, 0.1], slot) + (number % 5) * 0.02, 4)) AS run_cost
+  FROM numbers(40)
 );
 
--- ── 30 business outcomes, linked to the ROI runs (runs 0–29). ─────────────────
+-- ── 40 business outcomes, one per run (slot = number % 8 → same agent as its run).
+--    value_usd, attribution_confidence, and outcome_type per slot are tuned so the
+--    LARI recommendation lands where the narrative above says it should. ─────────
 INSERT INTO agentledger.outcomes
 (outcome_id, tenant_id, ts, source_system, outcome_type, team_id, user_id, run_id,
  business_value_usd, quality_score, attribution_confidence, completion_status)
@@ -124,30 +138,38 @@ SELECT
   concat('out_', toString(number)),
   {tenant:String},
   now() - toIntervalHour(number * 6),
-  arrayElement(['erp', 'zendesk', 'github', 'zendesk', 'contracts'], idx),
-  multiIf(agent = 'InvoiceReviewAgent', 'invoice_processed',
-          agent = 'SupportBot', 'ticket_resolved',
-          agent = 'CodeReviewAgent', 'pr_merged',
-          agent = 'RefundApprovalAgent', 'refund_approved',
-          'contract_summarized'),
-  arrayElement(['Finance', 'Customer Support', 'Engineering', 'Customer Support', 'Finance'], idx),
+  arrayElement(['erp', 'github', 'contracts', 'zendesk', 'erp', 'data', 'soc', 'crm'], slot),
+  arrayElement(['invoice_processed', 'pr_merged', 'contract_summarized', 'ticket_resolved',
+                'refund_approved', 'records_cleaned', 'alert_triaged', 'lead_qualified'], slot),
+  arrayElement(['Finance', 'Engineering', 'Finance', 'Customer Support',
+                'Finance', 'Security', 'Security', 'Customer Support'], slot),
   concat('demo-user-', toString(number % 9)),
   concat('run_', toString(number)),
-  multiIf(agent = 'InvoiceReviewAgent', round(1500.0 + (number % 5) * 120, 2),
-          agent = 'ContractSummarizerAgent', round(600.0 + (number % 4) * 40, 2),
-          agent = 'CodeReviewAgent', round(250.0 + (number % 5) * 30, 2),
-          agent = 'RefundApprovalAgent', round(120.0 + (number % 4) * 10, 2),
-          round(80.0 + (number % 6) * 5, 2)),
+  -- Gross business value per outcome (before attribution + incrementality discounting).
+  arrayElement([1500.0, 380.0, 200.0, 110.0, 160.0, 0.10, 0.50, 280.0], slot),
   0.85,
-  multiIf(agent = 'InvoiceReviewAgent', 0.95, agent = 'CodeReviewAgent', 0.88, agent = 'ContractSummarizerAgent', 0.82, 0.75),
+  -- ≥0.99 reads as a deterministic (agent-stamped) link → high confidence; below
+  -- that is probabilistic. SupportBot is deliberately weak (→ improve_evidence).
+  arrayElement([1.0, 1.0, 1.0, 0.6, 0.9, 0.5, 0.8, 0.9], slot),
   'completed'
 FROM (
-  SELECT
-    number,
-    toInt32(number % 5) + 1 AS idx,
-    arrayElement(['InvoiceReviewAgent', 'SupportBot', 'CodeReviewAgent', 'RefundApprovalAgent', 'ContractSummarizerAgent'], idx) AS agent
-  FROM numbers(30)
+  SELECT number, toInt32(number % 8) + 1 AS slot
+  FROM numbers(40)
 );
+
+-- ── Fully-loaded cost rates per (source_system, outcome_type). Human review (QA),
+--    eval/monitoring, and amortized integration are what turn a token-cheap agent
+--    into a real cost — and what make MAINTAIN / OPTIMIZE / INVESTIGATE reachable.
+--    Agents without a row (DataCleanup/SOC/Sales) are loaded on token cost alone. ─
+INSERT INTO agentledger.roi_rates
+(tenant_id, source_system, outcome_type, hourly_rate, baseline_minutes, rework_pct,
+ redeployment_factor, qa_cost_per_outcome, eval_cost_per_outcome,
+ integration_cost_per_outcome, platform_overhead_pct, updated_at) VALUES
+  ({tenant:String}, 'erp',       'invoice_processed',    0, 0, 0, 1,   8,  1,  2, 0.10, now()),
+  ({tenant:String}, 'github',    'pr_merged',            0, 0, 0, 1, 120, 15, 25, 0.15, now()),
+  ({tenant:String}, 'contracts', 'contract_summarized',  0, 0, 0, 1,  90, 10, 20, 0.15, now()),
+  ({tenant:String}, 'zendesk',   'ticket_resolved',      0, 0, 0, 1,  12,  2,  3, 0.10, now()),
+  ({tenant:String}, 'erp',       'refund_approved',      0, 0, 0, 1,  60,  8, 15, 0.20, now());
 
 -- ── 150 tool calls (SOC/Data heavier; feeds the governance views). ────────────
 INSERT INTO agentledger.agent_tool_calls
@@ -155,23 +177,25 @@ INSERT INTO agentledger.agent_tool_calls
 SELECT
   {tenant:String},
   arrayElement(['SupportBot', 'InvoiceReviewAgent', 'SOC-TriageAgent', 'SalesResearchAgent', 'CodeReviewAgent', 'DataCleanupAgent', 'RefundApprovalAgent', 'ContractSummarizerAgent'], toInt32(number % 8) + 1),
-  concat('run_', toString(number % 50)),
+  concat('run_', toString(number % 40)),
   concat('demo_tool_', toString(number)),
   arrayElement(['search_kb', 'read_invoice', 'run_query', 'web_search', 'fetch_pr', 'delete_records', 'issue_refund', 'read_contract'], toInt32(number % 8) + 1),
   '',
   now() - toIntervalHour(number * 4)
 FROM numbers(150);
 
--- ── 12 risk events (SOC high, DataCleanup medium). ────────────────────────────
+-- ── 12 risk events. SOC-Triage + Sales-Research carry CRITICAL events (those gate
+--    their LARI recommendation to pause / require_approval); DataCleanup is medium
+--    (so it RETIRES on economics, not pauses on risk). ──────────────────────────
 INSERT INTO agentledger.risk_events
 (event_id, tenant_id, agent_id, run_id, category, severity, detail, occurrences, first_seen, detected_at)
 SELECT
   concat('evt_', toString(number)),
   {tenant:String},
-  if(number < 8, 'SOC-TriageAgent', 'DataCleanupAgent'),
-  concat('run_', toString(30 + number % 20)),
+  multiIf(number < 5, 'SOC-TriageAgent', number < 8, 'SalesResearchAgent', 'DataCleanupAgent'),
+  concat('run_', toString(number % 40)),
   arrayElement(['unauthorized_tool', 'tool_spike', 'injection_suspected'], toInt32(number % 3) + 1),
-  if(number < 8, 'high', 'medium'),
+  multiIf(number < 8, 'critical', 'medium'),
   concat('tool: ', arrayElement(['delete_records', 'export_csv', 'run_query', 'issue_refund'], toInt32(number % 4) + 1)),
   toUInt32(1 + number % 5),
   now() - toIntervalHour(number * 8),
