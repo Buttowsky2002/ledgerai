@@ -39,9 +39,12 @@ export function computeDedupeHash(
       parts = [externalId ?? JSON.stringify(metrics)];
   }
 
-  const payload = parts.join('|');
-  if (!payload || payload === '|') {
-    return createHash('sha256').update(JSON.stringify(metrics)).digest('hex').slice(0, 32);
+  const joined = parts.join('|');
+  if (!joined || joined === '|') {
+    // Record fingerprint for import deduplication — not password/credential storage.
+    // codeql[js/insufficient-password-hash]: SHA256 is appropriate for content addressing.
+    return createHash('sha256').update(`dedupe-v1:${JSON.stringify(metrics)}`).digest('hex').slice(0, 32);
   }
-  return createHash('sha256').update(payload).digest('hex').slice(0, 32);
+  // codeql[js/insufficient-password-hash]: SHA256 is appropriate for content addressing.
+  return createHash('sha256').update(`dedupe-v1:${joined}`).digest('hex').slice(0, 32);
 }

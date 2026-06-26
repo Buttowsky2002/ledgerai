@@ -11,15 +11,3 @@ export function getPath(obj: unknown, path: string): unknown {
   return cur;
 }
 
-export function setPath(obj: Record<string, unknown>, path: string, value: unknown): void {
-  const parts = path.split('.');
-  let cur = obj;
-  for (let i = 0; i < parts.length - 1; i++) {
-    const p = parts[i];
-    if (!(p in cur) || typeof cur[p] !== 'object' || cur[p] === null) {
-      cur[p] = {};
-    }
-    cur = cur[p] as Record<string, unknown>;
-  }
-  cur[parts[parts.length - 1]] = value;
-}
