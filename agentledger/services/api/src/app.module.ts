@@ -14,6 +14,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { AppsModule } from './apps/apps.module';
 import { AttributionModule } from './attribution/attribution.module';
 import { BudgetsModule } from './budgets/budgets.module';
+import { ConnectorsModule } from './connectors/connectors.module';
 import { ClickHouseModule } from './clickhouse/clickhouse.module';
 import { HealthModule } from './health/health.module';
 import { IdentitiesModule } from './identities/identities.module';
@@ -81,6 +82,8 @@ import { VirtualKeysModule } from './virtual-keys/virtual-keys.module';
     OutcomesModule,
     // Bulk data ingestion (admin-only write into the analytics store).
     ImportModule,
+    // Config-driven API connector framework (presets + custom REST sources).
+    ConnectorsModule,
   ],
   providers: [
     // Guard order matters: rate-limit → authenticate → authorize.

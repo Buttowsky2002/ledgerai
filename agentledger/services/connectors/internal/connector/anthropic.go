@@ -110,7 +110,7 @@ func (c *AnthropicConnector) Fetch(ctx context.Context, cfg map[string]any, cur 
 	q.Set("starting_at", startISO)
 	q.Set("bucket_width", "1d")
 	q.Set("limit", strconv.Itoa(pageSize))
-	q.Add("group_by", "model")
+	q.Add("group_by", "description")
 	if page != "" {
 		q.Set("page", page)
 	}

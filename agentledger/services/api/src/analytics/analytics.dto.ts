@@ -9,7 +9,7 @@ export class RangeQueryDto {
 }
 
 export class AllocationQueryDto extends RangeQueryDto {
-  @IsIn(['team', 'app', 'agent']) dimension!: 'team' | 'app' | 'agent';
+  @IsIn(['team', 'app', 'agent', 'user']) dimension!: 'team' | 'app' | 'agent' | 'user';
 }
 
 export class BurndownQueryDto extends RangeQueryDto {

@@ -118,8 +118,17 @@ export class AnalyticsService {
     );
   }
 
-  allocation(dimension: 'team' | 'app' | 'agent', from?: string, to?: string) {
+  allocation(dimension: 'team' | 'app' | 'agent' | 'user', from?: string, to?: string) {
     const r = this.range(from, to);
+    if (dimension === 'user') {
+      return this.ch.queryScoped(
+        `SELECT user_id AS key, sum(cost_usd) AS cost_usd, sum(calls) AS calls
+         FROM spend_daily_by_user
+         WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date}
+         GROUP BY user_id ORDER BY cost_usd DESC`,
+        r as Record<string, ChParam>,
+      );
+    }
     if (dimension === 'agent') {
       return this.ch.queryScoped(
         `SELECT agent_id AS key, sum(cost_usd) AS cost_usd, sum(calls) AS calls

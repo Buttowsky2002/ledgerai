@@ -1,0 +1,53 @@
+{
+  "name": "OpenAI Usage API",
+  "provider": "openai",
+  "category": "provider_spend",
+  "authType": "bearer_token",
+  "baseUrl": "https://api.openai.com",
+  "endpoints": [
+    {
+      "path": "/v1/organization/usage",
+      "method": "GET",
+      "queryParams": {
+        "start_time": "{{sync_start}}",
+        "end_time": "{{sync_end}}"
+      }
+    }
+  ],
+  "pagination": {
+    "type": "cursor",
+    "itemsPath": "data",
+    "cursorPath": "next_page",
+    "cursorParam": "page",
+    "pageSize": 100
+  },
+  "rateLimit": {
+    "requestsPerMinute": 60
+  },
+  "retry": {
+    "maxAttempts": 3,
+    "retryOn": [429, 500, 502, 503, 504]
+  },
+  "destinationRecordType": "spend_usage_record",
+  "fieldMappings": [
+    { "type": "direct", "source": "model", "target": "model" },
+    { "type": "direct", "source": "n_context_tokens_total", "target": "input_tokens" },
+    { "type": "direct", "source": "n_generated_tokens_total", "target": "output_tokens" },
+    { "type": "fallback", "target": "cost_usd", "sources": ["cost_usd", "cost"] },
+    { "type": "direct", "source": "organization_id", "target": "project_id" },
+    { "type": "direct", "source": "id", "target": "id" },
+    { "type": "constant", "target": "provider", "value": "openai" },
+    { "type": "fallback", "target": "ts", "sources": ["aggregation_timestamp", "end_time"] }
+  ],
+  "validationRules": [
+    { "field": "cost_usd", "type": "currency" }
+  ],
+  "dedupe": {
+    "strategy": "period_model_user_product_cost",
+    "fields": ["model", "ts", "cost_usd"]
+  },
+  "schedule": {
+    "intervalMinutes": 60,
+    "enabled": true
+  }
+}

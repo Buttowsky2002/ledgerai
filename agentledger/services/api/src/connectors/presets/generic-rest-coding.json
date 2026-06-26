@@ -1,0 +1,19 @@
+{
+  "name": "Generic REST Coding Activity API",
+  "provider": "custom",
+  "category": "coding_tool",
+  "authType": "bearer_token",
+  "baseUrl": "https://api.example.com",
+  "endpoints": [{ "path": "/v1/coding-activity", "method": "GET" }],
+  "pagination": { "type": "next_url", "itemsPath": "data", "nextUrlPath": "links.next" },
+  "destinationRecordType": "coding_activity_record",
+  "fieldMappings": [
+    { "type": "direct", "source": "id", "target": "id" },
+    { "type": "direct", "source": "tool", "target": "tool_name" },
+    { "type": "direct", "source": "user_id", "target": "user_id" },
+    { "type": "direct", "source": "agent_id", "target": "agent_id" },
+    { "type": "fallback", "target": "cost_usd", "sources": ["cost_usd", "spend"] },
+    { "type": "fallback", "target": "ts", "sources": ["timestamp", "created_at"] }
+  ],
+  "dedupe": { "strategy": "provider_record_id" }
+}

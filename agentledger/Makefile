@@ -114,6 +114,21 @@ up:
 down:
 	docker compose down
 
+# Apply pending Postgres migrations to a running stack (Windows + Unix).
+# Fresh volumes auto-apply on first postgres init; use this after pulling new SQL.
+migrate:
+	powershell -ExecutionPolicy Bypass -File deploy/postgres/migrate.ps1
+
+migrate-api:
+	docker compose up -d --build api
+
+start-dashboard:
+	powershell -ExecutionPolicy Bypass -File deploy/start-dashboard.ps1
+
+migrate-dashboard:
+	docker compose stop dashboard
+	docker compose up -d --build dashboard
+
 # ── Demo mode (no provider keys required) ────────────────────────────────────
 # Brings up the analytics backend, seeds a demo tenant with synthetic activity,
 # and prints how to start the dashboard. See docs/DEPLOYMENT.md.

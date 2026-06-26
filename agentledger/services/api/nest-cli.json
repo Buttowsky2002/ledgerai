@@ -4,6 +4,7 @@
   "sourceRoot": "src",
   "compilerOptions": {
     "deleteOutDir": true,
+    "assets": [{ "include": "connectors/presets/**/*.json", "watchAssets": true }],
     "plugins": [
       {
         "name": "@nestjs/swagger",

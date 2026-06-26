@@ -111,7 +111,7 @@ export function mapRow(data: unknown): MappedRow {
         // rolls into risk_daily (which counts rows where dlp_action != 'allow').
         dlp_action: riskSeverity ? 'warn' : 'allow',
         risk_severity: riskSeverity ?? '',
-        source: 'sdk',
+        source: str(r.source, 'source') ?? 'sdk',
       },
     });
   }
@@ -122,7 +122,7 @@ export function mapRow(data: unknown): MappedRow {
       row: {
         outcome_id: id('out', idempotencyKey, '_out'),
         ts,
-        source_system: 'import',
+        source_system: str(r.source, 'source') === 'api' ? 'api' : 'import',
         outcome_type: outcomeType,
         team_id: teamId,
         user_id: userId,

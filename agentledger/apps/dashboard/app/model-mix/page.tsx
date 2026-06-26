@@ -1,14 +1,19 @@
 import { BarChartClient } from '../../components/charts';
+import { DateRangeFilter } from '../../components/DateRangeFilter';
 import { Card, DataTable, PageHeader, num, usd } from '../../components/ui';
 import { apiClient, fetchData } from '../../lib/api';
-import { defaultRange } from '../../lib/auth';
+import { parseRange } from '../../lib/date-range';
 
 export const dynamic = 'force-dynamic';
 
 type ModelRow = { provider: string; model: string; cost_usd: number; calls: string };
 
-export default async function ModelMixPage() {
-  const { from, to } = defaultRange();
+export default async function ModelMixPage({
+  searchParams,
+}: {
+  searchParams: { from?: string; to?: string };
+}) {
+  const { from, to } = parseRange(searchParams);
   const api = apiClient();
   const rows = (await fetchData(
     api.GET('/v1/analytics/model-mix', { params: { query: { from, to } } }),
@@ -19,7 +24,11 @@ export default async function ModelMixPage() {
 
   return (
     <>
-      <PageHeader title="Model mix" subtitle={`Spend by provider/model · ${from} → ${to}`} />
+      <PageHeader
+        title="Model mix"
+        subtitle={`Spend by provider/model · ${from} → ${to}`}
+        actions={<DateRangeFilter basePath="/model-mix" from={from} to={to} />}
+      />
       <Card title="Spend by model">
         <BarChartClient data={chart} xKey="model" yKey="cost_usd" />
       </Card>

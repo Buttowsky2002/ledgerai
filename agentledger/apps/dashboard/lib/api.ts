@@ -4,9 +4,17 @@ import { cookies } from 'next/headers';
 import { env } from './env';
 
 const API_URL = env('LEDGERAI_API_URL') ?? 'http://localhost:8094';
-// Dev-only tenant fallback: never resolved in production, so the x-tenant-id
-// header is never sent in prod (the API would refuse to trust it anyway).
-const DEV_TENANT = process.env.NODE_ENV !== 'production' ? env('LEDGERAI_DEV_TENANT_ID') : undefined;
+
+/** Dev/demo tenant for server-side BFF calls when no session cookie is present. */
+function devTenantId(): string | undefined {
+  const id = env('LEDGERAI_DEV_TENANT_ID');
+  if (!id) return undefined;
+  if (process.env.NODE_ENV !== 'production') return id;
+  if (env('LEDGERAI_DEMO_MODE') === 'true') return id;
+  return undefined;
+}
+
+const DEV_TENANT = devTenantId();
 
 /**
  * Server-side typed client for the control-plane API (BFF pattern — never runs in
@@ -25,6 +33,35 @@ export function apiClient() {
     headers['x-tenant-id'] = DEV_TENANT;
   }
   return createClient<paths>({ baseUrl: API_URL, headers });
+}
+
+/** Auth headers for BFF routes not yet in the generated OpenAPI client. */
+export function apiAuthHeaders(): Record<string, string> {
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  const token = cookies().get('al_access')?.value;
+  if (token) headers.Authorization = `Bearer ${token}`;
+  else if (DEV_TENANT) headers['x-tenant-id'] = DEV_TENANT;
+  return headers;
+}
+
+/** Proxy an API call until the route is added to docs/api/openapi.json. */
+export async function proxyApi(
+  path: string,
+  init?: RequestInit,
+): Promise<{ ok: boolean; status: number; data: unknown }> {
+  const headers = { ...apiAuthHeaders(), ...(init?.headers as Record<string, string> | undefined) };
+  if (init?.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+  const res = await fetch(`${API_URL}${path}`, { ...init, headers });
+  const text = await res.text();
+  let data: unknown = null;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { message: text.slice(0, 500) };
+    }
+  }
+  return { ok: res.ok, status: res.status, data };
 }
 
 /** Convenience: run a GET and return its data or a fallback (logs API errors). */

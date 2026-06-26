@@ -3343,7 +3343,7 @@ export interface operations {
                 to?: string;
                 /** @description Optional team_id filter (cost/value/risk reads honor it; ignored elsewhere). */
                 team?: string;
-                dimension: "team" | "app" | "agent";
+                dimension: "team" | "app" | "agent" | "user";
             };
             header?: never;
             path?: never;

@@ -266,6 +266,21 @@ services:
       pg-dev-init: { condition: service_completed_successfully }
       clickhouse: { condition: service_healthy }
 
+  dashboard:
+    build:
+      context: .
+      dockerfile: apps/dashboard/Dockerfile
+      args:
+        LEDGERAI_API_URL: http://api:8094
+    environment:
+      LEDGERAI_API_URL: http://api:8094
+      LEDGERAI_DEV_TENANT_ID: "00000000-0000-4000-8000-000000000001"
+      LEDGERAI_DEMO_MODE: "true"
+      NODE_ENV: development
+    ports: ["3000:3000"]
+    depends_on:
+      api: { condition: service_started }
+
 volumes:
   pg_data:
   ch_data:

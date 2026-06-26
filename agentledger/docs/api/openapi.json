@@ -2374,7 +2374,9 @@
               "enum": [
                 "team",
                 "app",
-                "agent"
+                "agent",
+                "user"
+              ],
               ],
               "type": "string"
             }

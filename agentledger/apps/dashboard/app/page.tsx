@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import { AreaChartClient, Sparkline } from '../components/charts';
+import { DateRangeFilter } from '../components/DateRangeFilter';
 import { Badge, BadgeTone, Card, DataTable, PageHeader, Stat, num, usd } from '../components/ui';
 import { apiClient, fetchData } from '../lib/api';
-import { defaultRange } from '../lib/auth';
+import { parseRange } from '../lib/date-range';
 
 export const dynamic = 'force-dynamic';
 
@@ -80,8 +81,12 @@ function ConfMeter({ score }: { score: number }) {
   );
 }
 
-export default async function OverviewPage({ searchParams }: { searchParams: { team?: string } }) {
-  const { from, to } = defaultRange();
+export default async function OverviewPage({
+  searchParams,
+}: {
+  searchParams: { team?: string; from?: string; to?: string };
+}) {
+  const { from, to } = parseRange(searchParams);
   const team = searchParams.team || undefined;
   const api = apiClient();
 
@@ -133,10 +138,12 @@ export default async function OverviewPage({ searchParams }: { searchParams: { t
         title="Overview"
         subtitle={`${teamLabel} · ${from} → ${to}`}
         actions={
-          teamNames.length > 0 ? (
+          <div className="flex flex-col items-end gap-2">
+            <DateRangeFilter basePath="/" from={from} to={to} extraParams={{ team }} />
+            {teamNames.length > 0 ? (
             <div className="flex flex-wrap gap-1.5">
               <Link
-                href="/"
+                href={`/?from=${from}&to=${to}`}
                 className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
                   !team ? 'bg-accent/15 text-accent ring-1 ring-inset ring-accent/30' : 'text-muted hover:bg-white/5'
                 }`}
@@ -146,7 +153,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: { t
               {teamNames.map((name) => (
                 <Link
                   key={name}
-                  href={`/?team=${encodeURIComponent(name)}`}
+                  href={`/?team=${encodeURIComponent(name)}&from=${from}&to=${to}`}
                   className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
                     team === name
                       ? 'bg-accent/15 text-accent ring-1 ring-inset ring-accent/30'
@@ -157,7 +164,8 @@ export default async function OverviewPage({ searchParams }: { searchParams: { t
                 </Link>
               ))}
             </div>
-          ) : undefined
+          ) : undefined}
+          </div>
         }
       />
 

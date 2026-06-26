@@ -230,18 +230,107 @@ model Budget {
   @@map("budgets")
 }
 
+model ConnectorDefinition {
+  definitionId   String   @id @default(dbgenerated("gen_random_uuid()")) @map("definition_id") @db.Uuid
+  tenantId       String?  @map("tenant_id") @db.Uuid
+  name           String
+  provider       String   @default("")
+  category       String   @default("custom")
+  definitionJson Json     @default("{}") @map("definition_json")
+  version        Int      @default(1)
+  builtIn        Boolean  @default(false) @map("built_in")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  @@map("connector_definitions")
+}
+
+model ConnectorSecret {
+  secretId   String   @id @default(dbgenerated("gen_random_uuid()")) @map("secret_id") @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  ciphertext String
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("connector_secrets")
+}
+
 model Connector {
-  connectorId String    @id @default(dbgenerated("gen_random_uuid()")) @map("connector_id") @db.Uuid
-  tenantId    String    @map("tenant_id") @db.Uuid
-  kind        String
-  config      Json      @default("{}")
-  secretRef   String?   @map("secret_ref")
-  status      String    @default("pending")
-  lastSyncAt  DateTime? @map("last_sync_at") @db.Timestamptz
-  lastError   String?   @map("last_error")
-  syncCursor  Json      @default("{}") @map("sync_cursor")
+  connectorId            String    @id @default(dbgenerated("gen_random_uuid()")) @map("connector_id") @db.Uuid
+  tenantId               String    @map("tenant_id") @db.Uuid
+  kind                   String?
+  connectorDefinitionId  String?   @map("connector_definition_id") @db.Uuid
+  displayName            String?   @map("display_name")
+  provider               String?
+  category               String?
+  config                 Json      @default("{}")
+  secretRef              String?   @map("secret_ref")
+  status                 String    @default("draft")
+  enabled                Boolean   @default(true)
+  mappingOverridesJson   Json      @default("{}") @map("mapping_overrides_json")
+  scheduleJson           Json      @default("{}") @map("schedule_json")
+  lastSyncAt             DateTime? @map("last_sync_at") @db.Timestamptz
+  lastError              String?   @map("last_error")
+  lastSyncStartedAt      DateTime? @map("last_sync_started_at") @db.Timestamptz
+  lastSyncCompletedAt    DateTime? @map("last_sync_completed_at") @db.Timestamptz
+  lastSuccessAt          DateTime? @map("last_success_at") @db.Timestamptz
+  lastErrorCode          String?   @map("last_error_code")
+  lastErrorMessageSafe   String?   @map("last_error_message_safe")
+  syncCursor             Json      @default("{}") @map("sync_cursor")
 
   @@map("connectors")
+}
+
+model ConnectorSyncRun {
+  syncRunId             String    @id @default(dbgenerated("gen_random_uuid()")) @map("sync_run_id") @db.Uuid
+  tenantId              String    @map("tenant_id") @db.Uuid
+  connectorId           String    @map("connector_id") @db.Uuid
+  status                String    @default("running")
+  startedAt             DateTime  @default(now()) @map("started_at") @db.Timestamptz
+  completedAt           DateTime? @map("completed_at") @db.Timestamptz
+  recordsSeen           Int       @default(0) @map("records_seen")
+  recordsImported       Int       @default(0) @map("records_imported")
+  recordsRejected       Int       @default(0) @map("records_rejected")
+  netSpendImportedUsd   Decimal   @default(0) @map("net_spend_imported_usd") @db.Decimal(14, 6)
+  grossSpendImportedUsd Decimal   @default(0) @map("gross_spend_imported_usd") @db.Decimal(14, 6)
+  requestCountImported  Int       @default(0) @map("request_count_imported")
+  tokenCountImported    BigInt    @default(0) @map("token_count_imported")
+  errorCode             String?   @map("error_code")
+  errorMessageSafe      String?   @map("error_message_safe")
+
+  @@map("connector_sync_runs")
+}
+
+model ConnectorSyncError {
+  errorId          String   @id @default(dbgenerated("gen_random_uuid()")) @map("error_id") @db.Uuid
+  tenantId         String   @map("tenant_id") @db.Uuid
+  connectorId      String   @map("connector_id") @db.Uuid
+  syncRunId        String   @map("sync_run_id") @db.Uuid
+  recordRef        String?  @map("record_ref")
+  errorCode        String   @map("error_code")
+  errorMessageSafe String   @map("error_message_safe")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("connector_sync_errors")
+}
+
+model NormalizedExternalRecord {
+  recordId         String    @id @default(dbgenerated("gen_random_uuid()")) @map("record_id") @db.Uuid
+  tenantId         String    @map("tenant_id") @db.Uuid
+  connectorId      String    @map("connector_id") @db.Uuid
+  syncRunId        String    @map("sync_run_id") @db.Uuid
+  sourceType       String    @default("api") @map("source_type")
+  recordType       String    @map("record_type")
+  provider         String    @default("")
+  externalRecordId String?   @map("external_record_id")
+  dedupeHash       String    @map("dedupe_hash")
+  periodStart      DateTime? @map("period_start") @db.Timestamptz
+  periodEnd        DateTime? @map("period_end") @db.Timestamptz
+  ts               DateTime  @default(now()) @db.Timestamptz
+  normalizedJson   Json      @default("{}") @map("normalized_json")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([tenantId, connectorId, dedupeHash])
+  @@map("normalized_external_records")
 }
 
 model RoiTemplate {

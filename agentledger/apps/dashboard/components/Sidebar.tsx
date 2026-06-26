@@ -15,6 +15,7 @@ const NAV = [
   { href: '/ciso', label: 'CISO view' },
   { href: '/risk', label: 'Risk events' },
   { href: '/settings', label: 'Settings' },
+  { href: '/settings/connectors', label: 'Data sources' },
 ];
 
 export function Sidebar() {

@@ -1,0 +1,18 @@
+{
+  "name": "Generic REST Outcome API",
+  "provider": "custom",
+  "category": "outcome_system",
+  "authType": "bearer_token",
+  "baseUrl": "https://api.example.com",
+  "endpoints": [{ "path": "/v1/outcomes", "method": "GET" }],
+  "pagination": { "type": "none", "itemsPath": "data" },
+  "destinationRecordType": "outcome_record",
+  "fieldMappings": [
+    { "type": "direct", "source": "id", "target": "id" },
+    { "type": "direct", "source": "type", "target": "outcome_type" },
+    { "type": "fallback", "target": "outcome_value_usd", "sources": ["value_usd", "business_value_usd", "value"] },
+    { "type": "direct", "source": "attribution_confidence", "target": "attribution_confidence" },
+    { "type": "direct", "source": "run_id", "target": "run_id" }
+  ],
+  "dedupe": { "strategy": "provider_record_id" }
+}
