@@ -208,6 +208,23 @@ export class ConnectorsService {
     return { apiKey: trimmed };
   }
 
+  /** Encrypted connector secret first; Anthropic Admin env fallback for headless sync only. */
+  private async resolveProviderSecret(
+    row: { secretRef?: string | null; kind?: string | null },
+    definition: ConnectorDefinition,
+    inlineSecret?: string,
+  ): Promise<string | undefined> {
+    const stored = inlineSecret ?? (await this.secrets.resolveSecret(row.secretRef));
+    if (stored?.trim()) return stored.trim();
+    if (
+      (definition.provider === 'anthropic' || row.kind === 'anthropic-usage') &&
+      process.env.ANTHROPIC_ADMIN_API_KEY?.trim()
+    ) {
+      return process.env.ANTHROPIC_ADMIN_API_KEY.trim();
+    }
+    return undefined;
+  }
+
   async list(page: Page) {
     const rows = await this.prisma.withTenant(getTenantId(), (tx) =>
       tx.connector.findMany({
@@ -398,7 +415,7 @@ export class ConnectorsService {
     if (!row) throw new NotFoundException('connector not found');
 
     const definitionBase = await this.resolveDefinition(row);
-    const secret = inlineSecret ?? (await this.secrets.resolveSecret(row.secretRef));
+    const secret = await this.resolveProviderSecret(row, definitionBase, inlineSecret);
     const definition = applyAnthropicKeyRouting(definitionBase, secret);
     const creds = this.parseCredentials(secret, definition.authType);
 
@@ -508,7 +525,7 @@ export class ConnectorsService {
     }
 
     const definitionBase = await this.resolveDefinition(row);
-    const secret = await this.secrets.resolveSecret(row.secretRef);
+    const secret = await this.resolveProviderSecret(row, definitionBase);
     if (!secret && definitionBase.authType !== 'none') {
       throw new BadRequestException('connector has no credentials');
     }

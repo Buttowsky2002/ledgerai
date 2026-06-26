@@ -1,6 +1,7 @@
 import {
   ConnectorAuthType,
   ConnectorDefinition,
+  ConnectorEndpoint,
   ConnectorError,
   RateLimitConfig,
   RetryConfig,
@@ -8,6 +9,32 @@ import {
 } from '../types/connector-definition';
 import { safeErrorMessage } from './sanitizer';
 import { renderObject, renderTemplate } from './template';
+
+function appendEndpointQuery(
+  params: URLSearchParams,
+  endpoint: ConnectorEndpoint | undefined,
+  definition: ConnectorDefinition,
+  ctx: TemplateContext,
+  overrides?: Record<string, string>,
+): void {
+  const scalar = {
+    ...renderObject(definition.queryParams, ctx),
+    ...renderObject(endpoint?.queryParams, ctx),
+    ...overrides,
+  };
+  for (const [k, v] of Object.entries(scalar)) {
+    if (v !== '') params.append(k, v);
+  }
+  const arrays = {
+    ...(definition.queryParamArrays ?? {}),
+    ...(endpoint?.queryParamArrays ?? {}),
+  };
+  for (const [k, values] of Object.entries(arrays)) {
+    for (const v of values) {
+      params.append(k, renderTemplate(v, ctx));
+    }
+  }
+}
 
 /** Extract a human-readable message from common provider error JSON shapes. */
 export function extractProviderErrorMessage(body: unknown): string {
@@ -47,9 +74,14 @@ export interface ApiRequestResult {
 }
 
 let lastRequestAt = 0;
+const lastRequestAtByProvider = new Map<string, number>();
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+function rateLimitKey(definition: ConnectorDefinition): string {
+  return definition.provider ?? definition.id ?? 'default';
 }
 
 export function buildAuthHeaders(
@@ -112,21 +144,25 @@ function classifyError(status: number, body: unknown): ConnectorError {
   return { code: 'REQUEST_FAILED', message: safeErrorMessage(msg), statusCode: status, retryable: false };
 }
 
-async function applyRateLimit(cfg: RateLimitConfig | undefined): Promise<void> {
+async function applyRateLimit(cfg: RateLimitConfig | undefined, providerKey: string): Promise<void> {
   if (!cfg) return;
   const minInterval =
     cfg.requestsPerSecond ? 1000 / cfg.requestsPerSecond
     : cfg.requestsPerMinute ? 60_000 / cfg.requestsPerMinute
     : 0;
   if (minInterval <= 0) return;
-  const elapsed = Date.now() - lastRequestAt;
+  const lastAt = lastRequestAtByProvider.get(providerKey) ?? lastRequestAt;
+  const elapsed = Date.now() - lastAt;
   if (elapsed < minInterval) await sleep(minInterval - elapsed);
-  lastRequestAt = Date.now();
+  const now = Date.now();
+  lastRequestAt = now;
+  lastRequestAtByProvider.set(providerKey, now);
 }
 
 /** Reset rate limit clock between test runs. */
 export function resetRateLimitClock(): void {
   lastRequestAt = 0;
+  lastRequestAtByProvider.clear();
 }
 
 function parseRetryAfterMs(headers: Record<string, string>): number {
@@ -167,10 +203,8 @@ export async function executeRequest(
     ...authHeaders,
   };
 
-  const query = new URLSearchParams({
-    ...renderObject({ ...definition.queryParams, ...endpoint?.queryParams }, ctx),
-    ...overrides?.queryParams,
-  });
+  const query = new URLSearchParams();
+  appendEndpointQuery(query, endpoint, definition, ctx, overrides?.queryParams);
   const fullUrl = query.toString() ? `${url}?${query}` : url;
 
   let body: string | undefined;
@@ -180,7 +214,22 @@ export async function executeRequest(
     headers['Content-Type'] = headers['Content-Type'] ?? 'application/json';
   }
 
-  const res = await fetch(fullUrl, { method, headers, body });
+  let res: Response;
+  try {
+    res = await fetch(fullUrl, { method, headers, body });
+  } catch (err) {
+    let origin = fullUrl;
+    try {
+      origin = new URL(fullUrl).origin;
+    } catch {
+      /* keep fullUrl */
+    }
+    throw {
+      code: 'NETWORK_ERROR',
+      message: `Could not reach ${origin} (${safeErrorMessage((err as Error).message ?? 'fetch failed')})`,
+      retryable: true,
+    } satisfies ConnectorError;
+  }
   const text = await res.text();
   let parsed: unknown;
   try {
@@ -210,7 +259,7 @@ export async function executeWithRetry(
   let lastErr: ConnectorError | null = null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    await applyRateLimit(definition.rateLimit);
+    await applyRateLimit(definition.rateLimit, rateLimitKey(definition));
     const result = await executeRequest(definition, creds, ctx, overrides);
 
     if (result.status >= 200 && result.status < 300) {

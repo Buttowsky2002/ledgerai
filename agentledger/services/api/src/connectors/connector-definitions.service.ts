@@ -18,7 +18,9 @@ export class ConnectorDefinitionsService {
 
   private loadPresets(): void {
     try {
-      const files = readdirSync(PRESETS_DIR).filter((f) => f.endsWith('.json'));
+      const files = readdirSync(PRESETS_DIR).filter(
+        (f) => f.endsWith('.json') && !f.endsWith('-registry.json'),
+      );
       for (const file of files) {
         const raw = JSON.parse(readFileSync(join(PRESETS_DIR, file), 'utf8')) as ConnectorDefinition;
         const id = file.replace('.json', '');
@@ -37,6 +39,16 @@ export class ConnectorDefinitionsService {
     const def = this.builtinPresets.get(id);
     if (!def) throw new NotFoundException(`preset ${id} not found`);
     return def;
+  }
+
+  /** Metadata index for billing presets (not a connector definition). */
+  getBillingRegistry(): Record<string, unknown> {
+    try {
+      const raw = readFileSync(join(PRESETS_DIR, 'billing-registry.json'), 'utf8');
+      return JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      return { version: 1, presets: [], templates: [] };
+    }
   }
 
   async list(): Promise<unknown[]> {

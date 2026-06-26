@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "description": "Index of built-in billing API presets. To add a proprietary LLM provider, copy generic-rest-spend.json, map fields, and register here.",
+  "presets": [
+    {
+      "id": "anthropic-usage",
+      "provider": "anthropic",
+      "displayName": "Anthropic Spend API",
+      "category": "provider_spend",
+      "authHint": "Organization Admin API key",
+      "docsUrl": "https://docs.anthropic.com/en/api/administration-api",
+      "billingGranularity": "daily_bucket"
+    },
+    {
+      "id": "openai-usage",
+      "provider": "openai",
+      "displayName": "OpenAI Usage API",
+      "category": "provider_spend",
+      "authHint": "Organization Admin API key",
+      "docsUrl": "https://platform.openai.com/docs/api-reference/usage",
+      "billingGranularity": "daily_bucket"
+    },
+    {
+      "id": "cursor-usage",
+      "provider": "cursor",
+      "displayName": "Cursor Admin API",
+      "category": "coding_tool",
+      "authHint": "Team Admin API key (paste key as credential — Basic auth)",
+      "docsUrl": "https://cursor.com/docs/account/teams/admin-api",
+      "billingGranularity": "usage_event"
+    }
+  ],
+  "templates": [
+    {
+      "id": "generic-rest-spend",
+      "displayName": "Generic REST Spend API",
+      "purpose": "Starting point for proprietary LLM billing endpoints"
+    },
+    {
+      "id": "generic-rest-usage",
+      "displayName": "Generic REST Usage API",
+      "purpose": "Token/usage metrics without guaranteed USD"
+    },
+    {
+      "id": "generic-rest-coding",
+      "displayName": "Generic Coding Tool API",
+      "purpose": "IDE/agent tool usage with optional cost fields"
+    }
+  ]
+}

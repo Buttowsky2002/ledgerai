@@ -20,6 +20,28 @@ import { PilotReport } from './report.renderer';
 
 type Range = { from: string; to: string };
 
+/** One day of portal vs API spend for reconciliation (Admin billing import). */
+export interface SourceReconciliationDay {
+  day: string;
+  portalCostUsd: number;
+  portalCalls: number;
+  apiCostUsd: number;
+  apiCalls: number;
+}
+
+export interface SourceReconciliationResult {
+  from: string;
+  to: string;
+  days: SourceReconciliationDay[];
+  summary: {
+    portalTotalUsd: number;
+    apiTotalUsd: number;
+    overlapDays: number;
+    portalOnlyDays: number;
+    apiOnlyDays: number;
+  };
+}
+
 /** Coerce a ClickHouse scalar (numbers may arrive as strings) to a number. */
 const n = (v: unknown): number => (typeof v === 'number' ? v : Number(v) || 0);
 
@@ -85,7 +107,7 @@ export class AnalyticsService {
   }
 
   /** Resolve an optional ISO-date range, defaulting to the last `days` days. */
-  private range(from: string | undefined, to: string | undefined, days = 30): Range {
+  private range(from: string | undefined, to: string | undefined, days = 90): Range {
     const today = new Date();
     const start = new Date(today);
     start.setUTCDate(start.getUTCDate() - days);
@@ -122,10 +144,11 @@ export class AnalyticsService {
     const r = this.range(from, to);
     if (dimension === 'user') {
       return this.ch.queryScoped(
-        `SELECT user_id AS key, sum(cost_usd) AS cost_usd, sum(calls) AS calls
+        `SELECT if(user_id = '', 'Unassigned', user_id) AS key,
+                sum(cost_usd) AS cost_usd, sum(calls) AS calls
          FROM spend_daily_by_user
          WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date}
-         GROUP BY user_id ORDER BY cost_usd DESC`,
+         GROUP BY key ORDER BY cost_usd DESC`,
         r as Record<string, ChParam>,
       );
     }
@@ -157,6 +180,18 @@ export class AnalyticsService {
        FROM spend_daily
        WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date}
        GROUP BY provider, model ORDER BY cost_usd DESC`,
+      r as Record<string, ChParam>,
+    );
+  }
+
+  /** Spend grouped by provider/platform — powers Overview and Model Mix pie charts. */
+  platformSpend(from?: string, to?: string) {
+    const r = this.range(from, to);
+    return this.ch.queryScoped(
+      `SELECT provider AS platform, sum(cost_usd) AS cost_usd, sum(calls) AS calls
+       FROM spend_daily
+       WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date}
+       GROUP BY provider ORDER BY cost_usd DESC`,
       r as Record<string, ChParam>,
     );
   }
@@ -478,6 +513,65 @@ export class AnalyticsService {
         dlpBlockEvents: sevRows.reduce((s, x) => s + n(x.dlp_block_events), 0),
         highSeverityEvents: sevRows.reduce((s, x) => s + n(x.high_events), 0),
       },
+    };
+  }
+
+  /**
+   * Compare portal CSV imports vs connector API sync by day. Queries raw llm_calls
+   * because spend_daily has no source dimension — admin-only reconciliation view.
+   */
+  async sourceReconciliation(from?: string, to?: string): Promise<SourceReconciliationResult> {
+    const r = this.range(from, to);
+    const rows = await this.ch.queryScoped<{
+      day: string;
+      portal_cost_usd: unknown;
+      portal_calls: unknown;
+      api_cost_usd: unknown;
+      api_calls: unknown;
+    }>(
+      `SELECT
+         toDate(ts) AS day,
+         sumIf(cost_usd, source = 'portal_import') AS portal_cost_usd,
+         countIf(source = 'portal_import') AS portal_calls,
+         sumIf(cost_usd, source = 'api') AS api_cost_usd,
+         countIf(source = 'api') AS api_calls
+       FROM agentledger.llm_calls FINAL
+       WHERE tenant_id = {tenant:String}
+         AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
+         AND source IN ('portal_import', 'api')
+       GROUP BY day
+       ORDER BY day`,
+      r as Record<string, ChParam>,
+    );
+
+    const days: SourceReconciliationDay[] = rows.map((row) => ({
+      day: String(row.day).slice(0, 10),
+      portalCostUsd: n(row.portal_cost_usd),
+      portalCalls: n(row.portal_calls),
+      apiCostUsd: n(row.api_cost_usd),
+      apiCalls: n(row.api_calls),
+    }));
+
+    let portalTotalUsd = 0;
+    let apiTotalUsd = 0;
+    let overlapDays = 0;
+    let portalOnlyDays = 0;
+    let apiOnlyDays = 0;
+    for (const d of days) {
+      portalTotalUsd += d.portalCostUsd;
+      apiTotalUsd += d.apiCostUsd;
+      const hasPortal = d.portalCostUsd > 0;
+      const hasApi = d.apiCostUsd > 0;
+      if (hasPortal && hasApi) overlapDays++;
+      else if (hasPortal) portalOnlyDays++;
+      else if (hasApi) apiOnlyDays++;
+    }
+
+    return {
+      from: r.from,
+      to: r.to,
+      days,
+      summary: { portalTotalUsd, apiTotalUsd, overlapDays, portalOnlyDays, apiOnlyDays },
     };
   }
 }

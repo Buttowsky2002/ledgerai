@@ -3,7 +3,7 @@ import { defaultRange } from './auth';
 /** Parse ?from=&to= search params, falling back to trailing N days. */
 export function parseRange(
   searchParams: { from?: string; to?: string },
-  defaultDays = 30,
+  defaultDays = 90,
 ): { from: string; to: string } {
   const from = searchParams.from?.slice(0, 10);
   const to = searchParams.to?.slice(0, 10);

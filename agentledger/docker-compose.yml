@@ -237,7 +237,9 @@ services:
       postgres: { condition: service_healthy }
 
   api:
-    build: ./services/api
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
     environment:
       # Connects as the least-privilege agentledger_api role (NON-superuser, so
       # it is subject to RLS). The bootstrap `agentledger` user would bypass RLS.

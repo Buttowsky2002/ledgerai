@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import { resolveSyncWindow } from './sync-range';
+import { DEFAULT_BACKFILL_DAYS, MAX_RANGE_DAYS, resolvePreviewWindow, resolveSyncChunks, resolveSyncWindow } from './sync-range';
 
 describe('resolveSyncWindow', () => {
   it('defaults to a 30-day inclusive window ending today', () => {
@@ -16,5 +16,33 @@ describe('resolveSyncWindow', () => {
 
   it('rejects ranges over 31 days', () => {
     expect(() => resolveSyncWindow('2026-01-01', '2026-02-15')).toThrow(BadRequestException);
+  });
+});
+
+describe('resolvePreviewWindow', () => {
+  it('clips wide ranges to the most recent 31 days', () => {
+    const { syncStart, syncEnd } = resolvePreviewWindow('2026-01-01', '2026-03-31');
+    const days = Math.round((syncEnd.getTime() - syncStart.getTime()) / 86_400_000) + 1;
+    expect(days).toBe(MAX_RANGE_DAYS);
+    expect(syncEnd.toISOString().slice(0, 10)).toBe('2026-03-31');
+    expect(syncStart.toISOString().slice(0, 10)).toBe('2026-03-01');
+  });
+});
+
+describe('resolveSyncChunks', () => {
+  it(`defaults to ${DEFAULT_BACKFILL_DAYS} days split into 31-day API windows`, () => {
+    const chunks = resolveSyncChunks();
+    expect(chunks.length).toBe(3);
+    const totalDays = chunks.reduce((sum, c) => {
+      return sum + Math.round((c.syncEnd.getTime() - c.syncStart.getTime()) / 86_400_000) + 1;
+    }, 0);
+    expect(totalDays).toBe(DEFAULT_BACKFILL_DAYS);
+  });
+
+  it('splits explicit 90-day ranges into three chunks', () => {
+    const chunks = resolveSyncChunks('2026-01-01', '2026-03-31');
+    expect(chunks).toHaveLength(3);
+    expect(chunks[0].syncStart.toISOString().slice(0, 10)).toBe('2026-01-01');
+    expect(chunks[chunks.length - 1].syncEnd.toISOString().slice(0, 10)).toBe('2026-03-31');
   });
 });

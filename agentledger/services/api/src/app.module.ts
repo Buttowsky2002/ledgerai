@@ -19,6 +19,7 @@ import { ClickHouseModule } from './clickhouse/clickhouse.module';
 import { HealthModule } from './health/health.module';
 import { IdentitiesModule } from './identities/identities.module';
 import { ImportModule } from './import/import.module';
+import { PortalImportModule } from './portal-import/portal-import.module';
 import { MetricsModule } from './metrics/metrics.module';
 import { OutcomesModule } from './outcomes/outcomes.module';
 import { PoliciesModule } from './policies/policies.module';
@@ -82,6 +83,7 @@ import { VirtualKeysModule } from './virtual-keys/virtual-keys.module';
     OutcomesModule,
     // Bulk data ingestion (admin-only write into the analytics store).
     ImportModule,
+    PortalImportModule,
     // Config-driven API connector framework (presets + custom REST sources).
     ConnectorsModule,
   ],

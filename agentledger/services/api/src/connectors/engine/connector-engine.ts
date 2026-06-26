@@ -40,24 +40,7 @@ export interface FetchAllResult {
   finalCursor?: string;
 }
 
-function utcDayIso(d: Date): string {
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())).toISOString();
-}
-
-function buildTemplateContext(ctx: SyncContext, extra?: Partial<TemplateContext>): TemplateContext {
-  return {
-    tenant_id: ctx.tenantId,
-    connector_id: ctx.connectorId,
-    sync_start: ctx.syncStart.toISOString(),
-    sync_end: ctx.syncEnd.toISOString(),
-    sync_start_day: utcDayIso(ctx.syncStart),
-    sync_end_day: utcDayIso(ctx.syncEnd),
-    now: new Date().toISOString(),
-    last_success_at: ctx.lastSuccessAt?.toISOString() ?? '',
-    page_size: ctx.definition.pagination?.pageSize ?? 100,
-    ...extra,
-  };
-}
+import { buildTemplateContext } from './sync-context';
 
 function mergeDefinition(
   base: ConnectorDefinition,
@@ -246,16 +229,25 @@ export async function fetchAllRecords(ctx: SyncContext, maxPages?: number): Prom
     page++;
     offset += pageResult.items.length;
 
-    if (pagination.type === 'page' || pagination.type === 'offset') {
+    if (!pagination.hasMorePath && (pagination.type === 'page' || pagination.type === 'offset')) {
       if (pageResult.items.length < pageSize) break;
     }
   }
 
   if (def.supplementalFetch && records.length > 0) {
-    const sup = await fetchSupplementalMetricsMap(ctx, def.supplementalFetch, maxPages);
-    requestCount += sup.requestCount;
-    errors.push(...sup.errors);
-    records = mergeSupplementalMetrics(records, sup.map, def.supplementalFetch.mergeOn);
+    try {
+      const sup = await fetchSupplementalMetricsMap(ctx, def.supplementalFetch, maxPages);
+      requestCount += sup.requestCount;
+      errors.push(...sup.errors);
+      records = mergeSupplementalMetrics(records, sup.map, def.supplementalFetch.mergeOn);
+    } catch (err) {
+      const e = err as { code?: string; message?: string };
+      errors.push({
+        recordRef: 'supplementalFetch',
+        code: e.code ?? 'REQUEST_FAILED',
+        message: e.message ?? 'supplemental fetch failed',
+      });
+    }
   }
 
   return { records, errors, requestCount, finalCursor };

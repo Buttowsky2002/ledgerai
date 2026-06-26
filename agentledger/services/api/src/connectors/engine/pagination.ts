@@ -48,6 +48,12 @@ export function extractPage(
     return { items, hasMore: false };
   }
 
+  if (config.hasMorePath && config.type === 'page' && !config.tokenPath) {
+    const flag = getPath(response, config.hasMorePath);
+    const hasMore = flag === true || flag === 'true' || flag === 1;
+    return { items, hasMore };
+  }
+
   switch (config.type) {
     case 'cursor': {
       const nextCursor = config.cursorPath ? String(getPath(response, config.cursorPath) ?? '') : undefined;
@@ -59,7 +65,12 @@ export function extractPage(
     }
     case 'response_token': {
       const nextToken = config.tokenPath ? String(getPath(response, config.tokenPath) ?? '') : undefined;
-      return { items, nextToken: nextToken || undefined, hasMore: !!nextToken };
+      let hasMore = !!nextToken;
+      if (config.hasMorePath) {
+        const flag = getPath(response, config.hasMorePath);
+        hasMore = (flag === true || flag === 'true' || flag === 1) && !!nextToken;
+      }
+      return { items, nextToken: hasMore ? nextToken : undefined, hasMore };
     }
     case 'page':
     case 'offset':

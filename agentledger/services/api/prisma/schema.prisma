@@ -294,6 +294,8 @@ model ConnectorSyncRun {
   grossSpendImportedUsd Decimal   @default(0) @map("gross_spend_imported_usd") @db.Decimal(14, 6)
   requestCountImported  Int       @default(0) @map("request_count_imported")
   tokenCountImported    BigInt    @default(0) @map("token_count_imported")
+  usersDetected         Int       @default(0) @map("users_detected")
+  unmappedRecords       Int       @default(0) @map("unmapped_records")
   errorCode             String?   @map("error_code")
   errorMessageSafe      String?   @map("error_message_safe")
 
@@ -331,6 +333,37 @@ model NormalizedExternalRecord {
 
   @@unique([tenantId, connectorId, dedupeHash])
   @@map("normalized_external_records")
+}
+
+model ConnectorAttributionMapping {
+  mappingId       String   @id @default(dbgenerated("gen_random_uuid()")) @map("mapping_id") @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  connectorId     String   @map("connector_id") @db.Uuid
+  mappingType     String   @map("mapping_type")
+  providerKey     String   @map("provider_key")
+  providerKeyName String?  @map("provider_key_name")
+  targetUserId    String?  @map("target_user_id")
+  targetTeamId    String?  @map("target_team_id")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  @@unique([tenantId, connectorId, mappingType, providerKey])
+  @@map("connector_attribution_mappings")
+}
+
+model ConnectorProviderEntity {
+  entityId     String   @id @default(dbgenerated("gen_random_uuid()")) @map("entity_id") @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  connectorId  String   @map("connector_id") @db.Uuid
+  entityType   String   @map("entity_type")
+  providerKey  String   @map("provider_key")
+  displayName  String?  @map("display_name")
+  email        String?
+  metadataJson Json     @default("{}") @map("metadata_json")
+  lastSeenAt   DateTime @default(now()) @map("last_seen_at") @db.Timestamptz
+
+  @@unique([tenantId, connectorId, entityType, providerKey])
+  @@map("connector_provider_entities")
 }
 
 model RoiTemplate {

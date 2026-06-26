@@ -37,6 +37,11 @@ export class AnalyticsController {
     return this.analytics.modelMix(q.from, q.to);
   }
 
+  @Roles('viewer') @Get('platform-spend')
+  platformSpend(@Query() q: RangeQueryDto) {
+    return this.analytics.platformSpend(q.from, q.to);
+  }
+
   @Roles('viewer') @Get('burndown')
   burndown(@Query() q: BurndownQueryDto) {
     return this.analytics.burndown(q.from, q.to, q.virtualKeyId);
@@ -96,5 +101,11 @@ export class AnalyticsController {
   @Roles('viewer') @Get('agents/:agentId')
   agentDetail(@Param('agentId') agentId: string, @Query() q: RangeQueryDto) {
     return this.analytics.agentDetail(agentId, q.from, q.to);
+  }
+
+  /** Portal CSV vs API sync spend by day — admin reconciliation (reads llm_calls.source). */
+  @Roles('admin') @Get('source-reconciliation')
+  sourceReconciliation(@Query() q: RangeQueryDto) {
+    return this.analytics.sourceReconciliation(q.from, q.to);
   }
 }

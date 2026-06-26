@@ -3,6 +3,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Card, DataTable, PageHeader } from '../ui';
+import {
+  MAX_SYNC_DAYS,
+  previewDateRange,
+  rangeSpanDays,
+  syncBatchCount,
+  syncDateChunks,
+} from '../../lib/sync-date-chunks';
 
 type Connector = {
   connectorId: string;
@@ -13,6 +20,20 @@ type Connector = {
   enabled: boolean;
   lastSyncAt: string | null;
   lastSuccessAt: string | null;
+  lastErrorMessageSafe?: string | null;
+  syncStatus?: {
+    lastSyncAt: string | null;
+    lastSyncStatus: string;
+    recordsImported: number;
+    usersDetected: number;
+    unmappedRecords: number;
+    spendSyncedUsd: number;
+    errorMessage?: string | null;
+  };
+  capabilities?: {
+    supportsUserLevelCost: boolean;
+  };
+  attributionWarning?: string;
 };
 
 type Preset = {
@@ -21,6 +42,12 @@ type Preset = {
   provider: string;
   category: string;
   builtIn?: boolean;
+  definitionJson?: {
+    baseUrl?: string;
+    authType?: string;
+    category?: string;
+    endpoints?: { path?: string; method?: string }[];
+  };
 };
 
 type PreviewResult = {
@@ -46,6 +73,8 @@ const CATEGORIES = [
 
 const AUTH_TYPES = ['api_key_header', 'bearer_token', 'basic_auth', 'custom_header', 'none'] as const;
 
+const LOCKED_PRESETS = new Set(['anthropic-usage', 'openai-usage', 'cursor-usage']);
+
 const PRESET_DEFAULTS: Record<
   string,
   { baseUrl: string; authType: string; endpointPath: string; category: string }
@@ -53,16 +82,38 @@ const PRESET_DEFAULTS: Record<
   'anthropic-usage': {
     baseUrl: 'https://api.anthropic.com',
     authType: 'api_key_header',
-    endpointPath: '/v1/organizations/analytics/cost/list_by_user',
+    endpointPath: '/v1/organizations/cost_report',
     category: 'provider_spend',
   },
   'openai-usage': {
     baseUrl: 'https://api.openai.com',
-    authType: 'api_key_header',
-    endpointPath: '/v1/usage',
+    authType: 'bearer_token',
+    endpointPath: '/v1/organization/costs',
     category: 'provider_spend',
   },
+  'cursor-usage': {
+    baseUrl: 'https://api.cursor.com',
+    authType: 'basic_auth',
+    endpointPath: '/teams/filtered-usage-events',
+    category: 'coding_tool',
+  },
 };
+
+function presetFormFields(presetId: string, presets: Preset[]) {
+  const preset = presets.find((p) => (p.definitionId ?? p.name) === presetId);
+  const def = preset?.definitionJson;
+  if (def) {
+    return {
+      presetId,
+      category: def.category ?? preset?.category ?? 'provider_spend',
+      baseUrl: def.baseUrl ?? 'https://api.example.com',
+      authType: def.authType ?? 'api_key_header',
+      endpointPath: def.endpoints?.[0]?.path ?? '/v1/spend',
+    };
+  }
+  const fallback = PRESET_DEFAULTS[presetId];
+  return fallback ? { presetId, ...fallback } : { presetId };
+}
 
 function formatApiError(body: Record<string, unknown>, fallback: string): string {
   if (typeof body.detail === 'string') return body.detail;
@@ -85,8 +136,25 @@ function isoDate(d: Date): string {
 function defaultConnectorRange(): { from: string; to: string } {
   const to = new Date();
   const from = new Date(to);
-  from.setUTCDate(from.getUTCDate() - 29);
+  from.setUTCDate(from.getUTCDate() - 89);
   return { from: isoDate(from), to: isoDate(to) };
+}
+
+function ProgressBar({ progress, label }: { progress: number; label: string }) {
+  return (
+    <div className="mt-3">
+      <div className="mb-1 flex justify-between text-xs text-muted">
+        <span>{label}</span>
+        <span>{Math.round(progress)}%</span>
+      </div>
+      <div className="h-2 w-full overflow-hidden rounded-full bg-edge">
+        <div
+          className="h-full rounded-full bg-accent transition-all duration-300 ease-out"
+          style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
+        />
+      </div>
+    </div>
+  );
 }
 
 export function ConnectorsClient() {
@@ -97,12 +165,21 @@ export function ConnectorsClient() {
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [syncing, setSyncing] = useState<string | null>(null);
+  const [testing, setTesting] = useState<string | null>(null);
+  const [testProgress, setTestProgress] = useState(0);
+  const [syncProgress, setSyncProgress] = useState(0);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [cooldownUntil, setCooldownUntil] = useState(0);
   const [cooldownSec, setCooldownSec] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [rangeFrom, setRangeFrom] = useState(() => defaultConnectorRange().from);
   const [rangeTo, setRangeTo] = useState(() => defaultConnectorRange().to);
+
+  const [mappingForm, setMappingForm] = useState({
+    mappingType: 'api_key',
+    providerKey: '',
+    targetUserId: '',
+  });
 
   const [form, setForm] = useState({
     displayName: '',
@@ -142,6 +219,7 @@ export function ConnectorsClient() {
 
   const createConnector = async () => {
     setError(null);
+    const locked = LOCKED_PRESETS.has(form.presetId);
     const res = await fetch('/api/connectors', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -149,9 +227,9 @@ export function ConnectorsClient() {
         displayName: form.displayName,
         presetId: form.presetId,
         category: form.category,
-        baseUrl: form.baseUrl,
+        baseUrl: locked ? undefined : form.baseUrl,
         authSecret: form.authSecret || undefined,
-        configJson: { endpointPath: form.endpointPath, authType: form.authType },
+        configJson: locked ? {} : { endpointPath: form.endpointPath, authType: form.authType },
       }),
     });
     if (!res.ok) {
@@ -161,6 +239,23 @@ export function ConnectorsClient() {
     }
     setFormOpen(false);
     setForm((f) => ({ ...f, authSecret: '', displayName: '' }));
+    await load();
+  };
+
+  const addMapping = async (connectorId: string) => {
+    if (!mappingForm.providerKey || !mappingForm.targetUserId) return;
+    setError(null);
+    const res = await fetch(`/api/connectors/${connectorId}/attribution-mappings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(mappingForm),
+    });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      setError(formatApiError(body, 'Failed to save mapping'));
+      return;
+    }
+    setMappingForm({ mappingType: 'api_key', providerKey: '', targetUserId: '' });
     await load();
   };
 
@@ -186,7 +281,9 @@ export function ConnectorsClient() {
     await load();
   };
 
-  const syncRangeBody = () => ({ from: rangeFrom, to: rangeTo });
+  const syncRangeBody = (from: string, to: string) => ({ from, to });
+  const syncBatches = syncBatchCount(rangeFrom, rangeTo);
+  const rangeDays = rangeSpanDays(rangeFrom, rangeTo);
 
   const applyRangePreset = (days: number) => {
     const to = new Date();
@@ -200,23 +297,38 @@ export function ConnectorsClient() {
     setSelectedId(id);
     setPreview(null);
     setError(null);
-    const res = await fetch(`/api/connectors/${id}/preview`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(syncRangeBody()),
-    });
-    if (!res.ok) {
-      const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-      setError(formatApiError(body, 'Test failed'));
-      return;
-    }
-    const data = (await res.json()) as PreviewResult;
-    setPreview(data);
-    startApiCooldown();
-    if (data.warning) {
-      setError(data.warning);
-    } else if (data.errors?.length) {
-      setError(data.errors.map((e) => `${e.recordRef}: ${e.message}`).join('; '));
+    setTesting(id);
+    setTestProgress(8);
+    const progressTimer = window.setInterval(() => {
+      setTestProgress((p) => (p >= 92 ? p : p + 6));
+    }, 350);
+    try {
+      const previewRange = previewDateRange(rangeFrom, rangeTo);
+      const res = await fetch(`/api/connectors/${id}/preview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(syncRangeBody(previewRange.from, previewRange.to)),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+        setError(formatApiError(body, 'Test failed'));
+        return;
+      }
+      const data = (await res.json()) as PreviewResult;
+      setPreview(data);
+      setTestProgress(100);
+      startApiCooldown();
+      if (data.warning) {
+        setError(data.warning);
+      } else if (data.errors?.length) {
+        setError(data.errors.map((e) => `${e.recordRef}: ${e.message}`).join('; '));
+      }
+    } finally {
+      window.clearInterval(progressTimer);
+      window.setTimeout(() => {
+        setTesting(null);
+        setTestProgress(0);
+      }, 600);
     }
   };
 
@@ -225,36 +337,63 @@ export function ConnectorsClient() {
       setError(`Wait ${cooldownSec}s after Test before syncing (Anthropic rate limits).`);
       return;
     }
-    setSyncing(id);
-    setError(null);
-    const res = await fetch(`/api/connectors/${id}/sync`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(syncRangeBody()),
-    });
-    setSyncing(null);
-    if (!res.ok) {
-      const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-      setError(formatApiError(body, 'Sync failed'));
+    const chunks = syncDateChunks(rangeFrom, rangeTo);
+    if (chunks.length === 0) {
+      setError('Invalid date range — From must be on or before To.');
       return;
     }
-    const body = (await res.json()) as {
-      recordsImported?: number;
-      recordsSeen?: number;
-      emptyWarning?: string;
-      duplicateWarning?: string;
-    };
-    if (body.emptyWarning) {
-      setError(String(body.emptyWarning));
-    } else if (body.duplicateWarning) {
-      setError(String(body.duplicateWarning));
-    } else if ((body.recordsImported ?? 0) > 0) {
-      setError(null);
-    } else {
-      setError(`Sync completed but imported 0 rows (${body.recordsSeen ?? 0} seen). Check Test preview for API data.`);
+
+    setSyncing(id);
+    setSyncProgress(8);
+    setError(null);
+
+    const progressTimer = window.setInterval(() => {
+      setSyncProgress((p) => (p >= 92 ? p : p + 2));
+    }, 1500);
+
+    try {
+      const res = await fetch(`/api/connectors/${id}/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(syncRangeBody(rangeFrom, rangeTo)),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+        setError(formatApiError(body, 'Sync failed'));
+        return;
+      }
+
+      const body = (await res.json()) as {
+        recordsImported?: number;
+        recordsSeen?: number;
+        netSpendImportedUsd?: number;
+        usersDetected?: number;
+        unmappedRecords?: number;
+        emptyWarning?: string;
+        duplicateWarning?: string;
+        userAttributionWarning?: string;
+        syncRangeApplied?: { from?: string; to?: string };
+      };
+      setSyncProgress(100);
+
+      if (body.userAttributionWarning) {
+        setError(body.userAttributionWarning);
+      } else if (body.emptyWarning) {
+        setError(String(body.emptyWarning));
+      } else if (body.duplicateWarning) {
+        setError(String(body.duplicateWarning));
+      } else if ((body.recordsImported ?? 0) > 0) {
+        setError(null);
+      } else {
+        setError(`Sync completed but imported 0 rows (${body.recordsSeen ?? 0} seen). Check Test preview for API data.`);
+      }
+      startApiCooldown();
+      await load();
+    } finally {
+      window.clearInterval(progressTimer);
+      setSyncing(null);
+      window.setTimeout(() => setSyncProgress(0), 600);
     }
-    startApiCooldown();
-    await load();
   };
 
   const statusTone = (s: string) => {
@@ -289,7 +428,7 @@ export function ConnectorsClient() {
       {error && (
         <div
           className={`mb-4 rounded border px-4 py-2 text-sm ${
-            error.includes('no cost rows') || error.includes('imported 0 rows')
+            error.includes('no cost rows') || error.includes('imported 0 rows') || error.includes('no billable cost')
               ? 'border-warn/40 bg-warn/10 text-warn'
               : 'border-neg/40 bg-neg/10 text-neg'
           }`}
@@ -317,8 +456,7 @@ export function ConnectorsClient() {
                 value={form.presetId}
                 onChange={(e) => {
                   const presetId = e.target.value;
-                  const defaults = PRESET_DEFAULTS[presetId];
-                  setForm({ ...form, presetId, ...(defaults ?? {}) });
+                  setForm((f) => ({ ...f, ...presetFormFields(presetId, presets) }));
                 }}
               >
                 {presets.filter((p) => p.builtIn !== false).map((p) => (
@@ -329,8 +467,19 @@ export function ConnectorsClient() {
               </select>
               {form.presetId === 'anthropic-usage' && (
                 <p className="mt-1 text-xs text-muted">
-                  Requires an Anthropic Admin API key (sk-ant-admin). Imports per-user spend (user_id, email) when
-                  available; falls back to org cost report otherwise. Max 31-day window per sync.
+                  Paste your Claude Console <strong>Admin API key</strong> (sk-ant-admin…) from
+                  console.anthropic.com → Settings → Admin keys. Sync pulls{' '}
+                  <code className="text-xs">cost_report</code> +{' '}
+                  <code className="text-xs">usage_report/messages</code> (grouped by workspace and
+                  model). Keys are stored encrypted server-side only; optional headless fallback:{' '}
+                  <code className="text-xs">ANTHROPIC_ADMIN_API_KEY</code> env on the API service.
+                </p>
+              )}
+              {form.presetId === 'cursor-usage' && (
+                <p className="mt-1 text-xs text-muted">
+                  Paste your Cursor <strong>Team Admin API key</strong> (cursor.com → Team settings → Admin API).
+                  Auth is HTTP Basic (<code className="text-xs">curl -u YOUR_KEY:</code>); base URL must stay{' '}
+                  https://api.cursor.com.
                 </p>
               )}
             </label>
@@ -349,24 +498,27 @@ export function ConnectorsClient() {
             <label className="block text-sm">
               <span className="text-muted">Base URL</span>
               <input
-                className="mt-1 w-full rounded border border-edge bg-black/20 px-3 py-2"
+                className="mt-1 w-full rounded border border-edge bg-black/20 px-3 py-2 disabled:opacity-50"
                 value={form.baseUrl}
+                disabled={LOCKED_PRESETS.has(form.presetId)}
                 onChange={(e) => setForm({ ...form, baseUrl: e.target.value })}
               />
             </label>
             <label className="block text-sm">
               <span className="text-muted">Endpoint path</span>
               <input
-                className="mt-1 w-full rounded border border-edge bg-black/20 px-3 py-2"
+                className="mt-1 w-full rounded border border-edge bg-black/20 px-3 py-2 disabled:opacity-50"
                 value={form.endpointPath}
+                disabled={LOCKED_PRESETS.has(form.presetId)}
                 onChange={(e) => setForm({ ...form, endpointPath: e.target.value })}
               />
             </label>
             <label className="block text-sm">
               <span className="text-muted">Auth type</span>
               <select
-                className="mt-1 w-full rounded border border-edge bg-black/20 px-3 py-2"
+                className="mt-1 w-full rounded border border-edge bg-black/20 px-3 py-2 disabled:opacity-50"
                 value={form.authType}
+                disabled={LOCKED_PRESETS.has(form.presetId)}
                 onChange={(e) => setForm({ ...form, authType: e.target.value })}
               >
                 {AUTH_TYPES.map((a) => (
@@ -381,7 +533,13 @@ export function ConnectorsClient() {
                 className="mt-1 w-full rounded border border-edge bg-black/20 px-3 py-2"
                 value={form.authSecret}
                 onChange={(e) => setForm({ ...form, authSecret: e.target.value })}
-                placeholder="API key or bearer token"
+                placeholder={
+                  form.presetId === 'cursor-usage'
+                    ? 'Cursor Team Admin API key'
+                    : form.presetId === 'anthropic-usage'
+                      ? 'Claude Console Admin API key (sk-ant-admin…)'
+                      : 'API key or bearer token'
+                }
               />
             </label>
           </div>
@@ -398,10 +556,17 @@ export function ConnectorsClient() {
         </Card>
       )}
 
-      <Card title="Sync time frame" subtitle="Applies to Test and Sync now (max 31 days for Anthropic)">
+      <Card
+        title="Sync time frame"
+        subtitle={
+          syncBatches > 1
+            ? `${rangeDays} days total — the API splits this into ${syncBatches}×${MAX_SYNC_DAYS}-day windows server-side. Large Cursor ranges can take several minutes; sync one connector at a time. Test previews the latest ${MAX_SYNC_DAYS} days only.`
+            : `Test previews usage; Sync imports spend for the selected range.`
+        }
+      >
         <div className="flex flex-wrap items-end gap-4">
           <div className="flex gap-2">
-            {[7, 14, 30].map((days) => (
+            {[7, 30, 90].map((days) => (
               <button
                 key={days}
                 type="button"
@@ -436,50 +601,150 @@ export function ConnectorsClient() {
         </div>
       </Card>
 
-      <Card title="API Connectors">
+      <Card title="Connected data sources">
         {loading ? (
           <p className="text-sm text-muted">Loading…</p>
+        ) : connectors.length === 0 ? (
+          <p className="text-sm text-muted">No API connectors yet. Add one above to sync usage data.</p>
         ) : (
-          <DataTable
-            columns={[
-              { key: 'name', label: 'Name' },
-              { key: 'provider', label: 'Provider' },
-              { key: 'category', label: 'Category' },
-              { key: 'status', label: 'Status' },
-              { key: 'lastSync', label: 'Last sync' },
-              { key: 'actions', label: '' },
-            ]}
-            rows={connectors.map((c) => ({
-              name: c.displayName ?? c.connectorId,
-              provider: c.provider ?? '—',
-              category: c.category ?? '—',
-              status: <span className={statusTone(c.status)}>{c.status}</span>,
-              lastSync: c.lastSuccessAt ? new Date(c.lastSuccessAt).toLocaleString() : '—',
-              actions: (
-                <div className="flex gap-2">
-                  <button type="button" className="text-xs text-accent hover:underline" onClick={() => void testConnector(c.connectorId)}>
-                    Test
-                  </button>
-                  <button
-                    type="button"
-                    className="text-xs text-accent hover:underline disabled:opacity-50"
-                    disabled={syncing === c.connectorId || cooldownSec > 0}
-                    onClick={() => void syncConnector(c.connectorId)}
-                  >
-                    {syncing === c.connectorId ? 'Syncing…' : cooldownSec > 0 ? `Wait ${cooldownSec}s` : 'Sync now'}
-                  </button>
-                  <button
-                    type="button"
-                    className="text-xs text-neg hover:underline disabled:opacity-50"
-                    disabled={deleting === c.connectorId}
-                    onClick={() => void deleteConnector(c.connectorId, c.displayName ?? c.connectorId)}
-                  >
-                    {deleting === c.connectorId ? 'Deleting…' : 'Delete'}
-                  </button>
+          <div className="grid gap-4 md:grid-cols-2">
+            {connectors.map((c) => {
+              const sync = c.syncStatus;
+              const lastSync = sync?.lastSyncAt ?? c.lastSuccessAt;
+              return (
+                <div
+                  key={c.connectorId}
+                  className="rounded-lg border border-edge bg-black/20 p-4"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h3 className="font-medium capitalize text-gray-100">
+                        {c.displayName ?? c.provider}
+                      </h3>
+                      <p className="text-xs text-muted">{c.provider} · {c.category}</p>
+                    </div>
+                    <span className={`text-xs font-medium ${statusTone(c.status)}`}>
+                      {c.status === 'healthy' || c.status === 'connected' ? 'Connected' : c.status}
+                    </span>
+                  </div>
+
+                  <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                    <dt className="text-muted">Last sync</dt>
+                    <dd>{lastSync ? new Date(lastSync).toLocaleString() : '—'}</dd>
+                    <dt className="text-muted">Records imported</dt>
+                    <dd className="num">{sync?.recordsImported?.toLocaleString() ?? '—'}</dd>
+                    <dt className="text-muted">Users detected</dt>
+                    <dd className="num">{sync?.usersDetected ?? '—'}</dd>
+                    <dt className="text-muted">Unmapped records</dt>
+                    <dd className={`num ${(sync?.unmappedRecords ?? 0) > 0 ? 'text-warn' : ''}`}>
+                      {sync?.unmappedRecords ?? '—'}
+                    </dd>
+                    <dt className="text-muted">Spend synced</dt>
+                    <dd className="num">
+                      {sync?.spendSyncedUsd != null ? `$${sync.spendSyncedUsd.toFixed(2)}` : '—'}
+                    </dd>
+                  </dl>
+
+                  {(sync?.errorMessage || c.lastErrorMessageSafe) && (
+                    <p className="mt-2 text-xs text-neg">
+                      {sync?.errorMessage ?? c.lastErrorMessageSafe}
+                    </p>
+                  )}
+
+                  {c.attributionWarning && (
+                    <p className="mt-2 rounded border border-warn/30 bg-warn/10 p-2 text-xs text-warn">
+                      {c.attributionWarning}
+                    </p>
+                  )}
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="text-xs text-accent hover:underline disabled:opacity-50"
+                      disabled={testing === c.connectorId}
+                      onClick={() => void testConnector(c.connectorId)}
+                    >
+                      {testing === c.connectorId ? 'Testing…' : 'Test'}
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded bg-accent/20 px-3 py-1 text-xs text-white hover:bg-accent/30 disabled:opacity-50"
+                      disabled={syncing === c.connectorId || cooldownSec > 0}
+                      onClick={() => void syncConnector(c.connectorId)}
+                    >
+                      {syncing === c.connectorId
+                        ? 'Syncing…'
+                        : cooldownSec > 0
+                          ? `Wait ${cooldownSec}s`
+                          : 'Sync usage data'}
+                    </button>
+                    <button
+                      type="button"
+                      className="text-xs text-neg hover:underline disabled:opacity-50"
+                      disabled={deleting === c.connectorId}
+                      onClick={() => void deleteConnector(c.connectorId, c.displayName ?? c.connectorId)}
+                    >
+                      {deleting === c.connectorId ? 'Deleting…' : 'Delete'}
+                    </button>
+                  </div>
+
+                  {testing === c.connectorId && (
+                    <ProgressBar progress={testProgress} label="Testing connection and normalizing sample rows…" />
+                  )}
+                  {syncing === c.connectorId && (
+                    <ProgressBar
+                      progress={syncProgress}
+                      label={
+                        syncBatches > 1
+                          ? `Syncing usage data (${syncBatches} server-side windows — may take several minutes)…`
+                          : 'Syncing usage data from provider…'
+                      }
+                    />
+                  )}
+
+                  {(sync?.unmappedRecords ?? 0) > 0 && (
+                    <div className="mt-4 border-t border-edge pt-3">
+                      <p className="mb-2 text-xs font-semibold uppercase text-muted">
+                        Map unassigned spend
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <select
+                          className="rounded border border-edge bg-black/20 px-2 py-1 text-xs"
+                          value={mappingForm.mappingType}
+                          onChange={(e) => setMappingForm({ ...mappingForm, mappingType: e.target.value })}
+                        >
+                          <option value="api_key">API key</option>
+                          <option value="project">Project</option>
+                          <option value="workspace">Workspace</option>
+                          <option value="service_account">Service account</option>
+                          <option value="provider_user">Provider user</option>
+                        </select>
+                        <input
+                          className="rounded border border-edge bg-black/20 px-2 py-1 text-xs"
+                          placeholder="Provider key / ID"
+                          value={mappingForm.providerKey}
+                          onChange={(e) => setMappingForm({ ...mappingForm, providerKey: e.target.value })}
+                        />
+                        <input
+                          className="rounded border border-edge bg-black/20 px-2 py-1 text-xs"
+                          placeholder="Target user ID"
+                          value={mappingForm.targetUserId}
+                          onChange={(e) => setMappingForm({ ...mappingForm, targetUserId: e.target.value })}
+                        />
+                        <button
+                          type="button"
+                          className="rounded border border-edge px-2 py-1 text-xs hover:bg-white/5"
+                          onClick={() => void addMapping(c.connectorId)}
+                        >
+                          Save mapping
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              ),
-            }))}
-          />
+              );
+            })}
+          </div>
         )}
       </Card>
 
@@ -499,6 +764,17 @@ export function ConnectorsClient() {
               </pre>
             </div>
           </div>
+          {preview.normalizedPreview.length > 0 && (
+            <div className="mt-4">
+              <h3 className="mb-2 text-xs font-semibold uppercase text-muted">Preview summary</h3>
+              <p className="text-sm text-muted">
+                {preview.normalizedPreview.length} sample row(s) · total preview spend $
+                {preview.normalizedPreview
+                  .reduce((s, r) => s + Number(r.cost_usd ?? 0), 0)
+                  .toFixed(4)}
+              </p>
+            </div>
+          )}
           {preview.normalizedPreview.some((r) => r.user_id || r.user_email) && (
             <div className="mt-4">
               <h3 className="mb-2 text-xs font-semibold uppercase text-muted">Spend by user (preview)</h3>

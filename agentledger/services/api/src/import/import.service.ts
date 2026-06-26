@@ -201,4 +201,17 @@ export class ImportService {
       return summary;
     });
   }
+
+  /** Release idempotency keys for a connector so a re-sync can replace stale rows. */
+  async releaseConnectorImportKeys(connectorId: string): Promise<void> {
+    const tenantId = getTenantId();
+    if (!tenantId) throw new BadRequestException('no tenant in context');
+    const prefix = `conn_${connectorId}_`;
+    await this.prisma.withTenant(tenantId, (tx) =>
+      tx.$executeRaw`
+        DELETE FROM import_idempotency
+        WHERE tenant_id = ${tenantId}::uuid
+          AND idempotency_key LIKE ${`${prefix}%`}`,
+    );
+  }
 }

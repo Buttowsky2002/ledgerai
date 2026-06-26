@@ -1,3 +1,5 @@
+import type { ConnectorCapabilities } from './connector-capabilities';
+
 /** LedgerAI connector definition schema — config-driven API connector framework. */
 
 export type ConnectorCategory =
@@ -49,6 +51,8 @@ export interface ConnectorEndpoint {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH';
   headers?: Record<string, string>;
   queryParams?: Record<string, string>;
+  /** Repeated query keys (e.g. group_by[]=workspace_id&group_by[]=model). */
+  queryParamArrays?: Record<string, string[]>;
   bodyTemplate?: string;
 }
 
@@ -67,6 +71,10 @@ export interface PaginationConfig {
   tokenPath?: string;
   tokenParam?: string;
   maxPages?: number;
+  /** Dot-path to boolean has-next flag (e.g. pagination.hasNextPage). Overrides item-count heuristic. */
+  hasMorePath?: string;
+  /** Where page/cursor params are sent when not using bodyTemplate placeholders. Default: query. */
+  location?: 'query' | 'body';
 }
 
 export interface RateLimitConfig {
@@ -130,6 +138,7 @@ export interface ConnectorDefinition {
   requestMethod?: 'GET' | 'POST';
   headers?: Record<string, string>;
   queryParams?: Record<string, string>;
+  queryParamArrays?: Record<string, string[]>;
   bodyTemplate?: string;
   pagination?: PaginationConfig;
   rateLimit?: RateLimitConfig;
@@ -151,6 +160,13 @@ export interface ConnectorDefinition {
     endParam?: string;
     format?: 'iso' | 'unix' | 'unix_ms' | 'date';
   };
+  /** Per-request sync window limits (defaults to global 31-day chunks when omitted). */
+  syncRange?: {
+    maxDaysPerRequest?: number;
+    defaultBackfillDays?: number;
+  };
+  /** Declares what this connector can pull — drives sync steps and UI warnings. */
+  capabilities?: ConnectorCapabilities;
 }
 
 export interface TemplateContext {
@@ -161,6 +177,11 @@ export interface TemplateContext {
   /** UTC midnight ISO for provider APIs that bucket by calendar day. */
   sync_start_day?: string;
   sync_end_day?: string;
+  sync_start_unix?: string;
+  sync_end_unix?: string;
+  /** Epoch milliseconds (inclusive range bounds for APIs like Cursor Admin). */
+  sync_start_unix_ms?: string;
+  sync_end_unix_ms?: string;
   cursor?: string;
   page?: number;
   page_size?: number;

@@ -4,6 +4,7 @@ import { Roles } from '../auth/decorators';
 import { parsePagination } from '../common/pagination';
 import { ConnectorDefinitionsService } from './connector-definitions.service';
 import { ConnectorsService } from './connectors.service';
+import { AttributionMappingsService } from './attribution/attribution-mappings.service';
 import { ConnectorDefinition } from './types/connector-definition';
 
 class CreateConnectorDto {
@@ -41,6 +42,15 @@ class CreateCustomDefinitionDto {
   @IsObject() definition!: ConnectorDefinition;
 }
 
+class CreateAttributionMappingDto {
+  @IsString() connectorId!: string;
+  @IsString() mappingType!: string;
+  @IsString() providerKey!: string;
+  @IsOptional() @IsString() providerKeyName?: string;
+  @IsOptional() @IsString() targetUserId?: string;
+  @IsOptional() @IsString() targetTeamId?: string;
+}
+
 @Controller('v1/connector-definitions')
 export class ConnectorDefinitionsController {
   constructor(private readonly defs: ConnectorDefinitionsService) {}
@@ -48,6 +58,11 @@ export class ConnectorDefinitionsController {
   @Roles('viewer') @Get()
   list() {
     return this.defs.list();
+  }
+
+  @Roles('viewer') @Get('billing-registry')
+  billingRegistry() {
+    return this.defs.getBillingRegistry();
   }
 
   @Roles('admin') @Post('custom')
@@ -58,7 +73,10 @@ export class ConnectorDefinitionsController {
 
 @Controller('v1/connectors')
 export class ConnectorsController {
-  constructor(private readonly connectors: ConnectorsService) {}
+  constructor(
+    private readonly connectors: ConnectorsService,
+    private readonly attributionMappings: AttributionMappingsService,
+  ) {}
 
   @Roles('viewer') @Get()
   list(@Query('limit') limit?: string, @Query('offset') offset?: string) {
@@ -108,5 +126,30 @@ export class ConnectorsController {
   @Roles('viewer') @Get(':id/errors')
   errors(@Param('id') id: string, @Query('limit') limit?: string, @Query('offset') offset?: string) {
     return this.connectors.listErrors(id, parsePagination(limit, offset));
+  }
+
+  @Roles('viewer') @Get(':id/attribution-mappings')
+  listAttributionMappings(@Param('id') id: string) {
+    return this.attributionMappings.list(id);
+  }
+
+  @Roles('admin') @Post(':id/attribution-mappings')
+  async createAttributionMapping(@Param('id') id: string, @Body() dto: CreateAttributionMappingDto) {
+    const created = await this.attributionMappings.create({
+      ...dto,
+      connectorId: id,
+      mappingType: dto.mappingType as import('./attribution/attribution-resolver').MappingType,
+    });
+    try {
+      await this.connectors.sync(id);
+    } catch {
+      // Mapping saved; re-sync can be retried manually.
+    }
+    return created;
+  }
+
+  @Roles('admin') @Delete('attribution-mappings/:mappingId')
+  deleteAttributionMapping(@Param('mappingId') mappingId: string) {
+    return this.attributionMappings.delete(mappingId);
   }
 }

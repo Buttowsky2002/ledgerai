@@ -1,4 +1,5 @@
 import { DestinationRecordType } from './connector-definition';
+import { parseCurrency } from '../engine/field-mapper';
 
 /** Normalized record emitted by the connector engine before import mapping. */
 export interface NormalizedRecord {
@@ -26,10 +27,14 @@ export interface ImportFlatRow {
   idempotency_key: string;
   timestamp?: string;
   provider?: string;
+  platform_display_name?: string;
   model?: string;
   input_tokens?: number;
   output_tokens?: number;
+  total_tokens?: number;
   cost_usd?: number;
+  cost_source?: string;
+  status?: string;
   team_id?: string;
   user_id?: string;
   agent_id?: string;
@@ -43,6 +48,8 @@ export interface ImportFlatRow {
   user_email?: string;
   project_id?: string;
   product?: string;
+  api_key_id?: string;
+  workspace_id?: string;
 }
 
 const RECORD_TYPE_TARGETS: Record<DestinationRecordType, string[]> = {
@@ -133,12 +140,27 @@ export function toImportRow(record: NormalizedRecord): ImportFlatRow {
   };
 
   assign('provider', 'provider');
+  assign('platform_display_name', 'platform_display_name', 'platformDisplayName');
   assign('model', 'model', 'request_model', 'response_model');
   assign('input_tokens', 'input_tokens', 'prompt_tokens');
   assign('output_tokens', 'output_tokens', 'completion_tokens');
-  assign('cost_usd', 'cost_usd', 'cost', 'spend', 'amount');
+  assign('total_tokens', 'total_tokens');
+
+  const costKeys = ['cost_usd', 'cost', 'spend', 'amount', 'provider_reported_cost'] as const;
+  for (const k of costKeys) {
+    const raw = m[k];
+    if (raw === undefined || raw === null || raw === '') continue;
+    const parsed = parseCurrency(raw);
+    if (parsed !== undefined && parsed > 0) {
+      row.cost_usd = parsed;
+      break;
+    }
+  }
+
+  assign('cost_source', 'cost_source');
+  assign('status', 'status');
   assign('team_id', 'team_id');
-  assign('user_id', 'user_id');
+  assign('user_id', 'user_id', 'provider_user_id', 'user_email', 'email');
   assign('agent_id', 'agent_id');
   assign('run_id', 'run_id');
   assign('tool_name', 'tool_name', 'tool');
@@ -149,8 +171,14 @@ export function toImportRow(record: NormalizedRecord): ImportFlatRow {
   assign('user_email', 'user_email', 'email');
   assign('project_id', 'project_id');
   assign('product', 'product', 'cost_type', 'line_item');
+  assign('api_key_id', 'api_key_id');
+  assign('workspace_id', 'workspace_id');
 
   if (!row.provider && record.provider) row.provider = record.provider;
+  if (!row.platform_display_name && row.provider) {
+    row.platform_display_name = row.provider;
+  }
+  if (!row.status) row.status = 'ok';
 
   return row;
 }

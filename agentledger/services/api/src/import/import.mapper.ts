@@ -64,15 +64,21 @@ export function mapRow(data: unknown): MappedRow {
   const ts = isoTs(r.timestamp);
   const idempotencyKey = str(r.idempotency_key ?? r.idem_key, 'idempotency_key');
   const teamId = str(r.team_id, 'team_id') ?? '';
-  const userId = str(r.user_id, 'user_id') ?? '';
+  const userId =
+    str(r.user_id, 'user_id') ??
+    str(r.user_email, 'user_email') ??
+    str(r.user_name, 'user_name') ??
+    '';
   const agentId = str(r.agent_id, 'agent_id') ?? '';
   const runId = str(r.run_id, 'run_id') ?? '';
 
   const provider = str(r.provider, 'provider');
+  const platformDisplayName = str(r.platform_display_name, 'platform_display_name');
   const model = str(r.model, 'model');
   const inputTokens = num(r.input_tokens, 'input_tokens');
   const outputTokens = num(r.output_tokens, 'output_tokens');
   const costUsd = num(r.cost_usd, 'cost_usd');
+  const callStatus = str(r.status, 'status') ?? 'ok';
   const toolName = str(r.tool_name, 'tool_name');
   const outcomeType = str(r.outcome_type, 'outcome_type');
   const outcomeValueUsd = num(r.outcome_value_usd, 'outcome_value_usd');
@@ -106,7 +112,8 @@ export function mapRow(data: unknown): MappedRow {
         input_tokens: Math.round(inputTokens ?? 0),
         output_tokens: Math.round(outputTokens ?? 0),
         cost_usd: costUsd ?? 0,
-        status: 'ok',
+        status: callStatus,
+        app_id: platformDisplayName ?? provider ?? '',
         // A risk severity on a usage row marks the call as risk-flagged so it
         // rolls into risk_daily (which counts rows where dlp_action != 'allow').
         dlp_action: riskSeverity ? 'warn' : 'allow',

@@ -17,6 +17,50 @@ describe('pagination', () => {
     expect(result.hasMore).toBe(true);
   });
 
+  it('uses hasMorePath when provided', () => {
+    const result = extractPage(
+      { usageEvents: [{ id: '1' }], pagination: { hasNextPage: true } },
+      { type: 'page', itemsPath: 'usageEvents', hasMorePath: 'pagination.hasNextPage' },
+    );
+    expect(result.hasMore).toBe(true);
+  });
+
+  it('stops when hasMorePath is false', () => {
+    const result = extractPage(
+      { usageEvents: [{ id: '1' }], pagination: { hasNextPage: false } },
+      { type: 'page', itemsPath: 'usageEvents', hasMorePath: 'pagination.hasNextPage', pageSize: 100 },
+    );
+    expect(result.hasMore).toBe(false);
+  });
+
+  it('combines has_more and next_page for Anthropic Admin APIs', () => {
+    const result = extractPage(
+      { data: [{ results: [] }], has_more: true, next_page: 'tok-1' },
+      {
+        type: 'response_token',
+        itemsPath: 'data',
+        tokenPath: 'next_page',
+        hasMorePath: 'has_more',
+      },
+    );
+    expect(result.hasMore).toBe(true);
+    expect(result.nextToken).toBe('tok-1');
+  });
+
+  it('stops Anthropic pagination when has_more is false even if next_page is present', () => {
+    const result = extractPage(
+      { data: [{ results: [] }], has_more: false, next_page: 'tok-1' },
+      {
+        type: 'response_token',
+        itemsPath: 'data',
+        tokenPath: 'next_page',
+        hasMorePath: 'has_more',
+      },
+    );
+    expect(result.hasMore).toBe(false);
+    expect(result.nextToken).toBeUndefined();
+  });
+
   it('extracts next URL pagination', () => {
     const result = extractPage(
       { data: [{ id: '1' }], links: { next: 'https://api.example.com/page2' } },

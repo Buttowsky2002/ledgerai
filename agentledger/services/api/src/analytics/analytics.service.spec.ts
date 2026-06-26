@@ -45,3 +45,40 @@ describe('AnalyticsService.agentEconomics', () => {
     expect(computeForAgent).toHaveBeenCalledTimes(25);
   });
 });
+
+describe('AnalyticsService.sourceReconciliation', () => {
+  it('aggregates portal vs API spend by day', async () => {
+    const queryScoped = jest.fn(async () => [
+      {
+        day: '2026-03-01',
+        portal_cost_usd: 12.5,
+        portal_calls: 2,
+        api_cost_usd: 0,
+        api_calls: 0,
+      },
+      {
+        day: '2026-04-01',
+        portal_cost_usd: 0,
+        portal_calls: 0,
+        api_cost_usd: 8,
+        api_calls: 1,
+      },
+      {
+        day: '2026-04-02',
+        portal_cost_usd: 5,
+        portal_calls: 1,
+        api_cost_usd: 5,
+        api_calls: 1,
+      },
+    ]);
+    const ch = { queryScoped } as unknown as ClickHouseService;
+    const svc = new AnalyticsService(ch, {} as PrismaService, {} as LariService);
+    const result = await svc.sourceReconciliation('2026-03-01', '2026-04-30');
+    expect(result.summary.portalTotalUsd).toBeCloseTo(17.5);
+    expect(result.summary.apiTotalUsd).toBeCloseTo(13);
+    expect(result.summary.overlapDays).toBe(1);
+    expect(result.summary.portalOnlyDays).toBe(1);
+    expect(result.summary.apiOnlyDays).toBe(1);
+    expect(result.days).toHaveLength(3);
+  });
+});

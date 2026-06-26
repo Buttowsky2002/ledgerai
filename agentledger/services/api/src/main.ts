@@ -2,7 +2,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
-import { json } from 'express';
+import { json, type NextFunction, type Request, type Response } from 'express';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { ProblemDetailsFilter } from './common/problem-details.filter';
@@ -59,8 +59,17 @@ async function bootstrap(): Promise<void> {
   // RFC 7807 problem+json for every error response.
   app.useGlobalFilters(new ProblemDetailsFilter());
 
-  // Cap request bodies (control-plane writes are small).
-  app.use(json({ limit: env('LEDGERAI_API_BODY_LIMIT') ?? '256kb' }));
+  // Cap request bodies (control-plane writes are small). Portal CSV uploads need more headroom.
+  const defaultBodyLimit = env('LEDGERAI_API_BODY_LIMIT') ?? '256kb';
+  const defaultJson = json({ limit: defaultBodyLimit });
+  const portalJson = json({ limit: '5mb' });
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (req.path.startsWith('/v1/portal-import/')) {
+      portalJson(req, res, next);
+    } else {
+      defaultJson(req, res, next);
+    }
+  });
 
   // Parse cookies (refresh token + OIDC login transaction).
   app.use(cookieParser());

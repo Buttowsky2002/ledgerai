@@ -37,7 +37,14 @@ function parseDate(v: unknown): string | undefined {
     const d = new Date(ms);
     return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
   }
-  const d = new Date(String(v));
+  const s = String(v).trim();
+  if (/^\d{10,13}$/.test(s)) {
+    const n = Number(s);
+    const ms = s.length >= 13 ? n : n * 1000;
+    const d = new Date(ms);
+    return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
+  }
+  const d = new Date(s);
   return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
 }
 
@@ -152,7 +159,11 @@ export function validateMetrics(
       case 'currency': {
         const n = parseCurrency(raw);
         if (n === undefined) errors.push(`field "${rule.field}" must be a valid currency amount`);
-        else metrics[rule.field] = n;
+        else {
+          if (rule.min !== undefined && n < rule.min) errors.push(`field "${rule.field}" must be >= ${rule.min}`);
+          if (rule.max !== undefined && n > rule.max) errors.push(`field "${rule.field}" must be <= ${rule.max}`);
+          metrics[rule.field] = n;
+        }
         break;
       }
       case 'date': {

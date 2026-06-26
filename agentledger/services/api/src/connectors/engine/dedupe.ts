@@ -27,8 +27,7 @@ export function computeDedupeHash(
       parts = [
         String(metrics.period_start ?? metrics.ts ?? ''),
         String(metrics.project_id ?? ''),
-        String(metrics.api_key_id ?? ''),
-        String(metrics.line_item_id ?? metrics.id ?? ''),
+        String(metrics.line_item_id ?? metrics.id ?? metrics.line_item ?? ''),
       ];
       break;
     case 'custom':

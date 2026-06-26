@@ -6,20 +6,26 @@
   "baseUrl": "https://api.openai.com",
   "endpoints": [
     {
-      "path": "/v1/organization/usage",
+      "path": "/v1/organization/costs",
       "method": "GET",
       "queryParams": {
-        "start_time": "{{sync_start}}",
-        "end_time": "{{sync_end}}"
+        "start_time": "{{sync_start_unix}}",
+        "end_time": "{{sync_end_unix}}",
+        "bucket_width": "1d",
+        "limit": "31",
+        "group_by[]": "line_item"
       }
     }
   ],
   "pagination": {
-    "type": "cursor",
+    "type": "response_token",
     "itemsPath": "data",
-    "cursorPath": "next_page",
-    "cursorParam": "page",
-    "pageSize": 100
+    "flattenPath": "results",
+    "tokenPath": "next_page",
+    "tokenParam": "page",
+    "pageSize": 31,
+    "limitParam": "limit",
+    "maxPages": 20
   },
   "rateLimit": {
     "requestsPerMinute": 60
@@ -30,24 +36,40 @@
   },
   "destinationRecordType": "spend_usage_record",
   "fieldMappings": [
-    { "type": "direct", "source": "model", "target": "model" },
-    { "type": "direct", "source": "n_context_tokens_total", "target": "input_tokens" },
-    { "type": "direct", "source": "n_generated_tokens_total", "target": "output_tokens" },
-    { "type": "fallback", "target": "cost_usd", "sources": ["cost_usd", "cost"] },
-    { "type": "direct", "source": "organization_id", "target": "project_id" },
-    { "type": "direct", "source": "id", "target": "id" },
+    { "type": "fallback", "target": "cost_usd", "sources": ["amount.value", "cost_usd", "cost"] },
+    { "type": "direct", "source": "amount.currency", "target": "currency" },
+    { "type": "direct", "source": "line_item", "target": "model" },
+    { "type": "direct", "source": "line_item", "target": "product" },
+    { "type": "direct", "source": "project_id", "target": "project_id" },
+    { "type": "fallback", "target": "id", "sources": ["line_item", "project_id", "start_time"] },
     { "type": "constant", "target": "provider", "value": "openai" },
-    { "type": "fallback", "target": "ts", "sources": ["aggregation_timestamp", "end_time"] }
+    { "type": "constant", "target": "platform_display_name", "value": "OpenAI" },
+    { "type": "fallback", "target": "ts", "sources": ["start_time", "end_time"] },
+    { "type": "fallback", "target": "period_start", "sources": ["start_time"] },
+    { "type": "fallback", "target": "period_end", "sources": ["end_time"] },
+    { "type": "direct", "source": "n_context_tokens_total", "target": "input_tokens" },
+    { "type": "direct", "source": "n_generated_tokens_total", "target": "output_tokens" }
   ],
   "validationRules": [
-    { "field": "cost_usd", "type": "currency" }
+    { "field": "model", "required": false, "type": "string" },
+    { "field": "cost_usd", "required": false, "type": "currency" }
   ],
   "dedupe": {
     "strategy": "period_model_user_product_cost",
-    "fields": ["model", "ts", "cost_usd"]
+    "fields": ["model", "ts", "project_id", "cost_usd", "product"]
   },
   "schedule": {
     "intervalMinutes": 60,
     "enabled": true
+  },
+  "capabilities": {
+    "supportsUsage": true,
+    "supportsBilling": true,
+    "supportsUsers": true,
+    "supportsProjects": true,
+    "supportsWorkspaces": false,
+    "supportsApiKeys": true,
+    "supportsUserLevelCost": false,
+    "supportsModelLevelUsage": true
   }
 }
