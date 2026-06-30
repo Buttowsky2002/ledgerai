@@ -1,5 +1,8 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ChParam, ClickHouseService } from '../clickhouse/clickhouse.service';
+import { CopilotAnalyticsService, CopilotSpendSummary } from '../github-copilot/github-copilot-analytics.service';
+import { CopilotMemberSpendService } from '../github-copilot/github-copilot-member-spend.service';
+import type { CopilotMemberSpendResponse } from '../github-copilot/github-copilot.types';
 import { LariService } from '../lari/lari.service';
 import { Recommendation } from '../lari/lari.types';
 import { PrismaService } from '../prisma/prisma.service';
@@ -17,6 +20,8 @@ export interface AgentEconomicsRow {
 }
 import { FocusRow, SpendDailyRow, toFocusRow } from './focus.mapper';
 import { PilotReport } from './report.renderer';
+import { loadIdentityLookups, resolveUserDirectoryIdentity, isEmailLike } from '../reports/identity-resolver';
+import type { UserDirectoryIdentity } from '../reports/identity-resolver';
 
 type Range = { from: string; to: string };
 
@@ -42,8 +47,41 @@ export interface SourceReconciliationResult {
   };
 }
 
+export interface UserModelBreakdownRow {
+  model: string;
+  platform: string;
+  spend_usd: number;
+  calls: number;
+}
+
+export interface UserDirectoryRow {
+  user_id: string;
+  display_name: string;
+  email: string | null;
+  team: string;
+  resolved: boolean;
+  total_spend_usd: number;
+  calls: number;
+  models: string[];
+  model_breakdown: UserModelBreakdownRow[];
+}
+
+export interface UsersAnalyticsResult {
+  from: string;
+  to: string;
+  users: UserDirectoryRow[];
+  /** How many distinct users came from each spend source before merge. */
+  sources: {
+    llm_call_users: number;
+    copilot_members: number;
+  };
+}
+
+type CopilotIdentityHint = { displayName: string | null; email: string | null; team: string };
+
 /** Coerce a ClickHouse scalar (numbers may arrive as strings) to a number. */
 const n = (v: unknown): number => (typeof v === 'number' ? v : Number(v) || 0);
+const usd = (v: number): number => Math.round((v + Number.EPSILON) * 100) / 100;
 
 /**
  * Read-only analytics over the ClickHouse materialized views — NEVER raw
@@ -60,6 +98,8 @@ export class AnalyticsService {
     private readonly ch: ClickHouseService,
     private readonly prisma: PrismaService,
     private readonly lari: LariService,
+    private readonly copilotAnalytics: CopilotAnalyticsService,
+    private readonly copilotMemberSpend: CopilotMemberSpendService,
   ) {}
 
   /**
@@ -126,18 +166,111 @@ export class AnalyticsService {
     const r = this.range(from, to);
     const params = { ...r } as Record<string, ChParam>;
     const tf = this.teamFilter(team, params);
-    // Select `day` directly (don't alias an expression to the column name — that
-    // shadows it and breaks the BETWEEN in WHERE). ClickHouse renders Date as
-    // 'YYYY-MM-DD' in JSON.
-    return this.ch.queryScoped(
-      `SELECT day, sum(cost_usd) AS cost_usd, sum(calls) AS calls,
-              sum(input_tokens + output_tokens) AS tokens,
-              sum(blocked_calls) AS blocked_calls, sum(error_calls) AS error_calls
-       FROM spend_daily
-       WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date} ${tf}
-       GROUP BY day ORDER BY day`,
-      params,
-    );
+    return this.ch
+      .queryScoped<SpendDailyRow>(
+        `SELECT day, sum(cost_usd) AS cost_usd, sum(calls) AS calls,
+                sum(input_tokens + output_tokens) AS tokens,
+                sum(blocked_calls) AS blocked_calls, sum(error_calls) AS error_calls
+         FROM spend_daily
+         WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date} ${tf}
+         GROUP BY day ORDER BY day`,
+        params,
+      )
+      .then((rows) => this.mergeCopilotDailySpend(rows, r, team));
+  }
+
+  /** GitHub Copilot spend for a period — used by cost-per-outcome supplemental AI cost. */
+  async copilotSpend(from?: string, to?: string): Promise<CopilotSpendSummary | null> {
+    const tenantId = getTenantId();
+    if (!tenantId) {
+      throw new BadRequestException('no tenant in context');
+    }
+    const r = this.range(from, to, 365);
+    return this.copilotAnalytics.getSpendSummary(tenantId, r.from, r.to);
+  }
+
+  private async mergeCopilotDailySpend<T extends { day: string; cost_usd: unknown }>(
+    chRows: T[],
+    r: Range,
+    team?: string,
+  ): Promise<T[]> {
+    if (team) return chRows;
+    const tenantId = getTenantId();
+    if (!tenantId) return chRows;
+    const copilot = await this.copilotAnalytics.getSpendSummary(tenantId, r.from, r.to);
+    if (!copilot || copilot.totalCostUsd <= 0) return chRows;
+
+    const dayMap = new Map<string, T>();
+    for (const row of chRows) {
+      dayMap.set(String(row.day).slice(0, 10), row);
+    }
+    for (const d of copilot.daily) {
+      const existing = dayMap.get(d.day);
+      if (existing) {
+        (existing as { cost_usd: number }).cost_usd = n(existing.cost_usd) + d.cost_usd;
+      } else {
+        dayMap.set(d.day, {
+          day: d.day,
+          cost_usd: d.cost_usd,
+          calls: 0,
+          tokens: 0,
+          blocked_calls: 0,
+          error_calls: 0,
+        } as unknown as T);
+      }
+    }
+    return [...dayMap.values()].sort((a, b) => String(a.day).localeCompare(String(b.day)));
+  }
+
+  private async mergeCopilotPlatformSpend(
+    chRows: { platform: string; cost_usd: unknown; calls: unknown }[],
+    r: Range,
+  ) {
+    const tenantId = getTenantId();
+    if (!tenantId) return chRows;
+    const copilot = await this.copilotAnalytics.getSpendSummary(tenantId, r.from, r.to);
+    if (!copilot || copilot.totalCostUsd <= 0) return chRows;
+
+    const rows = chRows.map((row) => ({
+      platform: String(row.platform),
+      cost_usd: n(row.cost_usd),
+      calls: n(row.calls),
+    }));
+    const idx = rows.findIndex((r) => r.platform === copilot.platform.platform);
+    if (idx >= 0) {
+      rows[idx].cost_usd = usd(rows[idx].cost_usd + copilot.platform.cost_usd);
+      rows[idx].calls += copilot.platform.calls;
+    } else {
+      rows.push({ ...copilot.platform });
+    }
+    return rows.sort((a, b) => b.cost_usd - a.cost_usd);
+  }
+
+  private async mergeCopilotModelMix(
+    chRows: { provider: string; model: string; cost_usd: unknown; calls: unknown }[],
+    r: Range,
+  ) {
+    const tenantId = getTenantId();
+    if (!tenantId) return chRows;
+    const copilot = await this.copilotAnalytics.getSpendSummary(tenantId, r.from, r.to);
+    if (!copilot || copilot.totalCostUsd <= 0) return chRows;
+
+    const rows = chRows.map((row) => ({
+      provider: String(row.provider),
+      model: String(row.model),
+      cost_usd: n(row.cost_usd),
+      calls: n(row.calls),
+    }));
+    for (const m of copilot.modelMix) {
+      const idx = rows.findIndex((r) => r.provider === m.provider && r.model === m.model);
+      if (idx >= 0) {
+        rows[idx].cost_usd = usd(rows[idx].cost_usd + m.cost_usd);
+        rows[idx].calls += m.calls;
+      } else {
+        rows.push({ ...m });
+      }
+    }
+    return rows.sort((a, b) => b.cost_usd - a.cost_usd);
   }
 
   allocation(dimension: 'team' | 'app' | 'agent' | 'user', from?: string, to?: string) {
@@ -175,25 +308,29 @@ export class AnalyticsService {
 
   modelMix(from?: string, to?: string) {
     const r = this.range(from, to);
-    return this.ch.queryScoped(
-      `SELECT provider, model, sum(cost_usd) AS cost_usd, sum(calls) AS calls
-       FROM spend_daily
-       WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date}
-       GROUP BY provider, model ORDER BY cost_usd DESC`,
-      r as Record<string, ChParam>,
-    );
+    return this.ch
+      .queryScoped<{ provider: string; model: string; cost_usd: unknown; calls: unknown }>(
+        `SELECT provider, model, sum(cost_usd) AS cost_usd, sum(calls) AS calls
+         FROM spend_daily
+         WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date}
+         GROUP BY provider, model ORDER BY cost_usd DESC`,
+        r as Record<string, ChParam>,
+      )
+      .then((rows) => this.mergeCopilotModelMix(rows, r));
   }
 
   /** Spend grouped by provider/platform — powers Overview and Model Mix pie charts. */
   platformSpend(from?: string, to?: string) {
     const r = this.range(from, to);
-    return this.ch.queryScoped(
-      `SELECT provider AS platform, sum(cost_usd) AS cost_usd, sum(calls) AS calls
-       FROM spend_daily
-       WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date}
-       GROUP BY provider ORDER BY cost_usd DESC`,
-      r as Record<string, ChParam>,
-    );
+    return this.ch
+      .queryScoped<{ platform: string; cost_usd: unknown; calls: unknown }>(
+        `SELECT provider AS platform, sum(cost_usd) AS cost_usd, sum(calls) AS calls
+         FROM spend_daily
+         WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date}
+         GROUP BY provider ORDER BY cost_usd DESC`,
+        r as Record<string, ChParam>,
+      )
+      .then((rows) => this.mergeCopilotPlatformSpend(rows, r));
   }
 
   burndown(from?: string, to?: string, virtualKeyId?: string) {
@@ -573,5 +710,279 @@ export class AnalyticsService {
       days,
       summary: { portalTotalUsd, apiTotalUsd, overlapDays, portalOnlyDays, apiOnlyDays },
     };
+  }
+
+  /** Member directory — token/Cursor spend (ClickHouse) + GitHub Copilot (Postgres). */
+  async users(from?: string, to?: string, q?: string): Promise<UsersAnalyticsResult> {
+    const r = this.range(from, to);
+    const tenantId = getTenantId();
+    if (!tenantId) {
+      throw new BadRequestException('no tenant in context');
+    }
+    const [{ totals: chTotals, breakdown: chBreakdown }, copilotPack] = await Promise.all([
+      this.fetchUserSpendFromCh(r),
+      this.fetchCopilotUserSpend(tenantId, r),
+    ]);
+    const users = await this.assembleUserDirectory(
+      tenantId,
+      [...chTotals, ...copilotPack.totals],
+      [...chBreakdown, ...copilotPack.breakdown],
+      q,
+      copilotPack.hints,
+    );
+    return {
+      from: r.from,
+      to: r.to,
+      users,
+      sources: {
+        llm_call_users: chTotals.length,
+        copilot_members: copilotPack.totals.length,
+      },
+    };
+  }
+
+  /** Single-user drill-down for /users/[userId]. */
+  async userDetail(userId: string, from?: string, to?: string): Promise<UserDirectoryRow | null> {
+    if (!userId) {
+      throw new BadRequestException('userId required');
+    }
+    const r = this.range(from, to);
+    const tenantId = getTenantId();
+    if (!tenantId) {
+      throw new BadRequestException('no tenant in context');
+    }
+    const params: Record<string, ChParam> = { ...r, userId };
+    const userFilter = `AND user_id = {userId:String}`;
+    const [{ totals: chTotals, breakdown: chBreakdown }, copilotPack] = await Promise.all([
+      Promise.all([
+        this.ch.queryScoped<{ user_id: string; total_spend_usd: unknown; calls: unknown }>(
+          `SELECT user_id, sum(cost_usd) AS total_spend_usd, sum(calls) AS calls
+         FROM spend_daily_by_user
+         WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date}
+           ${this.userSpendExclude()} ${userFilter}
+         GROUP BY user_id
+         HAVING total_spend_usd > 0`,
+          params,
+        ),
+        this.ch.queryScoped<{ user_id: string; platform: string; model: string; spend_usd: unknown; calls: unknown }>(
+          `SELECT user_id, provider AS platform, model, sum(cost_usd) AS spend_usd, sum(calls) AS calls
+         FROM spend_daily_by_user
+         WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date}
+           ${this.userSpendExclude()} ${userFilter}
+         GROUP BY user_id, provider, model
+         HAVING calls > 0
+         ORDER BY spend_usd DESC`,
+          params,
+        ),
+      ]).then(([totals, breakdown]) => ({ totals, breakdown })),
+      this.fetchCopilotUserSpend(tenantId, r, userId),
+    ]);
+    const rows = await this.assembleUserDirectory(
+      tenantId,
+      [...chTotals, ...copilotPack.totals],
+      [...chBreakdown, ...copilotPack.breakdown],
+      undefined,
+      copilotPack.hints,
+    );
+    return rows[0] ?? null;
+  }
+
+  private userSpendExclude(): string {
+    return `AND user_id != '' AND user_id != 'Unassigned'`;
+  }
+
+  private async fetchUserSpendFromCh(r: Range) {
+    const params = r as Record<string, ChParam>;
+    const exclude = this.userSpendExclude();
+    const [totals, breakdown] = await Promise.all([
+      this.ch.queryScoped<{ user_id: string; total_spend_usd: unknown; calls: unknown }>(
+        `SELECT user_id, sum(cost_usd) AS total_spend_usd, sum(calls) AS calls
+         FROM spend_daily_by_user
+         WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date} ${exclude}
+         GROUP BY user_id
+         HAVING calls > 0
+         ORDER BY total_spend_usd DESC`,
+        params,
+      ),
+      this.ch.queryScoped<{ user_id: string; platform: string; model: string; spend_usd: unknown; calls: unknown }>(
+        `SELECT user_id, provider AS platform, model, sum(cost_usd) AS spend_usd, sum(calls) AS calls
+         FROM spend_daily_by_user
+         WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date} ${exclude}
+         GROUP BY user_id, provider, model
+         HAVING calls > 0
+         ORDER BY user_id, spend_usd DESC`,
+        params,
+      ),
+    ]);
+    return { totals, breakdown };
+  }
+
+  /** GitHub Copilot allocated member spend (Postgres) — not in spend_daily_by_user. */
+  private async fetchCopilotUserSpend(
+    tenantId: string,
+    r: Range,
+    githubLogin?: string,
+  ): Promise<{
+    totals: { user_id: string; total_spend_usd: unknown; calls: unknown }[];
+    breakdown: { user_id: string; platform: string; model: string; spend_usd: unknown; calls: unknown }[];
+    hints: Map<string, CopilotIdentityHint>;
+  }> {
+    const resp: CopilotMemberSpendResponse = await this.copilotMemberSpend.getMemberSpend(tenantId, {
+      from: r.from,
+      to: r.to,
+      ...(githubLogin ? { user: githubLogin } : {}),
+    });
+    const hints = new Map<string, CopilotIdentityHint>();
+    if (!resp.connected) {
+      return { totals: [], breakdown: [], hints };
+    }
+
+    const totals: { user_id: string; total_spend_usd: unknown; calls: unknown }[] = [];
+    const breakdown: { user_id: string; platform: string; model: string; spend_usd: unknown; calls: unknown }[] = [];
+
+    for (const m of resp.members) {
+      if (m.totalAllocatedCost <= 0) continue;
+      const calls = m.chatTurns + m.linesAccepted + m.prSummaryCount;
+      totals.push({
+        user_id: m.githubLogin,
+        total_spend_usd: m.totalAllocatedCost,
+        calls,
+      });
+      breakdown.push({
+        user_id: m.githubLogin,
+        platform: 'github_copilot',
+        model: 'Copilot',
+        spend_usd: m.totalAllocatedCost,
+        calls,
+      });
+      hints.set(m.githubLogin, {
+        displayName: m.displayName,
+        email: null,
+        team: m.teamName || '',
+      });
+    }
+    return { totals, breakdown, hints };
+  }
+
+  private async assembleUserDirectory(
+    tenantId: string,
+    totals: { user_id: string; total_spend_usd: unknown; calls: unknown }[],
+    breakdown: { user_id: string; platform: string; model: string; spend_usd: unknown; calls: unknown }[],
+    q?: string,
+    copilotHints: Map<string, CopilotIdentityHint> = new Map(),
+  ): Promise<UserDirectoryRow[]> {
+    const totalsByUser = new Map<string, { total_spend_usd: number; calls: number }>();
+    for (const row of totals) {
+      totalsByUser.set(String(row.user_id), {
+        total_spend_usd: usd(n(row.total_spend_usd)),
+        calls: n(row.calls),
+      });
+    }
+
+    const breakdownByUser = new Map<string, UserModelBreakdownRow[]>();
+    for (const row of breakdown) {
+      const uid = String(row.user_id);
+      const list = breakdownByUser.get(uid) ?? [];
+      list.push({
+        model: String(row.model),
+        platform: String(row.platform),
+        spend_usd: usd(n(row.spend_usd)),
+        calls: n(row.calls),
+      });
+      breakdownByUser.set(uid, list);
+    }
+    for (const list of breakdownByUser.values()) {
+      list.sort((a, b) => b.spend_usd - a.spend_usd);
+    }
+
+    const allUserIds = new Set([...totalsByUser.keys(), ...breakdownByUser.keys()]);
+    const { byId, byEmail, byAlias } = await loadIdentityLookups(this.prisma, tenantId);
+    const needle = q?.trim().toLowerCase() ?? '';
+
+    const merged = new Map<string, UserDirectoryRow>();
+    for (const user_id of allUserIds) {
+      const totalsRow = totalsByUser.get(user_id) ?? { total_spend_usd: 0, calls: 0 };
+      const total_spend_usd = totalsRow.total_spend_usd;
+      const calls = totalsRow.calls;
+      if (total_spend_usd <= 0 && calls <= 0) continue;
+
+      const identity = resolveUserDirectoryIdentity(user_id, byId, byEmail, byAlias);
+      const hint = copilotHints.get(user_id);
+      const display_name =
+        identity.resolved
+          ? identity.display_name
+          : hint?.displayName?.trim() || identity.display_name;
+      const email = identity.email ?? hint?.email ?? null;
+      const team = identity.team || hint?.team || '';
+
+      const model_breakdown = breakdownByUser.get(user_id) ?? [];
+      const models = model_breakdown.map((m) => m.model).filter((m, i, arr) => arr.indexOf(m) === i);
+
+      const entry: UserDirectoryRow = {
+        user_id,
+        display_name,
+        email,
+        team,
+        resolved: identity.resolved,
+        total_spend_usd,
+        calls,
+        models,
+        model_breakdown,
+      };
+      if (needle && !this.userMatchesQuery(entry, needle)) continue;
+
+      const key = this.canonicalUserKey(user_id, identity);
+      const existing = merged.get(key);
+      if (!existing) {
+        merged.set(key, entry);
+        continue;
+      }
+      merged.set(key, this.mergeUserDirectoryRows(existing, entry));
+    }
+
+    return [...merged.values()].sort((a, b) => b.total_spend_usd - a.total_spend_usd);
+  }
+
+  private canonicalUserKey(user_id: string, identity: UserDirectoryIdentity): string {
+    if (identity.email) return `email:${identity.email.toLowerCase()}`;
+    if (isEmailLike(user_id)) return `email:${user_id.trim().toLowerCase()}`;
+    return `raw:${user_id.toLowerCase()}`;
+  }
+
+  private mergeUserDirectoryRows(a: UserDirectoryRow, b: UserDirectoryRow): UserDirectoryRow {
+    const primary = a.total_spend_usd >= b.total_spend_usd ? a : b;
+    const secondary = primary === a ? b : a;
+    const resolved = a.resolved ? a : b.resolved ? b : primary;
+
+    const breakdownMap = new Map<string, UserModelBreakdownRow>();
+    for (const row of [...a.model_breakdown, ...b.model_breakdown]) {
+      const key = `${row.platform}::${row.model}`;
+      const existing = breakdownMap.get(key);
+      if (existing) {
+        existing.spend_usd = usd(existing.spend_usd + row.spend_usd);
+        existing.calls += row.calls;
+      } else {
+        breakdownMap.set(key, { ...row });
+      }
+    }
+    const model_breakdown = [...breakdownMap.values()].sort((x, y) => y.spend_usd - x.spend_usd);
+    const models = model_breakdown.map((m) => m.model).filter((m, i, arr) => arr.indexOf(m) === i);
+
+    return {
+      user_id: primary.user_id,
+      display_name: resolved.display_name,
+      email: resolved.email ?? primary.email ?? secondary.email,
+      team: resolved.team || primary.team || secondary.team,
+      resolved: a.resolved || b.resolved,
+      total_spend_usd: usd(a.total_spend_usd + b.total_spend_usd),
+      calls: a.calls + b.calls,
+      models,
+      model_breakdown,
+    };
+  }
+
+  private userMatchesQuery(user: UserDirectoryRow, needle: string): boolean {
+    const fields = [user.display_name, user.email, user.team, user.user_id];
+    return fields.some((f) => f && f.toLowerCase().includes(needle));
   }
 }

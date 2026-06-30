@@ -5,9 +5,13 @@ import {
   AreaChart,
   Bar,
   BarChart,
+  Cell,
   CartesianGrid,
+  Legend,
   Line,
   LineChart,
+  Pie,
+  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -83,6 +87,42 @@ export function BarChartClient({ data, xKey, yKey }: { data: Row[]; xKey: string
         <Tooltip contentStyle={TOOLTIP} cursor={{ fill: '#ffffff10' }} />
         <Bar dataKey={yKey} fill="#4f8cff" radius={[3, 3, 0, 0]} />
       </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+const PIE_COLORS = ['#4f8cff', '#34d399', '#fbbf24', '#f87171', '#a78bfa', '#22d3ee', '#fb923c'];
+
+/** Donut chart for platform/model spend breakdown. */
+export function PieChartClient({
+  data,
+  nameKey,
+  valueKey,
+}: {
+  data: Row[];
+  nameKey: string;
+  valueKey: string;
+}) {
+  return (
+    <ResponsiveContainer width="100%" height={280}>
+      <PieChart>
+        <Pie
+          data={data}
+          dataKey={valueKey}
+          nameKey={nameKey}
+          cx="50%"
+          cy="50%"
+          innerRadius={60}
+          outerRadius={100}
+          paddingAngle={2}
+        >
+          {data.map((_, i) => (
+            <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+          ))}
+        </Pie>
+        <Tooltip contentStyle={TOOLTIP} />
+        <Legend wrapperStyle={{ fontSize: 12 }} />
+      </PieChart>
     </ResponsiveContainer>
   );
 }

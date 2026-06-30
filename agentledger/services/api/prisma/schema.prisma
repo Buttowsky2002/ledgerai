@@ -390,6 +390,177 @@ model AuditLog {
   @@map("audit_log")
 }
 
+model AiProviderConnection {
+  connectionId      String    @id @default(dbgenerated("gen_random_uuid()")) @map("connection_id") @db.Uuid
+  tenantId          String    @map("tenant_id") @db.Uuid
+  connectorId       String    @map("connector_id") @db.Uuid
+  provider          String    @default("github_copilot_business")
+  connectionType    String    @default("license_usage_roi") @map("connection_type")
+  orgSlug           String    @map("org_slug")
+  enterpriseSlug    String?   @map("enterprise_slug")
+  displayName       String?   @map("display_name")
+  roiAssumptions    Json      @default("{}") @map("roi_assumptions")
+  scheduleJson      Json      @default("{}") @map("schedule_json")
+  lastSuccessAt     DateTime? @map("last_success_at") @db.Timestamptz
+  lastErrorCode     String?   @map("last_error_code")
+  lastErrorMessage  String?   @map("last_error_message")
+  recordsImported   Int       @default(0) @map("records_imported")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime  @default(now()) @map("updated_at") @db.Timestamptz
+
+  @@unique([tenantId, connectorId])
+  @@unique([tenantId, provider, orgSlug])
+  @@map("ai_provider_connections")
+}
+
+model GithubCopilotSeat {
+  seatId                  String    @id @default(dbgenerated("gen_random_uuid()")) @map("seat_id") @db.Uuid
+  tenantId                String    @map("tenant_id") @db.Uuid
+  connectionId            String    @map("connection_id") @db.Uuid
+  orgSlug                 String    @map("org_slug")
+  githubUserId            BigInt    @map("github_user_id")
+  githubLogin             String    @map("github_login")
+  planType                String?   @map("plan_type")
+  assigningTeamSlug       String?   @map("assigning_team_slug")
+  seatCreatedAt           DateTime? @map("seat_created_at") @db.Timestamptz
+  pendingCancellationDate DateTime? @map("pending_cancellation_date") @db.Date
+  lastActivityAt          DateTime? @map("last_activity_at") @db.Timestamptz
+  lastActivityEditor      String?   @map("last_activity_editor")
+  isActive                Boolean   @default(true) @map("is_active")
+  monthlySeatCost         Decimal   @default(19) @map("monthly_seat_cost") @db.Decimal(14, 6)
+  rawPayload              Json      @default("{}") @map("raw_payload")
+  syncedAt                DateTime  @default(now()) @map("synced_at") @db.Timestamptz
+  createdAt               DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt               DateTime  @default(now()) @map("updated_at") @db.Timestamptz
+
+  @@unique([tenantId, connectionId, githubUserId])
+  @@map("github_copilot_seats")
+}
+
+model GithubCopilotMember {
+  memberId     String   @id @default(dbgenerated("gen_random_uuid()")) @map("member_id") @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  connectionId String   @map("connection_id") @db.Uuid
+  orgSlug      String   @map("org_slug")
+  githubUserId BigInt   @map("github_user_id")
+  githubLogin  String   @map("github_login")
+  displayName  String?  @map("display_name")
+  email        String?
+  avatarUrl    String?  @map("avatar_url")
+  role         String?
+  isOrgMember  Boolean  @default(true) @map("is_org_member")
+  syncedAt     DateTime @default(now()) @map("synced_at") @db.Timestamptz
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  @@unique([tenantId, connectionId, githubUserId])
+  @@map("github_copilot_members")
+}
+
+model GithubCopilotMemberTeam {
+  memberTeamId String   @id @default(dbgenerated("gen_random_uuid()")) @map("member_team_id") @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  connectionId String   @map("connection_id") @db.Uuid
+  orgSlug      String   @map("org_slug")
+  githubLogin  String   @map("github_login")
+  teamSlug     String   @map("team_slug")
+  teamName     String   @default("") @map("team_name")
+  syncedAt     DateTime @default(now()) @map("synced_at") @db.Timestamptz
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  @@unique([tenantId, connectionId, githubLogin, teamSlug])
+  @@map("github_copilot_member_teams")
+}
+
+model GithubCopilotMemberSpendDaily {
+  spendId               String   @id @default(dbgenerated("gen_random_uuid()")) @map("spend_id") @db.Uuid
+  tenantId              String   @map("tenant_id") @db.Uuid
+  connectionId          String   @map("connection_id") @db.Uuid
+  orgSlug               String   @map("org_slug")
+  usageDate             DateTime @map("usage_date") @db.Date
+  githubLogin           String   @map("github_login")
+  teamSlug              String   @default("") @map("team_slug")
+  seatCost              Decimal  @default(0) @map("seat_cost") @db.Decimal(14, 6)
+  estimatedCreditCost   Decimal  @default(0) @map("estimated_credit_cost") @db.Decimal(14, 6)
+  allocatedOverageCost  Decimal  @default(0) @map("allocated_overage_cost") @db.Decimal(14, 6)
+  totalAllocatedCost    Decimal  @default(0) @map("total_allocated_cost") @db.Decimal(14, 6)
+  aiCreditsUsed         Decimal  @default(0) @map("ai_credits_used") @db.Decimal(14, 6)
+  linesAccepted         Int      @default(0) @map("lines_accepted")
+  chatTurns             Int      @default(0) @map("chat_turns")
+  prSummaryCount        Int      @default(0) @map("pr_summary_count")
+  estimatedHoursSaved   Decimal  @default(0) @map("estimated_hours_saved") @db.Decimal(14, 6)
+  estimatedValueCreated Decimal  @default(0) @map("estimated_value_created") @db.Decimal(14, 6)
+  roiPercentage         Decimal? @map("roi_percentage") @db.Decimal(14, 6)
+  utilizationStatus     String   @default("active") @map("utilization_status")
+  confidenceScore       Decimal  @default(0.85) @map("confidence_score") @db.Decimal(5, 4)
+  calculationVersion    String   @default("v1") @map("calculation_version")
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt             DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  @@unique([tenantId, connectionId, usageDate, githubLogin, teamSlug])
+  @@map("github_copilot_member_spend_daily")
+}
+
+model GithubCopilotUsageDaily {
+  usageId           String   @id @default(dbgenerated("gen_random_uuid()")) @map("usage_id") @db.Uuid
+  tenantId          String   @map("tenant_id") @db.Uuid
+  connectionId      String   @map("connection_id") @db.Uuid
+  orgSlug           String   @map("org_slug")
+  usageDate         DateTime @map("usage_date") @db.Date
+  githubLogin       String   @default("") @map("github_login")
+  teamSlug          String   @default("") @map("team_slug")
+  editor            String   @default("")
+  language          String   @default("")
+  model             String   @default("")
+  feature           String   @default("")
+  suggestionsCount  Int      @default(0) @map("suggestions_count")
+  acceptancesCount  Int      @default(0) @map("acceptances_count")
+  linesSuggested    Int      @default(0) @map("lines_suggested")
+  linesAccepted     Int      @default(0) @map("lines_accepted")
+  activeUsers       Int      @default(0) @map("active_users")
+  engagedUsers      Int      @default(0) @map("engaged_users")
+  chatTurns         Int      @default(0) @map("chat_turns")
+  prSummaryCount    Int      @default(0) @map("pr_summary_count")
+  aiCreditsUsed     Decimal  @default(0) @map("ai_credits_used") @db.Decimal(14, 6)
+  rawPayload        Json     @default("{}") @map("raw_payload")
+  syncedAt          DateTime @default(now()) @map("synced_at") @db.Timestamptz
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  @@unique([tenantId, connectionId, usageDate, githubLogin, teamSlug, editor, language, model, feature])
+  @@map("github_copilot_usage_daily")
+}
+
+model GithubCopilotRoiDaily {
+  roiId              String   @id @default(dbgenerated("gen_random_uuid()")) @map("roi_id") @db.Uuid
+  tenantId           String   @map("tenant_id") @db.Uuid
+  connectionId       String   @map("connection_id") @db.Uuid
+  orgSlug            String   @map("org_slug")
+  usageDate          DateTime @map("usage_date") @db.Date
+  teamSlug           String   @default("") @map("team_slug")
+  assignedSeats      Int      @default(0) @map("assigned_seats")
+  activeSeats        Int      @default(0) @map("active_seats")
+  baseSeatCost       Decimal  @default(0) @map("base_seat_cost") @db.Decimal(14, 6)
+  includedAiCredits  Decimal  @default(0) @map("included_ai_credits") @db.Decimal(14, 6)
+  aiCreditsUsed      Decimal  @default(0) @map("ai_credits_used") @db.Decimal(14, 6)
+  overageEstimate    Decimal  @default(0) @map("overage_estimate") @db.Decimal(14, 6)
+  totalCopilotCost   Decimal  @default(0) @map("total_copilot_cost") @db.Decimal(14, 6)
+  linesAccepted      Int      @default(0) @map("lines_accepted")
+  chatTurns          Int      @default(0) @map("chat_turns")
+  prSummaryCount     Int      @default(0) @map("pr_summary_count")
+  grossHoursSaved    Decimal  @default(0) @map("gross_hours_saved") @db.Decimal(14, 6)
+  adjustedHoursSaved Decimal  @default(0) @map("adjusted_hours_saved") @db.Decimal(14, 6)
+  estimatedValue     Decimal  @default(0) @map("estimated_value") @db.Decimal(14, 6)
+  roiPercentage      Decimal  @default(0) @map("roi_percentage") @db.Decimal(14, 6)
+  assumptionsSnapshot Json    @default("{}") @map("assumptions_snapshot")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  @@unique([tenantId, connectionId, usageDate, teamSlug])
+  @@map("github_copilot_roi_daily")
+}
+
 // Idempotency ledger for POST /v1/import/events (migration 011). A re-import with
 // a previously-seen (tenant_id, idempotency_key) is skipped — no double counting.
 // Tenant-scoped + RLS like every other control-plane table.

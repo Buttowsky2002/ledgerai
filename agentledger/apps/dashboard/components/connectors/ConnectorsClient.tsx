@@ -1,7 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import { GitHubCopilotConnectForm } from '../copilot/GitHubCopilotConnectForm';
+import { syncCopilotConnection, fetchCopilotConnections } from '../../lib/api/github-copilot';
+import type { CopilotConnectionStatus } from '../../types/github-copilot';
 import { Card, DataTable, PageHeader } from '../ui';
 import {
   MAX_SYNC_DAYS,
@@ -73,7 +77,12 @@ const CATEGORIES = [
 
 const AUTH_TYPES = ['api_key_header', 'bearer_token', 'basic_auth', 'custom_header', 'none'] as const;
 
-const LOCKED_PRESETS = new Set(['anthropic-usage', 'openai-usage', 'cursor-usage']);
+const COPILOT_PRESET = 'github-copilot-business';
+const LOCKED_PRESETS = new Set(['anthropic-usage', 'openai-usage', 'cursor-usage', COPILOT_PRESET]);
+
+function isCopilotConnector(c: Connector): boolean {
+  return c.provider === 'github_copilot_business' || c.category === 'license_usage_roi';
+}
 
 const PRESET_DEFAULTS: Record<
   string,
@@ -96,6 +105,12 @@ const PRESET_DEFAULTS: Record<
     authType: 'basic_auth',
     endpointPath: '/teams/filtered-usage-events',
     category: 'coding_tool',
+  },
+  'github-copilot-business': {
+    baseUrl: 'https://api.github.com',
+    authType: 'bearer_token',
+    endpointPath: '/orgs/{org}/copilot/billing',
+    category: 'license_usage_roi',
   },
 };
 
@@ -158,7 +173,9 @@ function ProgressBar({ progress, label }: { progress: number; label: string }) {
 }
 
 export function ConnectorsClient() {
+  const searchParams = useSearchParams();
   const [connectors, setConnectors] = useState<Connector[]>([]);
+  const [copilotConnections, setCopilotConnections] = useState<CopilotConnectionStatus[]>([]);
   const [presets, setPresets] = useState<Preset[]>([]);
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
@@ -191,19 +208,38 @@ export function ConnectorsClient() {
     endpointPath: '/v1/spend',
   });
 
+  const [syncingCopilot, setSyncingCopilot] = useState<string | null>(null);
+
+  const copilotByConnectorId = useMemo(() => {
+    const map = new Map<string, CopilotConnectionStatus>();
+    for (const c of copilotConnections) {
+      map.set(c.connectorId, c);
+    }
+    return map;
+  }, [copilotConnections]);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [connRes, presetRes] = await Promise.all([
+      const [connRes, presetRes, copilotRes] = await Promise.all([
         fetch('/api/connectors'),
         fetch('/api/connector-definitions'),
+        fetchCopilotConnections(),
       ]);
       if (connRes.ok) setConnectors(await connRes.json());
       if (presetRes.ok) setPresets(await presetRes.json());
+      setCopilotConnections(copilotRes);
     } finally {
       setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get('preset') === COPILOT_PRESET) {
+      setFormOpen(true);
+      setForm((f) => ({ ...f, ...presetFormFields(COPILOT_PRESET, presets) }));
+    }
+  }, [searchParams, presets]);
 
   useEffect(() => {
     void load();
@@ -218,6 +254,10 @@ export function ConnectorsClient() {
   }, [cooldownUntil]);
 
   const createConnector = async () => {
+    if (form.presetId === COPILOT_PRESET) {
+      setError('Use Test token and Connect Copilot below for GitHub Copilot Business.');
+      return;
+    }
     setError(null);
     const locked = LOCKED_PRESETS.has(form.presetId);
     const res = await fetch('/api/connectors', {
@@ -396,6 +436,19 @@ export function ConnectorsClient() {
     }
   };
 
+  const syncCopilot = async (connectionId: string) => {
+    setSyncingCopilot(connectionId);
+    setError(null);
+    const result = await syncCopilotConnection(connectionId);
+    setSyncingCopilot(null);
+    if (!result?.ok) {
+      setError(result?.errorMessage ?? 'Copilot sync failed. Check token scopes (403) or org Copilot access.');
+      return;
+    }
+    setError(null);
+    await load();
+  };
+
   const statusTone = (s: string) => {
     if (s === 'healthy' || s === 'connected') return 'text-pos';
     if (s === 'auth_failed' || s === 'validation_failed') return 'text-neg';
@@ -438,6 +491,38 @@ export function ConnectorsClient() {
       )}
 
       {formOpen && (
+        <>
+          <Card title="Add data source" subtitle="Choose a provider template">
+            <label className="block max-w-md text-sm">
+              <span className="text-muted">Preset template</span>
+              <select
+                className="mt-1 w-full rounded border border-edge bg-black/20 px-3 py-2"
+                value={form.presetId}
+                onChange={(e) => {
+                  const presetId = e.target.value;
+                  setForm((f) => ({ ...f, ...presetFormFields(presetId, presets) }));
+                  setError(null);
+                }}
+              >
+                {presets.filter((p) => p.builtIn !== false).map((p) => (
+                  <option key={p.definitionId ?? p.name} value={p.definitionId ?? p.name}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </Card>
+
+          {form.presetId === COPILOT_PRESET ? (
+            <Card title="GitHub Copilot Business" subtitle="Seat, usage, member spend, and estimated ROI">
+              <GitHubCopilotConnectForm
+                onConnected={() => {
+                  setFormOpen(false);
+                  void load();
+                }}
+              />
+            </Card>
+          ) : (
         <Card title="Custom API Connector">
           <div className="grid gap-4 md:grid-cols-2">
             <label className="block text-sm">
@@ -449,22 +534,8 @@ export function ConnectorsClient() {
                 placeholder="My spend API"
               />
             </label>
-            <label className="block text-sm">
-              <span className="text-muted">Preset template</span>
-              <select
-                className="mt-1 w-full rounded border border-edge bg-black/20 px-3 py-2"
-                value={form.presetId}
-                onChange={(e) => {
-                  const presetId = e.target.value;
-                  setForm((f) => ({ ...f, ...presetFormFields(presetId, presets) }));
-                }}
-              >
-                {presets.filter((p) => p.builtIn !== false).map((p) => (
-                  <option key={p.definitionId ?? p.name} value={p.definitionId ?? p.name}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
+            <div className="hidden md:block" aria-hidden />
+            <div className="md:col-span-2">
               {form.presetId === 'anthropic-usage' && (
                 <p className="mt-1 text-xs text-muted">
                   Paste your Claude Console <strong>Admin API key</strong> (sk-ant-admin…) from
@@ -482,7 +553,7 @@ export function ConnectorsClient() {
                   https://api.cursor.com.
                 </p>
               )}
-            </label>
+            </div>
             <label className="block text-sm">
               <span className="text-muted">Category</span>
               <select
@@ -554,6 +625,8 @@ export function ConnectorsClient() {
             </button>
           </div>
         </Card>
+          )}
+        </>
       )}
 
       <Card
@@ -611,6 +684,10 @@ export function ConnectorsClient() {
             {connectors.map((c) => {
               const sync = c.syncStatus;
               const lastSync = sync?.lastSyncAt ?? c.lastSuccessAt;
+              const copilotConn = isCopilotConnector(c) ? copilotByConnectorId.get(c.connectorId) : undefined;
+              const copilotLastSync = copilotConn?.lastSuccessAt ?? lastSync;
+              const copilotRecords = copilotConn?.recordsImported;
+              const copilotError = copilotConn?.lastErrorMessage ?? sync?.errorMessage ?? c.lastErrorMessageSafe;
               return (
                 <div
                   key={c.connectorId}
@@ -630,22 +707,40 @@ export function ConnectorsClient() {
 
                   <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
                     <dt className="text-muted">Last sync</dt>
-                    <dd>{lastSync ? new Date(lastSync).toLocaleString() : '—'}</dd>
+                    <dd>{copilotLastSync ? new Date(copilotLastSync).toLocaleString() : '—'}</dd>
                     <dt className="text-muted">Records imported</dt>
-                    <dd className="num">{sync?.recordsImported?.toLocaleString() ?? '—'}</dd>
-                    <dt className="text-muted">Users detected</dt>
-                    <dd className="num">{sync?.usersDetected ?? '—'}</dd>
-                    <dt className="text-muted">Unmapped records</dt>
-                    <dd className={`num ${(sync?.unmappedRecords ?? 0) > 0 ? 'text-warn' : ''}`}>
-                      {sync?.unmappedRecords ?? '—'}
-                    </dd>
-                    <dt className="text-muted">Spend synced</dt>
                     <dd className="num">
-                      {sync?.spendSyncedUsd != null ? `$${sync.spendSyncedUsd.toFixed(2)}` : '—'}
+                      {copilotRecords != null
+                        ? copilotRecords.toLocaleString()
+                        : sync?.recordsImported?.toLocaleString() ?? '—'}
                     </dd>
+                    {!isCopilotConnector(c) && (
+                      <>
+                        <dt className="text-muted">Users detected</dt>
+                        <dd className="num">{sync?.usersDetected ?? '—'}</dd>
+                        <dt className="text-muted">Unmapped records</dt>
+                        <dd className={`num ${(sync?.unmappedRecords ?? 0) > 0 ? 'text-warn' : ''}`}>
+                          {sync?.unmappedRecords ?? '—'}
+                        </dd>
+                        <dt className="text-muted">Spend synced</dt>
+                        <dd className="num">
+                          {sync?.spendSyncedUsd != null ? `$${sync.spendSyncedUsd.toFixed(2)}` : '—'}
+                        </dd>
+                      </>
+                    )}
+                    {isCopilotConnector(c) && copilotConn && (
+                      <>
+                        <dt className="text-muted">Organization</dt>
+                        <dd>{copilotConn.orgSlug}</dd>
+                      </>
+                    )}
                   </dl>
 
-                  {(sync?.errorMessage || c.lastErrorMessageSafe) && (
+                  {copilotError && (
+                    <p className="mt-2 text-xs text-neg">{copilotError}</p>
+                  )}
+
+                  {!isCopilotConnector(c) && (sync?.errorMessage || c.lastErrorMessageSafe) && (
                     <p className="mt-2 text-xs text-neg">
                       {sync?.errorMessage ?? c.lastErrorMessageSafe}
                     </p>
@@ -658,26 +753,53 @@ export function ConnectorsClient() {
                   )}
 
                   <div className="mt-4 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      className="text-xs text-accent hover:underline disabled:opacity-50"
-                      disabled={testing === c.connectorId}
-                      onClick={() => void testConnector(c.connectorId)}
-                    >
-                      {testing === c.connectorId ? 'Testing…' : 'Test'}
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded bg-accent/20 px-3 py-1 text-xs text-white hover:bg-accent/30 disabled:opacity-50"
-                      disabled={syncing === c.connectorId || cooldownSec > 0}
-                      onClick={() => void syncConnector(c.connectorId)}
-                    >
-                      {syncing === c.connectorId
-                        ? 'Syncing…'
-                        : cooldownSec > 0
-                          ? `Wait ${cooldownSec}s`
-                          : 'Sync usage data'}
-                    </button>
+                    {isCopilotConnector(c) && !copilotConn && (
+                      <p className="mt-2 text-xs text-warn">
+                        Copilot connection metadata loading — refresh or complete setup in Add connector.
+                      </p>
+                    )}
+
+                    {isCopilotConnector(c) && copilotConn ? (
+                      <>
+                        <Link
+                          href="/"
+                          className="text-xs text-accent hover:underline"
+                        >
+                          View in Overview
+                        </Link>
+                        <button
+                          type="button"
+                          className="rounded bg-accent/20 px-3 py-1 text-xs text-white hover:bg-accent/30 disabled:opacity-50"
+                          disabled={syncingCopilot === copilotConn.connectionId}
+                          onClick={() => void syncCopilot(copilotConn.connectionId)}
+                        >
+                          {syncingCopilot === copilotConn.connectionId ? 'Syncing…' : 'Sync Copilot data'}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          className="text-xs text-accent hover:underline disabled:opacity-50"
+                          disabled={testing === c.connectorId}
+                          onClick={() => void testConnector(c.connectorId)}
+                        >
+                          {testing === c.connectorId ? 'Testing…' : 'Test'}
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded bg-accent/20 px-3 py-1 text-xs text-white hover:bg-accent/30 disabled:opacity-50"
+                          disabled={syncing === c.connectorId || cooldownSec > 0}
+                          onClick={() => void syncConnector(c.connectorId)}
+                        >
+                          {syncing === c.connectorId
+                            ? 'Syncing…'
+                            : cooldownSec > 0
+                              ? `Wait ${cooldownSec}s`
+                              : 'Sync usage data'}
+                        </button>
+                      </>
+                    )}
                     <button
                       type="button"
                       className="text-xs text-neg hover:underline disabled:opacity-50"
@@ -688,10 +810,10 @@ export function ConnectorsClient() {
                     </button>
                   </div>
 
-                  {testing === c.connectorId && (
+                  {testing === c.connectorId && !isCopilotConnector(c) && (
                     <ProgressBar progress={testProgress} label="Testing connection and normalizing sample rows…" />
                   )}
-                  {syncing === c.connectorId && (
+                  {syncing === c.connectorId && !isCopilotConnector(c) && (
                     <ProgressBar
                       progress={syncProgress}
                       label={

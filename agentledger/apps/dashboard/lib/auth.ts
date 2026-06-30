@@ -14,8 +14,8 @@ export function isDevMode(): boolean {
   return Boolean(env('LEDGERAI_DEV_TENANT_ID'));
 }
 
-/** Common date-range default for analytics pages: trailing 30 days (UTC ISO dates). */
-export function defaultRange(days = 30): { from: string; to: string } {
+/** Common date-range default for analytics pages: trailing 90 days (UTC ISO dates). */
+export function defaultRange(days = 90): { from: string; to: string } {
   const to = new Date();
   const from = new Date(to);
   from.setUTCDate(from.getUTCDate() - days);

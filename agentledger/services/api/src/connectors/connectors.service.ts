@@ -509,6 +509,11 @@ export class ConnectorsService {
       tx.connector.findUnique({ where: { connectorId: id } }),
     );
     if (!row) throw new NotFoundException('connector not found');
+    if (row.kind === 'github-copilot-business') {
+      throw new BadRequestException(
+        'GitHub Copilot Business uses the dedicated Copilot sync API. Open Overview → GitHub Copilot Business → Sync now, or POST /v1/github-copilot/connections/:connectionId/sync.',
+      );
+    }
     if (!row.enabled) throw new BadRequestException('connector is disabled');
 
     if (row.status === 'syncing' && row.lastSyncStartedAt) {

@@ -65,6 +65,16 @@ export const PRESET_CAPABILITIES: Record<string, ConnectorCapabilities> = {
     supportsUserLevelCost: true,
     supportsModelLevelUsage: true,
   },
+  'github-copilot-business': {
+    supportsUsage: true,
+    supportsBilling: true,
+    supportsUsers: true,
+    supportsProjects: false,
+    supportsWorkspaces: false,
+    supportsApiKeys: false,
+    supportsUserLevelCost: true,
+    supportsModelLevelUsage: true,
+  },
   'generic-rest-spend': DEFAULT_CAPABILITIES,
   'generic-rest-usage': DEFAULT_CAPABILITIES,
 };

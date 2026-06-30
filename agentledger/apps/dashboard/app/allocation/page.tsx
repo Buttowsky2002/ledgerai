@@ -8,7 +8,7 @@ import { parseRange } from '../../lib/date-range';
 export const dynamic = 'force-dynamic';
 
 type AllocRow = { key: string; cost_usd: number; calls: string };
-const DIMENSIONS = ['team', 'app', 'agent', 'user'] as const;
+const DIMENSIONS = ['app', 'agent', 'user'] as const;
 type Dimension = (typeof DIMENSIONS)[number];
 
 export default async function AllocationPage({
@@ -18,7 +18,7 @@ export default async function AllocationPage({
 }) {
   const dimension: Dimension = DIMENSIONS.includes(searchParams.dimension as Dimension)
     ? (searchParams.dimension as Dimension)
-    : 'team';
+    : 'user';
   const { from, to } = parseRange(searchParams);
   const api = apiClient();
   const rows = (await fetchData(

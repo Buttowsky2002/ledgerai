@@ -11,7 +11,7 @@ import { randomUUID } from 'node:crypto';
 export class ImportRowError extends Error {}
 
 export interface MappedEvent {
-  table: 'llm_calls' | 'agent_tool_calls' | 'outcomes' | 'risk_events';
+  table: 'llm_calls' | 'agent_tool_calls' | 'outcomes' | 'risk_events' | 'coding_agent_daily';
   row: Record<string, unknown>;
 }
 export interface MappedRow {
@@ -53,6 +53,23 @@ function isoTs(v: unknown): string {
 
 function id(prefix: string, key: string | undefined, suffix = ''): string {
   return key ? `imp_${key}${suffix}` : `${prefix}_${randomUUID().replace(/-/g, '')}`;
+}
+
+const CODING_AGENT_ALIASES: Record<string, string> = {
+  cursor: 'cursor',
+  'claude-code': 'claude-code',
+  'claude code': 'claude-code',
+  copilot: 'github-copilot',
+  'github-copilot': 'github-copilot',
+  'github copilot': 'github-copilot',
+};
+
+function codingAgentProvider(provider: string | undefined, toolName: string): string | undefined {
+  const probe = `${provider ?? ''} ${toolName}`.toLowerCase();
+  for (const [alias, canonical] of Object.entries(CODING_AGENT_ALIASES)) {
+    if (probe.includes(alias)) return canonical;
+  }
+  return undefined;
 }
 
 export function mapRow(data: unknown): MappedRow {
@@ -158,6 +175,22 @@ export function mapRow(data: unknown): MappedRow {
         ts,
       },
     });
+    const codingProvider = codingAgentProvider(provider, toolName);
+    if (codingProvider) {
+      events.push({
+        table: 'coding_agent_daily',
+        row: {
+          day: ts.slice(0, 10),
+          provider: codingProvider,
+          user_id: userId,
+          team_id: teamId,
+          agent_id: agentId,
+          cost_usd: costUsd ?? 0,
+          sessions: 1,
+          requests: 1,
+        },
+      });
+    }
   }
 
   // A standalone risk signal (no usage row to ride on) becomes a risk_event.

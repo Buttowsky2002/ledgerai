@@ -1,0 +1,22 @@
+{
+  "id": "github-copilot-business",
+  "name": "GitHub Copilot Business",
+  "provider": "github_copilot_business",
+  "category": "license_usage_roi",
+  "authType": "bearer_token",
+  "baseUrl": "https://api.github.com",
+  "endpoints": [],
+  "destinationRecordType": "license_usage_roi",
+  "capabilities": {
+    "supportsUsage": true,
+    "supportsBilling": true,
+    "supportsUsers": true,
+    "supportsProjects": false,
+    "supportsWorkspaces": false,
+    "supportsApiKeys": false,
+    "supportsUserLevelCost": true,
+    "supportsModelLevelUsage": true
+  },
+  "fieldMappings": [],
+  "schedule": { "frequency": "daily" }
+}

@@ -1,6 +1,10 @@
 import Link from 'next/link';
+import { Suspense } from 'react';
 import { AreaChartClient, Sparkline } from '../components/charts';
 import { DateRangeFilter } from '../components/DateRangeFilter';
+import { OverviewAiSourcesPanel } from '../components/overview/OverviewAiSourcesPanel';
+import { ExecutiveReportExport } from '../components/overview/ExecutiveReportExport';
+import { LariRecommendationsPanel } from '../components/lari/LariRecommendationsPanel';
 import { Badge, BadgeTone, Card, DataTable, PageHeader, Stat, num, usd } from '../components/ui';
 import { apiClient, fetchData } from '../lib/api';
 import { parseRange } from '../lib/date-range';
@@ -15,8 +19,6 @@ type SpendRow = {
   blocked_calls: string;
   error_calls: string;
 };
-
-type Team = { id: string; name: string };
 
 type Recommendation =
   | 'scale'
@@ -37,6 +39,10 @@ type AgentEconomicsRow = {
   confidenceScore: number;
   recommendation: Recommendation;
 };
+
+type AllocationRow = { key: string; cost_usd: number | string; calls: string };
+type PlatformRow = { platform: string; cost_usd: number | string; calls: string };
+type ModelRow = { provider: string; model: string; cost_usd: number | string; calls: string };
 
 // Presentation + triage metadata for each LARI recommendation. `priority` orders
 // the action queue (0 = most urgent); `action` decides whether it surfaces there;
@@ -84,18 +90,16 @@ function ConfMeter({ score }: { score: number }) {
 export default async function OverviewPage({
   searchParams,
 }: {
-  searchParams: { team?: string; from?: string; to?: string };
+  searchParams: { from?: string; to?: string; source?: string };
 }) {
   const { from, to } = parseRange(searchParams);
-  const team = searchParams.team || undefined;
+  const source = searchParams.source || undefined;
+  const rangeParams = { from, to, source };
   const api = apiClient();
 
-  // Spend + risk honor the team filter; agent economics (LARI rollup) is
-  // portfolio-wide by design (the recommendation must match /v1/agents/:id/lari,
-  // which is not team-scoped), so a selected team only narrows the spend section.
-  const [spend, economics, teams] = await Promise.all([
+  const [spend, economics, costByUser, platformSpend, modelMix] = await Promise.all([
     fetchData(
-      api.GET('/v1/analytics/spend', { params: { query: { from, to, team } } }),
+      api.GET('/v1/analytics/spend', { params: { query: { from, to } } }),
       [],
     ) as Promise<unknown> as Promise<SpendRow[]>,
     fetchData(
@@ -103,10 +107,33 @@ export default async function OverviewPage({
       [],
     ) as Promise<unknown> as Promise<AgentEconomicsRow[]>,
     fetchData(
-      api.GET('/v1/teams', { params: { query: { limit: '200', offset: '0' } } }),
+      api.GET('/v1/analytics/allocation', { params: { query: { dimension: 'user', from, to } } }),
       [],
-    ) as Promise<unknown> as Promise<Team[]>,
+    ) as Promise<unknown> as Promise<AllocationRow[]>,
+    fetchData(
+      api.GET('/v1/analytics/platform-spend', { params: { query: { from, to } } }),
+      [],
+    ) as Promise<unknown> as Promise<PlatformRow[]>,
+    fetchData(
+      api.GET('/v1/analytics/model-mix', { params: { query: { from, to } } }),
+      [],
+    ) as Promise<unknown> as Promise<ModelRow[]>,
   ]);
+
+  const platforms = platformSpend
+    .map((r) => ({
+      platform: r.platform || '(unknown)',
+      cost_usd: Number(r.cost_usd),
+      calls: Number(r.calls),
+    }))
+    .sort((a, b) => b.cost_usd - a.cost_usd);
+
+  const models = modelMix.map((r) => ({
+    provider: r.provider,
+    model: r.model,
+    cost_usd: Number(r.cost_usd),
+    calls: Number(r.calls),
+  }));
 
   const totalCost = spend.reduce((s, r) => s + Number(r.cost_usd), 0);
   const totalCalls = spend.reduce((s, r) => s + Number(r.calls), 0);
@@ -125,46 +152,16 @@ export default async function OverviewPage({
       return p !== 0 ? p : Math.abs(b.risk_adjusted_roi) - Math.abs(a.risk_adjusted_roi);
     });
 
-  // team_id is a free-form string label on the canonical event (not a UUID FK), so
-  // the filter value is the team name — that's what producers stamp and what the
-  // spend/risk dimensions store. Chips are deduped by name.
-  const teamLabel = team || 'all teams';
-  const teamNames = [...new Set(teams.map((t) => t.name))];
-
   return (
     <>
       <PageHeader
         eyebrow="FinOps control plane"
         title="Overview"
-        subtitle={`${teamLabel} · ${from} → ${to}`}
+        subtitle={`${from} → ${to}`}
         actions={
           <div className="flex flex-col items-end gap-2">
-            <DateRangeFilter basePath="/" from={from} to={to} extraParams={{ team }} />
-            {teamNames.length > 0 ? (
-            <div className="flex flex-wrap gap-1.5">
-              <Link
-                href={`/?from=${from}&to=${to}`}
-                className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
-                  !team ? 'bg-accent/15 text-accent ring-1 ring-inset ring-accent/30' : 'text-muted hover:bg-white/5'
-                }`}
-              >
-                All teams
-              </Link>
-              {teamNames.map((name) => (
-                <Link
-                  key={name}
-                  href={`/?team=${encodeURIComponent(name)}&from=${from}&to=${to}`}
-                  className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
-                    team === name
-                      ? 'bg-accent/15 text-accent ring-1 ring-inset ring-accent/30'
-                      : 'text-muted hover:bg-white/5'
-                  }`}
-                >
-                  {name}
-                </Link>
-              ))}
-            </div>
-          ) : undefined}
+            <ExecutiveReportExport from={from} to={to} />
+            <DateRangeFilter basePath="/" from={from} to={to} extraParams={rangeParams} />
           </div>
         }
       />
@@ -174,7 +171,7 @@ export default async function OverviewPage({
           label="Total spend"
           value={usd(totalCost)}
           accent
-          sub={team ? teamLabel : `${num(totalCalls)} calls`}
+          sub={`${num(totalCalls)} calls`}
           chart={chart.length > 1 ? <Sparkline data={chart} yKey="cost_usd" /> : undefined}
         />
         <Stat
@@ -197,8 +194,43 @@ export default async function OverviewPage({
         />
       </div>
 
-      <Card title="Daily spend" subtitle={`USD · ${teamLabel}`}>
+      <Card title="Daily spend" subtitle="USD">
         <AreaChartClient data={chart} xKey="day" yKey="cost_usd" />
+      </Card>
+
+      <Suspense
+        fallback={
+          <Card title="AI sources & models">
+            <p className="py-8 text-center text-sm text-muted">Loading sources…</p>
+          </Card>
+        }
+      >
+        <OverviewAiSourcesPanel
+          platforms={platforms}
+          modelMix={models}
+          from={from}
+          to={to}
+          initialSource={source}
+        />
+      </Suspense>
+
+      <Card title="Cost by user" subtitle="Includes API-synced and gateway spend">
+        <DataTable
+          columns={[
+            { key: 'user', label: 'User' },
+            { key: 'cost', label: 'Spend', align: 'right' },
+            { key: 'calls', label: 'Calls', align: 'right' },
+          ]}
+          rows={costByUser.map((r) => ({
+            user: r.key === 'Unassigned' ? (
+              <span className="text-warn">{r.key}</span>
+            ) : (
+              r.key
+            ),
+            cost: usd(Number(r.cost_usd)),
+            calls: num(r.calls),
+          }))}
+        />
       </Card>
 
       <Card
@@ -241,6 +273,8 @@ export default async function OverviewPage({
           </div>
         )}
       </Card>
+
+      <LariRecommendationsPanel from={from} to={to} compact />
 
       <Card title="Agent economics" subtitle="Per-agent cost, value, and LARI">
         <DataTable

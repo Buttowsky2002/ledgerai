@@ -28,6 +28,15 @@
       "authHint": "Team Admin API key (paste key as credential — Basic auth)",
       "docsUrl": "https://cursor.com/docs/account/teams/admin-api",
       "billingGranularity": "usage_event"
+    },
+    {
+      "id": "github-copilot-business",
+      "provider": "github_copilot_business",
+      "displayName": "GitHub Copilot Business",
+      "category": "license_usage_roi",
+      "authHint": "GitHub PAT with read:org and manage_billing:copilot scopes",
+      "docsUrl": "https://docs.github.com/en/rest/copilot",
+      "billingGranularity": "daily_seat_and_usage"
     }
   ],
   "templates": [

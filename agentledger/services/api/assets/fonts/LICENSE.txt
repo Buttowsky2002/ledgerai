@@ -1,0 +1,5 @@
+Fonts are Copyright (c) 2004-2024 DejaVu fonts contributors.
+License: Bitstream Vera Fonts Copyright + Arev Fonts Copyright + Public Domain for glyphs.
+See https://dejavu-fonts.github.io/License.html
+
+Vendored from dejavu-fonts-ttf 2.37 for reproducible server-side chart rendering.

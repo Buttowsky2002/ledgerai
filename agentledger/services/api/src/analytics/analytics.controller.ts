@@ -9,6 +9,7 @@ import {
   RangeQueryDto,
   RoiQueryDto,
   UnitEconomicsQueryDto,
+  UsersQueryDto,
 } from './analytics.dto';
 import { AnalyticsService } from './analytics.service';
 import { toCsv } from './focus.mapper';
@@ -32,6 +33,17 @@ export class AnalyticsController {
     return this.analytics.allocation(q.dimension, q.from, q.to);
   }
 
+  /** Discovered users with spend, models, and identity resolution (spend_daily_by_user). */
+  @Roles('viewer') @Get('users')
+  users(@Query() q: UsersQueryDto) {
+    return this.analytics.users(q.from, q.to, q.q);
+  }
+
+  @Roles('viewer') @Get('users/:userId')
+  userDetail(@Param('userId') userId: string, @Query() q: RangeQueryDto) {
+    return this.analytics.userDetail(userId, q.from, q.to);
+  }
+
   @Roles('viewer') @Get('model-mix')
   modelMix(@Query() q: RangeQueryDto) {
     return this.analytics.modelMix(q.from, q.to);
@@ -40,6 +52,12 @@ export class AnalyticsController {
   @Roles('viewer') @Get('platform-spend')
   platformSpend(@Query() q: RangeQueryDto) {
     return this.analytics.platformSpend(q.from, q.to);
+  }
+
+  /** GitHub Copilot license + usage cost for supplemental AI spend (cost-per-outcome). */
+  @Roles('viewer') @Get('copilot-spend')
+  copilotSpend(@Query() q: RangeQueryDto) {
+    return this.analytics.copilotSpend(q.from, q.to);
   }
 
   @Roles('viewer') @Get('burndown')

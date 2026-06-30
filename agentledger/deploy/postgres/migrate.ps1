@@ -20,7 +20,9 @@ function Invoke-PsqlFile([string]$Path) {
 }
 
 function Query-Psql([string]$Sql) {
-    return (docker compose exec -T postgres psql -U agentledger -d agentledger -tAc $Sql).Trim()
+    $raw = docker compose exec -T postgres psql -U agentledger -d agentledger -tAc $Sql
+    if ($null -eq $raw) { return "" }
+    return ([string]$raw).Trim()
 }
 
 $pgRunning = docker compose ps postgres --status running -q 2>$null

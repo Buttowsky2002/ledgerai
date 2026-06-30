@@ -15,6 +15,7 @@ import { AppsModule } from './apps/apps.module';
 import { AttributionModule } from './attribution/attribution.module';
 import { BudgetsModule } from './budgets/budgets.module';
 import { ConnectorsModule } from './connectors/connectors.module';
+import { GitHubCopilotModule } from './github-copilot/github-copilot.module';
 import { ClickHouseModule } from './clickhouse/clickhouse.module';
 import { HealthModule } from './health/health.module';
 import { IdentitiesModule } from './identities/identities.module';
@@ -33,6 +34,7 @@ import { TeamsModule } from './teams/teams.module';
 import { TenantModule } from './tenant/tenant.module';
 import { TenantIdpConfigModule } from './tenant-idp-config/tenant-idp-config.module';
 import { VirtualKeysModule } from './virtual-keys/virtual-keys.module';
+import { ReportsModule } from './reports/reports.module';
 
 @Module({
   imports: [
@@ -86,6 +88,8 @@ import { VirtualKeysModule } from './virtual-keys/virtual-keys.module';
     PortalImportModule,
     // Config-driven API connector framework (presets + custom REST sources).
     ConnectorsModule,
+    GitHubCopilotModule,
+    ReportsModule,
   ],
   providers: [
     // Guard order matters: rate-limit → authenticate → authorize.

@@ -39,3 +39,8 @@ export class PilotReportQueryDto extends RangeQueryDto {
   // Response format: 'json' (default — structured report) or 'md' (rendered text).
   @IsOptional() @IsIn(['json', 'md']) format?: 'json' | 'md';
 }
+
+export class UsersQueryDto extends RangeQueryDto {
+  /** Case-insensitive filter on display name, email, or team. */
+  @IsOptional() @IsString() q?: string;
+}

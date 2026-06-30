@@ -17,6 +17,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /src/node_modules ./node_modules
 COPY --from=build /src/dist ./dist
+COPY --from=build /src/assets ./assets
 COPY --from=build /src/prisma ./prisma
 COPY --from=build /src/pricing ./pricing
 EXPOSE 8094

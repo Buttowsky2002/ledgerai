@@ -129,6 +129,9 @@ migrate-dashboard:
 	docker compose stop dashboard
 	docker compose up -d --build dashboard
 
+# Windows equivalent: powershell -ExecutionPolicy Bypass -File deploy/migrate-dashboard.ps1
+# Pre-Docker sanity check: powershell -ExecutionPolicy Bypass -File deploy/verify-dashboard-build.ps1
+
 # ── Demo mode (no provider keys required) ────────────────────────────────────
 # Brings up the analytics backend, seeds a demo tenant with synthetic activity,
 # and prints how to start the dashboard. See docs/DEPLOYMENT.md.
@@ -164,7 +167,7 @@ smoke:
 	python3 $(GATEWAY_DIR)/smoke_test.py
 
 # ── Lint ─────────────────────────────────────────────────────────────────────
-lint: lint-api lint-sdk-typescript
+lint: lint-api lint-sdk-typescript lint-dashboard
 	@for d in $(GO_SERVICES); do \
 		echo "==> lint $$d"; \
 		(cd $$d && gofmt -l . && go vet ./...) || exit 1; \
@@ -177,6 +180,10 @@ lint-api:
 lint-sdk-typescript:
 	@echo "==> lint $(SDK_TS_DIR)"
 	cd $(SDK_TS_DIR) && npm run lint
+
+lint-dashboard:
+	@echo "==> lint $(DASHBOARD_DIR)"
+	cd $(DASHBOARD_DIR) && npm run lint && npm run typecheck
 
 # ── Pre-commit hook installation ─────────────────────────────────────────────
 # Copies the versioned hook into .git/hooks and marks it executable.

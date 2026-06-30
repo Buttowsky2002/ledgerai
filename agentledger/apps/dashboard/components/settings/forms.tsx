@@ -105,7 +105,7 @@ export function CreateBudget() {
   return (
     <form onSubmit={submit} className="flex flex-wrap items-end gap-2">
       <select className={FIELD} value={scopeType} onChange={(e) => setScopeType(e.target.value)}>
-        {['tenant', 'team', 'app', 'agent', 'key', 'model'].map((s) => <option key={s} value={s}>{s}</option>)}
+        {['tenant', 'app', 'agent', 'key', 'model'].map((s) => <option key={s} value={s}>{s}</option>)}
       </select>
       <input className={FIELD} placeholder="scope id" value={scopeId} onChange={(e) => setScopeId(e.target.value)} required />
       <input className={FIELD} type="number" step="0.01" placeholder="amount USD" value={amountUsd} onChange={(e) => setAmount(e.target.value)} required />

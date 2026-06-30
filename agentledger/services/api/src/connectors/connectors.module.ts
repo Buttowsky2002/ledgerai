@@ -15,6 +15,6 @@ import { AttributionMappingsService } from './attribution/attribution-mappings.s
     ConnectorsService,
     AttributionMappingsService,
   ],
-  exports: [ConnectorsService, AttributionMappingsService],
+  exports: [ConnectorsService, ConnectorSecretsService, AttributionMappingsService],
 })
 export class ConnectorsModule {}
