@@ -15,7 +15,6 @@ import {
   shouldRenderValueKpis,
   shouldShowPctValue,
 } from './executive-report.should-render';
-import { formatPct } from './formatters';
 
 describe('executive-report.should-render', () => {
   describe('priorWindow', () => {

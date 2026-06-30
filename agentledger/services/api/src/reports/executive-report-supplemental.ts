@@ -1,5 +1,5 @@
 import type { CopilotSpendSummary } from '../github-copilot/github-copilot-analytics.service';
-import { COPILOT_ANALYTICS_PLATFORM, COPILOT_ANALYTICS_PROVIDER } from '../github-copilot/github-copilot-analytics.service';
+import { COPILOT_ANALYTICS_PROVIDER } from '../github-copilot/github-copilot-analytics.service';
 import type {
   DailySpendRow,
   ModelSpendRow,

@@ -69,11 +69,7 @@ export function formatPeriodChange(
 }
 
 /** @deprecated use formatPeriodChange */
-export function periodChangeDisplay(
-  priorCost: number,
-  currentCost: number,
-  pctChange: number | null,
-): string | null {
+export function periodChangeDisplay(priorCost: number, currentCost: number): string | null {
   if (currentCost <= 0) return null;
   if (priorCost < priorMaterialityThreshold(currentCost)) return NEW_SPEND_LABEL;
   return null;

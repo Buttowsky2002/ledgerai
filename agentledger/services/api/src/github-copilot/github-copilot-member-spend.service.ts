@@ -141,7 +141,7 @@ export class CopilotMemberSpendService {
 
     memberRows.sort((a, b) => b.totalAllocatedCost - a.totalAllocatedCost);
 
-    const summary = buildSummary(memberRows, seats, assumptions);
+    const summary = buildSummary(memberRows, seats);
     const charts = buildCharts(memberRows, spendRows, usageDetail);
     const findings = generateMemberSpendFindings({
       members: memberRows,
@@ -263,7 +263,6 @@ function aggregateSpendByMember(
 function buildSummary(
   members: CopilotMemberSpendRow[],
   seats: { isActive: boolean; lastActivityAt: Date | null }[],
-  assumptions: CopilotRoiAssumptions,
 ): CopilotMemberSpendSummary {
   const now = Date.now();
   const activeSeats = seats.filter((s) => {

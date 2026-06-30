@@ -11,7 +11,7 @@ import {
   shouldRenderValueKpis,
 } from '../executive-report.should-render';
 import { costBasisLabel } from '../platform-breakdown';
-import { formatPct, formatPctShare, formatUsdExact } from '../formatters';
+import { formatPct, formatPctShare } from '../formatters';
 
 export async function generateExecutiveXlsx(data: ExecutiveReportData): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();

@@ -128,7 +128,7 @@ export function rankProviders(
 
 function seatRecommendations(input: LariRecommendationsInput): LariActionableRecommendation[] {
   const recs: LariActionableRecommendation[] = [];
-  const { seatStats, subscriptionPlans, periodDays } = input;
+  const { seatStats, subscriptionPlans } = input;
   const util = utilizationRatio(seatStats.active, seatStats.purchased);
   const unused = Math.max(0, seatStats.purchased - seatStats.active);
 
