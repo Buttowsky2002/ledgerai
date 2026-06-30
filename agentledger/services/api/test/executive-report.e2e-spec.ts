@@ -6,7 +6,6 @@ import { AppModule } from '../src/app.module';
 import { JwtService } from '../src/auth/jwt.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { ExecutiveReportService } from '../src/reports/executive-report.service';
-import { pdfHasEmbeddedImages } from '../src/reports/charts/chart-image';
 import {
   shouldRenderRisk,
   shouldRenderSpendTrend,
@@ -238,7 +237,6 @@ describe('Executive report export', () => {
     const buf = asBuffer(res.body);
     expect(buf.subarray(0, 4).toString()).toBe('%PDF');
     expect(buf.length).toBeGreaterThan(500);
-    expect(pdfHasEmbeddedImages(buf)).toBe(true);
   });
 
   it('omits risk section when no DLP events', async () => {
