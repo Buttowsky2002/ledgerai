@@ -1,0 +1,113 @@
+name: Build and push images
+on:
+  push:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  ORG: buttowsky2002
+
+jobs:
+  go-services:
+    name: ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - service: gateway
+            context: agentledger/services/gateway
+          - service: collector
+            context: agentledger/services/collector
+          - service: connectors
+            context: agentledger/services/connectors
+          - service: litellm-adapter
+            context: agentledger/services/ingest/adapters
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.context }}
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.ORG }}/agentledger-${{ matrix.service }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.ORG }}/agentledger-${{ matrix.service }}:latest
+
+  workers:
+    name: worker-${{ matrix.cmd }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        cmd: [ch-insert, reconcile, risk-engine, risk-enrichment,
+              slack-alerter, attribution, attribution-priors]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v5
+        with:
+          context: agentledger/services/workers
+          build-args: CMD=${{ matrix.cmd }}
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.ORG }}/agentledger-${{ matrix.cmd }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.ORG }}/agentledger-${{ matrix.cmd }}:latest
+
+  api:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # Build context is agentledger/ (the api Dockerfile pulls in sibling paths),
+      # matching docker-compose.yml (context: ., dockerfile: services/api/Dockerfile).
+      - uses: docker/build-push-action@v5
+        with:
+          context: agentledger
+          file: agentledger/services/api/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.ORG }}/agentledger-api:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.ORG }}/agentledger-api:latest
+
+  dashboard:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # Build context is agentledger/ (the dashboard Dockerfile copies packages/shared-types
+      # alongside apps/dashboard), matching docker-compose.yml.
+      - uses: docker/build-push-action@v5
+        with:
+          context: agentledger
+          file: agentledger/apps/dashboard/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.ORG }}/agentledger-dashboard:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.ORG }}/agentledger-dashboard:latest

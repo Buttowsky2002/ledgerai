@@ -1,4 +1,4 @@
-.PHONY: test test-go test-api test-sdk-typescript e2e load helm-lint build build-api build-shared-types build-sdk-typescript build-dashboard openapi delete-tenant up down lint lint-api lint-sdk-typescript api-install install-hooks security-check audit deps attr-calibration demo seed seed-demo reset-demo bootstrap-graph smoke
+.PHONY: test test-go test-api test-sdk-typescript e2e load helm-lint build build-api build-shared-types build-sdk-typescript build-dashboard openapi delete-tenant create-tenant provision-tenant up down lint lint-api lint-sdk-typescript api-install install-hooks security-check audit deps attr-calibration demo seed seed-demo reset-demo bootstrap-graph smoke
 
 GATEWAY_DIR      := services/gateway
 COLLECTOR_DIR    := services/collector
@@ -100,6 +100,16 @@ openapi:
 # ALTER DELETE. Usage: make delete-tenant TENANT=<tenant-uuid>
 delete-tenant:
 	cd $(API_DIR) && node dist/cli/delete-tenant.js $(TENANT)
+
+# Provision a new tenant (requires the API to be built first).
+# Usage: make create-tenant NAME="Acme Corp"
+create-tenant:
+	cd $(API_DIR) && node dist/cli/create-tenant.js --name "$(NAME)"
+
+# Full onboarding sequence (tenant + team + admin identity + first virtual key).
+# Usage: make provision-tenant NAME="Acme Corp" EMAIL="admin@acme.com"
+provision-tenant:
+	cd $(API_DIR) && node dist/cli/provision-tenant.js --name "$(NAME)" --admin-email "$(EMAIL)"
 
 # Install API toolchain (CI runs this before lint/test).
 api-install:

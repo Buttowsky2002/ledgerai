@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { Client, Issuer, generators } from 'openid-client';
-import { OidcProviderConfig, loadOidcProviders, resolveSecret, ssoRedirectUri } from './oidc.config';
+import { OidcProviderConfig, loadOidcProviders, ssoRedirectUri } from './oidc.config';
+import { resolveSecret } from './secret-resolver';
 
 export interface AuthRequest {
   url: string;
@@ -119,8 +120,11 @@ export class OidcService {
     if (cached) {
       return cached;
     }
-    const secret = resolveSecret(idp.clientSecretRef);
-    if (!secret) {
+    let secret: string;
+    try {
+      // Env first, then AWS Secrets Manager when opt-in (secret-resolver.ts, ADR-049).
+      secret = await resolveSecret(idp.clientSecretRef);
+    } catch {
       throw new BadRequestException(`IdP client secret unavailable (ref ${idp.clientSecretRef})`);
     }
     this.logger.log(`discovering OIDC issuer for tenant IdP ${idp.idpId}`);

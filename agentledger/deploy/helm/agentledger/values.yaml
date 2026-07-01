@@ -10,7 +10,7 @@
 # a Dockerfile but are built per-CMD into distinct images). Override per service
 # under `services.<name>.image`.
 image:
-  registry: ghcr.io/agentledger
+  registry: ghcr.io/buttowsky2002
   repository: agentledger
   tag: "" # defaults to .Chart.AppVersion when empty
   pullPolicy: IfNotPresent
@@ -165,6 +165,11 @@ services:
     secretEnv: [AGENTLEDGER_PG_DSN, AGENTLEDGER_JWT_SECRET]
     env:
       AGENTLEDGER_API_ADDR: ":8094"
+      # Secret-ref resolution (ADR-049): env-var lookup by default. Set SM_ENABLED=true
+      # to also resolve OIDC client secrets from AWS Secrets Manager (no redeploy per
+      # new enterprise SSO tenant). AWS credentials come from the pod's IAM role.
+      AGENTLEDGER_SM_ENABLED: "false"
+      AWS_REGION: "us-east-1"
 
   collector:
     enabled: true
