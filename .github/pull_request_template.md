@@ -18,7 +18,7 @@
 - [ ] No secrets, tokens, or credentials in any committed file
 - [ ] **New dependency?** — justify below (license, maintenance status, why existing packages can't solve this)
 - [ ] **DB migration included?** — confirm it is forward-only and numbered sequentially; a reverted app commit must not imply a reverted migration
-- [ ] **Schema change?** — `schemas/events/llm_call.schema.json` reviewed with backend, SDK, and frontend teams
+- [ ] **Schema change?** — `agentledger/schemas/events/llm_call.schema.json` reviewed with backend, SDK, and frontend teams
 - [ ] Relevant documentation updated
 
 ## New dependency justification (if applicable)

@@ -11,7 +11,7 @@
 
 ## Shared contract
 
-`schemas/events/llm_call.schema.json` is the single event schema shared by all producers and consumers.
+`agentledger/schemas/events/llm_call.schema.json` is the single event schema shared by all producers and consumers.
 **Never break this schema without a major version bump and cross-team review.**
 
 ## Key rules
