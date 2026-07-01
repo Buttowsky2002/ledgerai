@@ -324,6 +324,358 @@ export interface paths {
         patch: operations["AgentsController_update"];
         trace?: never;
     };
+    "/v1/lari/cfo-view": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["LariController_getCfoView"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/lari/recommendations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["LariController_getRecommendations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/github-copilot/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GitHubCopilotController_overview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/github-copilot/member-spend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GitHubCopilotController_memberSpendView"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/github-copilot/connections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GitHubCopilotController_listConnections"];
+        put?: never;
+        post: operations["GitHubCopilotController_createConnection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/github-copilot/connections/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GitHubCopilotController_getConnection"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/github-copilot/connections/test-token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["GitHubCopilotController_testToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/github-copilot/connections/{id}/roi-assumptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["GitHubCopilotController_updateAssumptions"];
+        trace?: never;
+    };
+    "/v1/github-copilot/connections/{id}/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["GitHubCopilotController_syncNow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connector-definitions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ConnectorDefinitionsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connector-definitions/billing-registry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ConnectorDefinitionsController_billingRegistry"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connector-definitions/custom": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ConnectorDefinitionsController_createCustom"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connectors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ConnectorsController_list"];
+        put?: never;
+        post: operations["ConnectorsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connectors/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ConnectorsController_get"];
+        put?: never;
+        post?: never;
+        delete: operations["ConnectorsController_delete"];
+        options?: never;
+        head?: never;
+        patch: operations["ConnectorsController_update"];
+        trace?: never;
+    };
+    "/v1/connectors/{id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ConnectorsController_test"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connectors/{id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ConnectorsController_preview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connectors/{id}/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ConnectorsController_sync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connectors/{id}/sync-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ConnectorsController_syncRuns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connectors/{id}/errors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ConnectorsController_errors"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connectors/{id}/attribution-mappings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ConnectorsController_listAttributionMappings"];
+        put?: never;
+        post: operations["ConnectorsController_createAttributionMapping"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connectors/attribution-mappings/{mappingId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["ConnectorsController_deleteAttributionMapping"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/import/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ImportController_importEvents"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/policies": {
         parameters: {
             query?: never;
@@ -852,6 +1204,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/analytics/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AnalyticsController_users"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/analytics/users/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AnalyticsController_userDetail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/analytics/model-mix": {
         parameters: {
             query?: never;
@@ -876,6 +1260,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["AnalyticsController_platformSpend"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/analytics/copilot-spend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AnalyticsController_copilotSpend"];
         put?: never;
         post?: never;
         delete?: never;
@@ -972,6 +1372,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["AnalyticsController_agentRisk"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/analytics/injection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AnalyticsController_injectionPosture"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1124,7 +1540,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/import/events": {
+    "/v1/portal-import/anthropic/preview": {
         parameters: {
             query?: never;
             header?: never;
@@ -1133,7 +1549,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["ImportController_importEvents"];
+        post: operations["PortalImportController_previewAnthropic"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1156,14 +1572,14 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/connector-definitions": {
+    "/v1/reports/executive": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["ConnectorDefinitionsController_list"];
+        get: operations["ReportsController_executive"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1172,110 +1588,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/connector-definitions/custom": {
+    "/v1/fixed-costs": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        get: operations["FixedCostsController_list"];
         put?: never;
-        post: operations["ConnectorDefinitionsController_createCustom"];
-        delete?: never;
+        post: operations["FixedCostsController_create"];
+        delete: operations["FixedCostsController_remove"];
         options?: never;
         head?: never;
-        patch?: never;
+        patch: operations["FixedCostsController_update"];
         trace?: never;
     };
-    "/v1/connectors": {
+    "/v1/fixed-costs/monthly": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["ConnectorsController_list"];
-        put?: never;
-        post: operations["ConnectorsController_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/connectors/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["ConnectorsController_get"];
-        put?: never;
-        post?: never;
-        delete: operations["ConnectorsController_delete"];
-        options?: never;
-        head?: never;
-        patch: operations["ConnectorsController_update"];
-        trace?: never;
-    };
-    "/v1/connectors/{id}/test": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["ConnectorsController_test"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/connectors/{id}/preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["ConnectorsController_preview"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/connectors/{id}/sync": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["ConnectorsController_sync"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/connectors/{id}/sync-runs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["ConnectorsController_syncRuns"];
+        get: operations["FixedCostsController_monthly"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1284,14 +1620,14 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/connectors/{id}/errors": {
+    "/v1/fixed-costs/total-cost-of-ai": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["ConnectorsController_errors"];
+        get: operations["FixedCostsController_totalCostOfAi"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1300,23 +1636,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/connectors/{id}/attribution-mappings": {
+    "/v1/design-partner/presets": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["ConnectorsController_listAttributionMappings"];
+        get: operations["DesignPartnerController_listPresets"];
         put?: never;
-        post: operations["ConnectorsController_createAttributionMapping"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/v1/connectors/attribution-mappings/{mappingId}": {
+    "/v1/design-partner/onboard": {
         parameters: {
             query?: never;
             header?: never;
@@ -1325,8 +1661,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post?: never;
-        delete: operations["ConnectorsController_deleteAttributionMapping"];
+        post: operations["DesignPartnerController_onboard"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1411,6 +1747,65 @@ export interface components {
             connectedTools?: Record<string, never>[];
             approvalStatus?: string;
             riskPosture?: string;
+        };
+        CreateConnectionBody: {
+            displayName: string;
+            orgSlug: string;
+            githubToken: string;
+            enterpriseSlug?: string;
+            roiAssumptions?: Record<string, never>;
+            scheduleJson?: Record<string, never>;
+        };
+        TestTokenBody: {
+            githubToken: string;
+            orgSlug: string;
+        };
+        UpdateAssumptionsBody: {
+            roiAssumptions: Record<string, never>;
+        };
+        CreateCustomDefinitionDto: {
+            definition: Record<string, never>;
+        };
+        CreateConnectorDto: {
+            connectorDefinitionId?: string;
+            presetId?: string;
+            displayName: string;
+            provider?: string;
+            category?: string;
+            configJson?: Record<string, never>;
+            mappingOverridesJson?: Record<string, never>;
+            scheduleJson?: Record<string, never>;
+            authSecret?: string;
+            baseUrl?: string;
+            enabled?: boolean;
+        };
+        UpdateConnectorDto: {
+            displayName?: string;
+            provider?: string;
+            category?: string;
+            configJson?: Record<string, never>;
+            mappingOverridesJson?: Record<string, never>;
+            scheduleJson?: Record<string, never>;
+            authSecret?: string;
+            enabled?: boolean;
+        };
+        TestConnectorDto: {
+            authSecret?: string;
+            from?: string;
+            to?: string;
+        };
+        CreateAttributionMappingDto: {
+            connectorId: string;
+            mappingType: string;
+            providerKey: string;
+            providerKeyName?: string;
+            targetUserId?: string;
+            targetTeamId?: string;
+        };
+        ImportEventsDto: {
+            events: Record<string, never>[];
+            /** @description When true, validate + report what WOULD be imported without writing. */
+            dryRun?: boolean;
         };
         CreatePolicyDto: {
             name: string;
@@ -1625,54 +2020,128 @@ export interface components {
             /** @description Optional quality score in [0,1]. */
             qualityScore?: number;
         };
-        ImportEventsDto: {
-            events: Record<string, never>[];
-            /** @description When true, validate + report what WOULD be imported without writing. */
-            dryRun?: boolean;
+        ColumnMappingDto: {
+            date?: string;
+            cost: string;
+            /** @enum {string} */
+            costUnit?: "usd" | "cents";
+            reportThroughDay?: string;
+            model?: string;
+            product?: string;
+            user?: string;
+            user_name?: string;
+            user_id?: string;
+            account_uuid?: string;
+            input_tokens?: string;
+            output_tokens?: string;
+        };
+        AnthropicPortalPreviewDto: {
+            csv: string;
+            fileName?: string;
+            mapping?: components["schemas"]["ColumnMappingDto"];
+        };
+        PortalFileDto: {
+            name: string;
+            csv: string;
+            mapping?: components["schemas"]["ColumnMappingDto"];
         };
         AnthropicPortalUploadDto: {
-            csv: string;
+            csv?: string;
+            fileName?: string;
+            mapping?: components["schemas"]["ColumnMappingDto"];
+            files?: components["schemas"]["PortalFileDto"][];
             connectorId?: string;
             dryRun?: boolean;
         };
-        CreateCustomDefinitionDto: {
-            definition: Record<string, never>;
+        CreateFixedCostDto: {
+            periodMonth: string;
+            /** @enum {string} */
+            vendor: "openai" | "anthropic" | "other";
+            /** @enum {string} */
+            costType: "seat_license" | "subscription" | "platform_fee" | "committed_use";
+            costUsd: number;
+            lineItem?: string;
+            seats?: number;
+            unitCostUsd?: number;
+            note?: string;
         };
-        CreateConnectorDto: {
-            connectorDefinitionId?: string;
-            presetId?: string;
-            displayName: string;
-            provider?: string;
-            category?: string;
-            configJson?: Record<string, never>;
-            mappingOverridesJson?: Record<string, never>;
-            scheduleJson?: Record<string, never>;
-            authSecret?: string;
-            baseUrl?: string;
-            enabled?: boolean;
+        UpdateFixedCostDto: {
+            periodMonth: string;
+            /** @enum {string} */
+            vendor: "openai" | "anthropic" | "other";
+            /** @enum {string} */
+            costType: "seat_license" | "subscription" | "platform_fee" | "committed_use";
+            lineItem?: string;
+            costUsd?: number;
+            seats?: number;
+            unitCostUsd?: number;
+            note?: string;
         };
-        UpdateConnectorDto: {
-            displayName?: string;
-            provider?: string;
-            category?: string;
-            configJson?: Record<string, never>;
-            mappingOverridesJson?: Record<string, never>;
-            scheduleJson?: Record<string, never>;
-            authSecret?: string;
-            enabled?: boolean;
+        DeleteFixedCostDto: {
+            periodMonth: string;
+            /** @enum {string} */
+            vendor: "openai" | "anthropic" | "other";
+            /** @enum {string} */
+            costType: "seat_license" | "subscription" | "platform_fee" | "committed_use";
+            lineItem?: string;
         };
-        TestConnectorDto: {
-            authSecret?: string;
+        PresentationDto: {
             from?: string;
             to?: string;
         };
-        CreateAttributionMappingDto: {
-            connectorId: string;
-            mappingType: string;
-            providerKey: string;
-            providerKeyName?: string;
-            targetUserId?: string;
-            targetTeamId?: string;
+        DesignPartnerAgentDto: {
+            name: string;
+            runtimeType?: string;
+            riskPosture?: string;
+            approvalStatus?: string;
+        };
+        DesignPartnerRunDto: {
+            runId: string;
+            agentId: string;
+            appId?: string;
+            userId?: string;
+            startedAt: string;
+            endedAt: string;
+            status: string;
+            objective?: string;
+            outcomeId?: string;
+            totalCostUsd: number;
+            totalTokens: number;
+            llmCalls: number;
+            toolCalls: number;
+            riskEvents: number;
+        };
+        DesignPartnerOutcomeDto: {
+            outcomeId: string;
+            ts: string;
+            sourceSystem: string;
+            outcomeType: string;
+            teamId?: string;
+            userId?: string;
+            businessValueUsd: number;
+            qualityScore?: number;
+            completionStatus: string;
+        };
+        DesignPartnerRoiRateDto: {
+            sourceSystem: string;
+            outcomeType: string;
+            hourlyRate?: number;
+            baselineMinutes?: number;
+            reworkPct?: number;
+            redeploymentFactor?: number;
+            qaCostPerOutcome?: number;
+            evalCostPerOutcome?: number;
+            integrationCostPerOutcome?: number;
+            platformOverheadPct?: number;
+        };
+        OnboardDesignPartnerDto: {
+            preset?: string;
+            presentation?: components["schemas"]["PresentationDto"];
+            clearPrior?: boolean;
+            agents?: components["schemas"]["DesignPartnerAgentDto"][];
+            runs?: components["schemas"]["DesignPartnerRunDto"][];
+            outcomes?: components["schemas"]["DesignPartnerOutcomeDto"][];
+            roiRates?: components["schemas"]["DesignPartnerRoiRateDto"][];
         };
     };
     responses: never;
@@ -2304,6 +2773,567 @@ export interface operations {
         };
         responses: {
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LariController_getCfoView: {
+        parameters: {
+            query?: {
+                startDate?: string;
+                endDate?: string;
+                confidenceThreshold?: number;
+                team?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LariController_getRecommendations: {
+        parameters: {
+            query?: {
+                startDate?: string;
+                endDate?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    GitHubCopilotController_overview: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    GitHubCopilotController_memberSpendView: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+                month: string;
+                team: string;
+                user: string;
+                utilizationStatus: string;
+                model: string;
+                editor: string;
+                language: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    GitHubCopilotController_listConnections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    GitHubCopilotController_createConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateConnectionBody"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    GitHubCopilotController_getConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    GitHubCopilotController_testToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TestTokenBody"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    GitHubCopilotController_updateAssumptions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAssumptionsBody"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    GitHubCopilotController_syncNow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ConnectorDefinitionsController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ConnectorDefinitionsController_billingRegistry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ConnectorDefinitionsController_createCustom: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCustomDefinitionDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ConnectorsController_list: {
+        parameters: {
+            query: {
+                limit: string;
+                offset: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ConnectorsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateConnectorDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ConnectorsController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ConnectorsController_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ConnectorsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateConnectorDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ConnectorsController_test: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TestConnectorDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ConnectorsController_preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TestConnectorDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ConnectorsController_sync: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TestConnectorDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ConnectorsController_syncRuns: {
+        parameters: {
+            query: {
+                limit: string;
+                offset: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ConnectorsController_errors: {
+        parameters: {
+            query: {
+                limit: string;
+                offset: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ConnectorsController_listAttributionMappings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ConnectorsController_createAttributionMapping: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAttributionMappingDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ConnectorsController_deleteAttributionMapping: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mappingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ImportController_importEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportEventsDto"];
+            };
+        };
+        responses: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3627,6 +4657,54 @@ export interface operations {
             };
         };
     };
+    AnalyticsController_users: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+                /** @description Optional team_id filter (cost/value/risk reads honor it; ignored elsewhere). */
+                team?: string;
+                /** @description Case-insensitive filter on display name, email, or team. */
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AnalyticsController_userDetail: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+                /** @description Optional team_id filter (cost/value/risk reads honor it; ignored elsewhere). */
+                team?: string;
+            };
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     AnalyticsController_modelMix: {
         parameters: {
             query?: {
@@ -3650,6 +4728,28 @@ export interface operations {
         };
     };
     AnalyticsController_platformSpend: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+                /** @description Optional team_id filter (cost/value/risk reads honor it; ignored elsewhere). */
+                team?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AnalyticsController_copilotSpend: {
         parameters: {
             query?: {
                 from?: string;
@@ -3787,6 +4887,23 @@ export interface operations {
         };
     };
     AnalyticsController_agentRisk: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AnalyticsController_injectionPosture: {
         parameters: {
             query?: never;
             header?: never;
@@ -4022,7 +5139,7 @@ export interface operations {
             };
         };
     };
-    ImportController_importEvents: {
+    PortalImportController_previewAnthropic: {
         parameters: {
             query?: never;
             header?: never;
@@ -4031,7 +5148,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ImportEventsDto"];
+                "application/json": components["schemas"]["AnthropicPortalPreviewDto"];
             };
         };
         responses: {
@@ -4064,7 +5181,153 @@ export interface operations {
             };
         };
     };
-    ConnectorDefinitionsController_list: {
+    ReportsController_executive: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+                /** @description Must match JWT tenant when provided; never overrides auth context. */
+                tenant_id?: string;
+                format?: "pdf" | "xlsx";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    FixedCostsController_list: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    FixedCostsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateFixedCostDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    FixedCostsController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteFixedCostDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    FixedCostsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateFixedCostDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    FixedCostsController_monthly: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    FixedCostsController_totalCostOfAi: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    DesignPartnerController_listPresets: {
         parameters: {
             query?: never;
             header?: never;
@@ -4081,7 +5344,7 @@ export interface operations {
             };
         };
     };
-    ConnectorDefinitionsController_createCustom: {
+    DesignPartnerController_onboard: {
         parameters: {
             query?: never;
             header?: never;
@@ -4090,287 +5353,11 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CreateCustomDefinitionDto"];
+                "application/json": components["schemas"]["OnboardDesignPartnerDto"];
             };
         };
         responses: {
             201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ConnectorsController_list: {
-        parameters: {
-            query: {
-                limit: string;
-                offset: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ConnectorsController_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateConnectorDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ConnectorsController_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ConnectorsController_delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ConnectorsController_update: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateConnectorDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ConnectorsController_test: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TestConnectorDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ConnectorsController_preview: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TestConnectorDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ConnectorsController_sync: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TestConnectorDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ConnectorsController_syncRuns: {
-        parameters: {
-            query: {
-                limit: string;
-                offset: string;
-            };
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ConnectorsController_errors: {
-        parameters: {
-            query: {
-                limit: string;
-                offset: string;
-            };
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ConnectorsController_listAttributionMappings: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ConnectorsController_createAttributionMapping: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateAttributionMappingDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ConnectorsController_deleteAttributionMapping: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                mappingId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -758,6 +758,801 @@
         ]
       }
     },
+    "/v1/lari/cfo-view": {
+      "get": {
+        "operationId": "LariController_getCfoView",
+        "parameters": [
+          {
+            "name": "startDate",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "endDate",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "confidenceThreshold",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 0,
+              "maximum": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "team",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Lari"
+        ]
+      }
+    },
+    "/v1/lari/recommendations": {
+      "get": {
+        "operationId": "LariController_getRecommendations",
+        "parameters": [
+          {
+            "name": "startDate",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "endDate",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Lari"
+        ]
+      }
+    },
+    "/v1/github-copilot/overview": {
+      "get": {
+        "operationId": "GitHubCopilotController_overview",
+        "parameters": [
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "GitHubCopilot"
+        ]
+      }
+    },
+    "/v1/github-copilot/member-spend": {
+      "get": {
+        "operationId": "GitHubCopilotController_memberSpendView",
+        "parameters": [
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "month",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "team",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "user",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "utilizationStatus",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "model",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "editor",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "language",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "GitHubCopilot"
+        ]
+      }
+    },
+    "/v1/github-copilot/connections": {
+      "get": {
+        "operationId": "GitHubCopilotController_listConnections",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "GitHubCopilot"
+        ]
+      },
+      "post": {
+        "operationId": "GitHubCopilotController_createConnection",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateConnectionBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "GitHubCopilot"
+        ]
+      }
+    },
+    "/v1/github-copilot/connections/{id}": {
+      "get": {
+        "operationId": "GitHubCopilotController_getConnection",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "GitHubCopilot"
+        ]
+      }
+    },
+    "/v1/github-copilot/connections/test-token": {
+      "post": {
+        "operationId": "GitHubCopilotController_testToken",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestTokenBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "GitHubCopilot"
+        ]
+      }
+    },
+    "/v1/github-copilot/connections/{id}/roi-assumptions": {
+      "patch": {
+        "operationId": "GitHubCopilotController_updateAssumptions",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAssumptionsBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "GitHubCopilot"
+        ]
+      }
+    },
+    "/v1/github-copilot/connections/{id}/sync": {
+      "post": {
+        "operationId": "GitHubCopilotController_syncNow",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "GitHubCopilot"
+        ]
+      }
+    },
+    "/v1/connector-definitions": {
+      "get": {
+        "operationId": "ConnectorDefinitionsController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ConnectorDefinitions"
+        ]
+      }
+    },
+    "/v1/connector-definitions/billing-registry": {
+      "get": {
+        "operationId": "ConnectorDefinitionsController_billingRegistry",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ConnectorDefinitions"
+        ]
+      }
+    },
+    "/v1/connector-definitions/custom": {
+      "post": {
+        "operationId": "ConnectorDefinitionsController_createCustom",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCustomDefinitionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ConnectorDefinitions"
+        ]
+      }
+    },
+    "/v1/connectors": {
+      "get": {
+        "operationId": "ConnectorsController_list",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Connectors"
+        ]
+      },
+      "post": {
+        "operationId": "ConnectorsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateConnectorDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Connectors"
+        ]
+      }
+    },
+    "/v1/connectors/{id}": {
+      "get": {
+        "operationId": "ConnectorsController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Connectors"
+        ]
+      },
+      "patch": {
+        "operationId": "ConnectorsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateConnectorDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Connectors"
+        ]
+      },
+      "delete": {
+        "operationId": "ConnectorsController_delete",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Connectors"
+        ]
+      }
+    },
+    "/v1/connectors/{id}/test": {
+      "post": {
+        "operationId": "ConnectorsController_test",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestConnectorDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Connectors"
+        ]
+      }
+    },
+    "/v1/connectors/{id}/preview": {
+      "post": {
+        "operationId": "ConnectorsController_preview",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestConnectorDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Connectors"
+        ]
+      }
+    },
+    "/v1/connectors/{id}/sync": {
+      "post": {
+        "operationId": "ConnectorsController_sync",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestConnectorDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Connectors"
+        ]
+      }
+    },
+    "/v1/connectors/{id}/sync-runs": {
+      "get": {
+        "operationId": "ConnectorsController_syncRuns",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Connectors"
+        ]
+      }
+    },
+    "/v1/connectors/{id}/errors": {
+      "get": {
+        "operationId": "ConnectorsController_errors",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Connectors"
+        ]
+      }
+    },
+    "/v1/connectors/{id}/attribution-mappings": {
+      "get": {
+        "operationId": "ConnectorsController_listAttributionMappings",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Connectors"
+        ]
+      },
+      "post": {
+        "operationId": "ConnectorsController_createAttributionMapping",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAttributionMappingDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Connectors"
+        ]
+      }
+    },
+    "/v1/connectors/attribution-mappings/{mappingId}": {
+      "delete": {
+        "operationId": "ConnectorsController_deleteAttributionMapping",
+        "parameters": [
+          {
+            "name": "mappingId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Connectors"
+        ]
+      }
+    },
+    "/v1/import/events": {
+      "post": {
+        "operationId": "ImportController_importEvents",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportEventsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Import"
+        ]
+      }
+    },
     "/v1/policies": {
       "get": {
         "operationId": "PoliciesController_list",
@@ -2391,6 +3186,103 @@
         ]
       }
     },
+    "/v1/analytics/users": {
+      "get": {
+        "operationId": "AnalyticsController_users",
+        "parameters": [
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "team",
+            "required": false,
+            "in": "query",
+            "description": "Optional team_id filter (cost/value/risk reads honor it; ignored elsewhere).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Case-insensitive filter on display name, email, or team.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Analytics"
+        ]
+      }
+    },
+    "/v1/analytics/users/{userId}": {
+      "get": {
+        "operationId": "AnalyticsController_userDetail",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "team",
+            "required": false,
+            "in": "query",
+            "description": "Optional team_id filter (cost/value/risk reads honor it; ignored elsewhere).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Analytics"
+        ]
+      }
+    },
     "/v1/analytics/model-mix": {
       "get": {
         "operationId": "AnalyticsController_modelMix",
@@ -2434,6 +3326,46 @@
     "/v1/analytics/platform-spend": {
       "get": {
         "operationId": "AnalyticsController_platformSpend",
+        "parameters": [
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "team",
+            "required": false,
+            "in": "query",
+            "description": "Optional team_id filter (cost/value/risk reads honor it; ignored elsewhere).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Analytics"
+        ]
+      }
+    },
+    "/v1/analytics/copilot-spend": {
+      "get": {
+        "operationId": "AnalyticsController_copilotSpend",
         "parameters": [
           {
             "name": "from",
@@ -2718,6 +3650,20 @@
     "/v1/analytics/agent-risk": {
       "get": {
         "operationId": "AnalyticsController_agentRisk",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Analytics"
+        ]
+      }
+    },
+    "/v1/analytics/injection": {
+      "get": {
+        "operationId": "AnalyticsController_injectionPosture",
         "parameters": [],
         "responses": {
           "200": {
@@ -3154,16 +4100,16 @@
         ]
       }
     },
-    "/v1/import/events": {
+    "/v1/portal-import/anthropic/preview": {
       "post": {
-        "operationId": "ImportController_importEvents",
+        "operationId": "PortalImportController_previewAnthropic",
         "parameters": [],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ImportEventsDto"
+                "$ref": "#/components/schemas/AnthropicPortalPreviewDto"
               }
             }
           }
@@ -3174,7 +4120,7 @@
           }
         },
         "tags": [
-          "Import"
+          "PortalImport"
         ]
       }
     },
@@ -3202,59 +4148,73 @@
         ]
       }
     },
-    "/v1/connector-definitions": {
+    "/v1/reports/executive": {
       "get": {
-        "operationId": "ConnectorDefinitionsController_list",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "ConnectorDefinitions"
-        ]
-      }
-    },
-    "/v1/connector-definitions/custom": {
-      "post": {
-        "operationId": "ConnectorDefinitionsController_createCustom",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateCustomDefinitionDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "ConnectorDefinitions"
-        ]
-      }
-    },
-    "/v1/connectors": {
-      "get": {
-        "operationId": "ConnectorsController_list",
+        "operationId": "ReportsController_executive",
         "parameters": [
           {
-            "name": "limit",
-            "required": true,
+            "name": "from",
+            "required": false,
             "in": "query",
             "schema": {
               "type": "string"
             }
           },
           {
-            "name": "offset",
-            "required": true,
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tenant_id",
+            "required": false,
+            "in": "query",
+            "description": "Must match JWT tenant when provided; never overrides auth context.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "format",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "pdf",
+                "xlsx"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/v1/fixed-costs": {
+      "get": {
+        "operationId": "FixedCostsController_list",
+        "parameters": [
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
             "in": "query",
             "schema": {
               "type": "string"
@@ -3267,18 +4227,18 @@
           }
         },
         "tags": [
-          "Connectors"
+          "FixedCosts"
         ]
       },
       "post": {
-        "operationId": "ConnectorsController_create",
+        "operationId": "FixedCostsController_create",
         "parameters": [],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateConnectorDto"
+                "$ref": "#/components/schemas/CreateFixedCostDto"
               }
             }
           }
@@ -3289,50 +4249,18 @@
           }
         },
         "tags": [
-          "Connectors"
-        ]
-      }
-    },
-    "/v1/connectors/{id}": {
-      "get": {
-        "operationId": "ConnectorsController_get",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Connectors"
+          "FixedCosts"
         ]
       },
       "patch": {
-        "operationId": "ConnectorsController_update",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "operationId": "FixedCostsController_update",
+        "parameters": [],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UpdateConnectorDto"
+                "$ref": "#/components/schemas/UpdateFixedCostDto"
               }
             }
           }
@@ -3343,153 +4271,47 @@
           }
         },
         "tags": [
-          "Connectors"
+          "FixedCosts"
         ]
       },
       "delete": {
-        "operationId": "ConnectorsController_delete",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
+        "operationId": "FixedCostsController_remove",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteFixedCostDto"
+              }
             }
           }
-        ],
+        },
         "responses": {
           "200": {
             "description": ""
           }
         },
         "tags": [
-          "Connectors"
+          "FixedCosts"
         ]
       }
     },
-    "/v1/connectors/{id}/test": {
-      "post": {
-        "operationId": "ConnectorsController_test",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TestConnectorDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Connectors"
-        ]
-      }
-    },
-    "/v1/connectors/{id}/preview": {
-      "post": {
-        "operationId": "ConnectorsController_preview",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TestConnectorDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Connectors"
-        ]
-      }
-    },
-    "/v1/connectors/{id}/sync": {
-      "post": {
-        "operationId": "ConnectorsController_sync",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TestConnectorDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Connectors"
-        ]
-      }
-    },
-    "/v1/connectors/{id}/sync-runs": {
+    "/v1/fixed-costs/monthly": {
       "get": {
-        "operationId": "ConnectorsController_syncRuns",
+        "operationId": "FixedCostsController_monthly",
         "parameters": [
           {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "limit",
-            "required": true,
+            "name": "from",
+            "required": false,
             "in": "query",
             "schema": {
               "type": "string"
             }
           },
           {
-            "name": "offset",
-            "required": true,
+            "name": "to",
+            "required": false,
             "in": "query",
             "schema": {
               "type": "string"
@@ -3502,33 +4324,25 @@
           }
         },
         "tags": [
-          "Connectors"
+          "FixedCosts"
         ]
       }
     },
-    "/v1/connectors/{id}/errors": {
+    "/v1/fixed-costs/total-cost-of-ai": {
       "get": {
-        "operationId": "ConnectorsController_errors",
+        "operationId": "FixedCostsController_totalCostOfAi",
         "parameters": [
           {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "limit",
-            "required": true,
+            "name": "from",
+            "required": false,
             "in": "query",
             "schema": {
               "type": "string"
             }
           },
           {
-            "name": "offset",
-            "required": true,
+            "name": "to",
+            "required": false,
             "in": "query",
             "schema": {
               "type": "string"
@@ -3541,50 +4355,34 @@
           }
         },
         "tags": [
-          "Connectors"
+          "FixedCosts"
         ]
       }
     },
-    "/v1/connectors/{id}/attribution-mappings": {
+    "/v1/design-partner/presets": {
       "get": {
-        "operationId": "ConnectorsController_listAttributionMappings",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "operationId": "DesignPartnerController_listPresets",
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
           }
         },
         "tags": [
-          "Connectors"
+          "DesignPartner"
         ]
-      },
+      }
+    },
+    "/v1/design-partner/onboard": {
       "post": {
-        "operationId": "ConnectorsController_createAttributionMapping",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "operationId": "DesignPartnerController_onboard",
+        "parameters": [],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateAttributionMappingDto"
+                "$ref": "#/components/schemas/OnboardDesignPartnerDto"
               }
             }
           }
@@ -3595,30 +4393,7 @@
           }
         },
         "tags": [
-          "Connectors"
-        ]
-      }
-    },
-    "/v1/connectors/attribution-mappings/{mappingId}": {
-      "delete": {
-        "operationId": "ConnectorsController_deleteAttributionMapping",
-        "parameters": [
-          {
-            "name": "mappingId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Connectors"
+          "DesignPartner"
         ]
       }
     }
@@ -3909,6 +4684,203 @@
             "type": "string"
           }
         }
+      },
+      "CreateConnectionBody": {
+        "type": "object",
+        "properties": {
+          "displayName": {
+            "type": "string"
+          },
+          "orgSlug": {
+            "type": "string"
+          },
+          "githubToken": {
+            "type": "string"
+          },
+          "enterpriseSlug": {
+            "type": "string"
+          },
+          "roiAssumptions": {
+            "type": "object"
+          },
+          "scheduleJson": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "displayName",
+          "orgSlug",
+          "githubToken"
+        ]
+      },
+      "TestTokenBody": {
+        "type": "object",
+        "properties": {
+          "githubToken": {
+            "type": "string"
+          },
+          "orgSlug": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "githubToken",
+          "orgSlug"
+        ]
+      },
+      "UpdateAssumptionsBody": {
+        "type": "object",
+        "properties": {
+          "roiAssumptions": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "roiAssumptions"
+        ]
+      },
+      "CreateCustomDefinitionDto": {
+        "type": "object",
+        "properties": {
+          "definition": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "definition"
+        ]
+      },
+      "CreateConnectorDto": {
+        "type": "object",
+        "properties": {
+          "connectorDefinitionId": {
+            "type": "string"
+          },
+          "presetId": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "configJson": {
+            "type": "object"
+          },
+          "mappingOverridesJson": {
+            "type": "object"
+          },
+          "scheduleJson": {
+            "type": "object"
+          },
+          "authSecret": {
+            "type": "string"
+          },
+          "baseUrl": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "displayName"
+        ]
+      },
+      "UpdateConnectorDto": {
+        "type": "object",
+        "properties": {
+          "displayName": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "configJson": {
+            "type": "object"
+          },
+          "mappingOverridesJson": {
+            "type": "object"
+          },
+          "scheduleJson": {
+            "type": "object"
+          },
+          "authSecret": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "TestConnectorDto": {
+        "type": "object",
+        "properties": {
+          "authSecret": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateAttributionMappingDto": {
+        "type": "object",
+        "properties": {
+          "connectorId": {
+            "type": "string"
+          },
+          "mappingType": {
+            "type": "string"
+          },
+          "providerKey": {
+            "type": "string"
+          },
+          "providerKeyName": {
+            "type": "string"
+          },
+          "targetUserId": {
+            "type": "string"
+          },
+          "targetTeamId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "connectorId",
+          "mappingType",
+          "providerKey"
+        ]
+      },
+      "ImportEventsDto": {
+        "type": "object",
+        "properties": {
+          "events": {
+            "minItems": 1,
+            "maxItems": 1000,
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "dryRun": {
+            "type": "boolean",
+            "description": "When true, validate + report what WOULD be imported without writing."
+          }
+        },
+        "required": [
+          "events"
+        ]
       },
       "CreatePolicyDto": {
         "type": "object",
@@ -4667,24 +5639,87 @@
           "valueUsd"
         ]
       },
-      "ImportEventsDto": {
+      "ColumnMappingDto": {
         "type": "object",
         "properties": {
-          "events": {
-            "minItems": 1,
-            "maxItems": 1000,
-            "type": "array",
-            "items": {
-              "type": "object"
-            }
+          "date": {
+            "type": "string"
           },
-          "dryRun": {
-            "type": "boolean",
-            "description": "When true, validate + report what WOULD be imported without writing."
+          "cost": {
+            "type": "string"
+          },
+          "costUnit": {
+            "type": "string",
+            "enum": [
+              "usd",
+              "cents"
+            ]
+          },
+          "reportThroughDay": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "product": {
+            "type": "string"
+          },
+          "user": {
+            "type": "string"
+          },
+          "user_name": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "string"
+          },
+          "account_uuid": {
+            "type": "string"
+          },
+          "input_tokens": {
+            "type": "string"
+          },
+          "output_tokens": {
+            "type": "string"
           }
         },
         "required": [
-          "events"
+          "cost"
+        ]
+      },
+      "AnthropicPortalPreviewDto": {
+        "type": "object",
+        "properties": {
+          "csv": {
+            "type": "string"
+          },
+          "fileName": {
+            "type": "string"
+          },
+          "mapping": {
+            "$ref": "#/components/schemas/ColumnMappingDto"
+          }
+        },
+        "required": [
+          "csv"
+        ]
+      },
+      "PortalFileDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "csv": {
+            "type": "string"
+          },
+          "mapping": {
+            "$ref": "#/components/schemas/ColumnMappingDto"
+          }
+        },
+        "required": [
+          "name",
+          "csv"
         ]
       },
       "AnthropicPortalUploadDto": {
@@ -4693,104 +5728,162 @@
           "csv": {
             "type": "string"
           },
+          "fileName": {
+            "type": "string"
+          },
+          "mapping": {
+            "$ref": "#/components/schemas/ColumnMappingDto"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortalFileDto"
+            }
+          },
           "connectorId": {
             "type": "string"
           },
           "dryRun": {
             "type": "boolean"
           }
-        },
-        "required": [
-          "csv"
-        ]
-      },
-      "CreateCustomDefinitionDto": {
-        "type": "object",
-        "properties": {
-          "definition": {
-            "type": "object"
-          }
-        },
-        "required": [
-          "definition"
-        ]
-      },
-      "CreateConnectorDto": {
-        "type": "object",
-        "properties": {
-          "connectorDefinitionId": {
-            "type": "string"
-          },
-          "presetId": {
-            "type": "string"
-          },
-          "displayName": {
-            "type": "string"
-          },
-          "provider": {
-            "type": "string"
-          },
-          "category": {
-            "type": "string"
-          },
-          "configJson": {
-            "type": "object"
-          },
-          "mappingOverridesJson": {
-            "type": "object"
-          },
-          "scheduleJson": {
-            "type": "object"
-          },
-          "authSecret": {
-            "type": "string"
-          },
-          "baseUrl": {
-            "type": "string"
-          },
-          "enabled": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "displayName"
-        ]
-      },
-      "UpdateConnectorDto": {
-        "type": "object",
-        "properties": {
-          "displayName": {
-            "type": "string"
-          },
-          "provider": {
-            "type": "string"
-          },
-          "category": {
-            "type": "string"
-          },
-          "configJson": {
-            "type": "object"
-          },
-          "mappingOverridesJson": {
-            "type": "object"
-          },
-          "scheduleJson": {
-            "type": "object"
-          },
-          "authSecret": {
-            "type": "string"
-          },
-          "enabled": {
-            "type": "boolean"
-          }
         }
       },
-      "TestConnectorDto": {
+      "CreateFixedCostDto": {
         "type": "object",
         "properties": {
-          "authSecret": {
+          "periodMonth": {
+            "type": "string",
+            "pattern": "MONTH_START"
+          },
+          "vendor": {
+            "type": "string",
+            "enum": [
+              "openai",
+              "anthropic",
+              "other"
+            ]
+          },
+          "costType": {
+            "type": "string",
+            "enum": [
+              "seat_license",
+              "subscription",
+              "platform_fee",
+              "committed_use"
+            ]
+          },
+          "costUsd": {
+            "type": "number",
+            "minimum": 0
+          },
+          "lineItem": {
             "type": "string"
           },
+          "seats": {
+            "type": "number",
+            "minimum": 0
+          },
+          "unitCostUsd": {
+            "type": "number",
+            "minimum": 0
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "periodMonth",
+          "vendor",
+          "costType",
+          "costUsd"
+        ]
+      },
+      "UpdateFixedCostDto": {
+        "type": "object",
+        "properties": {
+          "periodMonth": {
+            "type": "string",
+            "pattern": "MONTH_START"
+          },
+          "vendor": {
+            "type": "string",
+            "enum": [
+              "openai",
+              "anthropic",
+              "other"
+            ]
+          },
+          "costType": {
+            "type": "string",
+            "enum": [
+              "seat_license",
+              "subscription",
+              "platform_fee",
+              "committed_use"
+            ]
+          },
+          "lineItem": {
+            "type": "string"
+          },
+          "costUsd": {
+            "type": "number",
+            "minimum": 0
+          },
+          "seats": {
+            "type": "number",
+            "minimum": 0
+          },
+          "unitCostUsd": {
+            "type": "number",
+            "minimum": 0
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "periodMonth",
+          "vendor",
+          "costType"
+        ]
+      },
+      "DeleteFixedCostDto": {
+        "type": "object",
+        "properties": {
+          "periodMonth": {
+            "type": "string",
+            "pattern": "MONTH_START"
+          },
+          "vendor": {
+            "type": "string",
+            "enum": [
+              "openai",
+              "anthropic",
+              "other"
+            ]
+          },
+          "costType": {
+            "type": "string",
+            "enum": [
+              "seat_license",
+              "subscription",
+              "platform_fee",
+              "committed_use"
+            ]
+          },
+          "lineItem": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "periodMonth",
+          "vendor",
+          "costType"
+        ]
+      },
+      "PresentationDto": {
+        "type": "object",
+        "properties": {
           "from": {
             "type": "string"
           },
@@ -4799,33 +5892,201 @@
           }
         }
       },
-      "CreateAttributionMappingDto": {
+      "DesignPartnerAgentDto": {
         "type": "object",
         "properties": {
-          "connectorId": {
+          "name": {
             "type": "string"
           },
-          "mappingType": {
+          "runtimeType": {
             "type": "string"
           },
-          "providerKey": {
+          "riskPosture": {
             "type": "string"
           },
-          "providerKeyName": {
-            "type": "string"
-          },
-          "targetUserId": {
-            "type": "string"
-          },
-          "targetTeamId": {
+          "approvalStatus": {
             "type": "string"
           }
         },
         "required": [
-          "connectorId",
-          "mappingType",
-          "providerKey"
+          "name"
         ]
+      },
+      "DesignPartnerRunDto": {
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string"
+          },
+          "agentId": {
+            "type": "string"
+          },
+          "appId": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "startedAt": {
+            "type": "string"
+          },
+          "endedAt": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "objective": {
+            "type": "string"
+          },
+          "outcomeId": {
+            "type": "string"
+          },
+          "totalCostUsd": {
+            "type": "number"
+          },
+          "totalTokens": {
+            "type": "number"
+          },
+          "llmCalls": {
+            "type": "number"
+          },
+          "toolCalls": {
+            "type": "number"
+          },
+          "riskEvents": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "runId",
+          "agentId",
+          "startedAt",
+          "endedAt",
+          "status",
+          "totalCostUsd",
+          "totalTokens",
+          "llmCalls",
+          "toolCalls",
+          "riskEvents"
+        ]
+      },
+      "DesignPartnerOutcomeDto": {
+        "type": "object",
+        "properties": {
+          "outcomeId": {
+            "type": "string"
+          },
+          "ts": {
+            "type": "string"
+          },
+          "sourceSystem": {
+            "type": "string"
+          },
+          "outcomeType": {
+            "type": "string"
+          },
+          "teamId": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "businessValueUsd": {
+            "type": "number"
+          },
+          "qualityScore": {
+            "type": "number"
+          },
+          "completionStatus": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcomeId",
+          "ts",
+          "sourceSystem",
+          "outcomeType",
+          "businessValueUsd",
+          "completionStatus"
+        ]
+      },
+      "DesignPartnerRoiRateDto": {
+        "type": "object",
+        "properties": {
+          "sourceSystem": {
+            "type": "string"
+          },
+          "outcomeType": {
+            "type": "string"
+          },
+          "hourlyRate": {
+            "type": "number"
+          },
+          "baselineMinutes": {
+            "type": "number"
+          },
+          "reworkPct": {
+            "type": "number"
+          },
+          "redeploymentFactor": {
+            "type": "number"
+          },
+          "qaCostPerOutcome": {
+            "type": "number"
+          },
+          "evalCostPerOutcome": {
+            "type": "number"
+          },
+          "integrationCostPerOutcome": {
+            "type": "number"
+          },
+          "platformOverheadPct": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "sourceSystem",
+          "outcomeType"
+        ]
+      },
+      "OnboardDesignPartnerDto": {
+        "type": "object",
+        "properties": {
+          "preset": {
+            "type": "string"
+          },
+          "presentation": {
+            "$ref": "#/components/schemas/PresentationDto"
+          },
+          "clearPrior": {
+            "type": "boolean"
+          },
+          "agents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignPartnerAgentDto"
+            }
+          },
+          "runs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignPartnerRunDto"
+            }
+          },
+          "outcomes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignPartnerOutcomeDto"
+            }
+          },
+          "roiRates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignPartnerRoiRateDto"
+            }
+          }
+        }
       }
     }
   },

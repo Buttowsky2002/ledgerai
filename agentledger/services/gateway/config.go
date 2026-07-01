@@ -13,13 +13,14 @@ import (
 // served from the control plane (Postgres) with hot reload; for the MVP
 // it is a JSON file so the gateway has zero runtime dependencies.
 type Config struct {
-	ListenAddr    string        `json:"listen_addr"`
-	PriceBookPath string        `json:"price_book_path"`
-	Providers     []ProviderCfg `json:"providers"`
-	VirtualKeys   []VirtualKey  `json:"virtual_keys"`
-	DLP           DLPConfig     `json:"dlp"`
-	Events        EventSinkCfg  `json:"events"`
-	Redis         RedisCfg      `json:"redis"`
+	ListenAddr    string          `json:"listen_addr"`
+	PriceBookPath string          `json:"price_book_path"`
+	Providers     []ProviderCfg   `json:"providers"`
+	VirtualKeys   []VirtualKey    `json:"virtual_keys"`
+	DLP           DLPConfig       `json:"dlp"`
+	Injection     InjectionConfig `json:"injection"`
+	Events        EventSinkCfg    `json:"events"`
+	Redis         RedisCfg        `json:"redis"`
 	// AgentToolAllow is the per-agent tool/MCP allowlist enforced inline by tool
 	// governance (ADR-032). From Postgres it is loaded from agent_tool_allowlist;
 	// in file config it can be set directly. Empty = no agent is governed inline.
@@ -64,16 +65,17 @@ type VirtualKey struct {
 	KeyHash string `json:"key_hash,omitempty"`
 	// KeyID is the stable, non-secret public id: provided by the control plane,
 	// else derived as "vk_" + KeyHash[:16].
-	KeyID         string   `json:"key_id,omitempty"`
-	TenantID      string   `json:"tenant_id"`
-	TeamID        string   `json:"team_id"`
-	UserID        string   `json:"user_id"`
-	AppID         string   `json:"app_id"`
-	Environment   string   `json:"environment"`    // prod | staging | dev
-	AllowedModels []string `json:"allowed_models"` // empty = all
-	MonthlyBudget float64  `json:"monthly_budget_usd"`
-	RateLimitRPM  int      `json:"rate_limit_rpm"`
-	DLPPolicyID   string   `json:"dlp_policy_id"`
+	KeyID             string   `json:"key_id,omitempty"`
+	TenantID          string   `json:"tenant_id"`
+	TeamID            string   `json:"team_id"`
+	UserID            string   `json:"user_id"`
+	AppID             string   `json:"app_id"`
+	Environment       string   `json:"environment"`    // prod | staging | dev
+	AllowedModels     []string `json:"allowed_models"` // empty = all
+	MonthlyBudget     float64  `json:"monthly_budget_usd"`
+	RateLimitRPM      int      `json:"rate_limit_rpm"`
+	DLPPolicyID       string   `json:"dlp_policy_id"`
+	InjectionPolicyID string   `json:"injection_policy_id"`
 }
 
 // DLPConfig holds classifier rules and per-policy actions.
@@ -87,6 +89,21 @@ type DLPPolicy struct {
 	ID      string   `json:"id"`
 	Action  string   `json:"action"`  // allow | log | warn | redact | block
 	Classes []string `json:"classes"` // which classifier classes this policy covers; empty = all
+}
+
+// InjectionConfig holds inline prompt-injection detector settings and policies.
+type InjectionConfig struct {
+	Enabled            *bool             `json:"enabled,omitempty"`           // default true
+	BlockMinConfidence float64           `json:"block_min_confidence"`        // default 0.8
+	ScanToolResults    *bool             `json:"scan_tool_results,omitempty"` // default true
+	Policies           []InjectionPolicy `json:"policies"`
+}
+
+// InjectionPolicy maps a policy ID to the action taken when its classes match.
+type InjectionPolicy struct {
+	ID      string   `json:"id"`
+	Classes []string `json:"classes"` // empty = all classes
+	Action  string   `json:"action"`  // block | redact | flag | log
 }
 
 // EventSinkCfg configures async event emission.
@@ -136,6 +153,9 @@ func LoadConfig(path string) (*Config, error) {
 	}
 	if c.Events.Retries == 0 {
 		c.Events.Retries = 2
+	}
+	if c.Injection.BlockMinConfidence <= 0 {
+		c.Injection.BlockMinConfidence = 0.8
 	}
 	// Hash + clear plaintext bearer tokens and derive key ids at load time, so the
 	// plaintext never propagates to the budget store, snapshot, events, or logs.

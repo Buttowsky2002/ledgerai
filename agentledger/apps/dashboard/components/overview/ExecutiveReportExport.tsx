@@ -1,6 +1,8 @@
 'use client';
 
+import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
+import { resolveRange, type DateBounds } from '@/lib/date-range';
 
 const BTN =
   'rounded-md bg-accent/15 px-3 py-1.5 text-sm text-accent ring-1 ring-inset ring-accent/30 transition-colors hover:bg-accent/25 disabled:cursor-not-allowed disabled:opacity-50';
@@ -9,7 +11,24 @@ const BTN_SECONDARY =
 
 type Format = 'pdf' | 'xlsx';
 
-export function ExecutiveReportExport({ from, to }: { from: string; to: string }) {
+export function ExecutiveReportExport({
+  from: fromFallback,
+  to: toFallback,
+  bounds,
+}: {
+  from: string;
+  to: string;
+  bounds: DateBounds;
+}) {
+  const searchParams = useSearchParams();
+  const { from, to } = resolveRange(
+    {
+      from: searchParams.get('from') ?? fromFallback,
+      to: searchParams.get('to') ?? toFallback,
+      range: searchParams.get('range') ?? undefined,
+    },
+    bounds,
+  );
   const [loading, setLoading] = useState<Format | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,6 +70,9 @@ export function ExecutiveReportExport({ from, to }: { from: string; to: string }
           {loading === 'xlsx' ? '…' : 'XLSX'}
         </button>
       </div>
+      <p className="text-[11px] text-muted">
+        {from} → {to}
+      </p>
       {error && <p className="text-xs text-neg">{error}</p>}
     </div>
   );

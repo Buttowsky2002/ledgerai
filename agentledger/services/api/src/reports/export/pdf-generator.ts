@@ -17,14 +17,10 @@ import {
   formatUsdExact,
 } from '../formatters';
 import { costBasisLabel } from '../platform-breakdown';
+import { PDF_THEME as T } from './report-pdf-theme';
 
-const BRAND = '#1e293b';
-const MUTED = '#64748b';
-const HEADER_FILL = '#f1f5f9';
-const ROW_STRIPE = '#f8fafc';
-const ROW_LINE = '#e2e8f0';
-const ROW_H = 14;
 const HEADER_H = 16;
+const ROW_H = 14;
 const FOOTER_Y_OFFSET = 44;
 const CONTENT_BOTTOM_PAD = 72;
 
@@ -74,6 +70,12 @@ function truncateToWidth(doc: PdfDoc, text: string, maxWidth: number): string {
   return lo > 0 ? text.slice(0, lo) + ell : ell;
 }
 
+function paintInkBackground(doc: PdfDoc): void {
+  doc.save();
+  doc.rect(0, 0, doc.page.width, doc.page.height).fill(T.ink);
+  doc.restore();
+}
+
 function paintFixedFooters(doc: PdfDoc, data: ExecutiveReportData): void {
   const range = doc.bufferedPageRange();
   const total = range.count;
@@ -89,7 +91,7 @@ function paintFixedFooters(doc: PdfDoc, data: ExecutiveReportData): void {
     const savedMargins = doc.page.margins;
     doc.page.margins = { top: 0, bottom: 0, left: 0, right: 0 };
     doc.save();
-    doc.fontSize(7).fillColor(MUTED);
+    doc.fontSize(7).fillColor(T.muted);
     doc.text(footerText, 48, footerY, {
       width: doc.page.width - 96,
       align: 'center',
@@ -127,10 +129,10 @@ function drawKpiBand(ctx: LayoutCtx, tiles: KpiTile[]): void {
   const tileW = (ctx.contentW - gap * (tiles.length - 1)) / tiles.length;
   tiles.forEach((tile, i) => {
     const x = ctx.marginX + i * (tileW + gap);
-    doc.roundedRect(x, startY, tileW, 52, 4).fillAndStroke('#f8fafc', '#e2e8f0');
-    doc.fillColor(MUTED).fontSize(7).text(tile.label, x + 6, startY + 6, { width: tileW - 12, lineBreak: false });
+    doc.roundedRect(x, startY, tileW, 52, 4).fillAndStroke(T.panel, T.edge);
+    doc.fillColor(T.muted).fontSize(7).text(tile.label, x + 6, startY + 6, { width: tileW - 12, lineBreak: false });
     const valueSize = tile.value.length > 22 ? 8 : 11;
-    doc.fillColor(BRAND).fontSize(valueSize).text(tile.value, x + 6, startY + 20, {
+    doc.fillColor(T.accent).fontSize(valueSize).text(tile.value, x + 6, startY + 20, {
       width: tileW - 12,
       lineGap: 1,
     });
@@ -141,8 +143,8 @@ function drawKpiBand(ctx: LayoutCtx, tiles: KpiTile[]): void {
 function drawTableHeader<T>(ctx: LayoutCtx, columns: TableColumn<T>[], y: number): void {
   const { doc } = ctx;
   doc.save();
-  doc.rect(ctx.marginX, y - 2, ctx.contentW, HEADER_H).fill(HEADER_FILL);
-  doc.fillColor(MUTED).fontSize(7).font('Helvetica-Bold');
+  doc.rect(ctx.marginX, y - 2, ctx.contentW, HEADER_H).fill(T.panel2);
+  doc.fillColor(T.muted).fontSize(7).font('Helvetica-Bold');
   let x = ctx.marginX + 4;
   for (const col of columns) {
     const label = col.align === 'right' ? truncateToWidth(doc, col.header, col.width - 8) : col.header;
@@ -157,15 +159,15 @@ function drawTableRow<T>(ctx: LayoutCtx, columns: TableColumn<T>[], row: T, y: n
   const { doc } = ctx;
   if (zebra) {
     doc.save();
-    doc.rect(ctx.marginX, y - 1, ctx.contentW, ROW_H).fill(ROW_STRIPE);
+    doc.rect(ctx.marginX, y - 1, ctx.contentW, ROW_H).fill(T.panel);
     doc.restore();
   }
   doc.save();
-  doc.strokeColor(ROW_LINE).lineWidth(0.5);
+  doc.strokeColor(T.edge).lineWidth(0.5);
   doc.moveTo(ctx.marginX, y + ROW_H - 2).lineTo(ctx.marginX + ctx.contentW, y + ROW_H - 2).stroke();
   doc.restore();
 
-  doc.fillColor('#334155').fontSize(7);
+  doc.fillColor(T.text).fontSize(7);
   let x = ctx.marginX + 4;
   for (const col of columns) {
     const raw = col.text(row);
@@ -187,7 +189,7 @@ function drawTable<T>(
   const tableBlock = HEADER_H + 4 + ROW_H * Math.min(rows.length, minRowsOnPage) + 20;
   ensureSpace(ctx, tableBlock);
 
-  doc.fillColor(BRAND).fontSize(11).text(title, ctx.marginX, doc.y, { lineBreak: false });
+  doc.fillColor(T.text).fontSize(11).text(title, ctx.marginX, doc.y, { lineBreak: false });
   doc.y += 16;
 
   let rowIndex = 0;
@@ -295,7 +297,7 @@ function drawPlatformSection(ctx: LayoutCtx, platforms: PlatformBreakdownRow[]):
   if (platforms.length === 0) return;
 
   ensureSpace(ctx, 24);
-  doc.fillColor(BRAND).fontSize(11).text('Platform Breakdown', ctx.marginX, doc.y, { lineBreak: false });
+  doc.fillColor(T.text).fontSize(11).text('Platform Breakdown', ctx.marginX, doc.y, { lineBreak: false });
   doc.y += 14;
 
   for (const platform of platforms) {
@@ -306,25 +308,25 @@ function drawPlatformSection(ctx: LayoutCtx, platforms: PlatformBreakdownRow[]):
       `${platformLabel(platform.provider)} ${basis}`,
       ctx.contentW * 0.55,
     );
-    doc.fillColor(BRAND).fontSize(8).font('Helvetica-Bold');
+    doc.fillColor(T.accent).fontSize(8).font('Helvetica-Bold');
     doc.text(platformLabelText, ctx.marginX, doc.y, { continued: true, lineBreak: false });
-    doc.font('Helvetica').fillColor('#334155').text(`  ${formatUsdExact(platform.costUsd)}`, { continued: false });
+    doc.font('Helvetica').fillColor(T.text).text(`  ${formatUsdExact(platform.costUsd)}`, { continued: false });
     doc.y += 12;
 
-    doc.fontSize(7).fillColor(MUTED);
+    doc.fontSize(7).fillColor(T.muted);
     for (const model of platform.models) {
       ensureSpace(ctx, 12);
       const modelLabel = truncateToWidth(doc, model.model, ctx.contentW * 0.5);
       doc.text(`    ${modelLabel}`, ctx.marginX + 8, doc.y, { continued: true, lineBreak: false, width: ctx.contentW * 0.55 });
-      doc.fillColor('#64748b').text(`  ${formatUsdExact(model.costUsd)}`, { continued: false });
-      doc.fillColor(MUTED);
+      doc.fillColor(T.muted).text(`  ${formatUsdExact(model.costUsd)}`, { continued: false });
+      doc.fillColor(T.muted);
       doc.y += 11;
     }
     if (platform.remainderUsd !== 0) {
       ensureSpace(ctx, 12);
       doc.text('    rounding/other', ctx.marginX + 8, doc.y, { continued: true, lineBreak: false });
-      doc.fillColor('#64748b').text(`  ${formatUsdExact(platform.remainderUsd)}`, { continued: false });
-      doc.fillColor(MUTED);
+      doc.fillColor(T.muted).text(`  ${formatUsdExact(platform.remainderUsd)}`, { continued: false });
+      doc.fillColor(T.muted);
       doc.y += 11;
     }
     doc.moveDown(0.15);
@@ -332,17 +334,18 @@ function drawPlatformSection(ctx: LayoutCtx, platforms: PlatformBreakdownRow[]):
 }
 
 function drawBrandHeader(doc: PdfDoc): void {
-  doc.rect(0, 0, doc.page.width, 56).fill(BRAND);
-  doc.fillColor('#ffffff').fontSize(18).text('BadgerIQ', 48, 18, { lineBreak: false });
-  doc.fontSize(10).text('Executive AI Report', 48, 38, { lineBreak: false });
+  doc.rect(0, 0, doc.page.width, 56).fill(T.panel);
+  doc.rect(0, 55, doc.page.width, 1).fill(T.accent);
+  doc.fillColor(T.accent).fontSize(18).text('BadgerIQ', 48, 18, { lineBreak: false });
+  doc.fillColor(T.muted).fontSize(10).text('Executive AI Report', 48, 38, { lineBreak: false });
 }
 
 function drawTitleBlock(doc: PdfDoc, data: ExecutiveReportData): void {
-  doc.fillColor(BRAND);
+  doc.fillColor(T.text);
   doc.y = 72;
   const titleY = doc.y;
   doc.fontSize(14).text(data.tenantName, 48, titleY, { lineBreak: false });
-  doc.fontSize(10).fillColor(MUTED).text(
+  doc.fontSize(10).fillColor(T.muted).text(
     dateRangeLabel(data.window.from, data.window.to, data.window.days),
     48,
     titleY + 18,
@@ -355,6 +358,8 @@ export function generateExecutivePdf(data: ExecutiveReportData): Promise<Buffer>
   const doc = new PDFDocument({ size: 'A4', margin: 48, bufferPages: true });
   const chunks: Buffer[] = [];
   doc.on('data', (c) => chunks.push(c));
+  paintInkBackground(doc);
+  doc.on('pageAdded', () => paintInkBackground(doc));
 
   const ctx: LayoutCtx = {
     doc,
@@ -390,7 +395,7 @@ export function generateExecutivePdf(data: ExecutiveReportData): Promise<Buffer>
     drawKpiBand(ctx, tiles);
   }
 
-  doc.fontSize(9).fillColor(MUTED).text(data.oneLiner, ctx.marginX, doc.y, {
+  doc.fontSize(9).fillColor(T.muted).text(data.oneLiner, ctx.marginX, doc.y, {
     width: ctx.contentW,
     lineGap: 2,
   });
@@ -414,7 +419,7 @@ export function generateExecutivePdf(data: ExecutiveReportData): Promise<Buffer>
 
   if (shouldRenderCacheCallout(data.current.cachedTokens)) {
     ensureSpace(ctx, 20);
-    doc.fontSize(8).fillColor('#059669').text(
+    doc.fontSize(8).fillColor(T.pos).text(
       `Cache reads: ${formatTokens(data.current.cachedTokens)} tokens.`,
       ctx.marginX,
       doc.y,
@@ -425,9 +430,9 @@ export function generateExecutivePdf(data: ExecutiveReportData): Promise<Buffer>
 
   if (shouldRenderRisk(data.blockedEvents, data.risk)) {
     ensureSpace(ctx, 60);
-    doc.fillColor('#dc2626').fontSize(11).text('Risk Callout', ctx.marginX, doc.y, { lineBreak: false });
+    doc.fillColor(T.neg).fontSize(11).text('Risk Callout', ctx.marginX, doc.y, { lineBreak: false });
     doc.y += 14;
-    doc.fontSize(9).fillColor('#334155');
+    doc.fontSize(9).fillColor(T.muted);
     doc.text(`${formatInt(data.blockedEvents)} DLP-blocked events in this period.`, ctx.marginX, doc.y, {
       width: ctx.contentW,
     });

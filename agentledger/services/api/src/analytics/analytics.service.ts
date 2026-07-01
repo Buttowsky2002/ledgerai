@@ -20,6 +20,7 @@ export interface AgentEconomicsRow {
 }
 import { FocusRow, SpendDailyRow, toFocusRow } from './focus.mapper';
 import { PilotReport } from './report.renderer';
+import { computeSpendTrend } from './spend-trend';
 import { loadIdentityLookups, resolveUserDirectoryIdentity, isEmailLike } from '../reports/identity-resolver';
 import type { UserDirectoryIdentity } from '../reports/identity-resolver';
 
@@ -64,6 +65,11 @@ export interface UserDirectoryRow {
   calls: number;
   models: string[];
   model_breakdown: UserModelBreakdownRow[];
+}
+
+export interface AnalyticsDataBounds {
+  earliest_day: string;
+  latest_day: string;
 }
 
 export interface UsersAnalyticsResult {
@@ -179,6 +185,60 @@ export class AnalyticsService {
       .then((rows) => this.mergeCopilotDailySpend(rows, r, team));
   }
 
+  /**
+   * Earliest selectable analytics day for the tenant: first metered spend, first
+   * connector sync with imported records, or first AI provider connection.
+   */
+  async dataBounds(): Promise<AnalyticsDataBounds> {
+    const tenantId = getTenantId();
+    if (!tenantId) {
+      throw new BadRequestException('no tenant in context');
+    }
+    const iso = (d: Date) => d.toISOString().slice(0, 10);
+    const latest_day = iso(new Date());
+
+    const [spendRow, byUserRow, llmRow, syncMin, connectionMin] = await Promise.all([
+      this.ch
+        .queryScoped<{ earliest: string | null }>(
+          `SELECT min(day) AS earliest FROM spend_daily WHERE tenant_id = {tenant:String}`,
+          { tenant: tenantId },
+        )
+        .then((rows) => rows[0]),
+      this.ch
+        .queryScoped<{ earliest: string | null }>(
+          `SELECT min(day) AS earliest FROM spend_daily_by_user WHERE tenant_id = {tenant:String}`,
+          { tenant: tenantId },
+        )
+        .then((rows) => rows[0]),
+      this.ch
+        .queryScoped<{ earliest: string | null }>(
+          `SELECT min(toDate(ts)) AS earliest FROM llm_calls WHERE tenant_id = {tenant:String}`,
+          { tenant: tenantId },
+        )
+        .then((rows) => rows[0]),
+      this.prisma.withTenant(tenantId, (tx) =>
+        tx.connectorSyncRun.aggregate({
+          _min: { startedAt: true },
+          where: { recordsImported: { gt: 0 } },
+        }),
+      ),
+      this.prisma.withTenant(tenantId, (tx) =>
+        tx.aiProviderConnection.aggregate({ _min: { createdAt: true } }),
+      ),
+    ]);
+
+    const candidates: string[] = [];
+    if (spendRow?.earliest) candidates.push(String(spendRow.earliest).slice(0, 10));
+    if (byUserRow?.earliest) candidates.push(String(byUserRow.earliest).slice(0, 10));
+    if (llmRow?.earliest) candidates.push(String(llmRow.earliest).slice(0, 10));
+    if (syncMin._min.startedAt) candidates.push(iso(syncMin._min.startedAt));
+    if (connectionMin._min.createdAt) candidates.push(iso(connectionMin._min.createdAt));
+
+    const fallbackFrom = iso(new Date(Date.now() - 90 * 86400000));
+    const earliest_day = candidates.length > 0 ? candidates.sort()[0]! : fallbackFrom;
+    return { earliest_day, latest_day };
+  }
+
   /** GitHub Copilot spend for a period — used by cost-per-outcome supplemental AI cost. */
   async copilotSpend(from?: string, to?: string): Promise<CopilotSpendSummary | null> {
     const tenantId = getTenantId();
@@ -276,14 +336,7 @@ export class AnalyticsService {
   allocation(dimension: 'team' | 'app' | 'agent' | 'user', from?: string, to?: string) {
     const r = this.range(from, to);
     if (dimension === 'user') {
-      return this.ch.queryScoped(
-        `SELECT if(user_id = '', 'Unassigned', user_id) AS key,
-                sum(cost_usd) AS cost_usd, sum(calls) AS calls
-         FROM spend_daily_by_user
-         WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date}
-         GROUP BY key ORDER BY cost_usd DESC`,
-        r as Record<string, ChParam>,
-      );
+      return this.userAllocationWithTrend(r);
     }
     if (dimension === 'agent') {
       return this.ch.queryScoped(
@@ -304,6 +357,51 @@ export class AnalyticsService {
     );
     // NOTE: `col` is a fixed identifier from a validated enum (never user text),
     // so this is not dynamic SQL from input; all values remain bound parameters.
+  }
+
+  /** User allocation rows include daily-spend trend (latter half vs first half of range). */
+  private async userAllocationWithTrend(r: Range) {
+    const params = r as Record<string, ChParam>;
+    const [totals, daily] = await Promise.all([
+      this.ch.queryScoped<{ key: string; cost_usd: unknown; calls: unknown }>(
+        `SELECT if(user_id = '', 'Unassigned', user_id) AS key,
+                sum(cost_usd) AS cost_usd, sum(calls) AS calls
+         FROM spend_daily_by_user
+         WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date}
+         GROUP BY key ORDER BY cost_usd DESC`,
+        params,
+      ),
+      this.ch.queryScoped<{ user_id: string; day: string; cost_usd: unknown }>(
+        `SELECT if(user_id = '', 'Unassigned', user_id) AS user_id,
+                day, sum(cost_usd) AS cost_usd
+         FROM spend_daily_by_user
+         WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date}
+         GROUP BY user_id, day
+         ORDER BY user_id, day`,
+        params,
+      ),
+    ]);
+
+    const dailyByUser = new Map<string, { day: string; cost_usd: number }[]>();
+    for (const row of daily) {
+      const uid = String(row.user_id);
+      const list = dailyByUser.get(uid) ?? [];
+      list.push({ day: String(row.day), cost_usd: n(row.cost_usd) });
+      dailyByUser.set(uid, list);
+    }
+
+    return totals.map((row) => {
+      const key = String(row.key);
+      const trend = computeSpendTrend(dailyByUser.get(key) ?? []);
+      return {
+        key,
+        cost_usd: row.cost_usd,
+        calls: row.calls,
+        spend_trend: trend.direction,
+        ...(trend.change_pct != null ? { trend_change_pct: trend.change_pct } : {}),
+        ...(trend.change_usd != null ? { trend_change_usd: trend.change_usd } : {}),
+      };
+    });
   }
 
   modelMix(from?: string, to?: string) {
@@ -484,6 +582,44 @@ export class AnalyticsService {
        WHERE e.tenant_id = {tenant:String}
        GROUP BY e.agent_id
        ORDER BY risk_exposure_pct DESC, events DESC`,
+    );
+  }
+
+  /**
+   * CISO injection posture (ADR-048): per agent, inline gateway blocks
+   * (status = blocked_injection) union semantic flags (semantic_injection_suspected).
+   */
+  injectionPosture() {
+    return this.ch.queryScoped(
+      `SELECT
+         coalesce(b.agent_id, s.agent_id) AS agent_id,
+         coalesce(b.blocked_count, 0) AS blocked_count,
+         b.last_blocked,
+         coalesce(s.flagged_count, 0) AS flagged_count,
+         coalesce(s.high_severity, 0) AS high_severity,
+         s.latest_detail,
+         s.last_detected
+       FROM (
+         SELECT agent_id, count() AS blocked_count, max(ts) AS last_blocked
+         FROM agentledger.llm_calls FINAL
+         WHERE tenant_id = {tenant:String}
+           AND status = 'blocked_injection'
+           AND agent_id != ''
+         GROUP BY agent_id
+       ) b
+       FULL OUTER JOIN (
+         SELECT
+           agent_id,
+           count() AS flagged_count,
+           countIf(severity = 'high') AS high_severity,
+           argMax(detail, detected_at) AS latest_detail,
+           max(detected_at) AS last_detected
+         FROM agentledger.risk_events FINAL
+         WHERE tenant_id = {tenant:String}
+           AND category = 'semantic_injection_suspected'
+         GROUP BY agent_id
+       ) s ON b.agent_id = s.agent_id
+       ORDER BY blocked_count + flagged_count DESC`,
     );
   }
 

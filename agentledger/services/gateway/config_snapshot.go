@@ -4,22 +4,24 @@ package main
 // Gateway stores one via atomic.Pointer; the hot-reload goroutine atomically
 // replaces it so in-flight requests always see a consistent view.
 type gatewaySnapshot struct {
-	cfg    *Config
-	keys   *KeyStore
-	dlp    *DLPEngine
-	tools  *ToolGovernor
-	prices *PriceBook
+	cfg       *Config
+	keys      *KeyStore
+	dlp       *DLPEngine
+	injection *InjectionEngine
+	tools     *ToolGovernor
+	prices    *PriceBook
 }
 
 // newSnapshotFromCfg builds a snapshot from file-based Config where
 // VirtualKey.KeyPlaintext holds the bearer token (hashed + cleared on load).
 func newSnapshotFromCfg(cfg *Config, pb *PriceBook) *gatewaySnapshot {
 	return &gatewaySnapshot{
-		cfg:    cfg,
-		keys:   NewKeyStore(cfg.VirtualKeys),
-		dlp:    NewDLPEngine(cfg.DLP),
-		tools:  NewToolGovernor(cfg.AgentToolAllow),
-		prices: pb,
+		cfg:       cfg,
+		keys:      NewKeyStore(cfg.VirtualKeys),
+		dlp:       NewDLPEngine(cfg.DLP),
+		injection: NewInjectionEngine(cfg.Injection),
+		tools:     NewToolGovernor(cfg.AgentToolAllow),
+		prices:    pb,
 	}
 }
 
@@ -27,10 +29,11 @@ func newSnapshotFromCfg(cfg *Config, pb *PriceBook) *gatewaySnapshot {
 // the SHA-256 hex hash of the bearer token (Postgres virtual_keys.key_hash).
 func newSnapshotFromHashed(cfg *Config, pb *PriceBook) *gatewaySnapshot {
 	return &gatewaySnapshot{
-		cfg:    cfg,
-		keys:   NewKeyStoreFromHashed(cfg.VirtualKeys),
-		dlp:    NewDLPEngine(cfg.DLP),
-		tools:  NewToolGovernor(cfg.AgentToolAllow),
-		prices: pb,
+		cfg:       cfg,
+		keys:      NewKeyStoreFromHashed(cfg.VirtualKeys),
+		dlp:       NewDLPEngine(cfg.DLP),
+		injection: NewInjectionEngine(cfg.Injection),
+		tools:     NewToolGovernor(cfg.AgentToolAllow),
+		prices:    pb,
 	}
 }

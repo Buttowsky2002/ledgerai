@@ -2,10 +2,12 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { DateRangeFilter } from '@/components/DateRangeFilter';
 import { BarChartClient } from '@/components/charts';
 import { LariRecommendationsPanel } from '@/components/lari/LariRecommendationsPanel';
 import { Card, DataTable, PageHeader, Stat, usd } from '@/components/ui';
 import { fetchCfoView } from '@/lib/api/lari';
+import { rangeHref } from '@/lib/date-range';
 import type { CfoViewResponse } from '@/types/lari';
 
 const LEVELS = [0, 0.3, 0.5, 0.7, 0.9] as const;
@@ -71,18 +73,26 @@ export function CfoView({
         title="CFO view"
         subtitle={`Risk-adjusted ROI · confidence ≥ ${minConfidence} · ${from} → ${to}`}
         actions={
-          <div className="flex gap-2">
-            {LEVELS.map((lvl) => (
-              <Link
-                key={lvl}
-                href={`/cfo?min=${lvl}`}
-                className={`rounded px-3 py-1.5 text-sm tabular-nums ${
-                  lvl === minConfidence ? 'bg-accent/20 text-white' : 'border border-edge text-muted hover:bg-white/5'
-                }`}
-              >
-                ≥ {lvl}
-              </Link>
-            ))}
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <DateRangeFilter
+              basePath="/cfo"
+              from={from}
+              to={to}
+              extraParams={{ min: String(minConfidence) }}
+            />
+            <div className="flex gap-2">
+              {LEVELS.map((lvl) => (
+                <Link
+                  key={lvl}
+                  href={rangeHref('/cfo', from, to, { min: String(lvl) })}
+                  className={`rounded px-3 py-1.5 text-sm tabular-nums ${
+                    lvl === minConfidence ? 'bg-accent/20 text-white' : 'border border-edge text-muted hover:bg-white/5'
+                  }`}
+                >
+                  ≥ {lvl}
+                </Link>
+              ))}
+            </div>
           </div>
         }
       />

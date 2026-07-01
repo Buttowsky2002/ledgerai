@@ -28,6 +28,12 @@ export class AnalyticsController {
     return this.analytics.spend(q.from, q.to, q.team);
   }
 
+  /** Earliest/latest selectable dates for analytics (connections + metered spend). */
+  @Roles('viewer') @Get('data-bounds')
+  dataBounds() {
+    return this.analytics.dataBounds();
+  }
+
   @Roles('viewer') @Get('allocation')
   allocation(@Query() q: AllocationQueryDto) {
     return this.analytics.allocation(q.dimension, q.from, q.to);
@@ -89,6 +95,12 @@ export class AnalyticsController {
   @Roles('viewer') @Get('agent-risk')
   agentRisk() {
     return this.analytics.agentRisk();
+  }
+
+  /** Inline injection blocks + semantic injection flags per agent (ADR-048). */
+  @Roles('viewer') @Get('injection')
+  injectionPosture() {
+    return this.analytics.injectionPosture();
   }
 
   /** FOCUS 1.2 cost export (ADR-035). Default CSV download; ?format=json for rows. */

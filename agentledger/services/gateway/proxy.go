@@ -178,7 +178,9 @@ func (g *Gateway) serveCanonical(w http.ResponseWriter, r *http.Request, snap *g
 	findings := snap.dlp.Classify(promptText)
 	action := snap.dlp.Decide(vk.DLPPolicyID, findings)
 	ev.DLPAction, ev.DLPFindings = action, findings
-	ev.RiskSeverity = maxSeverity(findings)
+	if sev := maxSeverity(findings); rankSeverity(sev) > rankSeverity(ev.RiskSeverity) {
+		ev.RiskSeverity = sev
+	}
 
 	switch action {
 	case "block":
@@ -188,6 +190,32 @@ func (g *Gateway) serveCanonical(w http.ResponseWriter, r *http.Request, snap *g
 		return
 	case "redact":
 		body = redactBody(snap.dlp, body)
+	}
+
+	// 4b. Prompt-injection precheck. Deterministic, snapshot-only, zero I/O.
+	// Direction A: prompt text (already extracted). Direction B: tool_result blocks
+	// in the inbound request (untrusted MCP output on the next turn).
+	if snap.injection != nil && snap.injection.cfg.Enabled {
+		var inj []InjectionFinding
+		inj = append(inj, snap.injection.Classify(promptText, "prompt")...)
+		if snap.injection.cfg.ScanToolResults {
+			toolText := extractToolResultText(req)
+			inj = append(inj, snap.injection.Classify(toolText, "tool_result")...)
+		}
+		injAction := snap.injection.Decide(vk.InjectionPolicyID, inj)
+		ev.InjectionAction, ev.InjectionFindings = injAction, inj
+		if sev := maxInjectionSeverity(inj); rankSeverity(sev) > rankSeverity(ev.RiskSeverity) {
+			ev.RiskSeverity = sev
+		}
+		switch injAction {
+		case "block":
+			ev.Status, ev.StatusCode = "blocked_injection", http.StatusForbidden
+			g.finishFmt(w, ev, start, http.StatusForbidden, "injection_blocked",
+				"request blocked: prompt-injection pattern detected ("+injectionClasses(inj)+")", format)
+			return
+		case "redact":
+			body = redactInjectionBody(snap.injection, body)
+		}
 	}
 
 	// 5. Resolve upstream provider (needed to price the reservation estimate).
@@ -503,6 +531,34 @@ func extractText(req chatRequest) string {
 	return sb.String()
 }
 
+func extractToolResultText(req chatRequest) string {
+	var sb strings.Builder
+	for _, m := range req.Messages {
+		if m.Role != "tool" {
+			continue
+		}
+		var s string
+		if err := json.Unmarshal(m.Content, &s); err == nil {
+			sb.WriteString(s)
+			sb.WriteString("\n")
+			continue
+		}
+		var parts []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		}
+		if err := json.Unmarshal(m.Content, &parts); err == nil {
+			for _, p := range parts {
+				if p.Type == "text" || p.Type == "tool_result" {
+					sb.WriteString(p.Text)
+					sb.WriteString("\n")
+				}
+			}
+		}
+	}
+	return sb.String()
+}
+
 // redactBody rewrites sensitive spans in an OpenAI-style chat body in place,
 // covering the same content shapes the detector (extractText) reads: a message's
 // `content` may be a plain string or an array of parts, where only `text` parts
@@ -510,6 +566,15 @@ func extractText(req chatRequest) string {
 // Valid JSON structure is preserved. If the body cannot be parsed it is returned
 // unchanged, with a debug-level note that carries no raw content.
 func redactBody(d *DLPEngine, body []byte) []byte {
+	return redactMessageBody(d.Redact, body)
+}
+
+func redactInjectionBody(e *InjectionEngine, body []byte) []byte {
+	return redactMessageBody(e.Redact, body)
+}
+
+// redactMessageBody rewrites message content using redactor on text parts.
+func redactMessageBody(redactor func(string) string, body []byte) []byte {
 	var top map[string]json.RawMessage
 	if err := json.Unmarshal(body, &top); err != nil {
 		slog.Debug("dlp redact skipped: request body is not a JSON object; passing through unredacted")
@@ -535,7 +600,7 @@ func redactBody(d *DLPEngine, body []byte) []byte {
 		if !ok {
 			continue
 		}
-		newContent, ok := redactContent(d, content)
+		newContent, ok := redactContentField(redactor, content)
 		if !ok {
 			continue
 		}
@@ -557,14 +622,13 @@ func redactBody(d *DLPEngine, body []byte) []byte {
 	return body
 }
 
-// redactContent redacts a message's `content`, which may be a plain string or an
-// array of content parts. Non-text parts are preserved unchanged. It returns the
-// new content and whether it should replace the original (false = leave as-is).
-func redactContent(d *DLPEngine, content json.RawMessage) (json.RawMessage, bool) {
+// redactContentField redacts a message's `content`, which may be a plain string or an
+// array of content parts. Non-text parts are preserved unchanged.
+func redactContentField(redactor func(string) string, content json.RawMessage) (json.RawMessage, bool) {
 	// Case 1: content is a plain string.
 	var s string
 	if err := json.Unmarshal(content, &s); err == nil {
-		red, err := json.Marshal(d.Redact(s))
+		red, err := json.Marshal(redactor(s))
 		if err != nil {
 			return nil, false
 		}
@@ -583,20 +647,20 @@ func redactContent(d *DLPEngine, content json.RawMessage) (json.RawMessage, bool
 			continue // not an object — preserve unchanged
 		}
 		var typ string
-		if err := json.Unmarshal(part["type"], &typ); err != nil || typ != "text" {
-			continue // non-text part (e.g. image_url) preserved unchanged
+		if err := json.Unmarshal(part["type"], &typ); err != nil || (typ != "text" && typ != "tool_result") {
+			continue // non-text part preserved unchanged
 		}
 		var txt string
 		if err := json.Unmarshal(part["text"], &txt); err != nil {
 			continue // missing/non-string text — preserve unchanged
 		}
-		red, err := json.Marshal(d.Redact(txt))
+		red, err := json.Marshal(redactor(txt))
 		if err != nil {
 			continue
 		}
 		part["text"] = red
 		if remarshaled, err := json.Marshal(part); err == nil {
-			parts[i] = remarshaled // only this part changes; others keep their bytes
+			parts[i] = remarshaled
 			changed = true
 		}
 	}
@@ -614,11 +678,35 @@ func hashContent(s string) string {
 	return hex.EncodeToString(h[:8]) // 64-bit prefix is enough for dedup analytics
 }
 
+func rankSeverity(s string) int {
+	switch s {
+	case "low":
+		return 1
+	case "medium":
+		return 2
+	case "high":
+		return 3
+	case "critical":
+		return 4
+	default:
+		return 0
+	}
+}
+
 func maxSeverity(fs []Finding) string {
-	rank := map[string]int{"low": 1, "medium": 2, "high": 3, "critical": 4}
 	best := ""
 	for _, f := range fs {
-		if rank[f.Severity] > rank[best] {
+		if rankSeverity(f.Severity) > rankSeverity(best) {
+			best = f.Severity
+		}
+	}
+	return best
+}
+
+func maxInjectionSeverity(fs []InjectionFinding) string {
+	best := ""
+	for _, f := range fs {
+		if rankSeverity(f.Severity) > rankSeverity(best) {
 			best = f.Severity
 		}
 	}
@@ -626,6 +714,14 @@ func maxSeverity(fs []Finding) string {
 }
 
 func findingClasses(fs []Finding) string {
+	var cs []string
+	for _, f := range fs {
+		cs = append(cs, f.Class)
+	}
+	return strings.Join(cs, ", ")
+}
+
+func injectionClasses(fs []InjectionFinding) string {
 	var cs []string
 	for _, f := range fs {
 		cs = append(cs, f.Class)

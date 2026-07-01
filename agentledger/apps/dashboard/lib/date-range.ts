@@ -1,5 +1,10 @@
 import { defaultRange } from './auth';
 
+/** UTC ISO date (YYYY-MM-DD) for today. */
+export function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 /** Parse ?from=&to= search params, falling back to trailing N days. */
 export function parseRange(
   searchParams: { from?: string; to?: string },
@@ -32,4 +37,33 @@ export function rangeHref(
 
 export function presetRange(days: number): { from: string; to: string } {
   return defaultRange(days);
+}
+
+export type DateBounds = { earliest_day: string; latest_day: string };
+
+export type ResolvedRange = { from: string; to: string; isAllTime: boolean };
+
+/** Resolve URL params to a concrete from/to, honoring ?range=all against server bounds. */
+export function resolveRange(
+  searchParams: { from?: string; to?: string; range?: string },
+  bounds: DateBounds,
+  defaultDays = 90,
+): ResolvedRange {
+  if (searchParams.range === 'all') {
+    return { from: bounds.earliest_day, to: bounds.latest_day, isAllTime: true };
+  }
+  const { from, to } = parseRange(searchParams, defaultDays);
+  const isAllTime = from === bounds.earliest_day && to === bounds.latest_day;
+  return { from, to, isAllTime };
+}
+
+export function allTimeHref(basePath: string, extra?: Record<string, string | undefined>): string {
+  const params = new URLSearchParams({ range: 'all' });
+  if (extra) {
+    for (const [k, v] of Object.entries(extra)) {
+      if (v) params.set(k, v);
+    }
+  }
+  const qs = params.toString();
+  return qs ? `${basePath}?${qs}` : basePath;
 }

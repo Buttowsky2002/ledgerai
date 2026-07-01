@@ -6,9 +6,10 @@ import { FixedOverheadPanel } from '../components/overview/FixedOverheadPanel';
 import { ExecutiveReportExport } from '../components/overview/ExecutiveReportExport';
 import { LariRecommendationsPanel } from '../components/lari/LariRecommendationsPanel';
 import { Badge, BadgeTone, Card, DataTable, PageHeader, Stat, num, usd } from '../components/ui';
+import { DateRangePicker } from '../components/DateRangePicker';
 import { apiClient, fetchData, proxyApi } from '../lib/api';
 import { combinedAiCost } from '../lib/combined-ai-cost';
-import { parseRange } from '../lib/date-range';
+import { parseRange, resolveRange, todayIso, type DateBounds } from '../lib/date-range';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,7 +42,14 @@ type AgentEconomicsRow = {
   recommendation: Recommendation;
 };
 
-type AllocationRow = { key: string; cost_usd: number | string; calls: string };
+type AllocationRow = {
+  key: string;
+  cost_usd: number | string;
+  calls: string;
+  spend_trend?: 'up' | 'down' | 'flat' | 'insufficient';
+  trend_change_pct?: number;
+  trend_change_usd?: number;
+};
 type PlatformRow = { platform: string; cost_usd: number | string; calls: string };
 type ModelRow = { provider: string; model: string; cost_usd: number | string; calls: string };
 
@@ -74,6 +82,38 @@ const meta = (rec: Recommendation) => REC[rec] ?? REC.maintain;
 const roiTone = (v: number) => (v > 0 ? 'text-pos' : v < 0 ? 'text-neg' : 'text-muted');
 const fmtLari = (v: number) => `${num(Math.round(Number(v)))}×`;
 
+type SpendTrendDir = NonNullable<AllocationRow['spend_trend']>;
+
+function SpendTrendCell({
+  trend,
+  changePct,
+  changeUsd,
+}: {
+  trend?: SpendTrendDir;
+  changePct?: number;
+  changeUsd?: number;
+}) {
+  if (!trend || trend === 'insufficient') {
+    return <span className="text-xs text-muted">—</span>;
+  }
+  const label = trend === 'up' ? '↑ Up' : trend === 'down' ? '↓ Down' : '→ Flat';
+  const tone = trend === 'up' ? 'text-warn' : trend === 'down' ? 'text-pos' : 'text-muted';
+  const delta =
+    changeUsd != null && changeUsd !== 0
+      ? `${changeUsd > 0 ? '+' : ''}${usd(changeUsd)}/day`
+      : null;
+  const title =
+    changePct != null
+      ? `${changePct > 0 ? '+' : ''}${changePct}% avg daily spend (latter half vs first)`
+      : undefined;
+  return (
+    <span className={`inline-flex flex-col items-end text-xs font-medium ${tone}`} title={title}>
+      <span>{label}</span>
+      {delta && trend !== 'flat' && <span className="num text-[11px] opacity-90">{delta}</span>}
+    </span>
+  );
+}
+
 // Inline confidence meter (0–100): a numeric read plus a slim track.
 function ConfMeter({ score }: { score: number }) {
   const pct = Math.max(0, Math.min(100, Math.round(score)));
@@ -91,11 +131,24 @@ function ConfMeter({ score }: { score: number }) {
 export default async function OverviewPage({
   searchParams,
 }: {
-  searchParams: { from?: string; to?: string; source?: string };
+  searchParams: { from?: string; to?: string; source?: string; range?: string };
 }) {
-  const { from, to } = parseRange(searchParams);
   const source = searchParams.source || undefined;
   const api = apiClient();
+
+  const dataBounds: DateBounds = await (async () => {
+    const res = await proxyApi('/v1/analytics/data-bounds');
+    if (res.ok && res.data && typeof res.data === 'object') {
+      const b = res.data as { earliest_day?: string; latest_day?: string };
+      if (b.earliest_day && b.latest_day) {
+        return { earliest_day: b.earliest_day, latest_day: b.latest_day };
+      }
+    }
+    const fallback = parseRange(searchParams);
+    return { earliest_day: fallback.from, latest_day: fallback.to ?? todayIso() };
+  })();
+
+  const { from, to, isAllTime } = resolveRange(searchParams, dataBounds);
 
   type TotalCostRow = {
     month: string;
@@ -173,8 +226,26 @@ export default async function OverviewPage({
       <PageHeader
         eyebrow="FinOps control plane"
         title="Overview"
-        subtitle={`${from} → ${to}`}
-        actions={<ExecutiveReportExport from={from} to={to} />}
+        subtitle={
+          <DateRangePicker
+            basePath="/"
+            from={from}
+            to={to}
+            earliestDay={dataBounds.earliest_day}
+            latestDay={dataBounds.latest_day}
+            isAllTime={isAllTime}
+            extraParams={source ? { source } : undefined}
+          />
+        }
+        actions={
+          <Suspense
+            fallback={
+              <div className="text-sm text-muted">Export report…</div>
+            }
+          >
+            <ExecutiveReportExport from={from} to={to} bounds={dataBounds} />
+          </Suspense>
+        }
       />
 
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -237,6 +308,7 @@ export default async function OverviewPage({
           columns={[
             { key: 'user', label: 'User' },
             { key: 'cost', label: 'Spend', align: 'right' },
+            { key: 'trend', label: 'Daily trend', align: 'right' },
             { key: 'calls', label: 'Calls', align: 'right' },
           ]}
           rows={costByUser.map((r) => ({
@@ -246,6 +318,13 @@ export default async function OverviewPage({
               r.key
             ),
             cost: usd(Number(r.cost_usd)),
+            trend: (
+              <SpendTrendCell
+                trend={r.spend_trend}
+                changePct={r.trend_change_pct}
+                changeUsd={r.trend_change_usd}
+              />
+            ),
             calls: num(r.calls),
           }))}
         />

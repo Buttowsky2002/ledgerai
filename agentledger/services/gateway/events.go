@@ -57,14 +57,16 @@ type LLMCallEvent struct {
 	// performance + outcome of the call itself
 	LatencyMs  int64  `json:"latency_ms"`
 	StatusCode int    `json:"status_code"`
-	Status     string `json:"status"` // ok | upstream_error | client_error | blocked_dlp | blocked_budget | blocked_rate | blocked_policy | blocked_tool
+	Status     string `json:"status"` // ok | upstream_error | client_error | blocked_dlp | blocked_budget | blocked_rate | blocked_policy | blocked_tool | blocked_injection
 
 	// risk
-	PromptHash   string    `json:"prompt_hash"`
-	DLPAction    string    `json:"dlp_action"` // allow|log|warn|redact|block
-	DLPFindings  []Finding `json:"dlp_findings,omitempty"`
-	RiskSeverity string    `json:"risk_severity,omitempty"`
-	Streamed     bool      `json:"streamed"`
+	PromptHash        string             `json:"prompt_hash"`
+	DLPAction         string             `json:"dlp_action"` // allow|log|warn|redact|block
+	DLPFindings       []Finding          `json:"dlp_findings,omitempty"`
+	InjectionAction   string             `json:"injection_action,omitempty"`   // block|redact|flag|log|allow
+	InjectionFindings []InjectionFinding `json:"injection_findings,omitempty"` // metadata only — never raw content
+	RiskSeverity      string             `json:"risk_severity,omitempty"`
+	Streamed          bool               `json:"streamed"`
 }
 
 // flushBucketsMs are cumulative histogram upper bounds for flush duration.

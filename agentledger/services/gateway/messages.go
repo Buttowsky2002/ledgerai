@@ -118,10 +118,13 @@ func translateMessagesToCanonical(a anthropicRequest) []byte {
 		msgs = append(msgs, map[string]any{"role": "system", "content": sys})
 	}
 	for _, am := range a.Messages {
-		msgs = append(msgs, map[string]any{
-			"role":    am.Role,
-			"content": anthropicTextFromRaw(am.Content),
-		})
+		text, toolResults := anthropicSplitContent(am.Content)
+		if text != "" {
+			msgs = append(msgs, map[string]any{"role": am.Role, "content": text})
+		}
+		for _, tr := range toolResults {
+			msgs = append(msgs, map[string]any{"role": "tool", "content": tr})
+		}
 	}
 	m["messages"] = msgs
 
@@ -166,32 +169,74 @@ func rawObjectNames(raw json.RawMessage, field string) []string {
 
 // anthropicTextFromRaw extracts plain text from an Anthropic content value,
 // which may be a bare string or an array of content blocks. Only text blocks
-// contribute; other block types (image, tool_use) are skipped.
+// contribute; other block types (image, tool_use, tool_result) are skipped.
 func anthropicTextFromRaw(raw json.RawMessage) string {
+	text, _ := anthropicSplitContent(raw)
+	return text
+}
+
+// anthropicSplitContent separates plain text from tool_result block text in an
+// Anthropic content value. tool_result content is returned separately so the
+// canonical OpenAI body can carry it as role:"tool" messages (Direction B).
+func anthropicSplitContent(raw json.RawMessage) (string, []string) {
 	if len(raw) == 0 {
-		return ""
+		return "", nil
 	}
 	var s string
 	if err := json.Unmarshal(raw, &s); err == nil {
-		return s
+		return s, nil
 	}
 	var blocks []struct {
+		Type    string          `json:"type"`
+		Text    string          `json:"text"`
+		Content json.RawMessage `json:"content"`
+	}
+	if err := json.Unmarshal(raw, &blocks); err != nil {
+		return "", nil
+	}
+	var sb strings.Builder
+	var toolResults []string
+	for _, b := range blocks {
+		switch b.Type {
+		case "text":
+			if sb.Len() > 0 {
+				sb.WriteByte('\n')
+			}
+			sb.WriteString(b.Text)
+		case "tool_result":
+			if tr := anthropicToolResultText(b.Content, b.Text); tr != "" {
+				toolResults = append(toolResults, tr)
+			}
+		}
+	}
+	return sb.String(), toolResults
+}
+
+func anthropicToolResultText(content json.RawMessage, fallback string) string {
+	if len(content) == 0 {
+		return fallback
+	}
+	var s string
+	if err := json.Unmarshal(content, &s); err == nil {
+		return s
+	}
+	var parts []struct {
 		Type string `json:"type"`
 		Text string `json:"text"`
 	}
-	if err := json.Unmarshal(raw, &blocks); err == nil {
+	if err := json.Unmarshal(content, &parts); err == nil {
 		var sb strings.Builder
-		for _, b := range blocks {
-			if b.Type == "text" {
+		for _, p := range parts {
+			if p.Type == "text" {
 				if sb.Len() > 0 {
 					sb.WriteByte('\n')
 				}
-				sb.WriteString(b.Text)
+				sb.WriteString(p.Text)
 			}
 		}
 		return sb.String()
 	}
-	return ""
+	return fallback
 }
 
 // ---------- response proxy + translation ----------

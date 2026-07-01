@@ -61,6 +61,16 @@ func (s *PGConfigStore) Load(ctx context.Context) (*Config, error) {
 	}
 	cfg.AgentToolAllow = allow
 
+	injPolicies, err := s.loadInjectionPolicies(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("injection policies: %w", err)
+	}
+	cfg.Injection = s.base.Injection
+	if cfg.Injection.BlockMinConfidence <= 0 {
+		cfg.Injection.BlockMinConfidence = 0.8
+	}
+	cfg.Injection.Policies = injPolicies
+
 	return &cfg, nil
 }
 
@@ -79,7 +89,8 @@ func (s *PGConfigStore) loadVirtualKeys(ctx context.Context) ([]VirtualKey, erro
 			COALESCE(allowed_models, '{}'),
 			COALESCE(monthly_budget_usd::float8, 0),
 			COALESCE(rate_limit_rpm, 0),
-			COALESCE(dlp_policy_id::text, '')
+			COALESCE(dlp_policy_id::text, ''),
+			COALESCE(injection_policy_id, '')
 		FROM virtual_keys
 		WHERE revoked_at IS NULL`
 
@@ -96,7 +107,7 @@ func (s *PGConfigStore) loadVirtualKeys(ctx context.Context) ([]VirtualKey, erro
 		if err := rows.Scan(
 			&vk.KeyHash, &vk.TenantID, &vk.TeamID, &vk.UserID, &vk.AppID,
 			&vk.Environment, &models,
-			&vk.MonthlyBudget, &vk.RateLimitRPM, &vk.DLPPolicyID,
+			&vk.MonthlyBudget, &vk.RateLimitRPM, &vk.DLPPolicyID, &vk.InjectionPolicyID,
 		); err != nil {
 			return nil, err
 		}
@@ -157,6 +168,30 @@ func (s *PGConfigStore) loadDLPPolicies(ctx context.Context) ([]DLPPolicy, error
 		if err := json.Unmarshal([]byte(condText), &cond); err == nil {
 			pol.Classes = cond.Classes
 		}
+		out = append(out, pol)
+	}
+	return out, rows.Err()
+}
+
+func (s *PGConfigStore) loadInjectionPolicies(ctx context.Context) ([]InjectionPolicy, error) {
+	const q = `
+		SELECT id, COALESCE(classes, '{}'), action
+		FROM injection_policy`
+
+	rows, err := s.db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []InjectionPolicy
+	for rows.Next() {
+		var pol InjectionPolicy
+		var classes pq.StringArray
+		if err := rows.Scan(&pol.ID, &classes, &pol.Action); err != nil {
+			return nil, err
+		}
+		pol.Classes = []string(classes)
 		out = append(out, pol)
 	}
 	return out, rows.Err()
