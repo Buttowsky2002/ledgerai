@@ -37,18 +37,22 @@ func LoadConfig() Config {
 		ClickHouseUser:     env("AGENTLEDGER_CLICKHOUSE_USER", "default"),
 		ClickHousePassword: lookupEnv("AGENTLEDGER_CLICKHOUSE_PASSWORD"),
 		ListenAddr:         env("AGENTLEDGER_WORKER_ADDR", ":8091"),
-		InsertRetries:      int(envInt("AGENTLEDGER_INSERT_RETRIES", 3)),
+		InsertRetries:      envIntLocal("AGENTLEDGER_INSERT_RETRIES", 3),
 		RetryBackoff:       time.Duration(envInt("AGENTLEDGER_RETRY_BACKOFF_MS", 250)) * time.Millisecond,
 	}
 }
 
-// lookupEnv resolves an environment variable, preferring the new LEDGERAI_*
+// lookupEnv resolves an environment variable, preferring BADGERIQ_* and falling back to LEDGERAI_*
 // name and falling back to the legacy AGENTLEDGER_* alias (deprecated; kept for
-// backwards compatibility — see the README "Renaming to LedgerAI" note).
+// backwards compatibility — see the README "Renaming to BadgerIQ" note).
 func lookupEnv(name string) string {
 	const legacy = "AGENTLEDGER_"
 	if len(name) > len(legacy) && name[:len(legacy)] == legacy {
-		if v := os.Getenv("LEDGERAI_" + name[len(legacy):]); v != "" {
+		suffix := name[len(legacy):]
+		if v := os.Getenv("BADGERIQ_" + suffix); v != "" {
+			return v
+		}
+		if v := os.Getenv("LEDGERAI_" + suffix); v != "" {
 			return v
 		}
 	}
@@ -66,6 +70,16 @@ func envInt(key string, def int64) int64 {
 	if v := lookupEnv(key); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
 			return n
+		}
+	}
+	return def
+}
+
+func envIntLocal(key string, def int) int {
+	if v := lookupEnv(key); v != "" {
+		n, err := strconv.ParseInt(v, 10, 0)
+		if err == nil {
+			return int(n)
 		}
 	}
 	return def

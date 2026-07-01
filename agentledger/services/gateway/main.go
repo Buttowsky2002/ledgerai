@@ -19,15 +19,19 @@ import (
 	"time"
 )
 
-// lookupEnv resolves an environment variable, preferring the new LEDGERAI_*
+// lookupEnv resolves an environment variable, preferring BADGERIQ_* and falling back to LEDGERAI_*
 // name and falling back to the legacy AGENTLEDGER_* alias (deprecated; kept for
-// backwards compatibility — see the README "Renaming to LedgerAI" note). Used
+// backwards compatibility — see the README "Renaming to BadgerIQ" note). Used
 // only for the gateway's own config env vars; operator-named env vars (Redis
 // password, provider API keys) are read by their exact configured name.
 func lookupEnv(name string) string {
 	const legacy = "AGENTLEDGER_"
 	if len(name) > len(legacy) && name[:len(legacy)] == legacy {
-		if v := os.Getenv("LEDGERAI_" + name[len(legacy):]); v != "" {
+		suffix := name[len(legacy):]
+		if v := os.Getenv("BADGERIQ_" + suffix); v != "" {
+			return v
+		}
+		if v := os.Getenv("LEDGERAI_" + suffix); v != "" {
 			return v
 		}
 	}

@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { BarChartClient } from '../../components/charts';
 import { Card, DataTable, PageHeader, Stat, num, usd } from '../../components/ui';
-import { apiClient, fetchData } from '../../lib/api';
+import { apiClient, fetchData, proxyApi } from '../../lib/api';
 import { defaultRange } from '../../lib/auth';
 
 export const dynamic = 'force-dynamic';
@@ -33,7 +33,7 @@ export default async function CostPerOutcomePage({ searchParams }: { searchParam
 
   // Filtered headline set + the unfiltered baseline (minConfidence 0) so we can
   // show how many outcomes the threshold excludes.
-  const [rows, baseline] = await Promise.all([
+  const [rows, baseline, copilotSpend] = await Promise.all([
     fetchData(
       api.GET('/v1/analytics/unit-economics', { params: { query: { from, to, minConfidence: min } } }),
       [],
@@ -42,10 +42,15 @@ export default async function CostPerOutcomePage({ searchParams }: { searchParam
       api.GET('/v1/analytics/unit-economics', { params: { query: { from, to, minConfidence: 0 } } }),
       [],
     ) as Promise<unknown> as Promise<UnitEconRow[]>,
+    (async () => {
+      const res = await proxyApi(`/v1/analytics/copilot-spend?from=${from}&to=${to}`);
+      return res.ok ? (res.data as { totalCostUsd: number } | null) : null;
+    })(),
   ]);
 
+  const copilotCost = copilotSpend?.totalCostUsd ?? 0;
   const totalOutcomes = sum(rows, 'outcomes');
-  const aiCost = sum(rows, 'ai_cost_usd');
+  const aiCost = sum(rows, 'ai_cost_usd') + copilotCost;
   const businessValue = sum(rows, 'business_value_usd');
   const costPerOutcome = totalOutcomes > 0 ? aiCost / totalOutcomes : 0;
   const netValue = businessValue - aiCost;
@@ -89,7 +94,7 @@ export default async function CostPerOutcomePage({ searchParams }: { searchParam
       <div className="mb-2 grid grid-cols-4 gap-4">
         <Stat label="Cost per outcome" value={usd(costPerOutcome)} sub={`confidence ≥ ${min}`} />
         <Stat label="Outcomes included" value={num(totalOutcomes)} sub={`${num(excluded)} excluded below ${min}`} />
-        <Stat label="AI cost" value={usd(aiCost)} />
+        <Stat label="AI cost" value={usd(aiCost)} sub={copilotCost > 0 ? `incl. ${usd(copilotCost)} Copilot` : undefined} />
         <Stat label="Net value" value={usd(netValue)} />
       </div>
       <p className="mb-6 text-xs text-muted">
@@ -104,7 +109,6 @@ export default async function CostPerOutcomePage({ searchParams }: { searchParam
           columns={[
             { key: 'month', label: 'Month' },
             { key: 'type', label: 'Outcome type' },
-            { key: 'team', label: 'Team' },
             { key: 'outcomes', label: 'Outcomes', align: 'right' },
             { key: 'cpo', label: 'Cost / outcome', align: 'right' },
             { key: 'aiCost', label: 'AI cost', align: 'right' },
@@ -114,7 +118,6 @@ export default async function CostPerOutcomePage({ searchParams }: { searchParam
           rows={rows.map((r) => ({
             month: String(r.month).slice(0, 7),
             type: r.outcome_type,
-            team: r.team_id || '—',
             outcomes: num(r.outcomes),
             cpo: usd(r.cost_per_outcome),
             aiCost: usd(r.ai_cost_usd),

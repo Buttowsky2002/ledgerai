@@ -1,0 +1,33 @@
+{
+  "name": "Generic REST Spend API",
+  "provider": "custom",
+  "category": "provider_spend",
+  "authType": "bearer_token",
+  "baseUrl": "https://api.example.com",
+  "endpoints": [
+    {
+      "path": "/v1/spend",
+      "method": "GET",
+      "queryParams": {
+        "from": "{{sync_start}}",
+        "to": "{{sync_end}}"
+      }
+    }
+  ],
+  "pagination": {
+    "type": "page",
+    "itemsPath": "data",
+    "pageParam": "page",
+    "limitParam": "limit",
+    "pageSize": 100
+  },
+  "destinationRecordType": "spend_usage_record",
+  "fieldMappings": [
+    { "type": "direct", "source": "id", "target": "id" },
+    { "type": "fallback", "target": "cost_usd", "sources": ["cost_usd", "amount", "cost"] },
+    { "type": "direct", "source": "model", "target": "model" },
+    { "type": "direct", "source": "provider", "target": "provider" },
+    { "type": "fallback", "target": "ts", "sources": ["timestamp", "date", "period_end"] }
+  ],
+  "dedupe": { "strategy": "provider_record_id" }
+}

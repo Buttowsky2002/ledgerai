@@ -1,4 +1,4 @@
-# LedgerAI
+# BadgerIQ
 
 **AI FinOps control plane** — spend attribution, agent unit economics, prompt risk, and risk-adjusted ROI in one system of record. Built from `AI_FinOps_Product_Requirements_and_Market_Research.docx`; architecture rationale in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
@@ -72,7 +72,7 @@ The gateway holds budget with a **reserve → commit/release** lifecycle:
 
 - **Reserve** (before the upstream call) checks the monthly cap and per-minute
   rate limit and immediately holds a conservative estimate — priced from the
-  request's `max_tokens`, or `LEDGERAI_DEFAULT_RESERVE_USD` when it is absent.
+  request's `max_tokens`, or `BADGERIQ_DEFAULT_RESERVE_USD` when it is absent.
 - **Commit** adjusts the hold to the realized cost once usage is known.
 - **Release** returns the hold when the call fails before any billable usage.
 
@@ -83,18 +83,18 @@ budget by at most a single reservation, never more. This is a deliberate tradeof
 for a zero-extra-latency inline path; exact accounting is reconciled against
 provider billing downstream.
 
-On a Redis backend error, `LEDGERAI_BUDGET_FAIL_MODE` selects behavior:
+On a Redis backend error, `BADGERIQ_BUDGET_FAIL_MODE` selects behavior:
 `open` (default) keeps serving; `closed` rejects with HTTP 503.
 
-## Renaming to LedgerAI
+## Renaming to BadgerIQ
 
-This project was previously named **AgentLedger / AgentLedger AI** and is being
-rebranded to **LedgerAI**. The transition is backwards-compatible:
+This project was previously named **AgentLedger / AgentLedger AI** and **LedgerAI**.
+The current product name is **BadgerIQ**. The transition is backwards-compatible:
 
-- **Environment variables** — prefer the new `LEDGERAI_*` prefix. Every service
-  reads the new name first and falls back to the legacy `AGENTLEDGER_*` name, so
-  existing deployments keep working. The `AGENTLEDGER_*` names are deprecated
-  aliases (e.g. `AGENTLEDGER_PG_DSN` → `LEDGERAI_PG_DSN`).
+- **Environment variables** — prefer the new `BADGERIQ_*` prefix. Every service
+  reads the new name first and falls back to `LEDGERAI_*` and the legacy
+  `AGENTLEDGER_*` names, so existing deployments keep working. The older prefixes
+  are deprecated aliases (e.g. `AGENTLEDGER_PG_DSN` → `BADGERIQ_PG_DSN`).
 - **Wire/import identifiers are intentionally unchanged** — request headers
   (`X-AgentLedger-*`), SDK package names (`@agentledger/*`, the Python
   `agentledger` package), database tables, and the event schema are client

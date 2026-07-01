@@ -4,6 +4,11 @@
   "sourceRoot": "src",
   "compilerOptions": {
     "deleteOutDir": true,
+    "assets": [
+      { "include": "connectors/presets/**/*.json", "watchAssets": true },
+      { "include": "design-partner/presets/**/*.json", "watchAssets": true },
+      { "include": "assets/fonts/*", "outDir": "assets/fonts", "watchAssets": true }
+    ],
     "plugins": [
       {
         "name": "@nestjs/swagger",

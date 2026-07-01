@@ -44,7 +44,7 @@ func main() {
 
 	syncer := connector.NewOutcomeSyncer(store, sink, registeredOutcomeConnectors(), connector.Options{
 		Interval:      time.Duration(envInt("AGENTLEDGER_CONNECTOR_INTERVAL_MS", 1000)) * time.Millisecond,
-		RetryAttempts: int(envInt("AGENTLEDGER_CONNECTOR_RETRIES", 4)),
+		RetryAttempts: envIntLocal("AGENTLEDGER_CONNECTOR_RETRIES", 4),
 		RetryBase:     500 * time.Millisecond,
 		RetryMax:      30 * time.Second,
 	})
@@ -107,13 +107,17 @@ func registeredOutcomeConnectors() []connector.OutcomeConnector {
 	}
 }
 
-// lookupEnv resolves an environment variable, preferring the new LEDGERAI_*
+// lookupEnv resolves an environment variable, preferring BADGERIQ_* and falling back to LEDGERAI_*
 // name and falling back to the legacy AGENTLEDGER_* alias (deprecated; kept for
-// backwards compatibility — see the README "Renaming to LedgerAI" note).
+// backwards compatibility — see the README "Renaming to BadgerIQ" note).
 func lookupEnv(name string) string {
 	const legacy = "AGENTLEDGER_"
 	if len(name) > len(legacy) && name[:len(legacy)] == legacy {
-		if v := os.Getenv("LEDGERAI_" + name[len(legacy):]); v != "" {
+		suffix := name[len(legacy):]
+		if v := os.Getenv("BADGERIQ_" + suffix); v != "" {
+			return v
+		}
+		if v := os.Getenv("LEDGERAI_" + suffix); v != "" {
 			return v
 		}
 	}
@@ -131,6 +135,16 @@ func envInt(key string, def int64) int64 {
 	if v := lookupEnv(key); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
 			return n
+		}
+	}
+	return def
+}
+
+func envIntLocal(key string, def int) int {
+	if v := lookupEnv(key); v != "" {
+		n, err := strconv.ParseInt(v, 10, 0)
+		if err == nil {
+			return int(n)
 		}
 	}
 	return def

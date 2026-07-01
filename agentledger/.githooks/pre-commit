@@ -39,3 +39,21 @@ if ! gitleaks "${GITLEAKS_ARGS[@]}"; then
 fi
 
 echo "  ✓ gitleaks: no secrets detected in staged changes."
+
+# Dashboard typecheck when app sources change — catches bad import paths before Docker build.
+STAGED_DASH=$(git diff --cached --name-only --diff-filter=ACM | grep -E '^agentledger/apps/dashboard/.*\.(ts|tsx)$' || true)
+if [ -n "${STAGED_DASH}" ]; then
+  echo "  → dashboard typecheck (staged TS/TSX under apps/dashboard)"
+  if [ ! -d "${REPO_ROOT}/agentledger/apps/dashboard/node_modules" ]; then
+    echo "  ⚠ node_modules missing — run: cd agentledger/apps/dashboard && npm ci"
+    exit 1
+  fi
+  (cd "${REPO_ROOT}/agentledger/apps/dashboard" && npm run typecheck) || {
+    echo ""
+    echo "  ✗ dashboard typecheck failed. Fix TS errors before committing."
+    echo "    Tip: BFF routes should import lib via @/lib/api (not relative ../../../ paths)."
+    echo ""
+    exit 1
+  }
+  echo "  ✓ dashboard typecheck passed."
+fi

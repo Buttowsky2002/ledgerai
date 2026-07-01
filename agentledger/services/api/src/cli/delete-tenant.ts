@@ -28,7 +28,7 @@ const CH_TABLES = [
 ];
 
 async function main(): Promise<void> {
-  const tenantId = process.argv[2] ?? env('LEDGERAI_DELETE_TENANT_ID');
+  const tenantId = process.argv[2] ?? env('BADGERIQ_DELETE_TENANT_ID');
   if (!tenantId) {
     process.stderr.write('usage: delete-tenant <tenant-uuid>\n');
     process.exit(2);

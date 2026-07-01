@@ -38,7 +38,7 @@ describe('Enterprise SSO + JIT', () => {
       process.env.AGENTLEDGER_PG_DSN ??
       'postgres://agentledger_api:dev_only_change_me@localhost:5432/agentledger?sslmode=disable';
     // Known dashboard target so the default (browser) callback redirect is assertable.
-    process.env.LEDGERAI_DASHBOARD_URL = 'https://dash.example';
+    process.env.BADGERIQ_DASHBOARD_URL = 'https://dash.example';
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(OidcService)

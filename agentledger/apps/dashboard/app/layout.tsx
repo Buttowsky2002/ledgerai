@@ -22,13 +22,13 @@ const mono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'LedgerAI',
+  title: 'BadgerIQ',
   description: 'AI FinOps control plane — spend, allocation, risk, and unit economics.',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
-  // Show a banner when running on seeded demo data (LEDGERAI_DEMO_MODE=true).
-  const demoMode = env('LEDGERAI_DEMO_MODE') === 'true';
+  // Show a banner when running on seeded demo data (BADGERIQ_DEMO_MODE=true).
+  const demoMode = env('BADGERIQ_DEMO_MODE') === 'true';
   return (
     <html lang="en" className={`${sans.variable} ${mono.variable}`}>
       <body>

@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	_ "github.com/lib/pq" // postgres driver (already a workers dependency)
+	"github.com/lib/pq"
 )
 
 // Postgres persistence for the attribution engine v2 (build-plan sub-phase 3.1;
@@ -59,6 +59,8 @@ type Prior struct {
 // PGStore persists attribution edges, baselines, coalitions, and model lineage.
 type PGStore interface {
 	EnsureModelVersion(ctx context.Context, mv ModelVersion) error
+	// KnownTenants returns which tenant IDs from ids exist in Postgres tenants (FK guard).
+	KnownTenants(ctx context.Context, ids []string) (map[string]bool, error)
 	UpsertEdges(ctx context.Context, tenantID string, edges []Edge) error
 	UpsertBaselines(ctx context.Context, tenantID string, baselines []Baseline) error
 	UpsertCoalitions(ctx context.Context, tenantID string, coalitions []Coalition) error
@@ -95,6 +97,29 @@ func (p *PG) EnsureModelVersion(ctx context.Context, mv ModelVersion) error {
 		return fmt.Errorf("ensure model version %s: %w", mv.Version, err)
 	}
 	return nil
+}
+
+// KnownTenants reports which ids exist in tenants. Outcomes from ClickHouse may
+// reference tenants never seeded in Postgres; skipping them avoids FK violations
+// on attribution_baselines / attribution_edges.
+func (p *PG) KnownTenants(ctx context.Context, ids []string) (map[string]bool, error) {
+	out := make(map[string]bool)
+	if len(ids) == 0 {
+		return out, nil
+	}
+	rows, err := p.db.QueryContext(ctx, `SELECT tenant_id::text FROM tenants WHERE tenant_id::text = ANY($1)`, pq.Array(ids))
+	if err != nil {
+		return nil, fmt.Errorf("known tenants: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out[id] = true
+	}
+	return out, rows.Err()
 }
 
 // UpsertEdges writes one tenant's edges, refreshing in place on re-score. All

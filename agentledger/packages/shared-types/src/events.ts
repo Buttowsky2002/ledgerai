@@ -35,7 +35,17 @@ export interface AgentLedgerLlmCallEvent {
   cost_usd?: number;
   latency_ms?: number;
   status_code?: number;
-  status?: "ok" | "upstream_error" | "blocked_dlp" | "blocked_budget" | "blocked_rate" | "blocked_policy";
+  /**
+   * Call outcome. blocked_* are gateway policy rejections. 'blocked_tool' (additive enum, ADR-032) is an inline tool/MCP-governance rejection — existing producers/consumers are unaffected and the ClickHouse status column is LowCardinality(String) with the blocked% rollup already matching it, so no migration is required.
+   */
+  status?:
+    | "ok"
+    | "upstream_error"
+    | "blocked_dlp"
+    | "blocked_budget"
+    | "blocked_rate"
+    | "blocked_policy"
+    | "blocked_tool";
   prompt_hash?: string;
   dlp_action?: "allow" | "log" | "warn" | "redact" | "block";
   dlp_findings?: {

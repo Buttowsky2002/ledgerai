@@ -9,7 +9,7 @@ export class RangeQueryDto {
 }
 
 export class AllocationQueryDto extends RangeQueryDto {
-  @IsIn(['team', 'app', 'agent']) dimension!: 'team' | 'app' | 'agent';
+  @IsIn(['team', 'app', 'agent', 'user']) dimension!: 'team' | 'app' | 'agent' | 'user';
 }
 
 export class BurndownQueryDto extends RangeQueryDto {
@@ -38,4 +38,9 @@ export class FocusExportQueryDto extends RangeQueryDto {
 export class PilotReportQueryDto extends RangeQueryDto {
   // Response format: 'json' (default — structured report) or 'md' (rendered text).
   @IsOptional() @IsIn(['json', 'md']) format?: 'json' | 'md';
+}
+
+export class UsersQueryDto extends RangeQueryDto {
+  /** Case-insensitive filter on display name, email, or team. */
+  @IsOptional() @IsString() q?: string;
 }

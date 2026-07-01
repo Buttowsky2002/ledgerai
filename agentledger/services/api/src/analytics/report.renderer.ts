@@ -57,7 +57,7 @@ const pct = (n: number) => `${((n ?? 0) * 100).toFixed(1)}%`;
 /** Render a PilotReport as Markdown (email/PDF precursor). */
 export function renderMarkdown(r: PilotReport): string {
   const L: string[] = [];
-  L.push(`# AgentLedger Pilot Report`);
+  L.push(`# BadgerIQ Pilot Report`);
   L.push('');
   L.push(`**Window:** ${r.window.from} → ${r.window.to} (${r.window.days} days)`);
   L.push('');

@@ -131,6 +131,24 @@ default last 30 days).
 | `/analytics/unit-economics?outcomeType=` | `v_unit_economics` | Cost per outcome. |
 | `/analytics/agents/:agentId` | `spend_hourly_by_key` + `agent_runs` | Agent detail. |
 
+## Executive report export
+
+`GET /v1/reports/executive`, `viewer`+. Produces a self-contained **PDF** (default) or **XLSX**
+companion summarizing AI spend for the authenticated tenant over a date window. Data is read
+from ClickHouse MVs only (`spend_daily`, `spend_daily_by_user`, `v_roi`, `risk_daily`); display
+names come from Postgres (`tenants`, `identities`, `teams`). Each export is audited in
+`audit_log`.
+
+| Query param | Default | Purpose |
+|-------------|---------|---------|
+| `from` / `to` | last 30 days | ISO date window (inclusive). |
+| `format` | `pdf` | `pdf` or `xlsx`. |
+| `tenant_id` | _(JWT tenant)_ | Optional; must match the authenticated tenant or the request is rejected. |
+
+Net value and LARI appear in the summary band only when `tenants.compliance_flags.attribution_mode`
+is `live` (or `attribution_live: true`) and headline-eligible outcomes exist in the window.
+Sections with no data in the window are omitted entirely (no empty charts or N/A rows).
+
 ## Outcome Graph (runs, outcomes, agent ROI)
 
 The cost→outcome evidence chain (ADR-046), all tenant-scoped via the JWT-bound

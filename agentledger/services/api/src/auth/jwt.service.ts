@@ -26,13 +26,13 @@ export class JwtService {
   private readonly refreshTtl: string;
 
   constructor() {
-    const raw = env('LEDGERAI_JWT_SECRET');
+    const raw = env('BADGERIQ_JWT_SECRET');
     if (!raw) {
       throw new Error('LEDGERAI_JWT_SECRET (or legacy AGENTLEDGER_JWT_SECRET) is required');
     }
     this.secret = new TextEncoder().encode(raw);
-    this.accessTtl = env('LEDGERAI_JWT_ACCESS_TTL') ?? '15m';
-    this.refreshTtl = env('LEDGERAI_JWT_REFRESH_TTL') ?? '7d';
+    this.accessTtl = env('BADGERIQ_JWT_ACCESS_TTL') ?? '15m';
+    this.refreshTtl = env('BADGERIQ_JWT_REFRESH_TTL') ?? '7d';
   }
 
   async mintAccess(p: AccessClaims): Promise<string> {

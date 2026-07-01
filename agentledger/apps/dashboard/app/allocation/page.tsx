@@ -2,19 +2,23 @@ import Link from 'next/link';
 import { BarChartClient } from '../../components/charts';
 import { Card, DataTable, PageHeader, num, usd } from '../../components/ui';
 import { apiClient, fetchData } from '../../lib/api';
-import { defaultRange } from '../../lib/auth';
+import { parseRange } from '../../lib/date-range';
 
 export const dynamic = 'force-dynamic';
 
 type AllocRow = { key: string; cost_usd: number; calls: string };
-const DIMENSIONS = ['team', 'app', 'agent'] as const;
+const DIMENSIONS = ['app', 'agent', 'user'] as const;
 type Dimension = (typeof DIMENSIONS)[number];
 
-export default async function AllocationPage({ searchParams }: { searchParams: { dimension?: string } }) {
+export default async function AllocationPage({
+  searchParams,
+}: {
+  searchParams: { dimension?: string; from?: string; to?: string };
+}) {
   const dimension: Dimension = DIMENSIONS.includes(searchParams.dimension as Dimension)
     ? (searchParams.dimension as Dimension)
-    : 'team';
-  const { from, to } = defaultRange();
+    : 'user';
+  const { from, to } = parseRange(searchParams);
   const api = apiClient();
   const rows = (await fetchData(
     api.GET('/v1/analytics/allocation', { params: { query: { from, to, dimension } } }),
@@ -33,7 +37,7 @@ export default async function AllocationPage({ searchParams }: { searchParams: {
             {DIMENSIONS.map((d) => (
               <Link
                 key={d}
-                href={`/allocation?dimension=${d}`}
+                href={`/allocation?dimension=${d}&from=${from}&to=${to}`}
                 className={`rounded px-3 py-1.5 text-sm capitalize ${
                   d === dimension ? 'bg-accent/20 text-white' : 'border border-edge text-muted hover:bg-white/5'
                 }`}

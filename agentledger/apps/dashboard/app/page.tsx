@@ -1,8 +1,14 @@
 import Link from 'next/link';
+import { Suspense } from 'react';
 import { AreaChartClient, Sparkline } from '../components/charts';
+import { OverviewAiSourcesPanel } from '../components/overview/OverviewAiSourcesPanel';
+import { FixedOverheadPanel } from '../components/overview/FixedOverheadPanel';
+import { ExecutiveReportExport } from '../components/overview/ExecutiveReportExport';
+import { LariRecommendationsPanel } from '../components/lari/LariRecommendationsPanel';
 import { Badge, BadgeTone, Card, DataTable, PageHeader, Stat, num, usd } from '../components/ui';
-import { apiClient, fetchData } from '../lib/api';
-import { defaultRange } from '../lib/auth';
+import { apiClient, fetchData, proxyApi } from '../lib/api';
+import { combinedAiCost } from '../lib/combined-ai-cost';
+import { parseRange } from '../lib/date-range';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,8 +20,6 @@ type SpendRow = {
   blocked_calls: string;
   error_calls: string;
 };
-
-type Team = { id: string; name: string };
 
 type Recommendation =
   | 'scale'
@@ -36,6 +40,10 @@ type AgentEconomicsRow = {
   confidenceScore: number;
   recommendation: Recommendation;
 };
+
+type AllocationRow = { key: string; cost_usd: number | string; calls: string };
+type PlatformRow = { platform: string; cost_usd: number | string; calls: string };
+type ModelRow = { provider: string; model: string; cost_usd: number | string; calls: string };
 
 // Presentation + triage metadata for each LARI recommendation. `priority` orders
 // the action queue (0 = most urgent); `action` decides whether it surfaces there;
@@ -63,7 +71,7 @@ const BAR_BG: Record<BadgeTone, string> = {
 };
 
 const meta = (rec: Recommendation) => REC[rec] ?? REC.maintain;
-const roiTone = (v: number) => (v > 0 ? 'text-pos' : v < 0 ? 'text-neg' : 'text-gray-200');
+const roiTone = (v: number) => (v > 0 ? 'text-pos' : v < 0 ? 'text-neg' : 'text-muted');
 const fmtLari = (v: number) => `${num(Math.round(Number(v)))}×`;
 
 // Inline confidence meter (0–100): a numeric read plus a slim track.
@@ -72,7 +80,7 @@ function ConfMeter({ score }: { score: number }) {
   const tone = pct >= 67 ? 'bg-pos' : pct >= 34 ? 'bg-warn' : 'bg-neg';
   return (
     <span className="inline-flex items-center justify-end gap-2">
-      <span className="num text-gray-300">{pct}</span>
+      <span className="num text-muted">{pct}</span>
       <span className="h-1.5 w-12 overflow-hidden rounded-full bg-edge">
         <span className={`block h-full rounded-full ${tone}`} style={{ width: `${pct}%` }} />
       </span>
@@ -80,17 +88,25 @@ function ConfMeter({ score }: { score: number }) {
   );
 }
 
-export default async function OverviewPage({ searchParams }: { searchParams: { team?: string } }) {
-  const { from, to } = defaultRange();
-  const team = searchParams.team || undefined;
+export default async function OverviewPage({
+  searchParams,
+}: {
+  searchParams: { from?: string; to?: string; source?: string };
+}) {
+  const { from, to } = parseRange(searchParams);
+  const source = searchParams.source || undefined;
   const api = apiClient();
 
-  // Spend + risk honor the team filter; agent economics (LARI rollup) is
-  // portfolio-wide by design (the recommendation must match /v1/agents/:id/lari,
-  // which is not team-scoped), so a selected team only narrows the spend section.
-  const [spend, economics, teams] = await Promise.all([
+  type TotalCostRow = {
+    month: string;
+    attributable_cost_usd: number | string;
+    fixed_cost_usd: number | string;
+    total_cost_of_ai_usd: number | string;
+  };
+
+  const [spend, economics, costByUser, platformSpend, modelMix, totalCostRows] = await Promise.all([
     fetchData(
-      api.GET('/v1/analytics/spend', { params: { query: { from, to, team } } }),
+      api.GET('/v1/analytics/spend', { params: { query: { from, to } } }),
       [],
     ) as Promise<unknown> as Promise<SpendRow[]>,
     fetchData(
@@ -98,13 +114,45 @@ export default async function OverviewPage({ searchParams }: { searchParams: { t
       [],
     ) as Promise<unknown> as Promise<AgentEconomicsRow[]>,
     fetchData(
-      api.GET('/v1/teams', { params: { query: { limit: '200', offset: '0' } } }),
+      api.GET('/v1/analytics/allocation', { params: { query: { dimension: 'user', from, to } } }),
       [],
-    ) as Promise<unknown> as Promise<Team[]>,
+    ) as Promise<unknown> as Promise<AllocationRow[]>,
+    fetchData(
+      api.GET('/v1/analytics/platform-spend', { params: { query: { from, to } } }),
+      [],
+    ) as Promise<unknown> as Promise<PlatformRow[]>,
+    fetchData(
+      api.GET('/v1/analytics/model-mix', { params: { query: { from, to } } }),
+      [],
+    ) as Promise<unknown> as Promise<ModelRow[]>,
+    (async () => {
+      const qs = new URLSearchParams({ from, to }).toString();
+      const res = await proxyApi(`/v1/fixed-costs/total-cost-of-ai?${qs}`);
+      return res.ok && Array.isArray(res.data) ? (res.data as TotalCostRow[]) : [];
+    })(),
   ]);
 
-  const totalCost = spend.reduce((s, r) => s + Number(r.cost_usd), 0);
+  const platforms = platformSpend
+    .map((r) => ({
+      platform: r.platform || '(unknown)',
+      cost_usd: Number(r.cost_usd),
+      calls: Number(r.calls),
+    }))
+    .sort((a, b) => b.cost_usd - a.cost_usd);
+
+  const models = modelMix.map((r) => ({
+    provider: r.provider,
+    model: r.model,
+    cost_usd: Number(r.cost_usd),
+    calls: Number(r.calls),
+  }));
+
+  const meteredCost = spend.reduce((s, r) => s + Number(r.cost_usd), 0);
   const totalCalls = spend.reduce((s, r) => s + Number(r.calls), 0);
+  const costOfAi = combinedAiCost(meteredCost, totalCostRows);
+  const totalCostOfAi = costOfAi.total;
+  const attributableCost = costOfAi.attributable;
+  const fixedOverhead = costOfAi.fixed;
   const blocked = spend.reduce((s, r) => s + Number(r.blocked_calls), 0);
   const chart = spend.map((r) => ({ day: String(r.day).slice(5), cost_usd: Number(r.cost_usd) }));
 
@@ -120,53 +168,26 @@ export default async function OverviewPage({ searchParams }: { searchParams: { t
       return p !== 0 ? p : Math.abs(b.risk_adjusted_roi) - Math.abs(a.risk_adjusted_roi);
     });
 
-  // team_id is a free-form string label on the canonical event (not a UUID FK), so
-  // the filter value is the team name — that's what producers stamp and what the
-  // spend/risk dimensions store. Chips are deduped by name.
-  const teamLabel = team || 'all teams';
-  const teamNames = [...new Set(teams.map((t) => t.name))];
-
   return (
     <>
       <PageHeader
         eyebrow="FinOps control plane"
         title="Overview"
-        subtitle={`${teamLabel} · ${from} → ${to}`}
-        actions={
-          teamNames.length > 0 ? (
-            <div className="flex flex-wrap gap-1.5">
-              <Link
-                href="/"
-                className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
-                  !team ? 'bg-accent/15 text-accent ring-1 ring-inset ring-accent/30' : 'text-muted hover:bg-white/5'
-                }`}
-              >
-                All teams
-              </Link>
-              {teamNames.map((name) => (
-                <Link
-                  key={name}
-                  href={`/?team=${encodeURIComponent(name)}`}
-                  className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
-                    team === name
-                      ? 'bg-accent/15 text-accent ring-1 ring-inset ring-accent/30'
-                      : 'text-muted hover:bg-white/5'
-                  }`}
-                >
-                  {name}
-                </Link>
-              ))}
-            </div>
-          ) : undefined
-        }
+        subtitle={`${from} → ${to}`}
+        actions={<ExecutiveReportExport from={from} to={to} />}
       />
 
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Stat
-          label="Total spend"
-          value={usd(totalCost)}
+          label="Total cost of AI"
+          value={usd(totalCostOfAi)}
           accent
-          sub={team ? teamLabel : `${num(totalCalls)} calls`}
+          sub={
+            <>
+              {usd(attributableCost)} metered · {usd(fixedOverhead)} fixed
+              <span className="mt-0.5 block">{num(totalCalls)} calls</span>
+            </>
+          }
           chart={chart.length > 1 ? <Sparkline data={chart} yKey="cost_usd" /> : undefined}
         />
         <Stat
@@ -189,8 +210,45 @@ export default async function OverviewPage({ searchParams }: { searchParams: { t
         />
       </div>
 
-      <Card title="Daily spend" subtitle={`USD · ${teamLabel}`}>
+      <Card title="Daily spend" subtitle="USD">
         <AreaChartClient data={chart} xKey="day" yKey="cost_usd" />
+      </Card>
+
+      <FixedOverheadPanel from={from} to={to} />
+
+      <Suspense
+        fallback={
+          <Card title="AI sources & models">
+            <p className="py-8 text-center text-sm text-muted">Loading sources…</p>
+          </Card>
+        }
+      >
+        <OverviewAiSourcesPanel
+          platforms={platforms}
+          modelMix={models}
+          from={from}
+          to={to}
+          initialSource={source}
+        />
+      </Suspense>
+
+      <Card title="Cost by user" subtitle="Includes API-synced and gateway spend">
+        <DataTable
+          columns={[
+            { key: 'user', label: 'User' },
+            { key: 'cost', label: 'Spend', align: 'right' },
+            { key: 'calls', label: 'Calls', align: 'right' },
+          ]}
+          rows={costByUser.map((r) => ({
+            user: r.key === 'Unassigned' ? (
+              <span className="text-warn">{r.key}</span>
+            ) : (
+              r.key
+            ),
+            cost: usd(Number(r.cost_usd)),
+            calls: num(r.calls),
+          }))}
+        />
       </Card>
 
       <Card
@@ -233,6 +291,8 @@ export default async function OverviewPage({ searchParams }: { searchParams: { t
           </div>
         )}
       </Card>
+
+      <LariRecommendationsPanel from={from} to={to} compact />
 
       <Card title="Agent economics" subtitle="Per-agent cost, value, and LARI">
         <DataTable

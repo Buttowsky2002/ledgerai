@@ -5,23 +5,29 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: '#0b0e14',
-        panel: '#11151d',
-        'panel-2': '#151b25',
-        edge: '#1e2530',
-        muted: '#8b95a5',
-        accent: '#4f8cff',
-        // Semantic finance tones: gains, losses, caution.
-        pos: '#34d399',
-        neg: '#fb7185',
-        warn: '#fbbf24',
+        // ---- Black / ink: the canvas ----
+        ink: '#0a0a0c',
+        // ---- Gunmetal greys: elevated surfaces ----
+        panel: '#15171c',
+        'panel-2': '#1b1e24',
+        edge: '#2a2e37',
+        'edge-strong': '#3a3f4b',
+        muted: '#9aa0ad',
+        // ---- Gold: the single accent ----
+        accent: '#d4af37',
+        'accent-soft': '#e8c75a',
+        'accent-dim': '#8a7320',
+        // ---- Semantic finance tones (unchanged meaning, retuned for the warmer base) ----
+        pos: '#3ecf8e',
+        neg: '#f06a6a',
+        warn: '#e0a93c',
       },
       fontFamily: {
         sans: ['var(--font-sans)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         mono: ['var(--font-mono)', 'ui-monospace', 'monospace'],
       },
       boxShadow: {
-        card: '0 1px 0 0 rgba(255,255,255,0.03) inset, 0 8px 24px -12px rgba(0,0,0,0.6)',
+        card: '0 1px 0 0 rgba(212,175,55,0.06) inset, 0 8px 28px -14px rgba(0,0,0,0.7)',
       },
     },
   },

@@ -50,7 +50,7 @@ export function CreateKey() {
       <input className={FIELD} placeholder="Key name" value={name} onChange={(e) => setName(e.target.value)} required />
       <input className={FIELD} placeholder="environment" value={environment} onChange={(e) => setEnv(e.target.value)} />
       <button className={BTN} disabled={busy}>Create key</button>
-      {err && <span className="text-xs text-red-400">{err}</span>}
+      {err && <span className="text-xs text-neg">{err}</span>}
       {plaintext && (
         <div className="mt-2 w-full rounded border border-accent/40 bg-accent/10 p-2 text-xs">
           Copy now — shown once: <code className="break-all text-accent">{plaintext}</code>
@@ -82,7 +82,7 @@ export function CreatePolicy() {
         {['allow', 'log', 'warn', 'redact', 'block', 'ticket'].map((a) => <option key={a} value={a}>{a}</option>)}
       </select>
       <button className={BTN} disabled={busy}>Create policy</button>
-      {err && <span className="text-xs text-red-400">{err}</span>}
+      {err && <span className="text-xs text-neg">{err}</span>}
     </form>
   );
 }
@@ -105,12 +105,12 @@ export function CreateBudget() {
   return (
     <form onSubmit={submit} className="flex flex-wrap items-end gap-2">
       <select className={FIELD} value={scopeType} onChange={(e) => setScopeType(e.target.value)}>
-        {['tenant', 'team', 'app', 'agent', 'key', 'model'].map((s) => <option key={s} value={s}>{s}</option>)}
+        {['tenant', 'app', 'agent', 'key', 'model'].map((s) => <option key={s} value={s}>{s}</option>)}
       </select>
       <input className={FIELD} placeholder="scope id" value={scopeId} onChange={(e) => setScopeId(e.target.value)} required />
       <input className={FIELD} type="number" step="0.01" placeholder="amount USD" value={amountUsd} onChange={(e) => setAmount(e.target.value)} required />
       <button className={BTN} disabled={busy}>Create budget</button>
-      {err && <span className="text-xs text-red-400">{err}</span>}
+      {err && <span className="text-xs text-neg">{err}</span>}
     </form>
   );
 }

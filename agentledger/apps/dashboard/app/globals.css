@@ -10,8 +10,8 @@ body {
   font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
   /* Subtle atmosphere: a cool wash bleeding from the top-left so the flat ink
      background reads as depth, not a void. Fixed so it doesn't scroll away. */
-  background-color: #0b0e14;
-  background-image: radial-gradient(120% 80% at 0% 0%, rgba(79, 140, 255, 0.07), transparent 55%);
+  background-color: #0a0a0c;
+  background-image: radial-gradient(120% 80% at 0% 0%, rgba(212, 175, 55, 0.05), transparent 55%);
   background-attachment: fixed;
   @apply text-gray-100 antialiased;
 }
@@ -25,7 +25,7 @@ body {
 }
 
 ::selection {
-  background: rgba(79, 140, 255, 0.3);
+  background: rgba(212, 175, 55, 0.22);
 }
 
 /* Slim, unobtrusive scrollbars that match the panel palette. */
@@ -34,12 +34,18 @@ body {
   height: 10px;
 }
 *::-webkit-scrollbar-thumb {
-  background: #1e2530;
+  background: #2a2e37;
   border-radius: 8px;
-  border: 2px solid #0b0e14;
+  border: 2px solid #0a0a0c;
 }
 *::-webkit-scrollbar-thumb:hover {
-  background: #2a3340;
+  background: #3a3f4b;
+}
+
+:where(a, button, [role='button'], input, select, textarea):focus-visible {
+  outline: 2px solid #d4af37;
+  outline-offset: 2px;
+  border-radius: 6px;
 }
 
 /* Dense, data-first table defaults. */

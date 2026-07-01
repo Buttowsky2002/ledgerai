@@ -1,5 +1,5 @@
 /**
- * LARI — LedgerAI Risk-Adjusted Incremental ROI.
+ * LARI — BadgerIQ Risk-Adjusted Incremental ROI.
  *
  * Domain types for an explainable, DETERMINISTIC ROI engine. No type here carries
  * raw prompt/response content (security rule 2 + requirement 8) — only numeric and

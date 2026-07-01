@@ -1,0 +1,76 @@
+{
+  "name": "Cursor Admin API",
+  "provider": "cursor",
+  "category": "coding_tool",
+  "authType": "basic_auth",
+  "baseUrl": "https://api.cursor.com",
+  "endpoints": [
+    {
+      "path": "/teams/filtered-usage-events",
+      "method": "POST",
+      "bodyTemplate": "{\"startDate\":{{sync_start_unix_ms}},\"endDate\":{{sync_end_unix_ms}},\"page\":{{page}},\"pageSize\":{{page_size}}}"
+    }
+  ],
+  "pagination": {
+    "type": "page",
+    "itemsPath": "usageEvents",
+    "hasMorePath": "pagination.hasNextPage",
+    "pageSize": 100,
+    "maxPages": 500
+  },
+  "rateLimit": {
+    "requestsPerMinute": 20
+  },
+  "retry": {
+    "maxAttempts": 3,
+    "baseDelayMs": 2000,
+    "maxDelayMs": 30000,
+    "retryOn": [429, 500, 502, 503, 504]
+  },
+  "syncRange": {
+    "maxDaysPerRequest": 31,
+    "defaultBackfillDays": 90
+  },
+  "destinationRecordType": "spend_usage_record",
+  "capabilities": {
+    "supportsUsage": true,
+    "supportsBilling": true,
+    "supportsUsers": false,
+    "supportsProjects": false,
+    "supportsWorkspaces": false,
+    "supportsApiKeys": false,
+    "supportsUserLevelCost": true,
+    "supportsModelLevelUsage": true
+  },
+  "fieldMappings": [
+    { "type": "direct", "source": "timestamp", "target": "ts" },
+    { "type": "direct", "source": "userEmail", "target": "user_email" },
+    { "type": "direct", "source": "userEmail", "target": "user_id" },
+    { "type": "direct", "source": "model", "target": "model" },
+    { "type": "direct", "source": "kind", "target": "product" },
+    { "type": "direct", "source": "chargedCents", "target": "amount_cents" },
+    { "type": "derived", "target": "cost_usd", "expression": "amount_cents / 100" },
+    { "type": "fallback", "target": "input_tokens", "sources": ["tokenUsage.inputTokens"] },
+    { "type": "fallback", "target": "output_tokens", "sources": ["tokenUsage.outputTokens"] },
+    {
+      "type": "fallback",
+      "target": "id",
+      "sources": ["timestamp", "userEmail", "model", "chargedCents", "kind"]
+    },
+    { "type": "constant", "target": "provider", "value": "cursor" },
+    { "type": "constant", "target": "platform_display_name", "value": "Cursor" },
+    { "type": "constant", "target": "cost_source", "value": "cursor_admin_api" }
+  ],
+  "validationRules": [
+    { "field": "cost_usd", "type": "currency", "required": true, "min": 0.000001 },
+    { "field": "user_email", "type": "string", "required": true }
+  ],
+  "dedupe": {
+    "strategy": "custom",
+    "fields": ["ts", "user_email", "model", "cost_usd", "product"]
+  },
+  "schedule": {
+    "intervalMinutes": 60,
+    "enabled": true
+  }
+}

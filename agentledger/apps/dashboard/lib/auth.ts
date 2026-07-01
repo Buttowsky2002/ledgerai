@@ -1,6 +1,6 @@
 import { env } from './env';
 
-const API_URL = env('LEDGERAI_API_URL') ?? 'http://localhost:8094';
+const API_URL = env('BADGERIQ_API_URL') ?? 'http://localhost:8094';
 
 export type OidcProvider = 'google' | 'microsoft';
 
@@ -11,11 +11,11 @@ export function loginUrl(provider: OidcProvider): string {
 
 /** Dev mode = the API is trusted to accept x-tenant-id and a dev tenant is set. */
 export function isDevMode(): boolean {
-  return Boolean(env('LEDGERAI_DEV_TENANT_ID'));
+  return Boolean(env('BADGERIQ_DEV_TENANT_ID'));
 }
 
-/** Common date-range default for analytics pages: trailing 30 days (UTC ISO dates). */
-export function defaultRange(days = 30): { from: string; to: string } {
+/** Common date-range default for analytics pages: trailing 90 days (UTC ISO dates). */
+export function defaultRange(days = 90): { from: string; to: string } {
   const to = new Date();
   const from = new Date(to);
   from.setUTCDate(from.getUTCDate() - days);

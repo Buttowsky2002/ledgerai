@@ -1,0 +1,17 @@
+{
+  "name": "Generic REST Risk Event API",
+  "provider": "custom",
+  "category": "risk_security",
+  "authType": "bearer_token",
+  "baseUrl": "https://api.example.com",
+  "endpoints": [{ "path": "/v1/risk-events", "method": "GET" }],
+  "pagination": { "type": "offset", "itemsPath": "events", "offsetParam": "offset", "limitParam": "limit", "pageSize": 50 },
+  "destinationRecordType": "risk_event_record",
+  "fieldMappings": [
+    { "type": "direct", "source": "id", "target": "id" },
+    { "type": "fallback", "target": "risk_severity", "sources": ["severity", "risk_level"] },
+    { "type": "direct", "source": "agent_id", "target": "agent_id" },
+    { "type": "direct", "source": "category", "target": "category" }
+  ],
+  "dedupe": { "strategy": "provider_record_id" }
+}

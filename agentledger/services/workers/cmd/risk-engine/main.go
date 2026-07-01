@@ -30,11 +30,8 @@ func main() {
 	)
 
 	metrics := &riskengine.Metrics{}
-	spikeMin := envInt("AGENTLEDGER_RISK_SPIKE_MIN", 5)
-	if spikeMin < 0 {
-		spikeMin = 0
-	}
-	e := riskengine.New(ch, uint32(spikeMin), metrics) // #nosec G115 -- spikeMin is clamped non-negative above; operator-provided config
+	spikeMin := envUint32("AGENTLEDGER_RISK_SPIKE_MIN", 5)
+	e := riskengine.New(ch, spikeMin, metrics)
 	interval := time.Duration(envInt("AGENTLEDGER_RISK_INTERVAL_SEC", 3600)) * time.Second
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -112,13 +109,17 @@ func writeMetrics(w http.ResponseWriter, m *riskengine.Metrics) {
 	}
 }
 
-// lookupEnv resolves an environment variable, preferring the new LEDGERAI_*
+// lookupEnv resolves an environment variable, preferring BADGERIQ_* and falling back to LEDGERAI_*
 // name and falling back to the legacy AGENTLEDGER_* alias (deprecated; kept for
-// backwards compatibility — see the README "Renaming to LedgerAI" note).
+// backwards compatibility — see the README "Renaming to BadgerIQ" note).
 func lookupEnv(name string) string {
 	const legacy = "AGENTLEDGER_"
 	if len(name) > len(legacy) && name[:len(legacy)] == legacy {
-		if v := os.Getenv("LEDGERAI_" + name[len(legacy):]); v != "" {
+		suffix := name[len(legacy):]
+		if v := os.Getenv("BADGERIQ_" + suffix); v != "" {
+			return v
+		}
+		if v := os.Getenv("LEDGERAI_" + suffix); v != "" {
 			return v
 		}
 	}
@@ -136,6 +137,16 @@ func envInt(key string, def int64) int64 {
 	if v := lookupEnv(key); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
 			return n
+		}
+	}
+	return def
+}
+
+func envUint32(key string, def uint32) uint32 {
+	if v := lookupEnv(key); v != "" {
+		n, err := strconv.ParseUint(v, 10, 32)
+		if err == nil {
+			return uint32(n)
 		}
 	}
 	return def

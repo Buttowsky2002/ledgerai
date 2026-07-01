@@ -1,0 +1,176 @@
+{
+  "name": "Anthropic Admin Spend API",
+  "provider": "anthropic",
+  "category": "provider_spend",
+  "authType": "api_key_header",
+  "authHeaderName": "x-api-key",
+  "baseUrl": "https://api.anthropic.com",
+  "headers": {
+    "anthropic-version": "2023-06-01"
+  },
+  "endpoints": [
+    {
+      "path": "/v1/organizations/cost_report",
+      "method": "GET",
+      "queryParams": {
+        "starting_at": "{{sync_start_day}}",
+        "ending_at": "{{sync_end_day}}",
+        "bucket_width": "1d",
+        "limit": "31"
+      },
+      "queryParamArrays": {
+        "group_by[]": ["workspace_id", "description"]
+      }
+    }
+  ],
+  "pagination": {
+    "type": "response_token",
+    "itemsPath": "data",
+    "flattenPath": "results",
+    "tokenPath": "next_page",
+    "tokenParam": "page",
+    "hasMorePath": "has_more",
+    "pageSize": 31,
+    "limitParam": "limit",
+    "maxPages": 50
+  },
+  "rateLimit": {
+    "requestsPerSecond": 0.33,
+    "retryAfterHeader": "retry-after"
+  },
+  "retry": {
+    "maxAttempts": 4,
+    "baseDelayMs": 2000,
+    "maxDelayMs": 60000,
+    "retryOn": [429, 500, 502, 503, 504]
+  },
+  "destinationRecordType": "spend_usage_record",
+  "fieldMappings": [
+    { "type": "direct", "source": "amount", "target": "amount" },
+    { "type": "direct", "source": "currency", "target": "currency" },
+    { "type": "derived", "target": "cost_usd", "expression": "amount / 100" },
+    { "type": "fallback", "target": "model", "sources": ["model", "description", "cost_type"] },
+    { "type": "direct", "source": "description", "target": "product" },
+    { "type": "direct", "source": "cost_type", "target": "line_item" },
+    { "type": "direct", "source": "workspace_id", "target": "workspace_id" },
+    { "type": "direct", "source": "workspace_id", "target": "project_id" },
+    { "type": "direct", "source": "token_type", "target": "token_type" },
+    {
+      "type": "fallback",
+      "target": "id",
+      "sources": ["model", "description", "token_type", "workspace_id", "starting_at", "cost_type"]
+    },
+    { "type": "constant", "target": "provider", "value": "anthropic" },
+    { "type": "constant", "target": "platform_display_name", "value": "Anthropic" },
+    { "type": "constant", "target": "cost_source", "value": "anthropic_cost_report" },
+    { "type": "fallback", "target": "ts", "sources": ["starting_at", "ending_at"] },
+    { "type": "fallback", "target": "period_start", "sources": ["starting_at"] },
+    { "type": "fallback", "target": "period_end", "sources": ["ending_at"] }
+  ],
+  "supplementalFetch": {
+    "endpoint": {
+      "path": "/v1/organizations/usage_report/messages",
+      "method": "GET",
+      "queryParams": {
+        "starting_at": "{{sync_start_day}}",
+        "ending_at": "{{sync_end_day}}",
+        "bucket_width": "1d",
+        "limit": "31"
+      },
+      "queryParamArrays": {
+        "group_by[]": ["workspace_id", "model"]
+      }
+    },
+    "pagination": {
+      "type": "response_token",
+      "itemsPath": "data",
+      "flattenPath": "results",
+      "tokenPath": "next_page",
+      "tokenParam": "page",
+      "hasMorePath": "has_more",
+      "pageSize": 31,
+      "limitParam": "limit",
+      "maxPages": 50
+    },
+    "fieldMappings": [
+      { "type": "direct", "source": "model", "target": "model" },
+      { "type": "direct", "source": "workspace_id", "target": "workspace_id" },
+      { "type": "fallback", "target": "period_start", "sources": ["starting_at"] },
+      { "type": "direct", "source": "output_tokens", "target": "output_tokens" },
+      {
+        "type": "derived",
+        "target": "input_tokens",
+        "expression": "uncached_input_tokens + cache_read_input_tokens"
+      }
+    ],
+    "mergeOn": ["period_start", "model", "workspace_id"]
+  },
+  "fallbackDefinition": {
+    "endpoints": [
+      {
+        "path": "/v1/organizations/analytics/user_cost_report",
+        "method": "GET",
+        "queryParams": {
+          "starting_at": "{{sync_start_day}}",
+          "ending_at": "{{sync_end_day}}",
+          "bucket_width": "1d",
+          "limit": "1000",
+          "group_by[]": "model"
+        }
+      }
+    ],
+    "pagination": {
+      "type": "response_token",
+      "itemsPath": "data",
+      "tokenPath": "next_page",
+      "tokenParam": "page",
+      "hasMorePath": "has_more",
+      "pageSize": 1000,
+      "limitParam": "limit",
+      "maxPages": 20
+    },
+    "fieldMappings": [
+      { "type": "direct", "source": "actor.user_id", "target": "user_id" },
+      { "type": "direct", "source": "actor.email", "target": "user_email" },
+      { "type": "direct", "source": "actor.name", "target": "user_name" },
+      { "type": "direct", "source": "amount", "target": "amount" },
+      { "type": "direct", "source": "currency", "target": "currency" },
+      { "type": "derived", "target": "cost_usd", "expression": "amount / 100" },
+      { "type": "fallback", "target": "model", "sources": ["model", "description", "product"] },
+      { "type": "direct", "source": "product", "target": "product" },
+      { "type": "direct", "source": "cost_type", "target": "line_item" },
+      {
+        "type": "fallback",
+        "target": "id",
+        "sources": ["model", "product", "token_type", "actor.user_id", "starting_at", "cost_type"]
+      },
+      { "type": "constant", "target": "provider", "value": "anthropic" },
+      { "type": "constant", "target": "platform_display_name", "value": "Anthropic" },
+      { "type": "fallback", "target": "ts", "sources": ["starting_at", "ending_at"] },
+      { "type": "fallback", "target": "period_start", "sources": ["starting_at"] },
+      { "type": "fallback", "target": "period_end", "sources": ["ending_at"] }
+    ]
+  },
+  "validationRules": [
+    { "field": "cost_usd", "type": "currency" },
+    { "field": "model", "required": false, "type": "string" }
+  ],
+  "dedupe": {
+    "strategy": "custom",
+    "fields": ["period_start", "model", "workspace_id", "cost_usd", "product", "token_type"]
+  },
+  "schedule": {
+    "intervalMinutes": 60,
+    "enabled": true
+  },
+  "capabilities": {
+    "supportsUsage": true,
+    "supportsBilling": true,
+    "supportsUsers": false,
+    "supportsProjects": false,
+    "supportsWorkspaces": true,
+    "supportsApiKeys": false,
+    "supportsUserLevelCost": false,
+    "supportsModelLevelUsage": true
+  }
+}

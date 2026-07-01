@@ -2374,7 +2374,8 @@
               "enum": [
                 "team",
                 "app",
-                "agent"
+                "agent",
+                "user"
               ],
               "type": "string"
             }
@@ -2393,6 +2394,46 @@
     "/v1/analytics/model-mix": {
       "get": {
         "operationId": "AnalyticsController_modelMix",
+        "parameters": [
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "team",
+            "required": false,
+            "in": "query",
+            "description": "Optional team_id filter (cost/value/risk reads honor it; ignored elsewhere).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Analytics"
+        ]
+      }
+    },
+    "/v1/analytics/platform-spend": {
+      "get": {
+        "operationId": "AnalyticsController_platformSpend",
         "parameters": [
           {
             "name": "from",
@@ -2840,6 +2881,46 @@
         ]
       }
     },
+    "/v1/analytics/source-reconciliation": {
+      "get": {
+        "operationId": "AnalyticsController_sourceReconciliation",
+        "parameters": [
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "team",
+            "required": false,
+            "in": "query",
+            "description": "Optional team_id filter (cost/value/risk reads honor it; ignored elsewhere).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Analytics"
+        ]
+      }
+    },
     "/v1/attribution/edges": {
       "get": {
         "operationId": "AttributionController_edges",
@@ -3096,10 +3177,454 @@
           "Import"
         ]
       }
+    },
+    "/v1/portal-import/anthropic": {
+      "post": {
+        "operationId": "PortalImportController_uploadAnthropic",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnthropicPortalUploadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "PortalImport"
+        ]
+      }
+    },
+    "/v1/connector-definitions": {
+      "get": {
+        "operationId": "ConnectorDefinitionsController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ConnectorDefinitions"
+        ]
+      }
+    },
+    "/v1/connector-definitions/custom": {
+      "post": {
+        "operationId": "ConnectorDefinitionsController_createCustom",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCustomDefinitionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ConnectorDefinitions"
+        ]
+      }
+    },
+    "/v1/connectors": {
+      "get": {
+        "operationId": "ConnectorsController_list",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Connectors"
+        ]
+      },
+      "post": {
+        "operationId": "ConnectorsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateConnectorDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Connectors"
+        ]
+      }
+    },
+    "/v1/connectors/{id}": {
+      "get": {
+        "operationId": "ConnectorsController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Connectors"
+        ]
+      },
+      "patch": {
+        "operationId": "ConnectorsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateConnectorDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Connectors"
+        ]
+      },
+      "delete": {
+        "operationId": "ConnectorsController_delete",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Connectors"
+        ]
+      }
+    },
+    "/v1/connectors/{id}/test": {
+      "post": {
+        "operationId": "ConnectorsController_test",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestConnectorDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Connectors"
+        ]
+      }
+    },
+    "/v1/connectors/{id}/preview": {
+      "post": {
+        "operationId": "ConnectorsController_preview",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestConnectorDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Connectors"
+        ]
+      }
+    },
+    "/v1/connectors/{id}/sync": {
+      "post": {
+        "operationId": "ConnectorsController_sync",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestConnectorDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Connectors"
+        ]
+      }
+    },
+    "/v1/connectors/{id}/sync-runs": {
+      "get": {
+        "operationId": "ConnectorsController_syncRuns",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Connectors"
+        ]
+      }
+    },
+    "/v1/connectors/{id}/errors": {
+      "get": {
+        "operationId": "ConnectorsController_errors",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Connectors"
+        ]
+      }
+    },
+    "/v1/connectors/{id}/attribution-mappings": {
+      "get": {
+        "operationId": "ConnectorsController_listAttributionMappings",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Connectors"
+        ]
+      },
+      "post": {
+        "operationId": "ConnectorsController_createAttributionMapping",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAttributionMappingDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Connectors"
+        ]
+      }
+    },
+    "/v1/connectors/attribution-mappings/{mappingId}": {
+      "delete": {
+        "operationId": "ConnectorsController_deleteAttributionMapping",
+        "parameters": [
+          {
+            "name": "mappingId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Connectors"
+        ]
+      }
     }
   },
   "info": {
-    "title": "AgentLedger Control-Plane API",
+    "title": "BadgerIQ Control-Plane API",
     "description": "Tenant-scoped control plane: resources, auth, and analytics over the MVs.",
     "version": "0.1.0",
     "contact": {}
@@ -4160,6 +4685,146 @@
         },
         "required": [
           "events"
+        ]
+      },
+      "AnthropicPortalUploadDto": {
+        "type": "object",
+        "properties": {
+          "csv": {
+            "type": "string"
+          },
+          "connectorId": {
+            "type": "string"
+          },
+          "dryRun": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "csv"
+        ]
+      },
+      "CreateCustomDefinitionDto": {
+        "type": "object",
+        "properties": {
+          "definition": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "definition"
+        ]
+      },
+      "CreateConnectorDto": {
+        "type": "object",
+        "properties": {
+          "connectorDefinitionId": {
+            "type": "string"
+          },
+          "presetId": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "configJson": {
+            "type": "object"
+          },
+          "mappingOverridesJson": {
+            "type": "object"
+          },
+          "scheduleJson": {
+            "type": "object"
+          },
+          "authSecret": {
+            "type": "string"
+          },
+          "baseUrl": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "displayName"
+        ]
+      },
+      "UpdateConnectorDto": {
+        "type": "object",
+        "properties": {
+          "displayName": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "configJson": {
+            "type": "object"
+          },
+          "mappingOverridesJson": {
+            "type": "object"
+          },
+          "scheduleJson": {
+            "type": "object"
+          },
+          "authSecret": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "TestConnectorDto": {
+        "type": "object",
+        "properties": {
+          "authSecret": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateAttributionMappingDto": {
+        "type": "object",
+        "properties": {
+          "connectorId": {
+            "type": "string"
+          },
+          "mappingType": {
+            "type": "string"
+          },
+          "providerKey": {
+            "type": "string"
+          },
+          "providerKeyName": {
+            "type": "string"
+          },
+          "targetUserId": {
+            "type": "string"
+          },
+          "targetTeamId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "connectorId",
+          "mappingType",
+          "providerKey"
         ]
       }
     }

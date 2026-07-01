@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Suspense } from 'react';
 import { DeleteButton } from '../../components/settings/DeleteButton';
 import { CreateBudget, CreateKey, CreatePolicy } from '../../components/settings/forms';
 import { Card, DataTable, PageHeader, usd } from '../../components/ui';
@@ -10,12 +11,23 @@ const TABS = [
   ['keys', 'Virtual keys'],
   ['policies', 'Policies'],
   ['budgets', 'Budgets'],
+  ['connectors', 'Data sources'],
 ] as const;
-type Tab = (typeof TABS)[number][0];
+type SettingsTab = 'keys' | 'policies' | 'budgets';
+type TabKey = SettingsTab | 'connectors';
 
 export default async function SettingsPage({ searchParams }: { searchParams: { tab?: string } }) {
-  const tab: Tab = (['keys', 'policies', 'budgets'] as const).includes(searchParams.tab as Tab)
-    ? (searchParams.tab as Tab)
+  if (searchParams.tab === 'connectors') {
+    const { ConnectorsClient } = await import('../../components/connectors/ConnectorsClient');
+    return (
+      <Suspense fallback={<p className="p-8 text-sm text-muted">Loading data sources…</p>}>
+        <ConnectorsClient />
+      </Suspense>
+    );
+  }
+
+  const tab: SettingsTab = (['keys', 'policies', 'budgets'] as const).includes(searchParams.tab as SettingsTab)
+    ? (searchParams.tab as SettingsTab)
     : 'keys';
   const api = apiClient();
 
@@ -28,9 +40,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: { t
             {TABS.map(([key, label]) => (
               <Link
                 key={key}
-                href={`/settings?tab=${key}`}
+                href={key === 'connectors' ? '/settings?tab=connectors' : `/settings?tab=${key}`}
                 className={`rounded px-3 py-1.5 text-sm ${
-                  key === tab ? 'bg-accent/20 text-white' : 'border border-edge text-muted hover:bg-white/5'
+                  key === tab || (key === 'connectors' && searchParams.tab === 'connectors')
+                    ? 'bg-accent/20 text-white'
+                    : 'border border-edge text-muted hover:bg-white/5'
                 }`}
               >
                 {label}

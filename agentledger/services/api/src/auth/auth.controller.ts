@@ -48,7 +48,7 @@ type SameSite = 'strict' | 'lax' | 'none';
  * navigation. 'none' is meaningless without Secure, so we force secure=true then.
  */
 export function cookieSameSite(): SameSite {
-  const v = (env('LEDGERAI_COOKIE_SAMESITE') ?? 'strict').toLowerCase();
+  const v = (env('BADGERIQ_COOKIE_SAMESITE') ?? 'strict').toLowerCase();
   return v === 'lax' || v === 'none' ? v : 'strict';
 }
 
@@ -65,7 +65,7 @@ export function cookieOpts(maxAgeMs?: number) {
 
 /** Dashboard base URL to redirect to after a successful interactive login. */
 export function dashboardUrl(): string {
-  return env('LEDGERAI_DASHBOARD_URL') ?? 'http://localhost:3000';
+  return env('BADGERIQ_DASHBOARD_URL') ?? 'http://localhost:3000';
 }
 
 /**

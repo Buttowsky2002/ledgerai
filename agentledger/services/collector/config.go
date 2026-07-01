@@ -32,21 +32,25 @@ func LoadConfig() Config {
 		Topic:        env("AGENTLEDGER_KAFKA_TOPIC", "events.raw"),
 		SchemaPath:   env("AGENTLEDGER_EVENT_SCHEMA", "../../schemas/events/llm_call.schema.json"),
 		MaxBodyBytes: envInt64("AGENTLEDGER_MAX_BODY_BYTES", 4<<20),
-		MaxBatch:     int(envInt64("AGENTLEDGER_MAX_BATCH", 1000)),
-		MaxInflight:  int(envInt64("AGENTLEDGER_MAX_INFLIGHT", 8192)),
+		MaxBatch:     envIntLocal("AGENTLEDGER_MAX_BATCH", 1000),
+		MaxInflight:  envIntLocal("AGENTLEDGER_MAX_INFLIGHT", 8192),
 
 		OtelTenantAttr:    env("AGENTLEDGER_OTEL_TENANT_ATTR", otelTenantAttrDefault),
 		OtelDefaultTenant: lookupEnv("AGENTLEDGER_OTEL_DEFAULT_TENANT"),
 	}
 }
 
-// lookupEnv resolves an environment variable, preferring the new LEDGERAI_*
+// lookupEnv resolves an environment variable, preferring BADGERIQ_* and falling back to LEDGERAI_*
 // name and falling back to the legacy AGENTLEDGER_* alias (deprecated; kept for
-// backwards compatibility — see the README "Renaming to LedgerAI" note).
+// backwards compatibility — see the README "Renaming to BadgerIQ" note).
 func lookupEnv(name string) string {
 	const legacy = "AGENTLEDGER_"
 	if len(name) > len(legacy) && name[:len(legacy)] == legacy {
-		if v := os.Getenv("LEDGERAI_" + name[len(legacy):]); v != "" {
+		suffix := name[len(legacy):]
+		if v := os.Getenv("BADGERIQ_" + suffix); v != "" {
+			return v
+		}
+		if v := os.Getenv("LEDGERAI_" + suffix); v != "" {
 			return v
 		}
 	}
@@ -64,6 +68,16 @@ func envInt64(key string, def int64) int64 {
 	if v := lookupEnv(key); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
 			return n
+		}
+	}
+	return def
+}
+
+func envIntLocal(key string, def int) int {
+	if v := lookupEnv(key); v != "" {
+		n, err := strconv.ParseInt(v, 10, 0)
+		if err == nil {
+			return int(n)
 		}
 	}
 	return def

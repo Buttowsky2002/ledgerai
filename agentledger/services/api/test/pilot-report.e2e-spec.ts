@@ -98,7 +98,7 @@ describe('Pilot report', () => {
       .set(bearer(await tok(tenantA)));
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toContain('text/markdown');
-    expect(res.text).toContain('# AgentLedger Pilot Report');
+    expect(res.text).toContain('# BadgerIQ Pilot Report');
     expect(res.text).toContain('## Risk-adjusted ROI');
   });
 

@@ -1,4 +1,4 @@
-# AgentLedger local development stack
+# BadgerIQ local development stack
 #
 #   docker compose up -d
 #   curl -s http://localhost:8080/healthz
@@ -96,6 +96,43 @@ services:
     ports: ["8093:8093"]
     depends_on:
       clickhouse: { condition: service_healthy }
+
+  # Outcome→run attribution (P3). V2 cutover: stamps outcomes + attribution_edges;
+  # V1 skipped when ATTRIBUTION_ENGINE_V2_CUTOVER=true.
+  attribution:
+    build:
+      context: ./services/workers
+      args: { CMD: attribution }
+    environment:
+      AGENTLEDGER_PG_DSN: postgres://agentledger:dev_only_change_me@postgres:5432/agentledger?sslmode=disable
+      AGENTLEDGER_CLICKHOUSE_URL: http://clickhouse:8123
+      AGENTLEDGER_CLICKHOUSE_DB: agentledger
+      AGENTLEDGER_WORKER_ADDR: ":8096"
+      AGENTLEDGER_ATTR_INTERVAL_SEC: "300"
+      ATTRIBUTION_ENGINE_V2: "true"
+      ATTRIBUTION_ENGINE_V2_CUTOVER: "true"
+      BADGERIQ_ATTR_ALLOW_TRIGGER: "true"
+    ports: ["8096:8096"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      clickhouse: { condition: service_healthy }
+
+  # Proposes pricing/pricebook.candidate.json + pricebook.diff.json from the LiteLLM
+  # list-price feed for human PR review. Never mutates the live price book at runtime.
+  pricesync:
+    build:
+      context: ./services/workers
+      args: { CMD: pricesync }
+    working_dir: /w
+    volumes:
+      - .:/w
+    environment:
+      AGENTLEDGER_PRICESYNC_LIVE: pricing/pricebook.json
+      AGENTLEDGER_PRICESYNC_OUT: pricing/pricebook.candidate.json
+      AGENTLEDGER_PRICESYNC_DIFF: pricing/pricebook.diff.json
+      AGENTLEDGER_PRICESYNC_INTERVAL_SEC: "86400"
+      AGENTLEDGER_WORKER_ADDR: ":8094"
+    ports: ["8094:8094"]
 
   # Agent-Native Risk Engine (Phase 5): observed tool usage vs the deny-by-default
   # allowlist → governed risk_events + agent_risk → risk-adjusted ROI.
@@ -237,11 +274,14 @@ services:
       postgres: { condition: service_healthy }
 
   api:
-    build: ./services/api
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
     environment:
       # Connects as the least-privilege agentledger_api role (NON-superuser, so
       # it is subject to RLS). The bootstrap `agentledger` user would bypass RLS.
       AGENTLEDGER_PG_DSN: postgres://agentledger_api:dev_only_change_me@postgres:5432/agentledger?sslmode=disable
+      BADGERIQ_PG_DSN: postgres://agentledger_api:dev_only_change_me@postgres:5432/agentledger?sslmode=disable
       AGENTLEDGER_CLICKHOUSE_URL: http://clickhouse:8123
       AGENTLEDGER_CLICKHOUSE_DB: agentledger
       AGENTLEDGER_API_ADDR: ":8094"
@@ -253,6 +293,8 @@ services:
       AGENTLEDGER_JWT_SECRET: dev_only_change_me_jwt
       # DEV ONLY: trust x-tenant-id header (dev admin principal) alongside real JWT auth.
       AGENTLEDGER_DEV_TRUST_HEADER: "true"
+      BADGERIQ_DESIGN_PARTNER_ONBOARD_ENABLED: "true"
+      BADGERIQ_ATTRIBUTION_WORKER_URL: http://attribution:8096
       # OIDC providers are configured by env-var NAMES (rule 1); unset → provider
       # unavailable. Uncomment + supply real values to enable live SSO:
       # AGENTLEDGER_OIDC_REDIRECT_BASE: http://localhost:8094
@@ -265,6 +307,25 @@ services:
       postgres: { condition: service_healthy }
       pg-dev-init: { condition: service_completed_successfully }
       clickhouse: { condition: service_healthy }
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: apps/dashboard/Dockerfile
+      args:
+        BADGERIQ_API_URL: http://api:8094
+    environment:
+      BADGERIQ_API_URL: http://api:8094
+      # Your connectors/imports live on this tenant today (dev header auth).
+      BADGERIQ_DEV_TENANT_ID: "${BADGERIQ_DEV_TENANT_ID:-00000000-0000-4000-8000-000000000001}"
+      # false = no demo banner; use make reset-demo to drop synthetic analytics only.
+      BADGERIQ_DEMO_MODE: "${BADGERIQ_DEMO_MODE:-false}"
+      # Docker standalone image runs NODE_ENV=production — keep BFF auth for local stacks.
+      BADGERIQ_DEV_TRUST_TENANT: "${BADGERIQ_DEV_TRUST_TENANT:-true}"
+      NODE_ENV: development
+    ports: ["3000:3000"]
+    depends_on:
+      api: { condition: service_started }
 
 volumes:
   pg_data:

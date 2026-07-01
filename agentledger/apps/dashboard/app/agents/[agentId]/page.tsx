@@ -98,7 +98,7 @@ export default async function AgentDetailPage({ params }: { params: { agentId: s
             value_usd: usd(o.value_usd),
             confidence: pct(o.confidence),
             evidence: (
-              <a className="text-sky-600 hover:underline" href={`/attribution?outcome=${encodeURIComponent(o.outcome_id)}`}>
+              <a className="text-accent hover:text-accent-soft hover:underline" href={`/attribution?outcome=${encodeURIComponent(o.outcome_id)}`}>
                 view signals →
               </a>
             ),

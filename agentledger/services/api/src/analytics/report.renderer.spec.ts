@@ -47,7 +47,7 @@ describe('renderMarkdown', () => {
   const md = renderMarkdown(sample);
 
   it('renders the title, window, and every section heading', () => {
-    expect(md).toContain('# AgentLedger Pilot Report');
+    expect(md).toContain('# BadgerIQ Pilot Report');
     expect(md).toContain('2026-05-22 → 2026-06-21 (30 days)');
     for (const h of ['## Spend', '## Top agents', '## Unit economics', '## Risk-adjusted ROI', '## Governance posture']) {
       expect(md).toContain(h);

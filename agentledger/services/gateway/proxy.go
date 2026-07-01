@@ -110,7 +110,7 @@ func (g *Gateway) handleChatCompletions(w http.ResponseWriter, r *http.Request) 
 	// 1. Authenticate virtual key
 	vk, ok := g.authenticate(snap, r)
 	if !ok {
-		writeErr(w, http.StatusUnauthorized, "invalid_api_key", "unknown or missing AgentLedger virtual key")
+		writeErr(w, http.StatusUnauthorized, "invalid_api_key", "unknown or missing BadgerIQ virtual key")
 		return
 	}
 
@@ -215,7 +215,7 @@ func (g *Gateway) serveCanonical(w http.ResponseWriter, r *http.Request, snap *g
 			status, ev.Status = http.StatusServiceUnavailable, "blocked_budget"
 		}
 		ev.StatusCode = status
-		g.finishFmt(w, ev, start, status, reason, "request rejected by AgentLedger policy: "+reason, format)
+		g.finishFmt(w, ev, start, status, reason, "request rejected by BadgerIQ policy: "+reason, format)
 		return
 	}
 

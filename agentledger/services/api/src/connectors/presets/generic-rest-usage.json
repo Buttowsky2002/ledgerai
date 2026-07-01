@@ -1,0 +1,38 @@
+{
+  "name": "Generic REST Usage API",
+  "provider": "custom",
+  "category": "ai_usage",
+  "authType": "api_key_header",
+  "authHeaderName": "x-api-key",
+  "baseUrl": "https://api.example.com",
+  "endpoints": [
+    {
+      "path": "/v1/usage",
+      "method": "GET",
+      "queryParams": {
+        "start": "{{sync_start}}",
+        "end": "{{sync_end}}"
+      }
+    }
+  ],
+  "pagination": {
+    "type": "cursor",
+    "itemsPath": "data",
+    "cursorPath": "next_cursor",
+    "cursorParam": "cursor",
+    "pageSize": 100
+  },
+  "destinationRecordType": "llm_call_record",
+  "fieldMappings": [
+    { "type": "direct", "source": "usage.total_tokens", "target": "total_tokens" },
+    { "type": "direct", "source": "usage.input_tokens", "target": "input_tokens" },
+    { "type": "direct", "source": "usage.output_tokens", "target": "output_tokens" },
+    { "type": "direct", "source": "model.name", "target": "model" },
+    { "type": "direct", "source": "user.email", "target": "user_email" },
+    { "type": "direct", "source": "project.id", "target": "project_id" },
+    { "type": "fallback", "target": "cost_usd", "sources": ["costs.amount.value", "cost_usd"] },
+    { "type": "derived", "target": "cost_usd", "expression": "amount / 100" },
+    { "type": "direct", "source": "id", "target": "id" }
+  ],
+  "dedupe": { "strategy": "period_model_user_product_cost" }
+}

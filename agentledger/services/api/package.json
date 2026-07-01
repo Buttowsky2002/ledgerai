@@ -2,7 +2,7 @@
   "name": "@agentledger/api",
   "version": "0.1.0",
   "private": true,
-  "description": "LedgerAI control-plane API (NestJS + Prisma on Postgres)",
+  "description": "BadgerIQ control-plane API (NestJS + Prisma on Postgres)",
   "license": "UNLICENSED",
   "engines": {
     "node": ">=20"
@@ -10,6 +10,7 @@
   "scripts": {
     "prebuild": "prisma generate",
     "build": "nest build",
+    "postbuild": "node scripts/copy-report-assets.js",
     "start": "node dist/main.js",
     "start:dev": "nest start --watch",
     "prisma:generate": "prisma generate",
@@ -30,14 +31,17 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "cookie-parser": "^1.4.7",
+    "exceljs": "^4.4.0",
     "jose": "^5.10.0",
     "nestjs-pino": "^4.1.0",
     "openid-client": "^5.7.1",
+    "pdfkit": "^0.19.1",
     "pino": "^9.5.0",
     "pino-http": "^10.3.0",
     "prom-client": "^15.1.3",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "sharp": "^0.33.5"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.4.9",
@@ -47,6 +51,7 @@
     "@types/express": "^5.0.0",
     "@types/jest": "^29.5.14",
     "@types/node": "^20.17.10",
+    "@types/pdfkit": "^0.17.6",
     "@types/supertest": "^6.0.2",
     "@typescript-eslint/eslint-plugin": "^8.18.1",
     "@typescript-eslint/parser": "^8.18.1",

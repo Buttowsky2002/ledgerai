@@ -57,6 +57,37 @@ with `make reset-demo` (or `docker compose down -v` for a full reset).
 The demo tenant id is a real UUID (`00000000-0000-4000-8000-000000000001`) because
 the API validates the dev `x-tenant-id` header as a UUID.
 
+### Design partner onboarding (live tenant + LARI)
+
+When presenting to design partners on a **live tenant** (real connector spend, no full
+demo reset), use the one-shot onboard API to register agents, seed bootstrap
+runs/outcomes, trigger attribution V2, and verify LARI — without touching existing
+`llm_calls`.
+
+**Prerequisites:** `docker compose` stack up with `BADGERIQ_DESIGN_PARTNER_ONBOARD_ENABLED=true`
+and `BADGERIQ_ATTR_ALLOW_TRIGGER=true` (set in the dev compose file).
+
+```bash
+curl -X POST http://localhost:8094/v1/design-partner/onboard \
+  -H "x-tenant-id: YOUR-TENANT-UUID" \
+  -H "Content-Type: application/json" \
+  -d '{"preset":"studio-live"}'
+```
+
+Or use the Make wrapper (calls the same API):
+
+```bash
+make bootstrap-graph
+# BADGERIQ_DEV_TENANT_ID=<uuid> powershell -File deploy/demo/bootstrap-outcome-graph.ps1
+```
+
+**Built-in presets:** `studio-live` — three agents (CodeReview, InvoiceReview,
+SupportBot) with SDK-stamped runs and matching outcomes in the Apr–Jun 2026 CFO window.
+
+The response includes stamped-outcome counts, `v_roi` row counts, per-agent LARI
+summaries, and the recommended dashboard date range. List presets with
+`GET /v1/design-partner/presets` (admin role).
+
 ---
 
 ## 2. Gateway dev mode

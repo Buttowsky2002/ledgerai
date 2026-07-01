@@ -11,7 +11,7 @@ import { randomUUID } from 'node:crypto';
 export class ImportRowError extends Error {}
 
 export interface MappedEvent {
-  table: 'llm_calls' | 'agent_tool_calls' | 'outcomes' | 'risk_events';
+  table: 'llm_calls' | 'agent_tool_calls' | 'outcomes' | 'risk_events' | 'coding_agent_daily';
   row: Record<string, unknown>;
 }
 export interface MappedRow {
@@ -55,6 +55,23 @@ function id(prefix: string, key: string | undefined, suffix = ''): string {
   return key ? `imp_${key}${suffix}` : `${prefix}_${randomUUID().replace(/-/g, '')}`;
 }
 
+const CODING_AGENT_ALIASES: Record<string, string> = {
+  cursor: 'cursor',
+  'claude-code': 'claude-code',
+  'claude code': 'claude-code',
+  copilot: 'github-copilot',
+  'github-copilot': 'github-copilot',
+  'github copilot': 'github-copilot',
+};
+
+function codingAgentProvider(provider: string | undefined, toolName: string): string | undefined {
+  const probe = `${provider ?? ''} ${toolName}`.toLowerCase();
+  for (const [alias, canonical] of Object.entries(CODING_AGENT_ALIASES)) {
+    if (probe.includes(alias)) return canonical;
+  }
+  return undefined;
+}
+
 export function mapRow(data: unknown): MappedRow {
   if (typeof data !== 'object' || data === null || Array.isArray(data)) {
     throw new ImportRowError('row is not a JSON object');
@@ -64,15 +81,21 @@ export function mapRow(data: unknown): MappedRow {
   const ts = isoTs(r.timestamp);
   const idempotencyKey = str(r.idempotency_key ?? r.idem_key, 'idempotency_key');
   const teamId = str(r.team_id, 'team_id') ?? '';
-  const userId = str(r.user_id, 'user_id') ?? '';
+  const userId =
+    str(r.user_id, 'user_id') ??
+    str(r.user_email, 'user_email') ??
+    str(r.user_name, 'user_name') ??
+    '';
   const agentId = str(r.agent_id, 'agent_id') ?? '';
   const runId = str(r.run_id, 'run_id') ?? '';
 
   const provider = str(r.provider, 'provider');
+  const platformDisplayName = str(r.platform_display_name, 'platform_display_name');
   const model = str(r.model, 'model');
   const inputTokens = num(r.input_tokens, 'input_tokens');
   const outputTokens = num(r.output_tokens, 'output_tokens');
   const costUsd = num(r.cost_usd, 'cost_usd');
+  const callStatus = str(r.status, 'status') ?? 'ok';
   const toolName = str(r.tool_name, 'tool_name');
   const outcomeType = str(r.outcome_type, 'outcome_type');
   const outcomeValueUsd = num(r.outcome_value_usd, 'outcome_value_usd');
@@ -106,12 +129,13 @@ export function mapRow(data: unknown): MappedRow {
         input_tokens: Math.round(inputTokens ?? 0),
         output_tokens: Math.round(outputTokens ?? 0),
         cost_usd: costUsd ?? 0,
-        status: 'ok',
+        status: callStatus,
+        app_id: platformDisplayName ?? provider ?? '',
         // A risk severity on a usage row marks the call as risk-flagged so it
         // rolls into risk_daily (which counts rows where dlp_action != 'allow').
         dlp_action: riskSeverity ? 'warn' : 'allow',
         risk_severity: riskSeverity ?? '',
-        source: 'sdk',
+        source: str(r.source, 'source') ?? 'sdk',
       },
     });
   }
@@ -122,7 +146,7 @@ export function mapRow(data: unknown): MappedRow {
       row: {
         outcome_id: id('out', idempotencyKey, '_out'),
         ts,
-        source_system: 'import',
+        source_system: str(r.source, 'source') === 'api' ? 'api' : 'import',
         outcome_type: outcomeType,
         team_id: teamId,
         user_id: userId,
@@ -151,6 +175,22 @@ export function mapRow(data: unknown): MappedRow {
         ts,
       },
     });
+    const codingProvider = codingAgentProvider(provider, toolName);
+    if (codingProvider) {
+      events.push({
+        table: 'coding_agent_daily',
+        row: {
+          day: ts.slice(0, 10),
+          provider: codingProvider,
+          user_id: userId,
+          team_id: teamId,
+          agent_id: agentId,
+          cost_usd: costUsd ?? 0,
+          sessions: 1,
+          requests: 1,
+        },
+      });
+    }
   }
 
   // A standalone risk signal (no usage row to ride on) becomes a risk_event.
