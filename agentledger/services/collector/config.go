@@ -10,33 +10,33 @@ import (
 // has no static config file: it is a stateless ingest service, so everything
 // comes from the environment (12-factor; secrets are never read from files).
 type Config struct {
-	ListenAddr   string   // AGENTLEDGER_COLLECTOR_ADDR (default :8090)
-	Brokers      []string // AGENTLEDGER_KAFKA_BROKERS (csv, default localhost:19092)
-	Topic        string   // AGENTLEDGER_KAFKA_TOPIC (default events.raw)
-	SchemaPath   string   // AGENTLEDGER_EVENT_SCHEMA (default ../../schemas/events/llm_call.schema.json)
-	MaxBodyBytes int64    // AGENTLEDGER_MAX_BODY_BYTES (default 4 MiB)
-	MaxBatch     int      // AGENTLEDGER_MAX_BATCH (max events per request, default 1000)
-	MaxInflight  int      // AGENTLEDGER_MAX_INFLIGHT (backpressure gate, default 8192)
+	ListenAddr   string   // BADGERIQ_COLLECTOR_ADDR (default :8090)
+	Brokers      []string // BADGERIQ_KAFKA_BROKERS (csv, default localhost:19092)
+	Topic        string   // BADGERIQ_KAFKA_TOPIC (default events.raw)
+	SchemaPath   string   // BADGERIQ_EVENT_SCHEMA (default ../../schemas/events/llm_call.schema.json)
+	MaxBodyBytes int64    // BADGERIQ_MAX_BODY_BYTES (default 4 MiB)
+	MaxBatch     int      // BADGERIQ_MAX_BATCH (max events per request, default 1000)
+	MaxInflight  int      // BADGERIQ_MAX_INFLIGHT (backpressure gate, default 8192)
 
 	// OTel GenAI ingestion (gateway-agnostic source, ARCHITECTURE_PIVOT.md P1).
-	OtelTenantAttr    string // AGENTLEDGER_OTEL_TENANT_ATTR (resource/span attr carrying tenant; default agentledger.tenant_id)
-	OtelDefaultTenant string // AGENTLEDGER_OTEL_DEFAULT_TENANT (fallback when no attr/header; empty = require explicit tenant)
+	OtelTenantAttr    string // BADGERIQ_OTEL_TENANT_ATTR (resource/span attr carrying tenant; default agentledger.tenant_id)
+	OtelDefaultTenant string // BADGERIQ_OTEL_DEFAULT_TENANT (fallback when no attr/header; empty = require explicit tenant)
 }
 
 // LoadConfig reads the collector configuration from environment variables,
 // applying defaults for any unset values.
 func LoadConfig() Config {
 	return Config{
-		ListenAddr:   env("AGENTLEDGER_COLLECTOR_ADDR", ":8090"),
-		Brokers:      splitCSV(env("AGENTLEDGER_KAFKA_BROKERS", "localhost:19092")),
-		Topic:        env("AGENTLEDGER_KAFKA_TOPIC", "events.raw"),
-		SchemaPath:   env("AGENTLEDGER_EVENT_SCHEMA", "../../schemas/events/llm_call.schema.json"),
-		MaxBodyBytes: envInt64("AGENTLEDGER_MAX_BODY_BYTES", 4<<20),
-		MaxBatch:     envIntLocal("AGENTLEDGER_MAX_BATCH", 1000),
-		MaxInflight:  envIntLocal("AGENTLEDGER_MAX_INFLIGHT", 8192),
+		ListenAddr:   env("BADGERIQ_COLLECTOR_ADDR", ":8090"),
+		Brokers:      splitCSV(env("BADGERIQ_KAFKA_BROKERS", "localhost:19092")),
+		Topic:        env("BADGERIQ_KAFKA_TOPIC", "events.raw"),
+		SchemaPath:   env("BADGERIQ_EVENT_SCHEMA", "../../schemas/events/llm_call.schema.json"),
+		MaxBodyBytes: envInt64("BADGERIQ_MAX_BODY_BYTES", 4<<20),
+		MaxBatch:     envIntLocal("BADGERIQ_MAX_BATCH", 1000),
+		MaxInflight:  envIntLocal("BADGERIQ_MAX_INFLIGHT", 8192),
 
-		OtelTenantAttr:    env("AGENTLEDGER_OTEL_TENANT_ATTR", otelTenantAttrDefault),
-		OtelDefaultTenant: lookupEnv("AGENTLEDGER_OTEL_DEFAULT_TENANT"),
+		OtelTenantAttr:    env("BADGERIQ_OTEL_TENANT_ATTR", otelTenantAttrDefault),
+		OtelDefaultTenant: lookupEnv("BADGERIQ_OTEL_DEFAULT_TENANT"),
 	}
 }
 

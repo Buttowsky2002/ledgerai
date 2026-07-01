@@ -1,4 +1,4 @@
-module github.com/agentledger/workers
+module github.com/badgeriq/workers
 
 go 1.22
 

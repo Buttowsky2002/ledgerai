@@ -1,12 +1,12 @@
 /**
- * LedgerAI TypeScript SDK.
+ * BadgerIQ TypeScript SDK.
  *
  * Dependency-free tracing for AI agents — agent runs, LLM calls, tool calls,
- * business outcomes, and risk signals — sent to the LedgerAI collector
+ * business outcomes, and risk signals — sent to the BadgerIQ collector
  * (`POST {baseUrl}/v1/events`). Field names track the OpenTelemetry GenAI
  * semantic conventions (gen_ai.*); see `otelLlmAttributes`.
  *
- *   const ledger = new LedgerAI({ apiKey: process.env.LEDGERAI_KEY, baseUrl: process.env.LEDGERAI_URL });
+ *   const ledger = new LedgerAI({ apiKey: process.env.BADGERIQ_KEY, baseUrl: process.env.BADGERIQ_URL });
  *   await ledger.run({ agentId: 'support-bot' }, async (run) => {
  *     await run.llmCall({ provider: 'openai', model: 'gpt-4o', inputTokens: 120, outputTokens: 80, costUsd: 0.004 });
  *     await run.toolCall({ tool: 'search_kb' });
@@ -40,13 +40,13 @@ const CONTENT_KEYS = ['content', 'prompt', 'completion', 'messages', 'input', 'o
 
 /** Options for the LedgerAI client. */
 export interface LedgerAIOptions {
-  /** Ingest token. Default: env LEDGERAI_KEY (then legacy AGENTLEDGER_API_KEY). */
+  /** Ingest token. Default: env BADGERIQ_KEY (then legacy BADGERIQ_API_KEY). */
   apiKey?: string;
-  /** Collector base URL. Default: env LEDGERAI_URL (then localhost:8090). */
+  /** Collector base URL. Default: env BADGERIQ_URL (then localhost:8090). */
   baseUrl?: string;
   /** Never throw on telemetry failures (default true). */
   failOpen?: boolean;
-  /** Tenant id stamped on every event (required for ingestion). Default env LEDGERAI_TENANT_ID. */
+  /** Tenant id stamped on every event (required for ingestion). Default env BADGERIQ_TENANT_ID. */
   tenantId?: string;
   /** Optional default attribution dimensions. */
   appId?: string;
@@ -239,11 +239,11 @@ export class LedgerAI {
   private closed = false;
 
   constructor(opts: LedgerAIOptions = {}) {
-    this.apiKey = opts.apiKey ?? env('LEDGERAI_KEY') ?? env('AGENTLEDGER_API_KEY');
-    const base = (opts.baseUrl ?? env('LEDGERAI_URL') ?? env('AGENTLEDGER_COLLECTOR_URL') ?? 'http://localhost:8090').replace(/\/+$/, '');
+    this.apiKey = opts.apiKey ?? env('BADGERIQ_KEY') ?? env('BADGERIQ_API_KEY');
+    const base = (opts.baseUrl ?? env('BADGERIQ_URL') ?? env('BADGERIQ_COLLECTOR_URL') ?? 'http://localhost:8090').replace(/\/+$/, '');
     this.eventsUrl = base.endsWith('/v1/events') ? base : `${base}/v1/events`;
     this.failOpen = opts.failOpen ?? true;
-    this.tenantId = opts.tenantId ?? env('LEDGERAI_TENANT_ID');
+    this.tenantId = opts.tenantId ?? env('BADGERIQ_TENANT_ID');
     this.appId = opts.appId;
     this.userId = opts.userId;
     this.environment = opts.environment ?? 'prod';

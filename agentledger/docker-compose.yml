@@ -60,9 +60,9 @@ services:
   collector:
     build: ./services/collector
     environment:
-      AGENTLEDGER_KAFKA_BROKERS: redpanda:9092
-      AGENTLEDGER_KAFKA_TOPIC: events.raw
-      AGENTLEDGER_EVENT_SCHEMA: /etc/agentledger/schemas/events/llm_call.schema.json
+      BADGERIQ_KAFKA_BROKERS: redpanda:9092
+      BADGERIQ_KAFKA_TOPIC: events.raw
+      BADGERIQ_EVENT_SCHEMA: /etc/agentledger/schemas/events/llm_call.schema.json
     ports: ["8090:8090"]
     volumes:
       - ./schemas:/etc/agentledger/schemas:ro
@@ -74,11 +74,11 @@ services:
       context: ./services/workers
       args: { CMD: ch-insert }
     environment:
-      AGENTLEDGER_KAFKA_BROKERS: redpanda:9092
-      AGENTLEDGER_KAFKA_TOPIC: events.raw
-      AGENTLEDGER_KAFKA_DLQ_TOPIC: events.dlq
-      AGENTLEDGER_CLICKHOUSE_URL: http://clickhouse:8123
-      AGENTLEDGER_CLICKHOUSE_DB: agentledger
+      BADGERIQ_KAFKA_BROKERS: redpanda:9092
+      BADGERIQ_KAFKA_TOPIC: events.raw
+      BADGERIQ_KAFKA_DLQ_TOPIC: events.dlq
+      BADGERIQ_CLICKHOUSE_URL: http://clickhouse:8123
+      BADGERIQ_CLICKHOUSE_DB: agentledger
     ports: ["8091:8091"]
     depends_on:
       clickhouse: { condition: service_healthy }
@@ -89,10 +89,10 @@ services:
       context: ./services/workers
       args: { CMD: reconcile }
     environment:
-      AGENTLEDGER_CLICKHOUSE_URL: http://clickhouse:8123
-      AGENTLEDGER_CLICKHOUSE_DB: agentledger
-      AGENTLEDGER_RECONCILE_THRESHOLD: "0.02"
-      AGENTLEDGER_RECONCILE_INTERVAL_SEC: "86400"
+      BADGERIQ_CLICKHOUSE_URL: http://clickhouse:8123
+      BADGERIQ_CLICKHOUSE_DB: agentledger
+      BADGERIQ_RECONCILE_THRESHOLD: "0.02"
+      BADGERIQ_RECONCILE_INTERVAL_SEC: "86400"
     ports: ["8093:8093"]
     depends_on:
       clickhouse: { condition: service_healthy }
@@ -104,11 +104,11 @@ services:
       context: ./services/workers
       args: { CMD: attribution }
     environment:
-      AGENTLEDGER_PG_DSN: postgres://agentledger:dev_only_change_me@postgres:5432/agentledger?sslmode=disable
-      AGENTLEDGER_CLICKHOUSE_URL: http://clickhouse:8123
-      AGENTLEDGER_CLICKHOUSE_DB: agentledger
-      AGENTLEDGER_WORKER_ADDR: ":8096"
-      AGENTLEDGER_ATTR_INTERVAL_SEC: "300"
+      BADGERIQ_PG_DSN: postgres://agentledger:dev_only_change_me@postgres:5432/agentledger?sslmode=disable
+      BADGERIQ_CLICKHOUSE_URL: http://clickhouse:8123
+      BADGERIQ_CLICKHOUSE_DB: agentledger
+      BADGERIQ_WORKER_ADDR: ":8096"
+      BADGERIQ_ATTR_INTERVAL_SEC: "300"
       ATTRIBUTION_ENGINE_V2: "true"
       ATTRIBUTION_ENGINE_V2_CUTOVER: "true"
       BADGERIQ_ATTR_ALLOW_TRIGGER: "true"
@@ -127,11 +127,11 @@ services:
     volumes:
       - .:/w
     environment:
-      AGENTLEDGER_PRICESYNC_LIVE: pricing/pricebook.json
-      AGENTLEDGER_PRICESYNC_OUT: pricing/pricebook.candidate.json
-      AGENTLEDGER_PRICESYNC_DIFF: pricing/pricebook.diff.json
-      AGENTLEDGER_PRICESYNC_INTERVAL_SEC: "86400"
-      AGENTLEDGER_WORKER_ADDR: ":8094"
+      BADGERIQ_PRICESYNC_LIVE: pricing/pricebook.json
+      BADGERIQ_PRICESYNC_OUT: pricing/pricebook.candidate.json
+      BADGERIQ_PRICESYNC_DIFF: pricing/pricebook.diff.json
+      BADGERIQ_PRICESYNC_INTERVAL_SEC: "86400"
+      BADGERIQ_WORKER_ADDR: ":8094"
     ports: ["8094:8094"]
 
   # Agent-Native Risk Engine (Phase 5): observed tool usage vs the deny-by-default
@@ -141,10 +141,10 @@ services:
       context: ./services/workers
       args: { CMD: risk-engine }
     environment:
-      AGENTLEDGER_CLICKHOUSE_URL: http://clickhouse:8123
-      AGENTLEDGER_CLICKHOUSE_DB: agentledger
-      AGENTLEDGER_RISK_INTERVAL_SEC: "3600"
-      AGENTLEDGER_RISK_SPIKE_MIN: "5"
+      BADGERIQ_CLICKHOUSE_URL: http://clickhouse:8123
+      BADGERIQ_CLICKHOUSE_DB: agentledger
+      BADGERIQ_RISK_INTERVAL_SEC: "3600"
+      BADGERIQ_RISK_SPIKE_MIN: "5"
     ports: ["8099:8099"]
     depends_on:
       clickhouse: { condition: service_healthy }
@@ -152,18 +152,18 @@ services:
   # Semantic risk-enrichment tier (Phase 6, deferred from P5): LLM classifies
   # per-run tool-call sequences for injection / data-egress / anomalous patterns
   # → semantic_* risk_events. Opt-in and async (never inline): serves health only
-  # unless AGENTLEDGER_RISK_ENRICH_ENABLED=true AND ANTHROPIC_API_KEY is set.
+  # unless BADGERIQ_RISK_ENRICH_ENABLED=true AND ANTHROPIC_API_KEY is set.
   risk-enrichment:
     build:
       context: ./services/workers
       args: { CMD: risk-enrichment }
     environment:
-      AGENTLEDGER_CLICKHOUSE_URL: http://clickhouse:8123
-      AGENTLEDGER_CLICKHOUSE_DB: agentledger
-      AGENTLEDGER_RISK_ENRICH_ENABLED: "${AGENTLEDGER_RISK_ENRICH_ENABLED:-false}"
-      AGENTLEDGER_RISK_ENRICH_INTERVAL_SEC: "3600"
-      AGENTLEDGER_RISK_ENRICH_MIN_CONFIDENCE: "0.5"
-      AGENTLEDGER_RISK_ENRICH_MODEL: "${AGENTLEDGER_RISK_ENRICH_MODEL:-claude-opus-4-8}"
+      BADGERIQ_CLICKHOUSE_URL: http://clickhouse:8123
+      BADGERIQ_CLICKHOUSE_DB: agentledger
+      BADGERIQ_RISK_ENRICH_ENABLED: "${BADGERIQ_RISK_ENRICH_ENABLED:-false}"
+      BADGERIQ_RISK_ENRICH_INTERVAL_SEC: "3600"
+      BADGERIQ_RISK_ENRICH_MIN_CONFIDENCE: "0.5"
+      BADGERIQ_RISK_ENRICH_MODEL: "${BADGERIQ_RISK_ENRICH_MODEL:-claude-opus-4-8}"
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}" # env-var name only; never commit a key (rule 1)
     ports: ["8100:8100"]
     depends_on:
@@ -180,11 +180,11 @@ services:
       context: ./services/workers
       args: { CMD: slack-alerter }
     environment:
-      AGENTLEDGER_PG_DSN: postgres://agentledger:dev_only_change_me@postgres:5432/agentledger?sslmode=disable
-      AGENTLEDGER_CLICKHOUSE_URL: http://clickhouse:8123
-      AGENTLEDGER_CLICKHOUSE_DB: agentledger
-      AGENTLEDGER_SLACK_ALERT_INTERVAL_SEC: "300"
-      AGENTLEDGER_SLACK_WEBHOOK_URL: "${AGENTLEDGER_SLACK_WEBHOOK_URL:-}" # env-var name only; never commit a webhook (rule 1)
+      BADGERIQ_PG_DSN: postgres://agentledger:dev_only_change_me@postgres:5432/agentledger?sslmode=disable
+      BADGERIQ_CLICKHOUSE_URL: http://clickhouse:8123
+      BADGERIQ_CLICKHOUSE_DB: agentledger
+      BADGERIQ_SLACK_ALERT_INTERVAL_SEC: "300"
+      BADGERIQ_SLACK_WEBHOOK_URL: "${BADGERIQ_SLACK_WEBHOOK_URL:-}" # env-var name only; never commit a webhook (rule 1)
     ports: ["8101:8101"]
     depends_on:
       postgres: { condition: service_healthy }
@@ -195,10 +195,10 @@ services:
       context: ./services/connectors
       args: { CMD: connector-sync }
     environment:
-      AGENTLEDGER_PG_DSN: postgres://agentledger:dev_only_change_me@postgres:5432/agentledger?sslmode=disable
-      AGENTLEDGER_CLICKHOUSE_URL: http://clickhouse:8123
-      AGENTLEDGER_CLICKHOUSE_DB: agentledger
-      AGENTLEDGER_SYNC_INTERVAL_SEC: "3600"
+      BADGERIQ_PG_DSN: postgres://agentledger:dev_only_change_me@postgres:5432/agentledger?sslmode=disable
+      BADGERIQ_CLICKHOUSE_URL: http://clickhouse:8123
+      BADGERIQ_CLICKHOUSE_DB: agentledger
+      BADGERIQ_SYNC_INTERVAL_SEC: "3600"
     ports: ["8092:8092"]
     depends_on:
       postgres: { condition: service_healthy }
@@ -210,10 +210,10 @@ services:
       context: ./services/connectors
       args: { CMD: outcome-sync }
     environment:
-      AGENTLEDGER_PG_DSN: postgres://agentledger:dev_only_change_me@postgres:5432/agentledger?sslmode=disable
-      AGENTLEDGER_CLICKHOUSE_URL: http://clickhouse:8123
-      AGENTLEDGER_CLICKHOUSE_DB: agentledger
-      AGENTLEDGER_OUTCOME_SYNC_INTERVAL_SEC: "3600"
+      BADGERIQ_PG_DSN: postgres://agentledger:dev_only_change_me@postgres:5432/agentledger?sslmode=disable
+      BADGERIQ_CLICKHOUSE_URL: http://clickhouse:8123
+      BADGERIQ_CLICKHOUSE_DB: agentledger
+      BADGERIQ_OUTCOME_SYNC_INTERVAL_SEC: "3600"
       # GitHub PAT supplied at deploy time (env-var name referenced in connectors.config):
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
     ports: ["8095:8095"]
@@ -228,9 +228,9 @@ services:
       context: ./services/ingest/adapters
       args: { CMD: litellm }
     environment:
-      AGENTLEDGER_COLLECTOR_URL: http://collector:8090/v1/events
+      BADGERIQ_COLLECTOR_URL: http://collector:8090/v1/events
       # Per-deployment default tenant (override per-record via metadata key).
-      AGENTLEDGER_ADAPTER_TENANT: ${AGENTLEDGER_ADAPTER_TENANT:-}
+      BADGERIQ_ADAPTER_TENANT: ${BADGERIQ_ADAPTER_TENANT:-}
     ports: ["8097:8097"]
     depends_on:
       collector: { condition: service_started }
@@ -238,15 +238,15 @@ services:
   gateway:
     build: ./services/gateway
     environment:
-      AGENTLEDGER_CONFIG: /etc/agentledger/config.json
+      BADGERIQ_CONFIG: /etc/agentledger/config.json
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       # Uncomment to enable Redis-backed budget store:
-      # AGENTLEDGER_REDIS_PASSWORD: ""
+      # BADGERIQ_REDIS_PASSWORD: ""
       # Uncomment to enable Postgres config hot-reload (virtual keys + DLP policies
       # + per-agent tool/MCP allowlist for inline tool governance, ADR-032;
       # refreshed every 30s; serves last-known-good on outage). Unset = static file config.
-      # AGENTLEDGER_PG_DSN: postgres://agentledger:dev_only_change_me@postgres:5432/agentledger?sslmode=disable
+      # BADGERIQ_PG_DSN: postgres://agentledger:dev_only_change_me@postgres:5432/agentledger?sslmode=disable
     ports: ["8080:8080"]
     volumes:
       - ./services/gateway/config.example.json:/etc/agentledger/config.json:ro
@@ -280,28 +280,28 @@ services:
     environment:
       # Connects as the least-privilege agentledger_api role (NON-superuser, so
       # it is subject to RLS). The bootstrap `agentledger` user would bypass RLS.
-      AGENTLEDGER_PG_DSN: postgres://agentledger_api:dev_only_change_me@postgres:5432/agentledger?sslmode=disable
       BADGERIQ_PG_DSN: postgres://agentledger_api:dev_only_change_me@postgres:5432/agentledger?sslmode=disable
-      AGENTLEDGER_CLICKHOUSE_URL: http://clickhouse:8123
-      AGENTLEDGER_CLICKHOUSE_DB: agentledger
-      AGENTLEDGER_API_ADDR: ":8094"
+      BADGERIQ_PG_DSN: postgres://agentledger_api:dev_only_change_me@postgres:5432/agentledger?sslmode=disable
+      BADGERIQ_CLICKHOUSE_URL: http://clickhouse:8123
+      BADGERIQ_CLICKHOUSE_DB: agentledger
+      BADGERIQ_API_ADDR: ":8094"
       # This is the DEV/demo stack. The image defaults to NODE_ENV=production; override
       # it here so dev auth is permitted. (In production the API refuses to start if a
       # dev trust header is enabled — see assertDevTrustHeaderNotInProduction.)
       NODE_ENV: development
       # Session-JWT signing secret (dev placeholder; prod injects via secret manager).
-      AGENTLEDGER_JWT_SECRET: dev_only_change_me_jwt
+      BADGERIQ_JWT_SECRET: dev_only_change_me_jwt
       # DEV ONLY: trust x-tenant-id header (dev admin principal) alongside real JWT auth.
-      AGENTLEDGER_DEV_TRUST_HEADER: "true"
+      BADGERIQ_DEV_TRUST_HEADER: "true"
       BADGERIQ_DESIGN_PARTNER_ONBOARD_ENABLED: "true"
       BADGERIQ_ATTRIBUTION_WORKER_URL: http://attribution:8096
       # OIDC providers are configured by env-var NAMES (rule 1); unset → provider
       # unavailable. Uncomment + supply real values to enable live SSO:
-      # AGENTLEDGER_OIDC_REDIRECT_BASE: http://localhost:8094
-      # AGENTLEDGER_OIDC_GOOGLE_CLIENT_ID: ${AGENTLEDGER_OIDC_GOOGLE_CLIENT_ID:-}
-      # AGENTLEDGER_OIDC_GOOGLE_CLIENT_SECRET: ${AGENTLEDGER_OIDC_GOOGLE_CLIENT_SECRET:-}
-      # AGENTLEDGER_OIDC_MICROSOFT_CLIENT_ID: ${AGENTLEDGER_OIDC_MICROSOFT_CLIENT_ID:-}
-      # AGENTLEDGER_OIDC_MICROSOFT_CLIENT_SECRET: ${AGENTLEDGER_OIDC_MICROSOFT_CLIENT_SECRET:-}
+      # BADGERIQ_OIDC_REDIRECT_BASE: http://localhost:8094
+      # BADGERIQ_OIDC_GOOGLE_CLIENT_ID: ${BADGERIQ_OIDC_GOOGLE_CLIENT_ID:-}
+      # BADGERIQ_OIDC_GOOGLE_CLIENT_SECRET: ${BADGERIQ_OIDC_GOOGLE_CLIENT_SECRET:-}
+      # BADGERIQ_OIDC_MICROSOFT_CLIENT_ID: ${BADGERIQ_OIDC_MICROSOFT_CLIENT_ID:-}
+      # BADGERIQ_OIDC_MICROSOFT_CLIENT_SECRET: ${BADGERIQ_OIDC_MICROSOFT_CLIENT_SECRET:-}
     ports: ["8094:8094"]
     depends_on:
       postgres: { condition: service_healthy }

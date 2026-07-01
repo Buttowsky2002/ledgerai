@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/agentledger/workers/internal/attribution"
+	"github.com/badgeriq/workers/internal/attribution"
 )
 
 // tenantSamples builds one synthetic tenant's labeled samples from a golden corpus.

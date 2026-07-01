@@ -2,9 +2,9 @@
 import { LedgerAI } from '../src/index';
 
 const ledger = new LedgerAI({
-  apiKey: process.env.LEDGERAI_KEY,
-  baseUrl: process.env.LEDGERAI_URL, // e.g. http://localhost:8090
-  tenantId: process.env.LEDGERAI_TENANT_ID ?? '00000000-0000-4000-8000-000000000001',
+  apiKey: process.env.BADGERIQ_KEY,
+  baseUrl: process.env.BADGERIQ_URL, // e.g. http://localhost:8090
+  tenantId: process.env.BADGERIQ_TENANT_ID ?? '00000000-0000-4000-8000-000000000001',
   failOpen: true,
 });
 

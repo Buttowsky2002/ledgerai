@@ -58,9 +58,9 @@ LiteLLM's payload shape varies across versions, so the decoder accepts:
 
 ### Tenant resolution
 
-The adapter is normally deployed per tenant (`AGENTLEDGER_ADAPTER_TENANT`). For a
+The adapter is normally deployed per tenant (`BADGERIQ_ADAPTER_TENANT`). For a
 multi-tenant LiteLLM, a per-record override is read from the metadata key named
-by `AGENTLEDGER_ADAPTER_TENANT_META_KEY` (default `agentledger_tenant_id`). No
+by `BADGERIQ_ADAPTER_TENANT_META_KEY` (default `agentledger_tenant_id`). No
 resolvable tenant ⇒ the record is rejected (counted, logged), never produced.
 
 ### Provenance

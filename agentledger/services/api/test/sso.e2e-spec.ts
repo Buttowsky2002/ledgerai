@@ -33,9 +33,9 @@ describe('Enterprise SSO + JIT', () => {
   };
 
   beforeAll(async () => {
-    process.env.AGENTLEDGER_JWT_SECRET = process.env.AGENTLEDGER_JWT_SECRET ?? 'test-secret';
-    process.env.AGENTLEDGER_PG_DSN =
-      process.env.AGENTLEDGER_PG_DSN ??
+    process.env.BADGERIQ_JWT_SECRET = process.env.BADGERIQ_JWT_SECRET ?? 'test-secret';
+    process.env.BADGERIQ_PG_DSN =
+      process.env.BADGERIQ_PG_DSN ??
       'postgres://agentledger_api:dev_only_change_me@localhost:5432/agentledger?sslmode=disable';
     // Known dashboard target so the default (browser) callback redirect is assertable.
     process.env.BADGERIQ_DASHBOARD_URL = 'https://dash.example';

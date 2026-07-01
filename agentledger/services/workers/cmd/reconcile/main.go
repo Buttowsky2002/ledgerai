@@ -17,24 +17,24 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/agentledger/workers/internal/reconcile"
+	"github.com/badgeriq/workers/internal/reconcile"
 )
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 
 	ch := reconcile.NewHTTPClient(
-		env("AGENTLEDGER_CLICKHOUSE_URL", "http://localhost:8123"),
-		env("AGENTLEDGER_CLICKHOUSE_DB", "agentledger"),
-		env("AGENTLEDGER_CLICKHOUSE_USER", "default"),
-		lookupEnv("AGENTLEDGER_CLICKHOUSE_PASSWORD"),
+		env("BADGERIQ_CLICKHOUSE_URL", "http://localhost:8123"),
+		env("BADGERIQ_CLICKHOUSE_DB", "agentledger"),
+		env("BADGERIQ_CLICKHOUSE_USER", "default"),
+		lookupEnv("BADGERIQ_CLICKHOUSE_PASSWORD"),
 	)
 
 	metrics := &reconcile.Metrics{}
-	r := reconcile.New(ch, envFloat("AGENTLEDGER_RECONCILE_THRESHOLD", 0.02),
-		envIntLocal("AGENTLEDGER_RECONCILE_LOOKBACK_DAYS", 35), metrics)
+	r := reconcile.New(ch, envFloat("BADGERIQ_RECONCILE_THRESHOLD", 0.02),
+		envIntLocal("BADGERIQ_RECONCILE_LOOKBACK_DAYS", 35), metrics)
 
-	interval := time.Duration(envInt("AGENTLEDGER_RECONCILE_INTERVAL_SEC", 86400)) * time.Second
+	interval := time.Duration(envInt("BADGERIQ_RECONCILE_INTERVAL_SEC", 86400)) * time.Second
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -58,7 +58,7 @@ func main() {
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
 		writeMetrics(w, metrics)
 	})
-	srv := &http.Server{Addr: env("AGENTLEDGER_WORKER_ADDR", ":8093"), Handler: mux, ReadHeaderTimeout: 10 * time.Second}
+	srv := &http.Server{Addr: env("BADGERIQ_WORKER_ADDR", ":8093"), Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("admin server error", "err", err)

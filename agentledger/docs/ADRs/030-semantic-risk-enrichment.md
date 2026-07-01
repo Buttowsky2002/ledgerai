@@ -34,7 +34,7 @@ over the *behavioral pattern*, not over text.
 The Anthropic Messages API is called over stdlib `net/http`, consistent with how
 every other worker/connector reaches ClickHouse and provider APIs (no vendor SDK;
 CLAUDE.md rule 12 / dependency minimalism). The default model is
-`claude-opus-4-8` (override via `AGENTLEDGER_RISK_ENRICH_MODEL`). Output is
+`claude-opus-4-8` (override via `BADGERIQ_RISK_ENRICH_MODEL`). Output is
 constrained with `output_config.format` (JSON Schema) so the verdict parses
 deterministically; `temperature`/`thinking` are omitted (rejected on the 4.8
 surface). A `stop_reason: "refusal"` yields an empty assessment (the run is simply
@@ -47,10 +47,10 @@ live HTTP client is tested with `httptest`.
 ### Opt-in and async — gated on the deterministic tier
 
 The worker is **disabled by default**: the enrichment loop runs only when
-`AGENTLEDGER_RISK_ENRICH_ENABLED=true` and an API key is present; otherwise it
+`BADGERIQ_RISK_ENRICH_ENABLED=true` and an API key is present; otherwise it
 serves health endpoints and does nothing. This honors ADR-027's "gated on the
 deterministic tier's precision, never on the inline path." Findings below a
-confidence threshold (`AGENTLEDGER_RISK_ENRICH_MIN_CONFIDENCE`, default 0.5) are
+confidence threshold (`BADGERIQ_RISK_ENRICH_MIN_CONFIDENCE`, default 0.5) are
 dropped, so the semantic tier is clearly probabilistic.
 
 ### Writes into the shared risk_events table — no migration

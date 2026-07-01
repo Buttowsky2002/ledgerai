@@ -40,8 +40,8 @@ Point LiteLLM's logging callback (or a job replaying its `/spend/logs`) at
 
 ```bash
 cd services/ingest/adapters
-AGENTLEDGER_ADAPTER_TENANT=t_demo \
-AGENTLEDGER_COLLECTOR_URL=http://localhost:8090/v1/events \
+BADGERIQ_ADAPTER_TENANT=t_demo \
+BADGERIQ_COLLECTOR_URL=http://localhost:8090/v1/events \
 go run ./cmd/litellm     # listens on :8097
 
 curl -i http://localhost:8097/ingest/litellm \
@@ -74,20 +74,20 @@ curl -i http://localhost:8097/ingest/litellm \
 
 ### Tenant resolution
 
-The adapter is usually deployed per tenant: set `AGENTLEDGER_ADAPTER_TENANT`.
+The adapter is usually deployed per tenant: set `BADGERIQ_ADAPTER_TENANT`.
 For a multi-tenant LiteLLM, set a per-record override under the metadata key
-named by `AGENTLEDGER_ADAPTER_TENANT_META_KEY` (default
+named by `BADGERIQ_ADAPTER_TENANT_META_KEY` (default
 `agentledger_tenant_id`). A record with no resolvable tenant is rejected.
 
 ## Environment variables
 
 | Variable                             | Default                              | Purpose                                   |
 |--------------------------------------|--------------------------------------|-------------------------------------------|
-| `AGENTLEDGER_LITELLM_ADAPTER_ADDR`   | `:8097`                              | HTTP listen address.                      |
-| `AGENTLEDGER_COLLECTOR_URL`          | `http://localhost:8090/v1/events`    | Collector ingest endpoint to forward to.  |
-| `AGENTLEDGER_ADAPTER_TENANT`         | _(empty)_                            | Default tenant for records without an override. |
-| `AGENTLEDGER_ADAPTER_TENANT_META_KEY`| `agentledger_tenant_id`              | Metadata key that overrides the tenant per record. |
-| `AGENTLEDGER_MAX_BODY_BYTES`         | `8388608` (8 MiB)                    | Request body size limit.                  |
+| `BADGERIQ_LITELLM_ADAPTER_ADDR`   | `:8097`                              | HTTP listen address.                      |
+| `BADGERIQ_COLLECTOR_URL`          | `http://localhost:8090/v1/events`    | Collector ingest endpoint to forward to.  |
+| `BADGERIQ_ADAPTER_TENANT`         | _(empty)_                            | Default tenant for records without an override. |
+| `BADGERIQ_ADAPTER_TENANT_META_KEY`| `agentledger_tenant_id`              | Metadata key that overrides the tenant per record. |
+| `BADGERIQ_MAX_BODY_BYTES`         | `8388608` (8 MiB)                    | Request body size limit.                  |
 
 ## Format drift
 

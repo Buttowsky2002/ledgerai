@@ -18,9 +18,9 @@ if (-not (Test-Path (Join-Path $shared "dist"))) {
     Pop-Location
 }
 
-$env:LEDGERAI_API_URL = "http://localhost:8094"
-$env:LEDGERAI_DEV_TENANT_ID = "00000000-0000-4000-8000-000000000001"
-$env:LEDGERAI_DEMO_MODE = "true"
+$env:BADGERIQ_API_URL = "http://localhost:8094"
+$env:BADGERIQ_DEV_TENANT_ID = "00000000-0000-4000-8000-000000000001"
+$env:BADGERIQ_DEMO_MODE = "true"
 
 Write-Host "Starting dashboard at http://localhost:3000"
 Write-Host "  Data sources: sidebar or http://localhost:3000/settings?tab=connectors"

@@ -43,7 +43,7 @@ open("/tmp/gwcfg.json", "w").write(json.dumps(cfg))
 if os.path.exists("/tmp/events.ndjson"):
     os.remove("/tmp/events.ndjson")
 
-env = dict(os.environ, AGENTLEDGER_CONFIG="/tmp/gwcfg.json", OPENAI_API_KEY="sk-mock")
+env = dict(os.environ, BADGERIQ_CONFIG="/tmp/gwcfg.json", OPENAI_API_KEY="sk-mock")
 gw = subprocess.Popen(["/tmp/gateway"], env=env,
                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 try:

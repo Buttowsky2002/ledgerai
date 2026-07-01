@@ -36,7 +36,7 @@ export function assertDevTrustHeaderNotInProduction(): void {
   if (process.env.NODE_ENV === 'production' && devTrustHeaderRequested()) {
     throw new Error(
       'FATAL: dev tenant-header auth is enabled in production ' +
-        '(BADGERIQ_DEV_TRUST_HEADER / LEDGERAI_DEV_TRUST_HEADER / AGENTLEDGER_DEV_TRUST_HEADER === "true"). ' +
+        '(BADGERIQ_DEV_TRUST_HEADER / BADGERIQ_DEV_TRUST_HEADER / BADGERIQ_DEV_TRUST_HEADER === "true"). ' +
         'This bypasses authentication and must never run in production — refusing to start.',
     );
   }

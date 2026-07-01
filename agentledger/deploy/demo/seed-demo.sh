@@ -2,7 +2,7 @@
 # Seed (or reset) the BadgerIQ demo tenant — no provider keys required.
 #
 #   Seed:  bash deploy/demo/seed-demo.sh
-#   Reset: LEDGERAI_DEMO_RESET=1 bash deploy/demo/seed-demo.sh   (clear, no reseed)
+#   Reset: BADGERIQ_DEMO_RESET=1 bash deploy/demo/seed-demo.sh   (clear, no reseed)
 #
 # Seeds ClickHouse analytics (always) and the Postgres control plane (tenant /
 # teams / agents / budgets) when Postgres is running. The stack must be up:
@@ -10,8 +10,8 @@
 set -euo pipefail
 
 # A valid UUID — the API validates the dev x-tenant-id header as a UUID.
-TENANT="${LEDGERAI_DEMO_TENANT:-00000000-0000-4000-8000-000000000001}"
-RESET="${LEDGERAI_DEMO_RESET:-0}"
+TENANT="${BADGERIQ_DEMO_TENANT:-00000000-0000-4000-8000-000000000001}"
+RESET="${BADGERIQ_DEMO_RESET:-0}"
 DIR="$(cd "$(dirname "$0")" && pwd)"
 
 ch() { docker compose exec -T clickhouse clickhouse-client "$@"; }

@@ -1,4 +1,4 @@
-module github.com/agentledger/collector
+module github.com/badgeriq/collector
 
 go 1.22
 

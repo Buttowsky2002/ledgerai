@@ -2,7 +2,7 @@
 // produced it, with a confidence the attribution engine can weight.
 import { LedgerAI } from '../src/index';
 
-const ledger = new LedgerAI({ apiKey: process.env.LEDGERAI_KEY, baseUrl: process.env.LEDGERAI_URL });
+const ledger = new LedgerAI({ apiKey: process.env.BADGERIQ_KEY, baseUrl: process.env.BADGERIQ_URL });
 
 export async function recordMergedPR(runId: string, prNumber: string): Promise<void> {
   ledger.outcome({

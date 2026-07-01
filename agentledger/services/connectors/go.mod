@@ -1,4 +1,4 @@
-module github.com/agentledger/connectors
+module github.com/badgeriq/connectors
 
 go 1.22
 

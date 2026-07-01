@@ -1,17 +1,18 @@
-# @agentledger/sdk-typescript
+# @badgeriq/sdk-typescript
 
-Dependency-free TypeScript SDK for **LedgerAI** — trace AI agents (runs, LLM
-calls, tool calls, business outcomes, risk signals) to the LedgerAI collector.
+Dependency-free TypeScript SDK for **BadgerIQ** — trace AI agents (runs, LLM
+calls, tool calls, business outcomes, risk signals) to the BadgerIQ collector.
 Zero runtime dependencies, browser-safe types, Node/server by default.
 
-> The package name stays `@agentledger/sdk-typescript` for now; the public class
-> is `LedgerAI`. (Rename-compatible — see the repo "Renaming to LedgerAI" note.)
+> The package is `@badgeriq/sdk-typescript`; the public class is still named
+> `LedgerAI` (unchanged for API compatibility). See the repo "Renaming to
+> BadgerIQ" note.
 
 ## Install
 
 ```jsonc
 // package.json
-"dependencies": { "@agentledger/sdk-typescript": "file:../../packages/sdk-typescript" }
+"dependencies": { "@badgeriq/sdk-typescript": "file:../../packages/sdk-typescript" }
 ```
 
 Node ≥ 20 (uses global `fetch`, `crypto`, `AbortController`); zero runtime deps.
@@ -19,12 +20,12 @@ Node ≥ 20 (uses global `fetch`, `crypto`, `AbortController`); zero runtime dep
 ## Quickstart
 
 ```ts
-import { LedgerAI } from '@agentledger/sdk-typescript';
+import { LedgerAI } from '@badgeriq/sdk-typescript';
 
 const ledger = new LedgerAI({
-  apiKey: process.env.LEDGERAI_KEY,
-  baseUrl: process.env.LEDGERAI_URL, // e.g. http://localhost:8090
-  tenantId: process.env.LEDGERAI_TENANT_ID,
+  apiKey: process.env.BADGERIQ_KEY,
+  baseUrl: process.env.BADGERIQ_URL, // e.g. http://localhost:8090
+  tenantId: process.env.BADGERIQ_TENANT_ID,
   failOpen: true, // telemetry never throws into your app (default)
 });
 
@@ -71,7 +72,7 @@ no content field, and the SDK strips known content keys
 (`content`/`prompt`/`completion`/`messages`/…) from every event before sending.
 
 > ⚠️ `contentCapture: true` is an explicit opt-in that lets content fields through.
-> The standard LedgerAI collector rejects raw content (privacy by design), so this
+> The standard BadgerIQ collector rejects raw content (privacy by design), so this
 > is only meaningful if you operate your own capture pipeline. **Do not enable it
 > unless you fully understand the data-handling implications.**
 
@@ -95,7 +96,7 @@ Runnable, type-checked examples are in [`examples/`](./examples):
 ### Next.js (App Router)
 
 ```ts
-const ledger = new LedgerAI({ apiKey: process.env.LEDGERAI_KEY, baseUrl: process.env.LEDGERAI_URL });
+const ledger = new LedgerAI({ apiKey: process.env.BADGERIQ_KEY, baseUrl: process.env.BADGERIQ_URL });
 
 export async function POST(req: Request): Promise<Response> {
   const answer = await ledger.run({ agentId: 'support-bot' }, async (run) => {

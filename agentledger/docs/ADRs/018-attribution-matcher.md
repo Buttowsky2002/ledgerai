@@ -36,7 +36,7 @@ Per pass, per tenant, over a trailing `lookback_days` window of outcomes:
 3. Below `min_confidence` (default `0.3`) or no candidate → left unattributed (`run_id=''`,
    `confidence=0`). This is exactly the signal task 5's threshold filter keys off.
 
-Window, lookback, and min-confidence are env vars (`AGENTLEDGER_ATTR_*`); weights are code
+Window, lookback, and min-confidence are env vars (`BADGERIQ_ATTR_*`); weights are code
 constants. Per-tenant `roi_templates.attribution` (`{window_minutes, match_on}`) wiring is
 **deferred to task 4**, which builds that CRUD — task 3 stays self-contained with no Postgres
 dependency.
@@ -67,7 +67,7 @@ changed are written (a Float32-noise epsilon prevents churn).
   `/metrics`, ticker loop).
 - **Negative / scope**: heuristic weights and the window are fixed in code/env, not yet
   per-tenant (task 4); time-only matches at the exact run-end moment can reach `0.4` and clear
-  the default `0.3` threshold — tune `AGENTLEDGER_ATTR_MIN_CONFIDENCE` or the dashboard threshold
+  the default `0.3` threshold — tune `BADGERIQ_ATTR_MIN_CONFIDENCE` or the dashboard threshold
   if over-attribution appears. Re-attributing the full window each pass is O(outcomes×runs in
   window) in Go; fine at MVP scale, revisit with per-tenant blocking if needed.
 - **Operational**: a new `attribution` worker/binary (admin `:8096`); no new dependencies

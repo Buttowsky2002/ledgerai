@@ -9,36 +9,36 @@ import (
 
 // Config is the ch-insert worker's environment-driven configuration.
 type Config struct {
-	Brokers       []string // AGENTLEDGER_KAFKA_BROKERS (csv)
-	Topic         string   // AGENTLEDGER_KAFKA_TOPIC (events.raw)
-	DLQTopic      string   // AGENTLEDGER_KAFKA_DLQ_TOPIC (events.dlq)
-	ConsumerGroup string   // AGENTLEDGER_CONSUMER_GROUP (ch-insert)
+	Brokers       []string // BADGERIQ_KAFKA_BROKERS (csv)
+	Topic         string   // BADGERIQ_KAFKA_TOPIC (events.raw)
+	DLQTopic      string   // BADGERIQ_KAFKA_DLQ_TOPIC (events.dlq)
+	ConsumerGroup string   // BADGERIQ_CONSUMER_GROUP (ch-insert)
 
-	ClickHouseURL      string // AGENTLEDGER_CLICKHOUSE_URL (http://localhost:8123)
-	ClickHouseDB       string // AGENTLEDGER_CLICKHOUSE_DB (agentledger)
-	ClickHouseUser     string // AGENTLEDGER_CLICKHOUSE_USER (default)
-	ClickHousePassword string // AGENTLEDGER_CLICKHOUSE_PASSWORD (secret, from env)
+	ClickHouseURL      string // BADGERIQ_CLICKHOUSE_URL (http://localhost:8123)
+	ClickHouseDB       string // BADGERIQ_CLICKHOUSE_DB (agentledger)
+	ClickHouseUser     string // BADGERIQ_CLICKHOUSE_USER (default)
+	ClickHousePassword string // BADGERIQ_CLICKHOUSE_PASSWORD (secret, from env)
 
-	ListenAddr    string        // AGENTLEDGER_WORKER_ADDR (:8091) — health/metrics
-	InsertRetries int           // AGENTLEDGER_INSERT_RETRIES (3)
-	RetryBackoff  time.Duration // AGENTLEDGER_RETRY_BACKOFF_MS (250ms)
+	ListenAddr    string        // BADGERIQ_WORKER_ADDR (:8091) — health/metrics
+	InsertRetries int           // BADGERIQ_INSERT_RETRIES (3)
+	RetryBackoff  time.Duration // BADGERIQ_RETRY_BACKOFF_MS (250ms)
 }
 
 // LoadConfig reads the ch-insert worker configuration from environment
 // variables, applying defaults for any unset values.
 func LoadConfig() Config {
 	return Config{
-		Brokers:            splitCSV(env("AGENTLEDGER_KAFKA_BROKERS", "localhost:19092")),
-		Topic:              env("AGENTLEDGER_KAFKA_TOPIC", "events.raw"),
-		DLQTopic:           env("AGENTLEDGER_KAFKA_DLQ_TOPIC", "events.dlq"),
-		ConsumerGroup:      env("AGENTLEDGER_CONSUMER_GROUP", "ch-insert"),
-		ClickHouseURL:      env("AGENTLEDGER_CLICKHOUSE_URL", "http://localhost:8123"),
-		ClickHouseDB:       env("AGENTLEDGER_CLICKHOUSE_DB", "agentledger"),
-		ClickHouseUser:     env("AGENTLEDGER_CLICKHOUSE_USER", "default"),
-		ClickHousePassword: lookupEnv("AGENTLEDGER_CLICKHOUSE_PASSWORD"),
-		ListenAddr:         env("AGENTLEDGER_WORKER_ADDR", ":8091"),
-		InsertRetries:      envIntLocal("AGENTLEDGER_INSERT_RETRIES", 3),
-		RetryBackoff:       time.Duration(envInt("AGENTLEDGER_RETRY_BACKOFF_MS", 250)) * time.Millisecond,
+		Brokers:            splitCSV(env("BADGERIQ_KAFKA_BROKERS", "localhost:19092")),
+		Topic:              env("BADGERIQ_KAFKA_TOPIC", "events.raw"),
+		DLQTopic:           env("BADGERIQ_KAFKA_DLQ_TOPIC", "events.dlq"),
+		ConsumerGroup:      env("BADGERIQ_CONSUMER_GROUP", "ch-insert"),
+		ClickHouseURL:      env("BADGERIQ_CLICKHOUSE_URL", "http://localhost:8123"),
+		ClickHouseDB:       env("BADGERIQ_CLICKHOUSE_DB", "agentledger"),
+		ClickHouseUser:     env("BADGERIQ_CLICKHOUSE_USER", "default"),
+		ClickHousePassword: lookupEnv("BADGERIQ_CLICKHOUSE_PASSWORD"),
+		ListenAddr:         env("BADGERIQ_WORKER_ADDR", ":8091"),
+		InsertRetries:      envIntLocal("BADGERIQ_INSERT_RETRIES", 3),
+		RetryBackoff:       time.Duration(envInt("BADGERIQ_RETRY_BACKOFF_MS", 250)) * time.Millisecond,
 	}
 }
 

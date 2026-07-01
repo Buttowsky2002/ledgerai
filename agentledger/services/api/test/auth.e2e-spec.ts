@@ -10,7 +10,7 @@ import { PrismaService } from '../src/prisma/prisma.service';
 
 /**
  * Auth + RBAC end to end. Uses test-minted JWTs (signed with the same
- * AGENTLEDGER_JWT_SECRET) — live OIDC needs provider credentials we don't have,
+ * BADGERIQ_JWT_SECRET) — live OIDC needs provider credentials we don't have,
  * so the openid-client exchange isn't exercised here; the JWT/guard/RBAC paths
  * (which is what task 2 enforces) are. Requires a live Postgres (`make e2e`).
  */
@@ -21,13 +21,13 @@ describe('Auth + RBAC', () => {
 
   const tenantA = randomUUID();
   const teamName = `team-${tenantA.slice(0, 8)}`;
-  const secret = () => new TextEncoder().encode(process.env.AGENTLEDGER_JWT_SECRET);
+  const secret = () => new TextEncoder().encode(process.env.BADGERIQ_JWT_SECRET);
 
   beforeAll(async () => {
-    process.env.AGENTLEDGER_JWT_SECRET = process.env.AGENTLEDGER_JWT_SECRET ?? 'test-secret';
-    process.env.AGENTLEDGER_DEV_TRUST_HEADER = 'false'; // pure JWT auth here
-    process.env.AGENTLEDGER_PG_DSN =
-      process.env.AGENTLEDGER_PG_DSN ??
+    process.env.BADGERIQ_JWT_SECRET = process.env.BADGERIQ_JWT_SECRET ?? 'test-secret';
+    process.env.BADGERIQ_DEV_TRUST_HEADER = 'false'; // pure JWT auth here
+    process.env.BADGERIQ_PG_DSN =
+      process.env.BADGERIQ_PG_DSN ??
       'postgres://agentledger_api:dev_only_change_me@localhost:5432/agentledger?sslmode=disable';
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();

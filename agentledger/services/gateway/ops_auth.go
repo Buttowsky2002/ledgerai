@@ -16,23 +16,23 @@ import (
 // name and falls back to the deprecated AGENTLEDGER_* alias (see lookupEnv).
 type opsAuthConfig struct {
 	token         string // shared bearer for ops endpoints; "" = not configured
-	production    bool   // LEDGERAI_ENV=production — locks ops endpoints when no token
+	production    bool   // BADGERIQ_ENV=production — locks ops endpoints when no token
 	allowUnauth   bool   // dev-only escape hatch: allow unauthenticated ops access
 	metricsPublic bool   // expose /metrics without auth (trusted private scrape network)
 }
 
 // loadOpsAuthConfig reads ops-endpoint auth settings from the environment.
 // Preferred names (deprecated AGENTLEDGER_* aliases are also accepted):
-//   - LEDGERAI_OPS_TOKEN        bearer token required on /v1/usage and /metrics
-//   - LEDGERAI_ENV              "production" locks ops endpoints when no token is set
-//   - LEDGERAI_ALLOW_UNAUTH_OPS "true" allows unauthenticated ops access (dev only)
-//   - LEDGERAI_METRICS_PUBLIC   "true" exposes /metrics without auth (private scrape net)
+//   - BADGERIQ_OPS_TOKEN        bearer token required on /v1/usage and /metrics
+//   - BADGERIQ_ENV              "production" locks ops endpoints when no token is set
+//   - BADGERIQ_ALLOW_UNAUTH_OPS "true" allows unauthenticated ops access (dev only)
+//   - BADGERIQ_METRICS_PUBLIC   "true" exposes /metrics without auth (private scrape net)
 func loadOpsAuthConfig() opsAuthConfig {
 	return opsAuthConfig{
-		token:         lookupEnv("AGENTLEDGER_OPS_TOKEN"),
-		production:    strings.EqualFold(lookupEnv("AGENTLEDGER_ENV"), "production"),
-		allowUnauth:   lookupEnv("AGENTLEDGER_ALLOW_UNAUTH_OPS") == "true",
-		metricsPublic: lookupEnv("AGENTLEDGER_METRICS_PUBLIC") == "true",
+		token:         lookupEnv("BADGERIQ_OPS_TOKEN"),
+		production:    strings.EqualFold(lookupEnv("BADGERIQ_ENV"), "production"),
+		allowUnauth:   lookupEnv("BADGERIQ_ALLOW_UNAUTH_OPS") == "true",
+		metricsPublic: lookupEnv("BADGERIQ_METRICS_PUBLIC") == "true",
 	}
 }
 
@@ -41,7 +41,7 @@ func loadOpsAuthConfig() opsAuthConfig {
 //
 //   - Token configured  → require a matching Bearer token (constant-time); else 401.
 //   - No token, prod     → 404 (hide the endpoint entirely).
-//   - No token, dev      → allow if LEDGERAI_ALLOW_UNAUTH_OPS=true, else localhost only; else 401.
+//   - No token, dev      → allow if BADGERIQ_ALLOW_UNAUTH_OPS=true, else localhost only; else 401.
 func (c opsAuthConfig) authorize(r *http.Request) (bool, int) {
 	if c.token != "" {
 		if opsBearerMatches(r, c.token) {
@@ -87,7 +87,7 @@ func isLoopback(remoteAddr string) bool {
 
 // guardOps wraps an ops handler with token authorization. When isMetrics is true,
 // an operator may expose /metrics unauthenticated on a trusted private scrape
-// network by setting LEDGERAI_METRICS_PUBLIC=true.
+// network by setting BADGERIQ_METRICS_PUBLIC=true.
 func (g *Gateway) guardOps(isMetrics bool, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if isMetrics && g.ops.metricsPublic {
@@ -112,13 +112,13 @@ func logOpsAuthStartup(c opsAuthConfig) {
 	case c.token != "":
 		slog.Info("ops endpoints protected by bearer token", "endpoints", "/v1/usage,/metrics")
 	case c.production:
-		slog.Error("ops token not configured in production: /v1/usage and /metrics are locked (404). Set LEDGERAI_OPS_TOKEN")
+		slog.Error("ops token not configured in production: /v1/usage and /metrics are locked (404). Set BADGERIQ_OPS_TOKEN")
 	case c.allowUnauth:
-		slog.Warn("ops endpoints are UNAUTHENTICATED (LEDGERAI_ALLOW_UNAUTH_OPS=true) — development only; never use in production")
+		slog.Warn("ops endpoints are UNAUTHENTICATED (BADGERIQ_ALLOW_UNAUTH_OPS=true) — development only; never use in production")
 	default:
-		slog.Warn("ops token not configured: /v1/usage and /metrics allowed from localhost only. Set LEDGERAI_OPS_TOKEN for remote access")
+		slog.Warn("ops token not configured: /v1/usage and /metrics allowed from localhost only. Set BADGERIQ_OPS_TOKEN for remote access")
 	}
 	if c.metricsPublic {
-		slog.Warn("/metrics is exposed without auth (LEDGERAI_METRICS_PUBLIC=true) — restrict it to a private scrape network")
+		slog.Warn("/metrics is exposed without auth (BADGERIQ_METRICS_PUBLIC=true) — restrict it to a private scrape network")
 	}
 }

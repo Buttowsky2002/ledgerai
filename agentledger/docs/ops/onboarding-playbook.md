@@ -50,7 +50,7 @@ kubectl -n agentledger \
 kubectl rollout restart deployment/agentledger-api -n agentledger
 ```
 
-Or set `AGENTLEDGER_SM_ENABLED=true` and store the secret in AWS Secrets Manager under
+Or set `BADGERIQ_SM_ENABLED=true` and store the secret in AWS Secrets Manager under
 the name used as `clientSecretRef` (e.g. `CUSTOMER_OIDC_SECRET`) — **no redeploy
 required** (ADR-049).
 
@@ -77,7 +77,7 @@ SCIM Users map to identities; SCIM Groups map to teams.
 
 ## Known operational constraint — one env var per SSO customer
 
-Until `AGENTLEDGER_SM_ENABLED=true` is set, each enterprise customer's OIDC client
+Until `BADGERIQ_SM_ENABLED=true` is set, each enterprise customer's OIDC client
 secret requires one env var on the API container. This scales to ~10–15 customers
 before it becomes painful. **Enable AWS Secrets Manager before your ~10th enterprise
 customer** to avoid a redeploy per new tenant.

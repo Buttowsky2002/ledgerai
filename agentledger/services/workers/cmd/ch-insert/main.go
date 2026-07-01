@@ -19,7 +19,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/agentledger/workers/internal/chinsert"
+	"github.com/badgeriq/workers/internal/chinsert"
 )
 
 func main() {

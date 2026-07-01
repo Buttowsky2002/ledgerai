@@ -64,8 +64,8 @@ curl -i http://localhost:8090/v1/ingest/otel \
 
 Returns 200 on any successful conversion, 429 on pure backpressure, 400 on an
 unparseable body. **Tenant** is resolved from the span/resource attribute named
-by `AGENTLEDGER_OTEL_TENANT_ATTR` (default `agentledger.tenant_id`), then the
-`X-AgentLedger-Tenant` header, then `AGENTLEDGER_OTEL_DEFAULT_TENANT`; a GenAI
+by `BADGERIQ_OTEL_TENANT_ATTR` (default `agentledger.tenant_id`), then the
+`X-AgentLedger-Tenant` header, then `BADGERIQ_OTEL_DEFAULT_TENANT`; a GenAI
 span with no resolvable tenant is dropped, never produced. Mapping details and
 format assumptions: `docs/ADRs/022-otel-genai-ingestion.md`.
 
@@ -94,15 +94,15 @@ minimal envelope check pending their own schemas; unknown kinds are rejected.
 
 | Variable                      | Default                                          | Purpose                              |
 |-------------------------------|--------------------------------------------------|--------------------------------------|
-| `AGENTLEDGER_COLLECTOR_ADDR`  | `:8090`                                          | HTTP listen address.                 |
-| `AGENTLEDGER_KAFKA_BROKERS`   | `localhost:19092`                                | Comma-separated broker list.         |
-| `AGENTLEDGER_KAFKA_TOPIC`     | `events.raw`                                     | Target topic.                        |
-| `AGENTLEDGER_EVENT_SCHEMA`    | `../../schemas/events/llm_call.schema.json`      | Path to the canonical schema.        |
-| `AGENTLEDGER_MAX_BODY_BYTES`  | `4194304` (4 MiB)                                | Request body size limit.             |
-| `AGENTLEDGER_MAX_BATCH`       | `1000`                                           | Max events per request.              |
-| `AGENTLEDGER_MAX_INFLIGHT`    | `8192`                                           | Backpressure gate (in-flight records).|
-| `AGENTLEDGER_OTEL_TENANT_ATTR`| `agentledger.tenant_id`                          | OTel span/resource attr carrying the tenant.|
-| `AGENTLEDGER_OTEL_DEFAULT_TENANT`| _(empty)_                                     | Fallback tenant when no attr/header (empty = require explicit).|
+| `BADGERIQ_COLLECTOR_ADDR`  | `:8090`                                          | HTTP listen address.                 |
+| `BADGERIQ_KAFKA_BROKERS`   | `localhost:19092`                                | Comma-separated broker list.         |
+| `BADGERIQ_KAFKA_TOPIC`     | `events.raw`                                     | Target topic.                        |
+| `BADGERIQ_EVENT_SCHEMA`    | `../../schemas/events/llm_call.schema.json`      | Path to the canonical schema.        |
+| `BADGERIQ_MAX_BODY_BYTES`  | `4194304` (4 MiB)                                | Request body size limit.             |
+| `BADGERIQ_MAX_BATCH`       | `1000`                                           | Max events per request.              |
+| `BADGERIQ_MAX_INFLIGHT`    | `8192`                                           | Backpressure gate (in-flight records).|
+| `BADGERIQ_OTEL_TENANT_ATTR`| `agentledger.tenant_id`                          | OTel span/resource attr carrying the tenant.|
+| `BADGERIQ_OTEL_DEFAULT_TENANT`| _(empty)_                                     | Fallback tenant when no attr/header (empty = require explicit).|
 
 ## Design
 

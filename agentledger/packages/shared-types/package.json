@@ -1,5 +1,5 @@
 {
-  "name": "@agentledger/shared-types",
+  "name": "@badgeriq/shared-types",
   "version": "0.1.0",
   "private": true,
   "description": "Generated TypeScript types (OpenAPI + event JSON Schema) and a typed client for the BadgerIQ control-plane API.",

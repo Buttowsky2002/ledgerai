@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/agentledger/workers/internal/attribution"
+	"github.com/badgeriq/workers/internal/attribution"
 )
 
 // chLayout is the timestamp layout ClickHouse toString() emits (mirrors

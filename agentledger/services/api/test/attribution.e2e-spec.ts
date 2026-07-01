@@ -23,17 +23,17 @@ describe('Attribution audit (RLS)', () => {
   const tenantB = randomUUID();
   const outcome = 'github:acme/shared#1'; // SAME id for both tenants — must stay isolated
   const SEED_DSN =
-    process.env.AGENTLEDGER_SEED_DSN ??
+    process.env.BADGERIQ_SEED_DSN ??
     'postgres://agentledger:dev_only_change_me@localhost:5432/agentledger?sslmode=disable';
   const contribs = JSON.stringify([
     { signal: 'temporal_proximity', signal_type: 'temporal', value: 0.8, weighted_log_odds: 1.9, evidence_ref: 'gap=12m' },
   ]);
 
   beforeAll(async () => {
-    process.env.AGENTLEDGER_DEV_TRUST_HEADER = 'true';
-    process.env.AGENTLEDGER_JWT_SECRET = process.env.AGENTLEDGER_JWT_SECRET ?? 'test-secret';
-    process.env.AGENTLEDGER_PG_DSN =
-      process.env.AGENTLEDGER_PG_DSN ??
+    process.env.BADGERIQ_DEV_TRUST_HEADER = 'true';
+    process.env.BADGERIQ_JWT_SECRET = process.env.BADGERIQ_JWT_SECRET ?? 'test-secret';
+    process.env.BADGERIQ_PG_DSN =
+      process.env.BADGERIQ_PG_DSN ??
       'postgres://agentledger_api:dev_only_change_me@localhost:5432/agentledger?sslmode=disable';
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();

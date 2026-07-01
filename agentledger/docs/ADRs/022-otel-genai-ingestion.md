@@ -54,7 +54,7 @@ Mapping (gen_ai semantic conventions → canonical event):
 OTel has no tenant concept. We resolve `tenant_id` with precedence
 **span attribute → resource attribute → `X-AgentLedger-Tenant` header →
 configured default**. The attribute key defaults to `agentledger.tenant_id` and
-is overridable via `AGENTLEDGER_OTEL_TENANT_ATTR` so a customer can map an
+is overridable via `BADGERIQ_OTEL_TENANT_ATTR` so a customer can map an
 existing attribute instead of re-instrumenting. A GenAI span with **no
 resolvable tenant is dropped** (counted in `collector_otel_spans_no_tenant_total`),
 never produced — tenant isolation is non-negotiable (CLAUDE.md rule 3).
@@ -98,8 +98,8 @@ retry); 400 on an unparseable body.
   code changes — the first concrete payoff of the gateway-agnostic pivot.
 - The collector gains three Prometheus counters: `collector_otel_spans_converted_total`,
   `collector_otel_spans_skipped_total`, `collector_otel_spans_no_tenant_total`.
-- New env vars: `AGENTLEDGER_OTEL_TENANT_ATTR` (default `agentledger.tenant_id`),
-  `AGENTLEDGER_OTEL_DEFAULT_TENANT` (default empty = require explicit tenant).
+- New env vars: `BADGERIQ_OTEL_TENANT_ATTR` (default `agentledger.tenant_id`),
+  `BADGERIQ_OTEL_DEFAULT_TENANT` (default empty = require explicit tenant).
 - ch-insert needs no change: OTel events are canonical `llm_call` rows and flow
   through the existing consumer (which already tolerates `source`/extra keys).
 - OTLP attribute coverage is intentionally minimal (the fields we map). Emitter

@@ -95,7 +95,8 @@ The current product name is **BadgerIQ**. The transition is backwards-compatible
   reads the new name first and falls back to `LEDGERAI_*` and the legacy
   `AGENTLEDGER_*` names, so existing deployments keep working. The older prefixes
   are deprecated aliases (e.g. `AGENTLEDGER_PG_DSN` → `BADGERIQ_PG_DSN`).
-- **Wire/import identifiers are intentionally unchanged** — request headers
-  (`X-AgentLedger-*`), SDK package names (`@agentledger/*`, the Python
-  `agentledger` package), database tables, and the event schema are client
-  contracts and are not renamed here.
+- **Package/module names** now use the `@badgeriq/*` npm scope and the
+  `github.com/badgeriq/*` Go module paths.
+- **Wire identifiers are intentionally unchanged** — request headers
+  (`X-AgentLedger-*`), the Python `agentledger` package, database/schema
+  names, and the event schema are client contracts and are not renamed here.

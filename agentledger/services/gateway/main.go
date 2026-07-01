@@ -42,7 +42,7 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
-	cfgPath := lookupEnv("AGENTLEDGER_CONFIG")
+	cfgPath := lookupEnv("BADGERIQ_CONFIG")
 	if cfgPath == "" {
 		cfgPath = "config.json"
 	}
@@ -87,10 +87,10 @@ func main() {
 
 	// Event sink: optional disk spool + fail mode come from the environment
 	// (secrets-free config); both default to the safe, observe-only behavior.
-	if v := lookupEnv("AGENTLEDGER_EVENT_SPOOL_DIR"); v != "" {
+	if v := lookupEnv("BADGERIQ_EVENT_SPOOL_DIR"); v != "" {
 		cfg.Events.SpoolDir = v
 	}
-	if v := lookupEnv("AGENTLEDGER_EVENT_FAIL_MODE"); v != "" {
+	if v := lookupEnv("BADGERIQ_EVENT_FAIL_MODE"); v != "" {
 		cfg.Events.FailMode = v
 	}
 	sink := NewEventSink(cfg.Events)
@@ -99,11 +99,11 @@ func main() {
 	gw := newGateway(cfg, priceBook, budgets, sink)
 	gw.budgetCfg = budgetCfg
 
-	// Optional Postgres config hot-reload. When AGENTLEDGER_PG_DSN is set the
+	// Optional Postgres config hot-reload. When BADGERIQ_PG_DSN is set the
 	// gateway loads virtual_keys, DLP policies, and the per-agent tool/MCP
 	// allowlist from Postgres and refreshes them every 30 s. On failure it
 	// serves the last-known-good snapshot.
-	if pgDSN := lookupEnv("AGENTLEDGER_PG_DSN"); pgDSN != "" {
+	if pgDSN := lookupEnv("BADGERIQ_PG_DSN"); pgDSN != "" {
 		cs, err := NewPGConfigStore(pgDSN, cfg)
 		if err != nil {
 			slog.Error("pg config store init failed", "err", err)

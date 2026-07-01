@@ -33,7 +33,7 @@ that polls on a fixed interval and posts to a Slack incoming webhook.
   process start**, so a restart does **not** replay the historical backlog — we
   accept missing events during downtime over spamming the channel on every redeploy.
   No new table or migration; state is intentionally ephemeral.
-- **Webhook URL is an env-var NAME only (`AGENTLEDGER_SLACK_WEBHOOK_URL`), rule 1.**
+- **Webhook URL is an env-var NAME only (`BADGERIQ_SLACK_WEBHOOK_URL`), rule 1.**
   Unset ⇒ `Enabled()` is false and every pass is a no-op (the worker still serves
   health/metrics). The optional alerter never breaks a deployment that hasn't
   configured it — same "observe everywhere, act where configured" posture as the

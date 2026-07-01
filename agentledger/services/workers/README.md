@@ -47,17 +47,17 @@ go run ./cmd/ch-insert      # consumes events.raw → ClickHouse at :8123
 
 | Variable                        | Default                   | Purpose                         |
 |---------------------------------|---------------------------|---------------------------------|
-| `AGENTLEDGER_KAFKA_BROKERS`     | `localhost:19092`         | Comma-separated broker list.    |
-| `AGENTLEDGER_KAFKA_TOPIC`       | `events.raw`              | Source topic.                   |
-| `AGENTLEDGER_KAFKA_DLQ_TOPIC`   | `events.dlq`              | Dead-letter topic.              |
-| `AGENTLEDGER_CONSUMER_GROUP`    | `ch-insert`               | Consumer group id.              |
-| `AGENTLEDGER_CLICKHOUSE_URL`    | `http://localhost:8123`   | ClickHouse HTTP endpoint.       |
-| `AGENTLEDGER_CLICKHOUSE_DB`     | `agentledger`             | Target database.                |
-| `AGENTLEDGER_CLICKHOUSE_USER`   | `default`                 | ClickHouse user.                |
-| `AGENTLEDGER_CLICKHOUSE_PASSWORD` | _(empty)_               | ClickHouse password (secret).   |
-| `AGENTLEDGER_WORKER_ADDR`       | `:8091`                   | Admin/metrics listen address.   |
-| `AGENTLEDGER_INSERT_RETRIES`    | `3`                       | Per-batch insert retries.       |
-| `AGENTLEDGER_RETRY_BACKOFF_MS`  | `250`                     | Base retry/redelivery backoff.  |
+| `BADGERIQ_KAFKA_BROKERS`     | `localhost:19092`         | Comma-separated broker list.    |
+| `BADGERIQ_KAFKA_TOPIC`       | `events.raw`              | Source topic.                   |
+| `BADGERIQ_KAFKA_DLQ_TOPIC`   | `events.dlq`              | Dead-letter topic.              |
+| `BADGERIQ_CONSUMER_GROUP`    | `ch-insert`               | Consumer group id.              |
+| `BADGERIQ_CLICKHOUSE_URL`    | `http://localhost:8123`   | ClickHouse HTTP endpoint.       |
+| `BADGERIQ_CLICKHOUSE_DB`     | `agentledger`             | Target database.                |
+| `BADGERIQ_CLICKHOUSE_USER`   | `default`                 | ClickHouse user.                |
+| `BADGERIQ_CLICKHOUSE_PASSWORD` | _(empty)_               | ClickHouse password (secret).   |
+| `BADGERIQ_WORKER_ADDR`       | `:8091`                   | Admin/metrics listen address.   |
+| `BADGERIQ_INSERT_RETRIES`    | `3`                       | Per-batch insert retries.       |
+| `BADGERIQ_RETRY_BACKOFF_MS`  | `250`                     | Base retry/redelivery backoff.  |
 
 See `docs/ADRs/006-clickhouse-insert-worker.md` for the design rationale.
 
@@ -91,11 +91,11 @@ go run ./cmd/reconcile      # reads/writes ClickHouse at :8123, admin on :8093
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `AGENTLEDGER_CLICKHOUSE_URL` / `_DB` / `_USER` / `_PASSWORD` | `http://localhost:8123` / `agentledger` / `default` / _(empty)_ | ClickHouse connection. |
-| `AGENTLEDGER_RECONCILE_THRESHOLD` | `0.02` | Drift fraction above which a row is flagged. |
-| `AGENTLEDGER_RECONCILE_LOOKBACK_DAYS` | `35` | Trailing window reconciled each pass. |
-| `AGENTLEDGER_RECONCILE_INTERVAL_SEC` | `86400` | Seconds between passes. |
-| `AGENTLEDGER_WORKER_ADDR` | `:8093` | Admin/metrics listen address. |
+| `BADGERIQ_CLICKHOUSE_URL` / `_DB` / `_USER` / `_PASSWORD` | `http://localhost:8123` / `agentledger` / `default` / _(empty)_ | ClickHouse connection. |
+| `BADGERIQ_RECONCILE_THRESHOLD` | `0.02` | Drift fraction above which a row is flagged. |
+| `BADGERIQ_RECONCILE_LOOKBACK_DAYS` | `35` | Trailing window reconciled each pass. |
+| `BADGERIQ_RECONCILE_INTERVAL_SEC` | `86400` | Seconds between passes. |
+| `BADGERIQ_WORKER_ADDR` | `:8093` | Admin/metrics listen address. |
 
 See `docs/ADRs/009-reconciliation-worker.md` for the design rationale.
 
@@ -130,12 +130,12 @@ go run ./cmd/attribution   # reads/writes ClickHouse at :8123, admin on :8096
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `AGENTLEDGER_CLICKHOUSE_URL` / `_DB` / `_USER` / `_PASSWORD` | `http://localhost:8123` / `agentledger` / `default` / _(empty)_ | ClickHouse connection. |
-| `AGENTLEDGER_ATTR_WINDOW_MIN` | `240` | Max minutes between a run ending and the outcome. |
-| `AGENTLEDGER_ATTR_LOOKBACK_DAYS` | `30` | Trailing window of outcomes re-attributed each pass. |
-| `AGENTLEDGER_ATTR_MIN_CONFIDENCE` | `0.3` | Below this an outcome is left unattributed. |
-| `AGENTLEDGER_ATTR_INTERVAL_SEC` | `900` | Seconds between passes. |
-| `AGENTLEDGER_WORKER_ADDR` | `:8096` | Admin/metrics listen address. |
+| `BADGERIQ_CLICKHOUSE_URL` / `_DB` / `_USER` / `_PASSWORD` | `http://localhost:8123` / `agentledger` / `default` / _(empty)_ | ClickHouse connection. |
+| `BADGERIQ_ATTR_WINDOW_MIN` | `240` | Max minutes between a run ending and the outcome. |
+| `BADGERIQ_ATTR_LOOKBACK_DAYS` | `30` | Trailing window of outcomes re-attributed each pass. |
+| `BADGERIQ_ATTR_MIN_CONFIDENCE` | `0.3` | Below this an outcome is left unattributed. |
+| `BADGERIQ_ATTR_INTERVAL_SEC` | `900` | Seconds between passes. |
+| `BADGERIQ_WORKER_ADDR` | `:8096` | Admin/metrics listen address. |
 
 See `docs/ADRs/018-attribution-matcher.md` for the design rationale.
 
@@ -159,7 +159,7 @@ risk_events ─┘
   high-water mark.
 - Dedupe state is **in-memory per process** and re-arms from "now" on restart, so a
   redeploy does not replay the backlog (ADR-038). No table or migration.
-- **Disabled by default:** unset `AGENTLEDGER_SLACK_WEBHOOK_URL` ⇒ every pass is a
+- **Disabled by default:** unset `BADGERIQ_SLACK_WEBHOOK_URL` ⇒ every pass is a
   no-op (the worker still serves health/metrics). The URL is an env-var name only —
   never commit a webhook (rule 1).
 - Reads cross-tenant with a role that bypasses RLS (same convention as the gateway's
@@ -184,10 +184,10 @@ go run ./cmd/slack-alerter   # reads PG + ClickHouse, admin on :8101
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `AGENTLEDGER_PG_DSN` | `postgres://agentledger:…@localhost:5432/agentledger?sslmode=disable` | Postgres DSN for budget reads. |
-| `AGENTLEDGER_CLICKHOUSE_URL` / `_DB` / `_USER` / `_PASSWORD` | `http://localhost:8123` / `agentledger` / `default` / _(empty)_ | ClickHouse connection. |
-| `AGENTLEDGER_SLACK_WEBHOOK_URL` | _(empty)_ | Slack incoming-webhook URL. **Unset = alerting disabled** (no-op). Secret — env only. |
-| `AGENTLEDGER_SLACK_ALERT_INTERVAL_SEC` | `300` | Seconds between detection passes. |
-| `AGENTLEDGER_WORKER_ADDR` | `:8101` | Admin/metrics listen address. |
+| `BADGERIQ_PG_DSN` | `postgres://agentledger:…@localhost:5432/agentledger?sslmode=disable` | Postgres DSN for budget reads. |
+| `BADGERIQ_CLICKHOUSE_URL` / `_DB` / `_USER` / `_PASSWORD` | `http://localhost:8123` / `agentledger` / `default` / _(empty)_ | ClickHouse connection. |
+| `BADGERIQ_SLACK_WEBHOOK_URL` | _(empty)_ | Slack incoming-webhook URL. **Unset = alerting disabled** (no-op). Secret — env only. |
+| `BADGERIQ_SLACK_ALERT_INTERVAL_SEC` | `300` | Seconds between detection passes. |
+| `BADGERIQ_WORKER_ADDR` | `:8101` | Admin/metrics listen address. |
 
 See `docs/ADRs/038-slack-alerter.md` for the design rationale.

@@ -1,5 +1,5 @@
 param(
-    [string]$Tenant = $(if ($env:BADGERIQ_DEV_TENANT_ID) { $env:BADGERIQ_DEV_TENANT_ID } elseif ($env:LEDGERAI_DEMO_TENANT) { $env:LEDGERAI_DEMO_TENANT } else { "00000000-0000-4000-8000-000000000001" }),
+    [string]$Tenant = $(if ($env:BADGERIQ_DEV_TENANT_ID) { $env:BADGERIQ_DEV_TENANT_ID } elseif ($env:BADGERIQ_DEMO_TENANT) { $env:BADGERIQ_DEMO_TENANT } else { "00000000-0000-4000-8000-000000000001" }),
     [string]$ApiUrl = $(if ($env:BADGERIQ_API_URL) { $env:BADGERIQ_API_URL } else { "http://localhost:8094" }),
     [string]$Preset = "studio-live"
 )

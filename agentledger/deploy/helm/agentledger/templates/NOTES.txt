@@ -18,9 +18,9 @@ PRE-REQUISITES the chart references but does NOT create:
        configured: {{ .Values.secrets.existingSecret }}
 {{- else }}
        NOT SET. Create one and set `secrets.existingSecret`. Expected keys
-       include: AGENTLEDGER_PG_DSN, AGENTLEDGER_JWT_SECRET, OPENAI_API_KEY,
-       ANTHROPIC_API_KEY, AGENTLEDGER_SLACK_WEBHOOK_URL, GITHUB_TOKEN,
-       AGENTLEDGER_REDIS_PASSWORD. See secret.example.yaml.
+       include: BADGERIQ_PG_DSN, BADGERIQ_JWT_SECRET, OPENAI_API_KEY,
+       ANTHROPIC_API_KEY, BADGERIQ_SLACK_WEBHOOK_URL, GITHUB_TOKEN,
+       BADGERIQ_REDIS_PASSWORD. See secret.example.yaml.
 {{- end }}
 
   2. Gateway price book ConfigMap "{{ .Values.gateway.priceBookConfigMap }}":

@@ -1,5 +1,5 @@
 {
-  "name": "@agentledger/api",
+  "name": "@badgeriq/api",
   "version": "0.1.0",
   "private": true,
   "description": "BadgerIQ control-plane API (NestJS + Prisma on Postgres)",
@@ -18,8 +18,8 @@
     "create-tenant": "node dist/cli/create-tenant.js",
     "provision-tenant": "node dist/cli/provision-tenant.js",
     "delete-tenant": "node dist/cli/delete-tenant.js",
-    "demo:seed": "LEDGERAI_DEMO_TENANT=${LEDGERAI_DEMO_TENANT:-00000000-0000-4000-8000-000000000001} bash ../../deploy/demo/seed-demo.sh",
-    "demo:reset": "LEDGERAI_DEMO_TENANT=${LEDGERAI_DEMO_TENANT:-00000000-0000-4000-8000-000000000001} LEDGERAI_DEMO_RESET=1 bash ../../deploy/demo/seed-demo.sh",
+    "demo:seed": "BADGERIQ_DEMO_TENANT=${BADGERIQ_DEMO_TENANT:-00000000-0000-4000-8000-000000000001} bash ../../deploy/demo/seed-demo.sh",
+    "demo:reset": "BADGERIQ_DEMO_TENANT=${BADGERIQ_DEMO_TENANT:-00000000-0000-4000-8000-000000000001} BADGERIQ_DEMO_RESET=1 bash ../../deploy/demo/seed-demo.sh",
     "lint": "eslint \"{src,test}/**/*.ts\"",
     "format:check": "prettier --check \"{src,test}/**/*.ts\"",
     "test": "jest --config jest.config.js --testPathPattern=\"\\.spec\\.ts$\" --passWithNoTests",

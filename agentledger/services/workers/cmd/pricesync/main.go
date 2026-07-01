@@ -18,30 +18,30 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/agentledger/workers/internal/pricesync"
+	"github.com/badgeriq/workers/internal/pricesync"
 )
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 
-	timeout := time.Duration(envInt("AGENTLEDGER_PRICESYNC_HTTP_TIMEOUT_SEC", 15)) * time.Second
+	timeout := time.Duration(envInt("BADGERIQ_PRICESYNC_HTTP_TIMEOUT_SEC", 15)) * time.Second
 	metrics := &pricesync.Metrics{}
 	fetcher := pricesync.NewFetcher(
-		env("AGENTLEDGER_PRICESYNC_FEED_URL", ""),
+		env("BADGERIQ_PRICESYNC_FEED_URL", ""),
 		timeout,
 		metrics,
 	)
 	syncer := pricesync.NewSyncer(
 		fetcher,
-		env("AGENTLEDGER_PRICESYNC_LIVE", "pricing/pricebook.json"),
-		env("AGENTLEDGER_PRICESYNC_OUT", "pricing/pricebook.candidate.json"),
-		env("AGENTLEDGER_PRICESYNC_DIFF", "pricing/pricebook.diff.json"),
-		envFloat("AGENTLEDGER_PRICESYNC_ALERT_PCT", 0.0),
+		env("BADGERIQ_PRICESYNC_LIVE", "pricing/pricebook.json"),
+		env("BADGERIQ_PRICESYNC_OUT", "pricing/pricebook.candidate.json"),
+		env("BADGERIQ_PRICESYNC_DIFF", "pricing/pricebook.diff.json"),
+		envFloat("BADGERIQ_PRICESYNC_ALERT_PCT", 0.0),
 		metrics,
 	)
 
-	interval := time.Duration(envInt("AGENTLEDGER_PRICESYNC_INTERVAL_SEC", 86400)) * time.Second
-	oneshot := envBool("AGENTLEDGER_PRICESYNC_ONESHOT", false)
+	interval := time.Duration(envInt("BADGERIQ_PRICESYNC_INTERVAL_SEC", 86400)) * time.Second
+	oneshot := envBool("BADGERIQ_PRICESYNC_ONESHOT", false)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -63,7 +63,7 @@ func main() {
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
 		writeMetrics(w, metrics)
 	})
-	srv := &http.Server{Addr: env("AGENTLEDGER_WORKER_ADDR", ":8094"), Handler: mux, ReadHeaderTimeout: 10 * time.Second}
+	srv := &http.Server{Addr: env("BADGERIQ_WORKER_ADDR", ":8094"), Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("admin server error", "err", err)

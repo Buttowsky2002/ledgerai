@@ -55,26 +55,26 @@ type BudgetStore interface {
 // budgetConfig holds budget-reservation tunables, read from the environment.
 type budgetConfig struct {
 	// defaultReserveUSD is held when a request carries no max_tokens to estimate
-	// from. LEDGERAI_DEFAULT_RESERVE_USD (deprecated AGENTLEDGER_DEFAULT_RESERVE_USD).
+	// from. BADGERIQ_DEFAULT_RESERVE_USD (deprecated BADGERIQ_DEFAULT_RESERVE_USD).
 	defaultReserveUSD float64
 	// failClosed governs behavior when the budget backend (Redis) errors:
-	// reject the request (true) or allow it (false). LEDGERAI_BUDGET_FAIL_MODE=open|closed.
+	// reject the request (true) or allow it (false). BADGERIQ_BUDGET_FAIL_MODE=open|closed.
 	failClosed bool
 }
 
-// defaultReserveFallbackUSD is used when no LEDGERAI_DEFAULT_RESERVE_USD is set.
+// defaultReserveFallbackUSD is used when no BADGERIQ_DEFAULT_RESERVE_USD is set.
 const defaultReserveFallbackUSD = 0.01
 
 // loadBudgetConfig reads budget tunables from the environment, preferring the
 // LEDGERAI_* names with the deprecated AGENTLEDGER_* fallback (see lookupEnv).
 func loadBudgetConfig() budgetConfig {
 	c := budgetConfig{defaultReserveUSD: defaultReserveFallbackUSD}
-	if v := lookupEnv("AGENTLEDGER_DEFAULT_RESERVE_USD"); v != "" {
+	if v := lookupEnv("BADGERIQ_DEFAULT_RESERVE_USD"); v != "" {
 		if f, err := strconv.ParseFloat(v, 64); err == nil && f >= 0 {
 			c.defaultReserveUSD = f
 		}
 	}
-	c.failClosed = strings.EqualFold(lookupEnv("AGENTLEDGER_BUDGET_FAIL_MODE"), "closed")
+	c.failClosed = strings.EqualFold(lookupEnv("BADGERIQ_BUDGET_FAIL_MODE"), "closed")
 	return c
 }
 

@@ -41,17 +41,17 @@ spec:
               containerPort: {{ $svc.port }}
           env:
             {{- if $svc.clickhouse }}
-            - name: AGENTLEDGER_CLICKHOUSE_URL
+            - name: BADGERIQ_CLICKHOUSE_URL
               value: {{ $root.Values.externalServices.clickhouse.url | quote }}
-            - name: AGENTLEDGER_CLICKHOUSE_DB
+            - name: BADGERIQ_CLICKHOUSE_DB
               value: {{ $root.Values.externalServices.clickhouse.database | quote }}
             {{- end }}
             {{- if $svc.redpanda }}
-            - name: AGENTLEDGER_KAFKA_BROKERS
+            - name: BADGERIQ_KAFKA_BROKERS
               value: {{ $root.Values.externalServices.redpanda.brokers | quote }}
-            - name: AGENTLEDGER_KAFKA_TOPIC
+            - name: BADGERIQ_KAFKA_TOPIC
               value: {{ $root.Values.externalServices.redpanda.topic | quote }}
-            - name: AGENTLEDGER_KAFKA_DLQ_TOPIC
+            - name: BADGERIQ_KAFKA_DLQ_TOPIC
               value: {{ $root.Values.externalServices.redpanda.dlqTopic | quote }}
             {{- end }}
             {{- range $k, $v := $svc.env }}

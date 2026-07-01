@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/agentledger/workers/internal/attribution"
+	"github.com/badgeriq/workers/internal/attribution"
 )
 
 type fakeCH struct {

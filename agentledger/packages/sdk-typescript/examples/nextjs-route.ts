@@ -3,7 +3,7 @@
 // serverless freezes don't drop telemetry.
 import { LedgerAI } from '../src/index';
 
-const ledger = new LedgerAI({ apiKey: process.env.LEDGERAI_KEY, baseUrl: process.env.LEDGERAI_URL });
+const ledger = new LedgerAI({ apiKey: process.env.BADGERIQ_KEY, baseUrl: process.env.BADGERIQ_URL });
 
 export async function POST(req: Request): Promise<Response> {
   const { question } = (await req.json()) as { question: string };

@@ -6,7 +6,7 @@ import { LedgerAI } from '../src/index';
 type GenResult = { text: string; usage: { promptTokens: number; completionTokens: number } };
 declare function generateText(args: { model: unknown; prompt: string }): Promise<GenResult>;
 
-const ledger = new LedgerAI({ apiKey: process.env.LEDGERAI_KEY, baseUrl: process.env.LEDGERAI_URL });
+const ledger = new LedgerAI({ apiKey: process.env.BADGERIQ_KEY, baseUrl: process.env.BADGERIQ_URL });
 
 export async function summarize(model: unknown, prompt: string): Promise<string> {
   return ledger.run({ agentId: 'summarizer' }, async (run) => {

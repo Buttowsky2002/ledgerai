@@ -14,13 +14,13 @@ in the next task.
 
 - Swagger UI: **`/docs`** · spec JSON: **`/docs-json`**. **Environment-gated:**
   served outside production by default; **not exposed in production** unless
-  `LEDGERAI_EXPOSE_DOCS=true`, in which case production additionally requires a
-  `LEDGERAI_DOCS_TOKEN` and the endpoints are gated behind
+  `BADGERIQ_EXPOSE_DOCS=true`, in which case production additionally requires a
+  `BADGERIQ_DOCS_TOKEN` and the endpoints are gated behind
   `Authorization: Bearer <token>` (opting in without a token fails closed — docs
   stay off). A startup log line reports whether docs are enabled.
 - Published spec: `docs/api/openapi.json` (committed). Regenerate with
   `npm run generate:openapi` (uses Nest preview mode — no DB needed).
-- Typed client + types: `packages/shared-types` (`@agentledger/shared-types`) — generated from
+- Typed client + types: `packages/shared-types` (`@badgeriq/shared-types`) — generated from
   the spec (`openapi-typescript` + `openapi-fetch`) and the event schema
   (`json-schema-to-typescript`). From the repo root, `make openapi` refreshes both.
 
@@ -55,8 +55,8 @@ curl -s localhost:8094/healthz
 # Or run the API directly against a running Postgres:
 cd services/api
 npm ci
-AGENTLEDGER_PG_DSN='postgres://agentledger_api:dev_only_change_me@localhost:5432/agentledger?sslmode=disable' \
-AGENTLEDGER_DEV_TRUST_HEADER=true \
+BADGERIQ_PG_DSN='postgres://agentledger_api:dev_only_change_me@localhost:5432/agentledger?sslmode=disable' \
+BADGERIQ_DEV_TRUST_HEADER=true \
 npm run start:dev
 ```
 
@@ -229,19 +229,19 @@ Supported row fields: `idempotency_key`, `timestamp`, `team_id`, `user_id`,
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `AGENTLEDGER_PG_DSN` | _(required)_ | Postgres DSN. Use the `agentledger_api` role (non-superuser) so RLS applies. |
-| `AGENTLEDGER_CLICKHOUSE_URL` / `_DB` / `_USER` / `_PASSWORD` | `http://localhost:8123` / `agentledger` / `default` / _(empty)_ | ClickHouse connection for analytics. |
-| `AGENTLEDGER_API_ADDR` | `:8094` | Listen address (Go-style; the port is parsed out). |
-| `AGENTLEDGER_API_BODY_LIMIT` | `256kb` | Max request body size. |
-| `AGENTLEDGER_JWT_SECRET` | _(required)_ | HS256 signing secret for session JWTs. |
-| `AGENTLEDGER_JWT_ACCESS_TTL` | `15m` | Access-token lifetime. |
-| `AGENTLEDGER_JWT_REFRESH_TTL` | `7d` | Refresh-token lifetime. |
-| `AGENTLEDGER_OIDC_REDIRECT_BASE` | `http://localhost:8094` | Base URL for OIDC callback redirect URIs. |
-| `AGENTLEDGER_OIDC_GOOGLE_CLIENT_ID` / `_CLIENT_SECRET` | _(unset)_ | Google OIDC client; unset → provider unavailable. |
-| `AGENTLEDGER_OIDC_MICROSOFT_CLIENT_ID` / `_CLIENT_SECRET` | _(unset)_ | Microsoft OIDC client; unset → provider unavailable. |
-| `AGENTLEDGER_DEV_TRUST_HEADER` | _(unset)_ | **Dev only.** When `true`, an `x-tenant-id` header (no Bearer) binds a dev `admin` principal. |
-| `LEDGERAI_EXPOSE_DOCS` | _(unset)_ | Expose `/docs` + `/docs-json`. Auto-on outside production; in production set `true` to opt in (then a token is required). |
-| `LEDGERAI_DOCS_TOKEN` | _(unset)_ | Bearer token required to view docs **in production**. Without it, a production opt-in fails closed (docs stay off). |
+| `BADGERIQ_PG_DSN` | _(required)_ | Postgres DSN. Use the `agentledger_api` role (non-superuser) so RLS applies. |
+| `BADGERIQ_CLICKHOUSE_URL` / `_DB` / `_USER` / `_PASSWORD` | `http://localhost:8123` / `agentledger` / `default` / _(empty)_ | ClickHouse connection for analytics. |
+| `BADGERIQ_API_ADDR` | `:8094` | Listen address (Go-style; the port is parsed out). |
+| `BADGERIQ_API_BODY_LIMIT` | `256kb` | Max request body size. |
+| `BADGERIQ_JWT_SECRET` | _(required)_ | HS256 signing secret for session JWTs. |
+| `BADGERIQ_JWT_ACCESS_TTL` | `15m` | Access-token lifetime. |
+| `BADGERIQ_JWT_REFRESH_TTL` | `7d` | Refresh-token lifetime. |
+| `BADGERIQ_OIDC_REDIRECT_BASE` | `http://localhost:8094` | Base URL for OIDC callback redirect URIs. |
+| `BADGERIQ_OIDC_GOOGLE_CLIENT_ID` / `_CLIENT_SECRET` | _(unset)_ | Google OIDC client; unset → provider unavailable. |
+| `BADGERIQ_OIDC_MICROSOFT_CLIENT_ID` / `_CLIENT_SECRET` | _(unset)_ | Microsoft OIDC client; unset → provider unavailable. |
+| `BADGERIQ_DEV_TRUST_HEADER` | _(unset)_ | **Dev only.** When `true`, an `x-tenant-id` header (no Bearer) binds a dev `admin` principal. |
+| `BADGERIQ_EXPOSE_DOCS` | _(unset)_ | Expose `/docs` + `/docs-json`. Auto-on outside production; in production set `true` to opt in (then a token is required). |
+| `BADGERIQ_DOCS_TOKEN` | _(unset)_ | Bearer token required to view docs **in production**. Without it, a production opt-in fails closed (docs stay off). |
 
 ## Test
 

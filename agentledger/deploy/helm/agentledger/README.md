@@ -35,13 +35,13 @@ in-cluster StatefulSets. See [ADR-039](../../../docs/ADRs/039-helm-terraform-dep
 
    ```bash
    kubectl -n agentledger create secret generic agentledger-secrets \
-     --from-literal=AGENTLEDGER_PG_DSN='postgres://USER:PASS@HOST:5432/agentledger?sslmode=require' \
-     --from-literal=AGENTLEDGER_JWT_SECRET='...' \
+     --from-literal=BADGERIQ_PG_DSN='postgres://USER:PASS@HOST:5432/agentledger?sslmode=require' \
+     --from-literal=BADGERIQ_JWT_SECRET='...' \
      --from-literal=OPENAI_API_KEY='...' \
      --from-literal=ANTHROPIC_API_KEY='...' \
-     --from-literal=AGENTLEDGER_SLACK_WEBHOOK_URL='...' \
+     --from-literal=BADGERIQ_SLACK_WEBHOOK_URL='...' \
      --from-literal=GITHUB_TOKEN='...' \
-     --from-literal=AGENTLEDGER_REDIS_PASSWORD='...'
+     --from-literal=BADGERIQ_REDIS_PASSWORD='...'
    ```
 
    (See [`secret.example.yaml`](secret.example.yaml). Prefer External Secrets /

@@ -54,7 +54,7 @@ The hot requirement is "never block; 429 on backpressure." The collector does
 **not** buffer in an unbounded queue. The producer exposes `TryProduce`, which
 either accepts a record for async delivery or returns `ErrBackpressure`
 immediately; the handler maps that to HTTP 429. Backpressure is gated by an
-atomic in-flight counter (`AGENTLEDGER_MAX_INFLIGHT`, default 8192) kept below
+atomic in-flight counter (`BADGERIQ_MAX_INFLIGHT`, default 8192) kept below
 the franz-go internal buffer limit, so `kgo.Produce` itself never blocks. The
 ingest path therefore has a hard, bounded memory ceiling and constant-time
 behavior under overload.

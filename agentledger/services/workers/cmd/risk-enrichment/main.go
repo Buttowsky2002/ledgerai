@@ -4,7 +4,7 @@
 // anomalous sequences), and writes the findings as governed risk_events.
 //
 // Opt-in and async by design (never on any inline path): the enrichment loop runs
-// only when AGENTLEDGER_RISK_ENRICH_ENABLED=true and ANTHROPIC_API_KEY is set —
+// only when BADGERIQ_RISK_ENRICH_ENABLED=true and ANTHROPIC_API_KEY is set —
 // otherwise the process serves health endpoints and does nothing, so it is safe
 // to deploy disabled and gate on the deterministic tier's precision (ADR-027/030).
 //
@@ -21,21 +21,21 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/agentledger/workers/internal/riskenrich"
+	"github.com/badgeriq/workers/internal/riskenrich"
 )
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 
 	ch := riskenrich.NewHTTPClient(
-		env("AGENTLEDGER_CLICKHOUSE_URL", "http://localhost:8123"),
-		env("AGENTLEDGER_CLICKHOUSE_DB", "agentledger"),
-		env("AGENTLEDGER_CLICKHOUSE_USER", "default"),
-		lookupEnv("AGENTLEDGER_CLICKHOUSE_PASSWORD"),
+		env("BADGERIQ_CLICKHOUSE_URL", "http://localhost:8123"),
+		env("BADGERIQ_CLICKHOUSE_DB", "agentledger"),
+		env("BADGERIQ_CLICKHOUSE_USER", "default"),
+		lookupEnv("BADGERIQ_CLICKHOUSE_PASSWORD"),
 	)
 
 	metrics := &riskenrich.Metrics{}
-	enabled := lookupEnv("AGENTLEDGER_RISK_ENRICH_ENABLED") == "true"
+	enabled := lookupEnv("BADGERIQ_RISK_ENRICH_ENABLED") == "true"
 	apiKey := os.Getenv("ANTHROPIC_API_KEY")
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -60,7 +60,7 @@ func main() {
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
 		writeMetrics(w, metrics)
 	})
-	srv := &http.Server{Addr: env("AGENTLEDGER_WORKER_ADDR", ":8100"), Handler: mux, ReadHeaderTimeout: 10 * time.Second}
+	srv := &http.Server{Addr: env("BADGERIQ_WORKER_ADDR", ":8100"), Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("admin server error", "err", err)
@@ -69,22 +69,22 @@ func main() {
 
 	switch {
 	case !enabled:
-		slog.Warn("semantic risk enrichment disabled (set AGENTLEDGER_RISK_ENRICH_ENABLED=true to enable); serving health only")
+		slog.Warn("semantic risk enrichment disabled (set BADGERIQ_RISK_ENRICH_ENABLED=true to enable); serving health only")
 	case apiKey == "":
 		slog.Warn("ANTHROPIC_API_KEY not set; semantic risk enrichment cannot run; serving health only")
 	default:
 		cfg := riskenrich.Config{
-			LookbackHours: envIntLocal("AGENTLEDGER_RISK_ENRICH_LOOKBACK_HOURS", 24),
-			MinCalls:      envIntLocal("AGENTLEDGER_RISK_ENRICH_MIN_CALLS", 2),
-			MinConfidence: envFloat("AGENTLEDGER_RISK_ENRICH_MIN_CONFIDENCE", 0.5),
+			LookbackHours: envIntLocal("BADGERIQ_RISK_ENRICH_LOOKBACK_HOURS", 24),
+			MinCalls:      envIntLocal("BADGERIQ_RISK_ENRICH_MIN_CALLS", 2),
+			MinConfidence: envFloat("BADGERIQ_RISK_ENRICH_MIN_CONFIDENCE", 0.5),
 		}
 		classifier := riskenrich.NewAnthropicClassifier(
 			apiKey,
-			env("AGENTLEDGER_RISK_ENRICH_MODEL", "claude-opus-4-8"),
-			env("AGENTLEDGER_ANTHROPIC_BASE_URL", "https://api.anthropic.com"),
+			env("BADGERIQ_RISK_ENRICH_MODEL", "claude-opus-4-8"),
+			env("BADGERIQ_ANTHROPIC_BASE_URL", "https://api.anthropic.com"),
 		)
 		e := riskenrich.New(ch, classifier, cfg, metrics)
-		interval := time.Duration(envInt("AGENTLEDGER_RISK_ENRICH_INTERVAL_SEC", 3600)) * time.Second
+		interval := time.Duration(envInt("BADGERIQ_RISK_ENRICH_INTERVAL_SEC", 3600)) * time.Second
 		go runLoop(ctx, e, interval)
 	}
 

@@ -20,8 +20,8 @@ $Dir = $PSScriptRoot
 $Root = Split-Path -Parent (Split-Path -Parent $Dir)
 Set-Location $Root
 
-$Tenant = if ($env:LEDGERAI_DEMO_TENANT) { $env:LEDGERAI_DEMO_TENANT } else { "00000000-0000-4000-8000-000000000001" }
-if (-not $Reset -and $env:LEDGERAI_DEMO_RESET -eq "1") { $Reset = $true }
+$Tenant = if ($env:BADGERIQ_DEMO_TENANT) { $env:BADGERIQ_DEMO_TENANT } else { "00000000-0000-4000-8000-000000000001" }
+if (-not $Reset -and $env:BADGERIQ_DEMO_RESET -eq "1") { $Reset = $true }
 
 $ChTables = @(
     "llm_calls", "spend_daily", "spend_hourly_by_key", "risk_daily",

@@ -1,4 +1,4 @@
-module github.com/agentledger/gateway
+module github.com/badgeriq/gateway
 
 go 1.22
 

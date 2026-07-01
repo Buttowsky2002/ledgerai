@@ -5,7 +5,7 @@ BEGIN;
 
 ALTER TABLE connectors ALTER COLUMN kind DROP NOT NULL;
 
--- Demo tenant for local/docker dashboard (id matches LEDGERAI_DEV_TENANT_ID).
+-- Demo tenant for local/docker dashboard (id matches BADGERIQ_DEV_TENANT_ID).
 INSERT INTO tenants (tenant_id, name, plan)
 VALUES ('00000000-0000-4000-8000-000000000001', 'Acme Demo Co', 'enterprise')
 ON CONFLICT (tenant_id) DO NOTHING;

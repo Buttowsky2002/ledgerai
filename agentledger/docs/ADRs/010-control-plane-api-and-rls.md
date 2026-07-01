@@ -90,7 +90,7 @@ mutate them or another tenant's templates. `price_book` is global reference data
 
 Tenant id flows through an `AsyncLocalStorage` request context set by `TenantMiddleware`.
 Until OIDC/JWT lands (task 2), it is read from an `x-tenant-id` header honored **only**
-when `AGENTLEDGER_DEV_TRUST_HEADER=true`. Task 2 swaps the source for verified JWT claims;
+when `BADGERIQ_DEV_TRUST_HEADER=true`. Task 2 swaps the source for verified JWT claims;
 the RLS machinery it feeds is the permanent, real mechanism and does not change.
 
 ### Service shape
@@ -121,7 +121,7 @@ limit, and an RFC-7807 problem+json exception filter that never leaks internals.
   no-leak case — the permanent rule-3 acceptance test.
 - **Positive**: One source of truth for schema; no Prisma/SQL drift.
 - **Negative / scope**: Tenant comes from a dev-trusted header until task 2 — safe only
-  because it is gated behind `AGENTLEDGER_DEV_TRUST_HEADER` and replaced by JWT next.
+  because it is gated behind `BADGERIQ_DEV_TRUST_HEADER` and replaced by JWT next.
 - **Operational**: The API **must** connect as `agentledger_api`, never the superuser, or
   RLS is bypassed. Enforced in docker-compose and documented; prod wires the role
   password via secret manager. Connector rows referenced by ADR-007 are now managed here.

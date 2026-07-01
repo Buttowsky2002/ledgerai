@@ -16,23 +16,23 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/agentledger/workers/internal/riskengine"
+	"github.com/badgeriq/workers/internal/riskengine"
 )
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 
 	ch := riskengine.NewHTTPClient(
-		env("AGENTLEDGER_CLICKHOUSE_URL", "http://localhost:8123"),
-		env("AGENTLEDGER_CLICKHOUSE_DB", "agentledger"),
-		env("AGENTLEDGER_CLICKHOUSE_USER", "default"),
-		lookupEnv("AGENTLEDGER_CLICKHOUSE_PASSWORD"),
+		env("BADGERIQ_CLICKHOUSE_URL", "http://localhost:8123"),
+		env("BADGERIQ_CLICKHOUSE_DB", "agentledger"),
+		env("BADGERIQ_CLICKHOUSE_USER", "default"),
+		lookupEnv("BADGERIQ_CLICKHOUSE_PASSWORD"),
 	)
 
 	metrics := &riskengine.Metrics{}
-	spikeMin := envUint32("AGENTLEDGER_RISK_SPIKE_MIN", 5)
+	spikeMin := envUint32("BADGERIQ_RISK_SPIKE_MIN", 5)
 	e := riskengine.New(ch, spikeMin, metrics)
-	interval := time.Duration(envInt("AGENTLEDGER_RISK_INTERVAL_SEC", 3600)) * time.Second
+	interval := time.Duration(envInt("BADGERIQ_RISK_INTERVAL_SEC", 3600)) * time.Second
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -56,7 +56,7 @@ func main() {
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
 		writeMetrics(w, metrics)
 	})
-	srv := &http.Server{Addr: env("AGENTLEDGER_WORKER_ADDR", ":8099"), Handler: mux, ReadHeaderTimeout: 10 * time.Second}
+	srv := &http.Server{Addr: env("BADGERIQ_WORKER_ADDR", ":8099"), Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("admin server error", "err", err)

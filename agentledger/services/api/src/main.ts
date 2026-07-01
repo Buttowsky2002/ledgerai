@@ -41,7 +41,7 @@ async function bootstrap(): Promise<void> {
         nodeEnv: process.env.NODE_ENV ?? 'development',
         detail:
           'x-tenant-id is trusted as a dev auth bypass (grants admin). DEV ONLY — ' +
-          'never enable LEDGERAI_DEV_TRUST_HEADER in production.',
+          'never enable BADGERIQ_DEV_TRUST_HEADER in production.',
       },
       'AuthMiddleware',
     );
@@ -75,8 +75,8 @@ async function bootstrap(): Promise<void> {
   app.use(cookieParser());
 
   // OpenAPI: Swagger UI at /docs, spec JSON at /docs-json — gated by environment.
-  // Not exposed in production by default; opt in with LEDGERAI_EXPOSE_DOCS=true
-  // (which then requires a LEDGERAI_DOCS_TOKEN bearer in production).
+  // Not exposed in production by default; opt in with BADGERIQ_EXPOSE_DOCS=true
+  // (which then requires a BADGERIQ_DOCS_TOKEN bearer in production).
   switch (resolveDocsMode()) {
     case 'enabled':
       SwaggerModule.setup('docs', app, buildOpenApiDocument(app));
@@ -88,19 +88,19 @@ async function bootstrap(): Promise<void> {
       app.use('/docs-json', guard);
       SwaggerModule.setup('docs', app, buildOpenApiDocument(app));
       logger.warn(
-        { event: 'docs_enabled_protected', path: '/docs', detail: 'production docs require an LEDGERAI_DOCS_TOKEN bearer' },
+        { event: 'docs_enabled_protected', path: '/docs', detail: 'production docs require an BADGERIQ_DOCS_TOKEN bearer' },
         'Swagger',
       );
       break;
     }
     case 'disabled_no_token':
       logger.error(
-        { event: 'docs_disabled_no_token', detail: 'LEDGERAI_EXPOSE_DOCS=true in production but LEDGERAI_DOCS_TOKEN is unset — docs not exposed' },
+        { event: 'docs_disabled_no_token', detail: 'BADGERIQ_EXPOSE_DOCS=true in production but BADGERIQ_DOCS_TOKEN is unset — docs not exposed' },
         'Swagger',
       );
       break;
     case 'disabled':
-      logger.log({ event: 'docs_disabled', detail: 'set LEDGERAI_EXPOSE_DOCS=true to enable' }, 'Swagger');
+      logger.log({ event: 'docs_disabled', detail: 'set BADGERIQ_EXPOSE_DOCS=true to enable' }, 'Swagger');
       break;
   }
 

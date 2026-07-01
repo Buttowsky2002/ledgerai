@@ -74,6 +74,6 @@ operational breaks during the transition:
   names are deprecated aliases and will be removed in a future major version.
   Migrate by renaming, e.g. `AGENTLEDGER_PG_DSN` → `LEDGERAI_PG_DSN`.
 - **Wire/import identifiers are unchanged on purpose** — request headers
-  (`X-AgentLedger-*`), SDK package names (`@agentledger/sdk-typescript`, the
+  (`X-AgentLedger-*`), SDK package names (`@badgeriq/sdk-typescript`, the
   Python `agentledger` package), database tables, and the event schema are
   contracts with existing clients and are **not** renamed in this change.

@@ -37,7 +37,7 @@
       { "id": "strict-block", "action": "block", "classes": ["credentials", "pci", "pii"] }
     ]
   },
-  "_comment_agent_tool_allow": "Per-agent tool/MCP allowlist enforced inline (ADR-032). An agent listed here is deny-by-default: any declared tool/MCP server not in its entries is blocked. Agents NOT listed are ungoverned (allowed; the async risk worker still scores them). Usually loaded from Postgres agent_tool_allowlist via AGENTLEDGER_PG_DSN rather than set here.",
+  "_comment_agent_tool_allow": "Per-agent tool/MCP allowlist enforced inline (ADR-032). An agent listed here is deny-by-default: any declared tool/MCP server not in its entries is blocked. Agents NOT listed are ungoverned (allowed; the async risk worker still scores them). Usually loaded from Postgres agent_tool_allowlist via BADGERIQ_PG_DSN rather than set here.",
   "agent_tool_allow": [
     { "tenant_id": "00000000-0000-0000-0000-000000000001", "agent_id": "00000000-0000-0000-0000-0000000000a1", "tool_name": "web_search" },
     { "tenant_id": "00000000-0000-0000-0000-000000000001", "agent_id": "00000000-0000-0000-0000-0000000000a1", "tool_name": "list_issues", "mcp_server": "github" }
@@ -50,7 +50,7 @@
   },
   "redis": {
     "addr": "",
-    "password_env": "AGENTLEDGER_REDIS_PASSWORD",
+    "password_env": "BADGERIQ_REDIS_PASSWORD",
     "db": 0
   }
 }

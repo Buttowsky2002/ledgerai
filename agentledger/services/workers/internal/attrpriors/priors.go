@@ -18,7 +18,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/agentledger/workers/internal/attribution"
+	"github.com/badgeriq/workers/internal/attribution"
 )
 
 // DefaultMinCustomerN is the privacy gate: a prior is only emitted when at least

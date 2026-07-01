@@ -14,7 +14,7 @@ output "kafka_brokers" {
 }
 
 output "postgres_dsn" {
-  description = "Control-plane Postgres DSN → agentledger-secrets/AGENTLEDGER_PG_DSN."
+  description = "Control-plane Postgres DSN → agentledger-secrets/BADGERIQ_PG_DSN."
   value       = null # populated by the postgres module; sensitive when implemented
   sensitive   = true
 }

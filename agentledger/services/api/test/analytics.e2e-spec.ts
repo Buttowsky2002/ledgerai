@@ -5,7 +5,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { JwtService } from '../src/auth/jwt.service';
 
-const CH = process.env.AGENTLEDGER_CLICKHOUSE_URL ?? 'http://localhost:8123';
+const CH = process.env.BADGERIQ_CLICKHOUSE_URL ?? 'http://localhost:8123';
 
 /** Insert rows via the ClickHouse HTTP JSONEachRow interface; MVs auto-populate. */
 async function insertCH(table: string, rows: object[]): Promise<void> {
@@ -31,13 +31,13 @@ describe('Analytics (ClickHouse MVs)', () => {
   const WIDE = { from: '2020-01-01', to: '2035-01-01' };
 
   beforeAll(async () => {
-    process.env.AGENTLEDGER_JWT_SECRET = process.env.AGENTLEDGER_JWT_SECRET ?? 'test-secret';
-    process.env.AGENTLEDGER_DEV_TRUST_HEADER = 'false';
-    process.env.AGENTLEDGER_PG_DSN =
-      process.env.AGENTLEDGER_PG_DSN ??
+    process.env.BADGERIQ_JWT_SECRET = process.env.BADGERIQ_JWT_SECRET ?? 'test-secret';
+    process.env.BADGERIQ_DEV_TRUST_HEADER = 'false';
+    process.env.BADGERIQ_PG_DSN =
+      process.env.BADGERIQ_PG_DSN ??
       'postgres://agentledger_api:dev_only_change_me@localhost:5432/agentledger?sslmode=disable';
-    process.env.AGENTLEDGER_CLICKHOUSE_URL = CH;
-    process.env.AGENTLEDGER_CLICKHOUSE_DB = 'agentledger';
+    process.env.BADGERIQ_CLICKHOUSE_URL = CH;
+    process.env.BADGERIQ_CLICKHOUSE_DB = 'agentledger';
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();

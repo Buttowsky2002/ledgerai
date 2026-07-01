@@ -74,8 +74,8 @@ Outcome importer: implement `OutcomeConnector` and register it in
 
 ```bash
 cd services/connectors
-AGENTLEDGER_PG_DSN='postgres://agentledger:dev_only_change_me@localhost:5432/agentledger?sslmode=disable' \
-AGENTLEDGER_CLICKHOUSE_URL=http://localhost:8123 \
+BADGERIQ_PG_DSN='postgres://agentledger:dev_only_change_me@localhost:5432/agentledger?sslmode=disable' \
+BADGERIQ_CLICKHOUSE_URL=http://localhost:8123 \
 go run ./cmd/connector-sync
 ```
 
@@ -83,16 +83,16 @@ go run ./cmd/connector-sync
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `AGENTLEDGER_PG_DSN` | _(required)_ | Postgres DSN (connector config + cursor state). |
-| `AGENTLEDGER_CLICKHOUSE_URL` | `http://localhost:8123` | ClickHouse HTTP endpoint. |
-| `AGENTLEDGER_CLICKHOUSE_DB` | `agentledger` | Target database. |
-| `AGENTLEDGER_CLICKHOUSE_USER` / `_PASSWORD` | `default` / _(empty)_ | ClickHouse auth. |
-| `AGENTLEDGER_SYNC_INTERVAL_SEC` | `3600` | Seconds between sync passes. |
-| `AGENTLEDGER_CONNECTOR_INTERVAL_MS` | `1000` | Min spacing between provider calls. |
-| `AGENTLEDGER_CONNECTOR_RETRIES` | `4` | Retry attempts per fetch. |
-| `AGENTLEDGER_CONNECTOR_ADDR` | `:8092` | Admin/health listen address (connector-sync). |
-| `AGENTLEDGER_OUTCOME_SYNC_INTERVAL_SEC` | `3600` | Seconds between outcome sync passes. |
-| `AGENTLEDGER_OUTCOME_ADDR` | `:8095` | Admin/health listen address (outcome-sync). |
+| `BADGERIQ_PG_DSN` | _(required)_ | Postgres DSN (connector config + cursor state). |
+| `BADGERIQ_CLICKHOUSE_URL` | `http://localhost:8123` | ClickHouse HTTP endpoint. |
+| `BADGERIQ_CLICKHOUSE_DB` | `agentledger` | Target database. |
+| `BADGERIQ_CLICKHOUSE_USER` / `_PASSWORD` | `default` / _(empty)_ | ClickHouse auth. |
+| `BADGERIQ_SYNC_INTERVAL_SEC` | `3600` | Seconds between sync passes. |
+| `BADGERIQ_CONNECTOR_INTERVAL_MS` | `1000` | Min spacing between provider calls. |
+| `BADGERIQ_CONNECTOR_RETRIES` | `4` | Retry attempts per fetch. |
+| `BADGERIQ_CONNECTOR_ADDR` | `:8092` | Admin/health listen address (connector-sync). |
+| `BADGERIQ_OUTCOME_SYNC_INTERVAL_SEC` | `3600` | Seconds between outcome sync passes. |
+| `BADGERIQ_OUTCOME_ADDR` | `:8095` | Admin/health listen address (outcome-sync). |
 
 See `docs/ADRs/007-connector-framework.md` (cost) and
 `docs/ADRs/016-outcome-connectors.md` (outcomes) for design rationale.

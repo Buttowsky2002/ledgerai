@@ -25,10 +25,10 @@ describe('Tenant isolation (RLS)', () => {
   const teamBName = `team-B-${tenantB.slice(0, 8)}`;
 
   beforeAll(async () => {
-    process.env.AGENTLEDGER_DEV_TRUST_HEADER = 'true';
-    process.env.AGENTLEDGER_JWT_SECRET = process.env.AGENTLEDGER_JWT_SECRET ?? 'test-secret';
-    process.env.AGENTLEDGER_PG_DSN =
-      process.env.AGENTLEDGER_PG_DSN ??
+    process.env.BADGERIQ_DEV_TRUST_HEADER = 'true';
+    process.env.BADGERIQ_JWT_SECRET = process.env.BADGERIQ_JWT_SECRET ?? 'test-secret';
+    process.env.BADGERIQ_PG_DSN =
+      process.env.BADGERIQ_PG_DSN ??
       'postgres://agentledger_api:dev_only_change_me@localhost:5432/agentledger?sslmode=disable';
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();

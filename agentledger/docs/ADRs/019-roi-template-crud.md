@@ -52,7 +52,7 @@ code but error-prone and a worse "editor".
 
 - **Positive**: a full CRUD + editor with tenant isolation, audit, and RBAC inherited from the
   Phase-3 plumbing; only a controller + module + DTOs + a dashboard page/form were added. The
-  regenerated `docs/api/openapi.json` + `@agentledger/shared-types` keep the typed client honest.
+  regenerated `docs/api/openapi.json` + `@badgeriq/shared-types` keep the typed client honest.
 - **Negative / scope**: `value_formula` is captured but **not yet applied** — writing
   `business_value_usd` onto outcomes from the formula is task 5 / the seeded demo. The Jira JQL-
   style `match_on` overrides are stored but the attribution matcher (ADR-018) still uses env

@@ -1,4 +1,4 @@
-import type { paths } from '@agentledger/shared-types';
+import type { paths } from '@badgeriq/shared-types';
 import createClient from 'openapi-fetch';
 import { cookies } from 'next/headers';
 import { env } from './env';

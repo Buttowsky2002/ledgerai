@@ -6,7 +6,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
  * can read it without threading it through every call.
  *
  * Populated by AuthMiddleware from a verified access JWT (or, in dev, the
- * x-tenant-id header behind LEDGERAI_DEV_TRUST_HEADER). The `tenantId` feeds
+ * x-tenant-id header behind BADGERIQ_DEV_TRUST_HEADER). The `tenantId` feeds
  * the RLS chain (set_config('app.tenant_id', …)); `role` drives RBAC.
  */
 export interface Principal {

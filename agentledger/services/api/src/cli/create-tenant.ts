@@ -11,7 +11,7 @@ import { env } from '../env';
  * line on stdout, same exit codes.
  *
  *   npm run create-tenant -- --name "Acme Corp" --region us --plan trial
- *   BADGERIQ_TENANT_NAME="Acme Corp" npm run create-tenant   # (LEDGERAI_ / AGENTLEDGER_ prefixes also resolve)
+ *   BADGERIQ_TENANT_NAME="Acme Corp" npm run create-tenant   # (BADGERIQ_ / BADGERIQ_ prefixes also resolve)
  *
  * RLS note: the tenants table has FORCE ROW LEVEL SECURITY with
  * WITH CHECK (tenant_id = app_current_tenant()) (002_rls.sql), and the API connects

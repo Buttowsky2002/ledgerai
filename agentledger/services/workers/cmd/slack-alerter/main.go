@@ -15,13 +15,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/agentledger/workers/internal/slackalert"
+	"github.com/badgeriq/workers/internal/slackalert"
 )
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 
-	pg, err := slackalert.NewPGClient(env("AGENTLEDGER_PG_DSN", "postgres://agentledger:dev_only_change_me@localhost:5432/agentledger?sslmode=disable"))
+	pg, err := slackalert.NewPGClient(env("BADGERIQ_PG_DSN", "postgres://agentledger:dev_only_change_me@localhost:5432/agentledger?sslmode=disable"))
 	if err != nil {
 		slog.Error("postgres init failed", "err", err)
 		os.Exit(1)
@@ -29,21 +29,21 @@ func main() {
 	defer func() { _ = pg.Close() }()
 
 	ch := slackalert.NewCHClient(
-		env("AGENTLEDGER_CLICKHOUSE_URL", "http://localhost:8123"),
-		env("AGENTLEDGER_CLICKHOUSE_DB", "agentledger"),
-		env("AGENTLEDGER_CLICKHOUSE_USER", "default"),
-		lookupEnv("AGENTLEDGER_CLICKHOUSE_PASSWORD"),
+		env("BADGERIQ_CLICKHOUSE_URL", "http://localhost:8123"),
+		env("BADGERIQ_CLICKHOUSE_DB", "agentledger"),
+		env("BADGERIQ_CLICKHOUSE_USER", "default"),
+		lookupEnv("BADGERIQ_CLICKHOUSE_PASSWORD"),
 	)
 
 	// Webhook URL by env-var NAME only (rule 1); unset → alerting disabled.
-	slack := slackalert.NewSlackNotifier(lookupEnv("AGENTLEDGER_SLACK_WEBHOOK_URL"))
+	slack := slackalert.NewSlackNotifier(lookupEnv("BADGERIQ_SLACK_WEBHOOK_URL"))
 	if !slack.Enabled() {
-		slog.Warn("AGENTLEDGER_SLACK_WEBHOOK_URL unset — alerting disabled (no-op passes)")
+		slog.Warn("BADGERIQ_SLACK_WEBHOOK_URL unset — alerting disabled (no-op passes)")
 	}
 
 	metrics := &slackalert.Metrics{}
 	alerter := slackalert.New(pg, ch, slack, metrics, time.Now)
-	interval := time.Duration(envInt("AGENTLEDGER_SLACK_ALERT_INTERVAL_SEC", 300)) * time.Second
+	interval := time.Duration(envInt("BADGERIQ_SLACK_ALERT_INTERVAL_SEC", 300)) * time.Second
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -71,7 +71,7 @@ func main() {
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
 		writeMetrics(w, metrics)
 	})
-	srv := &http.Server{Addr: env("AGENTLEDGER_WORKER_ADDR", ":8101"), Handler: mux, ReadHeaderTimeout: 10 * time.Second}
+	srv := &http.Server{Addr: env("BADGERIQ_WORKER_ADDR", ":8101"), Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("admin server error", "err", err)

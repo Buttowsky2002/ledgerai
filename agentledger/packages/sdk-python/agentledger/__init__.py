@@ -55,8 +55,8 @@ def init(collector_url: str, tenant_id: str, app_id: str,
             app_id=app_id,
             user_id=user_id or os.getenv("USER", ""),
             environment=environment,
-            # Prefer LEDGERAI_API_KEY; fall back to the legacy AGENTLEDGER_API_KEY alias.
-            api_key=api_key or os.getenv("LEDGERAI_API_KEY") or os.getenv("AGENTLEDGER_API_KEY", ""),
+            # Prefer BADGERIQ_API_KEY; fall back to the legacy BADGERIQ_API_KEY alias.
+            api_key=api_key or os.getenv("BADGERIQ_API_KEY") or os.getenv("BADGERIQ_API_KEY", ""),
         )
 
 

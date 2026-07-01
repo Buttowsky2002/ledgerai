@@ -25,8 +25,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/agentledger/ingest-adapters/internal/forward"
-	"github.com/agentledger/ingest-adapters/internal/litellm"
+	"github.com/badgeriq/ingest-adapters/internal/forward"
+	"github.com/badgeriq/ingest-adapters/internal/litellm"
 )
 
 type config struct {
@@ -39,11 +39,11 @@ type config struct {
 
 func loadConfig() config {
 	return config{
-		addr:          env("AGENTLEDGER_LITELLM_ADAPTER_ADDR", ":8097"),
-		collectorURL:  env("AGENTLEDGER_COLLECTOR_URL", "http://localhost:8090/v1/events"),
-		defaultTenant: lookupEnv("AGENTLEDGER_ADAPTER_TENANT"),
-		tenantMetaKey: env("AGENTLEDGER_ADAPTER_TENANT_META_KEY", "agentledger_tenant_id"),
-		maxBodyBytes:  envInt64("AGENTLEDGER_MAX_BODY_BYTES", 8<<20),
+		addr:          env("BADGERIQ_LITELLM_ADAPTER_ADDR", ":8097"),
+		collectorURL:  env("BADGERIQ_COLLECTOR_URL", "http://localhost:8090/v1/events"),
+		defaultTenant: lookupEnv("BADGERIQ_ADAPTER_TENANT"),
+		tenantMetaKey: env("BADGERIQ_ADAPTER_TENANT_META_KEY", "agentledger_tenant_id"),
+		maxBodyBytes:  envInt64("BADGERIQ_MAX_BODY_BYTES", 8<<20),
 	}
 }
 

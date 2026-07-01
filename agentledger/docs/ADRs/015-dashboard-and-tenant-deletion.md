@@ -20,11 +20,11 @@ two stores the control plane owns.
 
 ### Dashboard — Next.js 14 App Router, server-side typed client (BFF)
 `apps/dashboard` renders every data page as a **React Server Component** that calls the API
-**server-side** via the generated `@agentledger/shared-types` client (`lib/api.ts`). No token
+**server-side** via the generated `@badgeriq/shared-types` client (`lib/api.ts`). No token
 or API surface reaches the browser, and there's no CORS. Auth resolution: a session
 `al_access` cookie → `Authorization: Bearer` (prod, post-OIDC); otherwise
-`AGENTLEDGER_DEV_TENANT_ID` → `x-tenant-id` (dev, the API trusts it behind
-`AGENTLEDGER_DEV_TRUST_HEADER`). Settings **writes** go through Next route handlers
+`BADGERIQ_DEV_TENANT_ID` → `x-tenant-id` (dev, the API trusts it behind
+`BADGERIQ_DEV_TRUST_HEADER`). Settings **writes** go through Next route handlers
 (`app/api/*`) so they too stay server-side; **virtual-key create surfaces the plaintext once**.
 
 Pages: Executive spend, Allocation (team/app/agent), Model mix, Budgets + burn-down, Risk

@@ -20,16 +20,16 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/agentledger/workers/internal/attribution"
-	"github.com/agentledger/workers/internal/attrpriors"
+	"github.com/badgeriq/workers/internal/attribution"
+	"github.com/badgeriq/workers/internal/attrpriors"
 )
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 
-	dsn := lookupEnv("AGENTLEDGER_PG_DSN")
+	dsn := lookupEnv("BADGERIQ_PG_DSN")
 	if dsn == "" {
-		slog.Error("AGENTLEDGER_PG_DSN is required")
+		slog.Error("BADGERIQ_PG_DSN is required")
 		os.Exit(1)
 	}
 	pg, err := attribution.NewPG(dsn)
@@ -40,20 +40,20 @@ func main() {
 	defer func() { _ = pg.Close() }()
 
 	ch := attribution.NewHTTPClient(
-		env("AGENTLEDGER_CLICKHOUSE_URL", "http://localhost:8123"),
-		env("AGENTLEDGER_CLICKHOUSE_DB", "agentledger"),
-		env("AGENTLEDGER_CLICKHOUSE_USER", "default"),
-		lookupEnv("AGENTLEDGER_CLICKHOUSE_PASSWORD"),
+		env("BADGERIQ_CLICKHOUSE_URL", "http://localhost:8123"),
+		env("BADGERIQ_CLICKHOUSE_DB", "agentledger"),
+		env("BADGERIQ_CLICKHOUSE_USER", "default"),
+		lookupEnv("BADGERIQ_CLICKHOUSE_PASSWORD"),
 	)
 
 	metrics := &attrpriors.Metrics{}
 	runner := attrpriors.NewRunner(ch, pg,
-		time.Duration(envInt("AGENTLEDGER_ATTR_WINDOW_MIN", 240))*time.Minute,
-		envIntLocal("AGENTLEDGER_PRIORS_LOOKBACK_DAYS", 90),
-		envIntLocal("AGENTLEDGER_PRIORS_MIN_CUSTOMER_N", attrpriors.DefaultMinCustomerN),
+		time.Duration(envInt("BADGERIQ_ATTR_WINDOW_MIN", 240))*time.Minute,
+		envIntLocal("BADGERIQ_PRIORS_LOOKBACK_DAYS", 90),
+		envIntLocal("BADGERIQ_PRIORS_MIN_CUSTOMER_N", attrpriors.DefaultMinCustomerN),
 		metrics)
 
-	interval := time.Duration(envInt("AGENTLEDGER_PRIORS_INTERVAL_SEC", 86400)) * time.Second
+	interval := time.Duration(envInt("BADGERIQ_PRIORS_INTERVAL_SEC", 86400)) * time.Second
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -76,7 +76,7 @@ func main() {
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
 		writeMetrics(w, metrics)
 	})
-	srv := &http.Server{Addr: env("AGENTLEDGER_WORKER_ADDR", ":8102"), Handler: mux, ReadHeaderTimeout: 10 * time.Second}
+	srv := &http.Server{Addr: env("BADGERIQ_WORKER_ADDR", ":8102"), Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("admin server error", "err", err)

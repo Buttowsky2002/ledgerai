@@ -19,7 +19,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/agentledger/workers/internal/attribution"
+	"github.com/badgeriq/workers/internal/attribution"
 )
 
 // attributionRunner serializes attribution passes (scheduled loop + on-demand trigger).
@@ -51,17 +51,17 @@ func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 
 	ch := attribution.NewHTTPClient(
-		env("AGENTLEDGER_CLICKHOUSE_URL", "http://localhost:8123"),
-		env("AGENTLEDGER_CLICKHOUSE_DB", "agentledger"),
-		env("AGENTLEDGER_CLICKHOUSE_USER", "default"),
-		lookupEnv("AGENTLEDGER_CLICKHOUSE_PASSWORD"),
+		env("BADGERIQ_CLICKHOUSE_URL", "http://localhost:8123"),
+		env("BADGERIQ_CLICKHOUSE_DB", "agentledger"),
+		env("BADGERIQ_CLICKHOUSE_USER", "default"),
+		lookupEnv("BADGERIQ_CLICKHOUSE_PASSWORD"),
 	)
 
 	metrics := &attribution.Metrics{}
-	window := time.Duration(envInt("AGENTLEDGER_ATTR_WINDOW_MIN", 240)) * time.Minute
-	lookbackDays := envIntLocal("AGENTLEDGER_ATTR_LOOKBACK_DAYS", 30)
+	window := time.Duration(envInt("BADGERIQ_ATTR_WINDOW_MIN", 240)) * time.Minute
+	lookbackDays := envIntLocal("BADGERIQ_ATTR_LOOKBACK_DAYS", 30)
 	m := attribution.New(ch, window, lookbackDays,
-		envFloat("AGENTLEDGER_ATTR_MIN_CONFIDENCE", 0.3), metrics)
+		envFloat("BADGERIQ_ATTR_MIN_CONFIDENCE", 0.3), metrics)
 
 	// Attribution engine v2 (build-plan Phase 3 refactor; ADR-040). Behind the
 	// ATTRIBUTION_ENGINE_V2 flag and requiring a Postgres DSN:
@@ -72,9 +72,9 @@ func main() {
 	v2metrics := &attribution.V2Metrics{}
 	v2Cutover := envBool("ATTRIBUTION_ENGINE_V2_CUTOVER", false)
 	if envBool("ATTRIBUTION_ENGINE_V2", false) {
-		dsn := lookupEnv("AGENTLEDGER_PG_DSN")
+		dsn := lookupEnv("BADGERIQ_PG_DSN")
 		if dsn == "" {
-			slog.Warn("ATTRIBUTION_ENGINE_V2 set but AGENTLEDGER_PG_DSN empty — v2 disabled")
+			slog.Warn("ATTRIBUTION_ENGINE_V2 set but BADGERIQ_PG_DSN empty — v2 disabled")
 		} else {
 			var err error
 			if pg, err = attribution.NewPG(dsn); err != nil {
@@ -90,11 +90,11 @@ func main() {
 			}
 		}
 	} else if v2Cutover {
-		slog.Error("ATTRIBUTION_ENGINE_V2_CUTOVER requires ATTRIBUTION_ENGINE_V2=true and AGENTLEDGER_PG_DSN")
+		slog.Error("ATTRIBUTION_ENGINE_V2_CUTOVER requires ATTRIBUTION_ENGINE_V2=true and BADGERIQ_PG_DSN")
 		os.Exit(1)
 	}
 
-	interval := time.Duration(envInt("AGENTLEDGER_ATTR_INTERVAL_SEC", 900)) * time.Second
+	interval := time.Duration(envInt("BADGERIQ_ATTR_INTERVAL_SEC", 900)) * time.Second
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -141,7 +141,7 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
-	srv := &http.Server{Addr: env("AGENTLEDGER_WORKER_ADDR", ":8096"), Handler: mux, ReadHeaderTimeout: 10 * time.Second}
+	srv := &http.Server{Addr: env("BADGERIQ_WORKER_ADDR", ":8096"), Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("admin server error", "err", err)
@@ -180,7 +180,7 @@ func runLoop(ctx context.Context, runner *attributionRunner, every time.Duration
 
 // allowAttrTrigger gates POST /run (dev/demo stacks only unless explicitly enabled).
 func allowAttrTrigger() bool {
-	for _, k := range []string{"BADGERIQ_ATTR_ALLOW_TRIGGER", "LEDGERIQ_ATTR_ALLOW_TRIGGER", "AGENTLEDGER_ATTR_ALLOW_TRIGGER"} {
+	for _, k := range []string{"BADGERIQ_ATTR_ALLOW_TRIGGER", "LEDGERIQ_ATTR_ALLOW_TRIGGER", "BADGERIQ_ATTR_ALLOW_TRIGGER"} {
 		if os.Getenv(k) == "true" {
 			return true
 		}

@@ -15,7 +15,7 @@ expects these to already exist and be reachable from the cluster:
 | Component | Purpose | Surfaced to the chart as |
 |-----------|---------|--------------------------|
 | Kubernetes cluster | Runs the workloads | `kubeconfig` / context |
-| PostgreSQL 16 | Control plane (RLS-enabled) | `AGENTLEDGER_PG_DSN` (Secret) |
+| PostgreSQL 16 | Control plane (RLS-enabled) | `BADGERIQ_PG_DSN` (Secret) |
 | ClickHouse | Analytics store | `externalServices.clickhouse.url` |
 | Redpanda / Kafka | Event bus (`events.raw`) | `externalServices.redpanda.brokers` |
 | Redis (optional) | Gateway budget store | `externalServices.redis.addr` |

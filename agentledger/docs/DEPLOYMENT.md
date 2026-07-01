@@ -28,9 +28,9 @@ dashboard command. Then start the dashboard:
 ```bash
 (cd packages/shared-types && npm ci && npm run build)
 (cd apps/dashboard && npm ci && \
-   LEDGERAI_API_URL=http://localhost:8094 \
-   LEDGERAI_DEV_TENANT_ID=00000000-0000-4000-8000-000000000001 \
-   LEDGERAI_DEMO_MODE=true \
+   BADGERIQ_API_URL=http://localhost:8094 \
+   BADGERIQ_DEV_TENANT_ID=00000000-0000-4000-8000-000000000001 \
+   BADGERIQ_DEMO_MODE=true \
    npm run dev)
 # → http://localhost:3000  (a "Demo mode" banner confirms seeded data)
 ```
@@ -43,7 +43,7 @@ tell a coherent story:
 - **DataCleanupAgent** (Security) — runaway cost: dominates spend, no outcomes.
 - **SOC-TriageAgent** (Security) — high risk: blocked/redacted calls + risk events.
 
-`LEDGERAI_DEMO_MODE=true` shows the dashboard demo banner. Clear the demo data
+`BADGERIQ_DEMO_MODE=true` shows the dashboard demo banner. Clear the demo data
 with `make reset-demo` (or `docker compose down -v` for a full reset).
 
 - **No provider keys**: the demo injects pre-aggregated analytics directly into
@@ -129,17 +129,17 @@ ClickHouse, Redpanda/Kafka, and Redis (the chart bundles no databases).
 
 | Secret | Used by | Notes |
 |--------|---------|-------|
-| `LEDGERAI_JWT_SECRET` | API | HS256 session-token secret. `openssl rand -hex 32`. |
-| `LEDGERAI_PG_DSN` | API, workers, connectors, gateway (PG reload) | Use the **non-superuser** `agentledger_api` role so RLS applies; `sslmode=require`. |
-| `LEDGERAI_CLICKHOUSE_PASSWORD` | API, workers, connectors | ClickHouse auth. |
-| `LEDGERAI_OPS_TOKEN` | gateway | Bearer for `/v1/usage` + `/metrics`. |
-| `LEDGERAI_DOCS_TOKEN` | API | Bearer for Swagger if docs are exposed. |
+| `BADGERIQ_JWT_SECRET` | API | HS256 session-token secret. `openssl rand -hex 32`. |
+| `BADGERIQ_PG_DSN` | API, workers, connectors, gateway (PG reload) | Use the **non-superuser** `agentledger_api` role so RLS applies; `sslmode=require`. |
+| `BADGERIQ_CLICKHOUSE_PASSWORD` | API, workers, connectors | ClickHouse auth. |
+| `BADGERIQ_OPS_TOKEN` | gateway | Bearer for `/v1/usage` + `/metrics`. |
+| `BADGERIQ_DOCS_TOKEN` | API | Bearer for Swagger if docs are exposed. |
 | Provider keys (`OPENAI_API_KEY`, …) | gateway | Referenced by **name** in gateway config; never inline. |
 | OIDC client secrets | API | Referenced by env-var **name**; per-tenant SSO via SCIM/OIDC. |
 
 ### Auth — do NOT use dev auth in production
 
-- **Never set `LEDGERAI_DEV_TRUST_HEADER`** (the `x-tenant-id` bypass). The API
+- **Never set `BADGERIQ_DEV_TRUST_HEADER`** (the `x-tenant-id` bypass). The API
   **refuses to start** in production (`NODE_ENV=production`) if it is enabled, and
   the dashboard never sends `x-tenant-id` in production builds. Authenticate users
   via **OIDC SSO** (`/auth/sso/login`) with session JWTs.
@@ -147,12 +147,12 @@ ClickHouse, Redpanda/Kafka, and Redis (the chart bundles no databases).
 
 ### Ops endpoints & docs
 
-- Protect the gateway's `/v1/usage` and `/metrics` with `LEDGERAI_OPS_TOKEN`
+- Protect the gateway's `/v1/usage` and `/metrics` with `BADGERIQ_OPS_TOKEN`
   (`Authorization: Bearer …`). With no token in production they return 404.
-  Expose `/metrics` to a private scrape network only (`LEDGERAI_METRICS_PUBLIC=true`
+  Expose `/metrics` to a private scrape network only (`BADGERIQ_METRICS_PUBLIC=true`
   if and only if the scrape network is trusted).
-- Swagger docs are **off in production** unless `LEDGERAI_EXPOSE_DOCS=true`, and
-  then require `LEDGERAI_DOCS_TOKEN`.
+- Swagger docs are **off in production** unless `BADGERIQ_EXPOSE_DOCS=true`, and
+  then require `BADGERIQ_DOCS_TOKEN`.
 
 ### Migrations (forward-only, numbered)
 
@@ -187,5 +187,5 @@ Never edit an applied migration; add a new numbered file.
 ```bash
 curl -fsS https://<api-host>/healthz        # API liveness
 curl -fsS https://<api-host>/readyz         # API readiness (pings Postgres)
-curl -fsS -H "Authorization: Bearer $LEDGERAI_OPS_TOKEN" https://<gw-host>/metrics
+curl -fsS -H "Authorization: Bearer $BADGERIQ_OPS_TOKEN" https://<gw-host>/metrics
 ```

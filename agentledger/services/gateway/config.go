@@ -121,11 +121,11 @@ type EventSinkCfg struct {
 	// (bounded backoff between attempts). 0 = no retry.
 	Retries int `json:"retries,omitempty"`
 	// SpoolDir, when set, persists failed flush batches as ndjson (content-free)
-	// for later replay. From LEDGERAI_EVENT_SPOOL_DIR.
+	// for later replay. From BADGERIQ_EVENT_SPOOL_DIR.
 	SpoolDir string `json:"spool_dir,omitempty"`
 	// FailMode: "observe_only" (default — drop on a full buffer, measured) or
 	// "strict" (apply bounded backpressure to minimize loss). From
-	// LEDGERAI_EVENT_FAIL_MODE.
+	// BADGERIQ_EVENT_FAIL_MODE.
 	FailMode string `json:"fail_mode,omitempty"`
 }
 

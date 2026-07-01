@@ -73,7 +73,7 @@ func Normalize(rec SpendLog, cfg Config) (map[string]any, error) {
 	}
 	tenant := resolveTenant(rec.Metadata, cfg)
 	if tenant == "" {
-		return nil, fmt.Errorf("litellm record %q has no tenant (set AGENTLEDGER_ADAPTER_TENANT or a %q metadata key)", id, cfg.TenantMetaKey)
+		return nil, fmt.Errorf("litellm record %q has no tenant (set BADGERIQ_ADAPTER_TENANT or a %q metadata key)", id, cfg.TenantMetaKey)
 	}
 
 	ev := map[string]any{

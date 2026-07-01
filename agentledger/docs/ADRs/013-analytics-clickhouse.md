@@ -76,5 +76,5 @@ sensible date-range defaults. `/readyz` now also pings ClickHouse.
   `queryScoped` discipline is load-bearing and covered by tests; a future raw-`query` caller
   must remember the filter (only `ping`/health uses the unscoped `query`).
 - **Operational**: API now depends on ClickHouse (compose `depends_on` + `/readyz` ping; new
-  `AGENTLEDGER_CLICKHOUSE_*` env). The p95 < 300ms @ 50M-row proof is a seeded-environment/CI
+  `BADGERIQ_CLICKHOUSE_*` env). The p95 < 300ms @ 50M-row proof is a seeded-environment/CI
   concern, not verified locally; the MV + tenant-first ordering is the design basis for it.

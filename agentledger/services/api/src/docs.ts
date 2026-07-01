@@ -6,8 +6,8 @@ import { env } from './env';
  * Swagger / OpenAPI docs exposure policy.
  *
  * Docs (`/docs` UI + `/docs-json` spec) are served outside production, or when an
- * operator explicitly opts in with LEDGERAI_EXPOSE_DOCS=true. In production they
- * are additionally gated behind a bearer token (LEDGERAI_DOCS_TOKEN) so an opted-in
+ * operator explicitly opts in with BADGERIQ_EXPOSE_DOCS=true. In production they
+ * are additionally gated behind a bearer token (BADGERIQ_DOCS_TOKEN) so an opted-in
  * production deployment never exposes the spec unauthenticated. If docs are opted
  * into in production without a token, they are refused (fail closed).
  */
@@ -18,7 +18,7 @@ export function docsEnabled(): boolean {
   return process.env.NODE_ENV !== 'production' || env('BADGERIQ_EXPOSE_DOCS') === 'true';
 }
 
-/** Bearer token required to view docs in production (LEDGERAI_DOCS_TOKEN). */
+/** Bearer token required to view docs in production (BADGERIQ_DOCS_TOKEN). */
 export function docsToken(): string | undefined {
   return env('BADGERIQ_DOCS_TOKEN');
 }

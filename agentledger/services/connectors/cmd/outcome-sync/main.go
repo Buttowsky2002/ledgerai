@@ -17,15 +17,15 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/agentledger/connectors/internal/connector"
+	"github.com/badgeriq/connectors/internal/connector"
 )
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 
-	dsn := lookupEnv("AGENTLEDGER_PG_DSN")
+	dsn := lookupEnv("BADGERIQ_PG_DSN")
 	if dsn == "" {
-		slog.Error("AGENTLEDGER_PG_DSN is required")
+		slog.Error("BADGERIQ_PG_DSN is required")
 		os.Exit(1)
 	}
 	store, err := connector.NewPGStore(dsn)
@@ -36,20 +36,20 @@ func main() {
 	defer func() { _ = store.Close() }()
 
 	sink := connector.NewClickHouseOutcomeSink(
-		env("AGENTLEDGER_CLICKHOUSE_URL", "http://localhost:8123"),
-		env("AGENTLEDGER_CLICKHOUSE_DB", "agentledger"),
-		env("AGENTLEDGER_CLICKHOUSE_USER", "default"),
-		lookupEnv("AGENTLEDGER_CLICKHOUSE_PASSWORD"),
+		env("BADGERIQ_CLICKHOUSE_URL", "http://localhost:8123"),
+		env("BADGERIQ_CLICKHOUSE_DB", "agentledger"),
+		env("BADGERIQ_CLICKHOUSE_USER", "default"),
+		lookupEnv("BADGERIQ_CLICKHOUSE_PASSWORD"),
 	)
 
 	syncer := connector.NewOutcomeSyncer(store, sink, registeredOutcomeConnectors(), connector.Options{
-		Interval:      time.Duration(envInt("AGENTLEDGER_CONNECTOR_INTERVAL_MS", 1000)) * time.Millisecond,
-		RetryAttempts: envIntLocal("AGENTLEDGER_CONNECTOR_RETRIES", 4),
+		Interval:      time.Duration(envInt("BADGERIQ_CONNECTOR_INTERVAL_MS", 1000)) * time.Millisecond,
+		RetryAttempts: envIntLocal("BADGERIQ_CONNECTOR_RETRIES", 4),
 		RetryBase:     500 * time.Millisecond,
 		RetryMax:      30 * time.Second,
 	})
 
-	syncEvery := time.Duration(envInt("AGENTLEDGER_OUTCOME_SYNC_INTERVAL_SEC", 3600)) * time.Second
+	syncEvery := time.Duration(envInt("BADGERIQ_OUTCOME_SYNC_INTERVAL_SEC", 3600)) * time.Second
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -59,7 +59,7 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
-	srv := &http.Server{Addr: env("AGENTLEDGER_OUTCOME_ADDR", ":8095"), Handler: mux, ReadHeaderTimeout: 10 * time.Second}
+	srv := &http.Server{Addr: env("BADGERIQ_OUTCOME_ADDR", ":8095"), Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("admin server error", "err", err)

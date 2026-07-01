@@ -91,7 +91,7 @@ defaults:
 # Gateway runtime config (rendered to /etc/agentledger/config.json via a
 # ConfigMap). NON-secret only: provider API keys are referenced by env-var NAME
 # (api_key_env), and virtual_keys + per-agent tool allowlist + DLP policies are
-# loaded from Postgres at runtime via AGENTLEDGER_PG_DSN (ADR-032) — so none of
+# loaded from Postgres at runtime via BADGERIQ_PG_DSN (ADR-032) — so none of
 # them appear here. Override wholesale to suit your deployment.
 gateway:
   # Operator-supplied ConfigMap holding pricebook.json (single source of truth is
@@ -125,7 +125,7 @@ gateway:
       buffer_size: 4096
     redis:
       addr: ""
-      password_env: AGENTLEDGER_REDIS_PASSWORD
+      password_env: BADGERIQ_REDIS_PASSWORD
       db: 0
 
 # Collector needs the canonical event JSON Schema mounted. Operator-supplied
@@ -144,8 +144,8 @@ collector:
 #   readinessPath override defaults.readinessPath (use /healthz where no /readyz)
 #   env           map of NON-secret env vars
 #   secretEnv     list of env-var names sourced from secrets.existingSecret
-#   clickhouse    inject AGENTLEDGER_CLICKHOUSE_URL/_DB from externalServices
-#   redpanda      inject AGENTLEDGER_KAFKA_BROKERS/_TOPIC/_DLQ_TOPIC
+#   clickhouse    inject BADGERIQ_CLICKHOUSE_URL/_DB from externalServices
+#   redpanda      inject BADGERIQ_KAFKA_BROKERS/_TOPIC/_DLQ_TOPIC
 #   web           true for externally-routable services (Ingress targets)
 services:
   gateway:
@@ -153,22 +153,22 @@ services:
     web: true
     port: 8080
     readinessPath: /healthz # gateway exposes /healthz only
-    secretEnv: [OPENAI_API_KEY, ANTHROPIC_API_KEY, AGENTLEDGER_REDIS_PASSWORD, AGENTLEDGER_PG_DSN]
+    secretEnv: [OPENAI_API_KEY, ANTHROPIC_API_KEY, BADGERIQ_REDIS_PASSWORD, BADGERIQ_PG_DSN]
     env:
-      AGENTLEDGER_CONFIG: /etc/agentledger/config.json
+      BADGERIQ_CONFIG: /etc/agentledger/config.json
 
   api:
     enabled: true
     web: true
     port: 8094
     clickhouse: true
-    secretEnv: [AGENTLEDGER_PG_DSN, AGENTLEDGER_JWT_SECRET]
+    secretEnv: [BADGERIQ_PG_DSN, BADGERIQ_JWT_SECRET]
     env:
-      AGENTLEDGER_API_ADDR: ":8094"
+      BADGERIQ_API_ADDR: ":8094"
       # Secret-ref resolution (ADR-049): env-var lookup by default. Set SM_ENABLED=true
       # to also resolve OIDC client secrets from AWS Secrets Manager (no redeploy per
       # new enterprise SSO tenant). AWS credentials come from the pod's IAM role.
-      AGENTLEDGER_SM_ENABLED: "false"
+      BADGERIQ_SM_ENABLED: "false"
       AWS_REGION: "us-east-1"
 
   collector:
@@ -177,14 +177,14 @@ services:
     port: 8090
     redpanda: true
     env:
-      AGENTLEDGER_EVENT_SCHEMA: /etc/agentledger/schemas/events/llm_call.schema.json
+      BADGERIQ_EVENT_SCHEMA: /etc/agentledger/schemas/events/llm_call.schema.json
 
   litellm-adapter:
     enabled: true
     web: true
     port: 8097
     env:
-      AGENTLEDGER_COLLECTOR_URL: http://collector:8090/v1/events
+      BADGERIQ_COLLECTOR_URL: http://collector:8090/v1/events
 
   ch-insert:
     enabled: true
@@ -197,16 +197,16 @@ services:
     port: 8093
     clickhouse: true
     env:
-      AGENTLEDGER_RECONCILE_THRESHOLD: "0.02"
-      AGENTLEDGER_RECONCILE_INTERVAL_SEC: "86400"
+      BADGERIQ_RECONCILE_THRESHOLD: "0.02"
+      BADGERIQ_RECONCILE_INTERVAL_SEC: "86400"
 
   risk-engine:
     enabled: true
     port: 8099
     clickhouse: true
     env:
-      AGENTLEDGER_RISK_INTERVAL_SEC: "3600"
-      AGENTLEDGER_RISK_SPIKE_MIN: "5"
+      BADGERIQ_RISK_INTERVAL_SEC: "3600"
+      BADGERIQ_RISK_SPIKE_MIN: "5"
 
   risk-enrichment:
     enabled: true
@@ -214,36 +214,36 @@ services:
     clickhouse: true
     secretEnv: [ANTHROPIC_API_KEY]
     env:
-      AGENTLEDGER_RISK_ENRICH_ENABLED: "false"
-      AGENTLEDGER_RISK_ENRICH_INTERVAL_SEC: "3600"
-      AGENTLEDGER_RISK_ENRICH_MIN_CONFIDENCE: "0.5"
-      AGENTLEDGER_RISK_ENRICH_MODEL: claude-opus-4-8
+      BADGERIQ_RISK_ENRICH_ENABLED: "false"
+      BADGERIQ_RISK_ENRICH_INTERVAL_SEC: "3600"
+      BADGERIQ_RISK_ENRICH_MIN_CONFIDENCE: "0.5"
+      BADGERIQ_RISK_ENRICH_MODEL: claude-opus-4-8
 
   slack-alerter:
     enabled: true
     port: 8101
     clickhouse: true
-    secretEnv: [AGENTLEDGER_PG_DSN, AGENTLEDGER_SLACK_WEBHOOK_URL]
+    secretEnv: [BADGERIQ_PG_DSN, BADGERIQ_SLACK_WEBHOOK_URL]
     env:
-      AGENTLEDGER_SLACK_ALERT_INTERVAL_SEC: "300"
+      BADGERIQ_SLACK_ALERT_INTERVAL_SEC: "300"
 
   connector-sync:
     enabled: true
     port: 8092
     clickhouse: true
     readinessPath: /healthz # connectors expose /healthz only
-    secretEnv: [AGENTLEDGER_PG_DSN]
+    secretEnv: [BADGERIQ_PG_DSN]
     env:
-      AGENTLEDGER_SYNC_INTERVAL_SEC: "3600"
+      BADGERIQ_SYNC_INTERVAL_SEC: "3600"
 
   outcome-sync:
     enabled: true
     port: 8095
     clickhouse: true
     readinessPath: /healthz # connectors expose /healthz only
-    secretEnv: [AGENTLEDGER_PG_DSN, GITHUB_TOKEN]
+    secretEnv: [BADGERIQ_PG_DSN, GITHUB_TOKEN]
     env:
-      AGENTLEDGER_OUTCOME_SYNC_INTERVAL_SEC: "3600"
+      BADGERIQ_OUTCOME_SYNC_INTERVAL_SEC: "3600"
 
   # Attribution matcher (P3). Exists as a worker but is not in docker-compose;
   # enable to run it as a scheduled background matcher.
@@ -251,8 +251,8 @@ services:
     enabled: true
     port: 8096
     clickhouse: true
-    secretEnv: [AGENTLEDGER_PG_DSN]
+    secretEnv: [BADGERIQ_PG_DSN]
     env:
-      AGENTLEDGER_ATTR_INTERVAL_SEC: "900"
+      BADGERIQ_ATTR_INTERVAL_SEC: "900"
       ATTRIBUTION_ENGINE_V2: "true"
       # ATTRIBUTION_ENGINE_V2_CUTOVER: "true"  # flip only after pilot gates (ADR-040)

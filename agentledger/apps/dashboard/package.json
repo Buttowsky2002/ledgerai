@@ -1,5 +1,5 @@
 {
-  "name": "@agentledger/dashboard",
+  "name": "@badgeriq/dashboard",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@agentledger/shared-types": "file:../../packages/shared-types",
+    "@badgeriq/shared-types": "file:../../packages/shared-types",
     "next": "14.2.18",
     "openapi-fetch": "^0.13.1",
     "react": "18.3.1",

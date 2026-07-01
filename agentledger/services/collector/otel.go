@@ -27,7 +27,7 @@ import (
 // partialSuccess schema) is deferred — most exporters only branch on the 2xx.
 
 // otelTenantAttrDefault is the resource/span attribute key carrying the
-// BadgerIQ tenant. Overridable via AGENTLEDGER_OTEL_TENANT_ATTR so customers
+// BadgerIQ tenant. Overridable via BADGERIQ_OTEL_TENANT_ATTR so customers
 // can map an existing attribute instead of re-instrumenting.
 const otelTenantAttrDefault = "agentledger.tenant_id"
 

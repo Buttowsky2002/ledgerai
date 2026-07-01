@@ -94,9 +94,9 @@ of config source. (Constant-time comparison is not required here: the lookup is 
 hash-keyed map probe, not a secret-vs-secret byte compare — an attacker cannot
 learn the stored hash from map timing.)
 
-### Opt-in via `AGENTLEDGER_PG_DSN`
+### Opt-in via `BADGERIQ_PG_DSN`
 
-Hot-reload activates only when `AGENTLEDGER_PG_DSN` is set (`main.go`). Empty →
+Hot-reload activates only when `BADGERIQ_PG_DSN` is set (`main.go`). Empty →
 the gateway behaves exactly as before (static file config), preserving the
 zero-runtime-dependency MVP path and all existing tests. The Postgres connection
 pool is capped small (3 open / 1 idle) — config polling is low-volume.

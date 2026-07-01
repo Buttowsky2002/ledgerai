@@ -10,7 +10,7 @@
 ## Context
 
 ADR-010 stood up `services/api` with tenant isolation enforced by Postgres RLS, but the
-tenant was a **dev stand-in**: an `x-tenant-id` header behind `AGENTLEDGER_DEV_TRUST_HEADER`.
+tenant was a **dev stand-in**: an `x-tenant-id` header behind `BADGERIQ_DEV_TRUST_HEADER`.
 This ADR replaces that with real authentication and authorization, per the spec ("AuthN:
 OIDC (Google/Microsoft), session JWTs. AuthZ: roles viewer/analyst/admin per tenant") and
 security rule 6 ("session JWTs short-lived with refresh; rate-limit auth endpoints; tokens
@@ -43,7 +43,7 @@ assumes one identity per email.
 
 ### Tokens: short access (bearer) + refresh (httpOnly cookie), stateless
 
-`jose`-signed HS256 (secret from `AGENTLEDGER_JWT_SECRET`). Access token ~15 min, returned in
+`jose`-signed HS256 (secret from `BADGERIQ_JWT_SECRET`). Access token ~15 min, returned in
 the response body and sent as `Authorization: Bearer` — not auto-sent by the browser, so API
 calls aren't CSRF-exposed. Refresh token ~7 days in an **httpOnly Secure SameSite=strict**
 cookie — unreadable by JS (XSS can't exfiltrate it), and only the `/auth/refresh` and
@@ -69,7 +69,7 @@ exactly as ADR-010 needs for the RLS transaction. A global `AuthGuard` 401s any 
 no principal (except `@Public`: health, readyz, metrics, `/auth/login|callback|refresh|logout`);
 `RolesGuard` + `@Roles()` enforce RBAC with `admin ⊇ analyst ⊇ viewer` min-rank semantics.
 The dev `x-tenant-id` fallback is retained (binds a dev `admin` principal) so local dev and
-the ADR-010 isolation suite keep working; it is inert unless `AGENTLEDGER_DEV_TRUST_HEADER=true`.
+the ADR-010 isolation suite keep working; it is inert unless `BADGERIQ_DEV_TRUST_HEADER=true`.
 Auth endpoints are rate-limited via `@nestjs/throttler` (rule 6).
 
 **Alternatives considered:**
@@ -93,7 +93,7 @@ Auth endpoints are rate-limited via `@nestjs/throttler` (rule 6).
 - **Negative / scope**: No server-side token revocation yet (logout is cookie-clear only);
   SCIM provisioning and auto-creation of identities are out of scope — unknown emails 401.
 - **Operational**: Live Google/Microsoft login needs provider client id/secret env vars;
-  without them those providers are unavailable. `AGENTLEDGER_JWT_SECRET` is required to boot.
+  without them those providers are unavailable. `BADGERIQ_JWT_SECRET` is required to boot.
   Verified in CI/tests with test-minted JWTs + a stubbed token exchange (no live IdP).
 - **Verification note**: the ADR-010 isolation test's "no context" case now returns **401**
   (auth fails closed at the API edge), in addition to the DB-level RLS fail-closed.

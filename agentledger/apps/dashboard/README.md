@@ -2,7 +2,7 @@
 
 Next.js 14 (App Router) FinOps dashboard for BadgerIQ. Pages are React Server Components
 that call the control-plane API **server-side** through the generated typed client
-(`@agentledger/shared-types`) — no token reaches the browser, no CORS.
+(`@badgeriq/shared-types`) — no token reaches the browser, no CORS.
 
 Pages: Executive spend (`/`), Allocation (`/allocation`), Model mix (`/model-mix`), Budgets +
 burn-down (`/budgets`), Risk events (`/risk`), Agent detail (`/agents/[id]`), and Settings

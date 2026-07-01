@@ -44,7 +44,7 @@ type SameSite = 'strict' | 'lax' | 'none';
  * sameSite for the session cookies — defaults to 'strict' (security requirement:
  * the browser never sends them on cross-site requests). A cross-site deployment,
  * where the dashboard and API live on different registrable domains, can document
- * and set LEDGERAI_COOKIE_SAMESITE=lax|none so the cookies survive the cross-site
+ * and set BADGERIQ_COOKIE_SAMESITE=lax|none so the cookies survive the cross-site
  * navigation. 'none' is meaningless without Secure, so we force secure=true then.
  */
 export function cookieSameSite(): SameSite {

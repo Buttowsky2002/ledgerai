@@ -1,6 +1,6 @@
-# @agentledger/shared-types
+# @badgeriq/shared-types
 
-Generated TypeScript types and a typed client for the LedgerAI control-plane API.
+Generated TypeScript types and a typed client for the BadgerIQ control-plane API.
 Consumed by the dashboard (and any other TS consumer) so request/response shapes stay in
 lockstep with the API.
 
@@ -20,7 +20,7 @@ cd ../../packages/shared-types && npm run generate && npm run build
 ## Usage
 
 ```ts
-import { createAgentLedgerClient } from '@agentledger/shared-types';
+import { createAgentLedgerClient } from '@badgeriq/shared-types';
 
 const api = createAgentLedgerClient({ baseUrl: 'http://localhost:8094', token });
 const { data, error } = await api.GET('/v1/analytics/spend', {

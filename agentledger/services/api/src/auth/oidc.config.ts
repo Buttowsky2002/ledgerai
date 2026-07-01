@@ -27,16 +27,16 @@ const SPECS: ProviderEnvSpec[] = [
   {
     name: 'google',
     defaultIssuer: 'https://accounts.google.com',
-    issuerEnv: 'AGENTLEDGER_OIDC_GOOGLE_ISSUER',
-    clientIdEnv: 'AGENTLEDGER_OIDC_GOOGLE_CLIENT_ID',
-    clientSecretEnv: 'AGENTLEDGER_OIDC_GOOGLE_CLIENT_SECRET',
+    issuerEnv: 'BADGERIQ_OIDC_GOOGLE_ISSUER',
+    clientIdEnv: 'BADGERIQ_OIDC_GOOGLE_CLIENT_ID',
+    clientSecretEnv: 'BADGERIQ_OIDC_GOOGLE_CLIENT_SECRET',
   },
   {
     name: 'microsoft',
     defaultIssuer: 'https://login.microsoftonline.com/common/v2.0',
-    issuerEnv: 'AGENTLEDGER_OIDC_MICROSOFT_ISSUER',
-    clientIdEnv: 'AGENTLEDGER_OIDC_MICROSOFT_CLIENT_ID',
-    clientSecretEnv: 'AGENTLEDGER_OIDC_MICROSOFT_CLIENT_SECRET',
+    issuerEnv: 'BADGERIQ_OIDC_MICROSOFT_ISSUER',
+    clientIdEnv: 'BADGERIQ_OIDC_MICROSOFT_CLIENT_ID',
+    clientSecretEnv: 'BADGERIQ_OIDC_MICROSOFT_CLIENT_SECRET',
   },
 ];
 
