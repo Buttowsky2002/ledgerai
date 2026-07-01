@@ -74,8 +74,8 @@ func main() {
 		slog.Warn("ANTHROPIC_API_KEY not set; semantic risk enrichment cannot run; serving health only")
 	default:
 		cfg := riskenrich.Config{
-			LookbackHours: int(envInt("AGENTLEDGER_RISK_ENRICH_LOOKBACK_HOURS", 24)),
-			MinCalls:      int(envInt("AGENTLEDGER_RISK_ENRICH_MIN_CALLS", 2)),
+			LookbackHours: envIntLocal("AGENTLEDGER_RISK_ENRICH_LOOKBACK_HOURS", 24),
+			MinCalls:      envIntLocal("AGENTLEDGER_RISK_ENRICH_MIN_CALLS", 2),
 			MinConfidence: envFloat("AGENTLEDGER_RISK_ENRICH_MIN_CONFIDENCE", 0.5),
 		}
 		classifier := riskenrich.NewAnthropicClassifier(
@@ -139,7 +139,7 @@ func writeMetrics(w http.ResponseWriter, m *riskenrich.Metrics) {
 func lookupEnv(name string) string {
 	const legacy = "AGENTLEDGER_"
 	if len(name) > len(legacy) && name[:len(legacy)] == legacy {
-	suffix := name[len(legacy):]
+		suffix := name[len(legacy):]
 		if v := os.Getenv("BADGERIQ_" + suffix); v != "" {
 			return v
 		}
@@ -161,6 +161,16 @@ func envInt(key string, def int64) int64 {
 	if v := lookupEnv(key); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
 			return n
+		}
+	}
+	return def
+}
+
+func envIntLocal(key string, def int) int {
+	if v := lookupEnv(key); v != "" {
+		n, err := strconv.ParseInt(v, 10, 0)
+		if err == nil {
+			return int(n)
 		}
 	}
 	return def

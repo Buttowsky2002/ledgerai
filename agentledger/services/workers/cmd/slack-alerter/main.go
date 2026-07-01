@@ -131,7 +131,7 @@ func writeMetrics(w http.ResponseWriter, m *slackalert.Metrics) {
 func lookupEnv(name string) string {
 	const legacy = "AGENTLEDGER_"
 	if len(name) > len(legacy) && name[:len(legacy)] == legacy {
-	suffix := name[len(legacy):]
+		suffix := name[len(legacy):]
 		if v := os.Getenv("BADGERIQ_" + suffix); v != "" {
 			return v
 		}

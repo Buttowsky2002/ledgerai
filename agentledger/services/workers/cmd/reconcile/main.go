@@ -32,7 +32,7 @@ func main() {
 
 	metrics := &reconcile.Metrics{}
 	r := reconcile.New(ch, envFloat("AGENTLEDGER_RECONCILE_THRESHOLD", 0.02),
-		int(envInt("AGENTLEDGER_RECONCILE_LOOKBACK_DAYS", 35)), metrics)
+		envIntLocal("AGENTLEDGER_RECONCILE_LOOKBACK_DAYS", 35), metrics)
 
 	interval := time.Duration(envInt("AGENTLEDGER_RECONCILE_INTERVAL_SEC", 86400)) * time.Second
 
@@ -117,7 +117,7 @@ func writeMetrics(w http.ResponseWriter, m *reconcile.Metrics) {
 func lookupEnv(name string) string {
 	const legacy = "AGENTLEDGER_"
 	if len(name) > len(legacy) && name[:len(legacy)] == legacy {
-	suffix := name[len(legacy):]
+		suffix := name[len(legacy):]
 		if v := os.Getenv("BADGERIQ_" + suffix); v != "" {
 			return v
 		}
@@ -139,6 +139,16 @@ func envInt(key string, def int64) int64 {
 	if v := lookupEnv(key); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
 			return n
+		}
+	}
+	return def
+}
+
+func envIntLocal(key string, def int) int {
+	if v := lookupEnv(key); v != "" {
+		n, err := strconv.ParseInt(v, 10, 0)
+		if err == nil {
+			return int(n)
 		}
 	}
 	return def

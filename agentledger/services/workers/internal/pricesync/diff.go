@@ -34,13 +34,13 @@ type DiffReport struct {
 
 // Syncer orchestrates fetch → normalize → diff → atomic writes.
 type Syncer struct {
-	fetcher   *Fetcher
-	livePath  string
-	outPath   string
-	diffPath  string
-	alertPct  float64
-	metrics   *Metrics
-	now       func() time.Time
+	fetcher  *Fetcher
+	livePath string
+	outPath  string
+	diffPath string
+	alertPct float64
+	metrics  *Metrics
+	now      func() time.Time
 }
 
 // NewSyncer wires a pricesync pass. Output paths are owned by the worker; the live
@@ -267,7 +267,7 @@ func writeJSONAtomic(path string, v any) error {
 
 func writeBytesAtomic(path string, data []byte) error {
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return err
 	}
 	tmp, err := os.CreateTemp(dir, ".pricesync-*")

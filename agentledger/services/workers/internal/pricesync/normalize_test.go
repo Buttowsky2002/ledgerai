@@ -86,8 +86,8 @@ func TestNormalizeSetsEffectiveStartOnChangedRows(t *testing.T) {
 func TestNormalizeExcludesUntrackedModels(t *testing.T) {
 	feed := map[string]FeedModelEntry{
 		"untracked-model-xyz": {
-			LitellmProvider:   "openai",
-			InputCostPerToken: fp(1e-06),
+			LitellmProvider:    "openai",
+			InputCostPerToken:  fp(1e-06),
 			OutputCostPerToken: fp(2e-06),
 		},
 	}
@@ -100,8 +100,8 @@ func TestNormalizeExcludesUntrackedModels(t *testing.T) {
 func TestNormalizeSkipsProviderMismatch(t *testing.T) {
 	feed := map[string]FeedModelEntry{
 		"claude-haiku-4-5": {
-			LitellmProvider:   "bedrock",
-			InputCostPerToken: fp(1e-06),
+			LitellmProvider:    "bedrock",
+			InputCostPerToken:  fp(1e-06),
 			OutputCostPerToken: fp(5e-06),
 		},
 	}

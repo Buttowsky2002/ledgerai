@@ -37,7 +37,7 @@ func LoadConfig() Config {
 		ClickHouseUser:     env("AGENTLEDGER_CLICKHOUSE_USER", "default"),
 		ClickHousePassword: lookupEnv("AGENTLEDGER_CLICKHOUSE_PASSWORD"),
 		ListenAddr:         env("AGENTLEDGER_WORKER_ADDR", ":8091"),
-		InsertRetries:      int(envInt("AGENTLEDGER_INSERT_RETRIES", 3)),
+		InsertRetries:      envIntLocal("AGENTLEDGER_INSERT_RETRIES", 3),
 		RetryBackoff:       time.Duration(envInt("AGENTLEDGER_RETRY_BACKOFF_MS", 250)) * time.Millisecond,
 	}
 }
@@ -48,7 +48,7 @@ func LoadConfig() Config {
 func lookupEnv(name string) string {
 	const legacy = "AGENTLEDGER_"
 	if len(name) > len(legacy) && name[:len(legacy)] == legacy {
-	suffix := name[len(legacy):]
+		suffix := name[len(legacy):]
 		if v := os.Getenv("BADGERIQ_" + suffix); v != "" {
 			return v
 		}
@@ -70,6 +70,16 @@ func envInt(key string, def int64) int64 {
 	if v := lookupEnv(key); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
 			return n
+		}
+	}
+	return def
+}
+
+func envIntLocal(key string, def int) int {
+	if v := lookupEnv(key); v != "" {
+		n, err := strconv.ParseInt(v, 10, 0)
+		if err == nil {
+			return int(n)
 		}
 	}
 	return def

@@ -55,7 +55,7 @@ func (f *Fetcher) Fetch(ctx context.Context) (map[string]FeedModelEntry, error) 
 		f.metrics.FetchErrors.Add(1)
 		return nil, fmt.Errorf("fetch feed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		f.metrics.FetchErrors.Add(1)

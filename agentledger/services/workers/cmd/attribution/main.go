@@ -59,7 +59,7 @@ func main() {
 
 	metrics := &attribution.Metrics{}
 	window := time.Duration(envInt("AGENTLEDGER_ATTR_WINDOW_MIN", 240)) * time.Minute
-	lookbackDays := int(envInt("AGENTLEDGER_ATTR_LOOKBACK_DAYS", 30))
+	lookbackDays := envIntLocal("AGENTLEDGER_ATTR_LOOKBACK_DAYS", 30)
 	m := attribution.New(ch, window, lookbackDays,
 		envFloat("AGENTLEDGER_ATTR_MIN_CONFIDENCE", 0.3), metrics)
 
@@ -219,7 +219,7 @@ func writeMetrics(w http.ResponseWriter, m *attribution.Metrics, v2 *attribution
 func lookupEnv(name string) string {
 	const legacy = "AGENTLEDGER_"
 	if len(name) > len(legacy) && name[:len(legacy)] == legacy {
-	suffix := name[len(legacy):]
+		suffix := name[len(legacy):]
 		if v := os.Getenv("BADGERIQ_" + suffix); v != "" {
 			return v
 		}
@@ -241,6 +241,16 @@ func envInt(key string, def int64) int64 {
 	if v := lookupEnv(key); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
 			return n
+		}
+	}
+	return def
+}
+
+func envIntLocal(key string, def int) int {
+	if v := lookupEnv(key); v != "" {
+		n, err := strconv.ParseInt(v, 10, 0)
+		if err == nil {
+			return int(n)
 		}
 	}
 	return def

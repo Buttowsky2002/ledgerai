@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/lib/pq"
-	_ "github.com/lib/pq" // postgres driver (already a workers dependency)
 )
 
 // Postgres persistence for the attribution engine v2 (build-plan sub-phase 3.1;

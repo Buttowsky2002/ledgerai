@@ -13,18 +13,18 @@ import (
 
 // FixedCostRecord is one row in agentledger.fixed_costs. attributable is always 0.
 type FixedCostRecord struct {
-	TenantID    string  `json:"tenant_id"`
-	PeriodMonth string  `json:"period_month"` // YYYY-MM-DD (first of month)
-	Vendor      string  `json:"vendor"`
-	CostType    string  `json:"cost_type"`
-	LineItem    string  `json:"line_item,omitempty"`
-	Seats       uint32  `json:"seats,omitempty"`
-	UnitCostUSD float64 `json:"unit_cost_usd,omitempty"`
-	CostUSD     float64 `json:"cost_usd"`
-	Currency    string  `json:"currency,omitempty"`
-	Attributable uint8  `json:"attributable"`
-	Source      string  `json:"source"`
-	Note        string  `json:"note,omitempty"`
+	TenantID     string  `json:"tenant_id"`
+	PeriodMonth  string  `json:"period_month"` // YYYY-MM-DD (first of month)
+	Vendor       string  `json:"vendor"`
+	CostType     string  `json:"cost_type"`
+	LineItem     string  `json:"line_item,omitempty"`
+	Seats        uint32  `json:"seats,omitempty"`
+	UnitCostUSD  float64 `json:"unit_cost_usd,omitempty"`
+	CostUSD      float64 `json:"cost_usd"`
+	Currency     string  `json:"currency,omitempty"`
+	Attributable uint8   `json:"attributable"`
+	Source       string  `json:"source"`
+	Note         string  `json:"note,omitempty"`
 }
 
 // FixedCostSink writes fixed_costs rows via ClickHouse HTTP JSONEachRow.
