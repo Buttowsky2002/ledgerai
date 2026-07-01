@@ -1,4 +1,4 @@
--- LedgerAI Postgres migration 011 — import idempotency ledger
+-- BadgerIQ Postgres migration 011 — import idempotency ledger
 --
 -- Tracks idempotency keys seen by POST /v1/import/events so a re-import with the
 -- same keys is skipped (no double counting). Tenant-scoped + RLS like every other

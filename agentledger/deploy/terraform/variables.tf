@@ -1,4 +1,4 @@
-# Inputs describing the managed infrastructure AgentLedger expects. These are
+# Inputs describing the managed infrastructure BadgerIQ expects. These are
 # stable; the resources that consume them (main.tf) are stubbed per ADR-039.
 
 variable "environment" {
@@ -14,7 +14,7 @@ variable "region" {
 }
 
 variable "cluster_name" {
-  description = "Kubernetes cluster name the AgentLedger Helm release targets."
+  description = "Kubernetes cluster name the BadgerIQ Helm release targets."
   type        = string
   default     = "agentledger"
 }

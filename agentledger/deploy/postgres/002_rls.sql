@@ -1,4 +1,4 @@
--- AgentLedger Postgres migration 002 — tenant isolation via row-level security
+-- BadgerIQ Postgres migration 002 — tenant isolation via row-level security
 --
 -- Enables RLS on every tenant-scoped table so a connection can only see/modify
 -- rows for the tenant bound to `app.tenant_id` for the current transaction. The

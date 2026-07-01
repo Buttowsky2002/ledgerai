@@ -1,4 +1,4 @@
-AgentLedger {{ .Chart.AppVersion }} deployed as release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
+BadgerIQ {{ .Chart.AppVersion }} deployed as release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
 
 This chart deploys APPLICATION workloads only. It expects external, managed
 infrastructure (PostgreSQL, ClickHouse, Redpanda/Kafka, Redis) — see

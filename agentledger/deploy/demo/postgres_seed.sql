@@ -1,4 +1,4 @@
--- LedgerAI demo seed — control plane (Postgres).
+-- BadgerIQ demo seed — control plane (Postgres).
 --
 -- Seeds the demo tenant, 4 teams, 9 human identities (with Cursor/demo aliases),
 -- the 8 named demo agents, and 5 budgets (one of which — DataCleanupAgent — is

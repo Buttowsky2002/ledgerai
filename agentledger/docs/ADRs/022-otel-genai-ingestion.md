@@ -94,7 +94,7 @@ retry); 400 on an unparseable body.
 
 ## Consequences
 
-- Anyone emitting `gen_ai.*` OTLP/JSON traces can ingest into AgentLedger with no
+- Anyone emitting `gen_ai.*` OTLP/JSON traces can ingest into BadgerIQ with no
   code changes — the first concrete payoff of the gateway-agnostic pivot.
 - The collector gains three Prometheus counters: `collector_otel_spans_converted_total`,
   `collector_otel_spans_skipped_total`, `collector_otel_spans_no_tenant_total`.

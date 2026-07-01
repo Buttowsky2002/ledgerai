@@ -9,7 +9,7 @@
 
 ## Context
 
-After a trial, AgentLedger has to *prove value* to the FinOps lead/CISO who ran
+After a trial, BadgerIQ has to *prove value* to the FinOps lead/CISO who ran
 it — but there was no single artifact summarizing what the agents cost, returned,
 and risked over the pilot window. CLAUDE.md mandates a "30-day pilot report
 generator." The acceptance bar (carried from Phase 4) is that a headline figure

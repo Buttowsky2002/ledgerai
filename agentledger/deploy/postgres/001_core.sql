@@ -1,4 +1,4 @@
--- AgentLedger Postgres schema (control plane / transactional state)
+-- BadgerIQ Postgres schema (control plane / transactional state)
 --
 -- Postgres owns everything low-volume and consistency-critical:
 -- tenants, identities, keys, policies, pricing, allocation rules,

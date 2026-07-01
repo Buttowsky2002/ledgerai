@@ -1,15 +1,15 @@
 apiVersion: v2
 name: agentledger
 description: |
-  AgentLedger — the agent FinOps & risk control plane. This chart deploys the
-  AgentLedger application workloads (gateway, control-plane API, ingest collector,
+  BadgerIQ — the agent FinOps & risk control plane. This chart deploys the
+  BadgerIQ application workloads (gateway, control-plane API, ingest collector,
   async workers, connectors, adapter). Stateful infrastructure (PostgreSQL,
   ClickHouse, Redpanda/Kafka, Redis) is NOT bundled — point the chart at managed,
   operator-provisioned services (see deploy/terraform). Cloud-agnostic by design.
 type: application
 # Chart version — bump on chart changes (SemVer).
 version: 0.1.0
-# appVersion tracks the AgentLedger application release; image tags default to it.
+# appVersion tracks the BadgerIQ application release; image tags default to it.
 appVersion: "0.1.0"
 keywords:
   - finops
@@ -18,4 +18,4 @@ keywords:
   - ai-governance
 home: https://github.com/agentledger/agentledger
 maintainers:
-  - name: AgentLedger Platform team
+  - name: BadgerIQ Platform team

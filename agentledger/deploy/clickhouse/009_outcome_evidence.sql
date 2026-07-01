@@ -1,4 +1,4 @@
--- AgentLedger ClickHouse migration 009 — deterministic-link evidence
+-- BadgerIQ ClickHouse migration 009 — deterministic-link evidence
 --
 -- Phase 3 deepening, sub-phase 3.1 (docs/ATTRIBUTION_ENGINE_BUILD.md §3.1; ADR-040).
 -- Connector-discovered HARD links between an outcome and the agent run that

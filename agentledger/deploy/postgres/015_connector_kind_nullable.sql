@@ -1,4 +1,4 @@
--- LedgerAI migration 015 — API connector framework follow-ups
+-- BadgerIQ migration 015 — API connector framework follow-ups
 -- kind is optional for config-driven API connectors (Go sync rows still use kind).
 
 BEGIN;

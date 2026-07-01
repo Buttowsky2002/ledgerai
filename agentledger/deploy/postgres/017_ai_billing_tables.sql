@@ -1,4 +1,4 @@
--- AgentLedger Postgres migration 017 — AI provider billing & seat inventory
+-- BadgerIQ Postgres migration 017 — AI provider billing & seat inventory
 --
 -- Control-plane tables for subscription/seat costs that feed LARI fully-loaded
 -- cost (subscription_cost_allocated). Tenant-scoped + RLS like every other table.

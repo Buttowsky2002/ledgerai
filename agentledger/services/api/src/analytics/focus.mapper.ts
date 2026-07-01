@@ -1,5 +1,5 @@
 // FOCUS 1.2 export mapping (P6-E1, ADR-035). Maps a spend_daily row to a FOCUS
-// 1.2 charge record plus AgentLedger x_ai_* extensions, and serializes records to
+// 1.2 charge record plus BadgerIQ x_ai_* extensions, and serializes records to
 // CSV. The column order here is the canonical order in schemas/focus/
 // focus-1.2.columns.json — keep the two in lockstep.
 

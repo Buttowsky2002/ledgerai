@@ -1,4 +1,4 @@
--- AgentLedger migration 016 — connector attribution mappings + sync stats
+-- BadgerIQ migration 016 — connector attribution mappings + sync stats
 -- Forward-only; never edit an applied migration.
 
 BEGIN;

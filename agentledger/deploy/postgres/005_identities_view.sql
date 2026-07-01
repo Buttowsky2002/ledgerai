@@ -1,4 +1,4 @@
--- AgentLedger Postgres migration 005 — unified identity graph (NHIs first-class)
+-- BadgerIQ Postgres migration 005 — unified identity graph (NHIs first-class)
 --
 -- CLAUDE.md Phase 3 requires "identities as first-class incl. non-human
 -- identities (NHIs) for agents". Humans live in `identities`, agents in the

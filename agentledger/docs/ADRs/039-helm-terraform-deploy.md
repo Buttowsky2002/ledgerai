@@ -9,9 +9,9 @@
 
 ## Context
 
-P6 calls for a deployable packaging of AgentLedger beyond `docker-compose` (which
+P6 calls for a deployable packaging of BadgerIQ beyond `docker-compose` (which
 is dev-only). The repo had no Kubernetes manifests, Helm chart, or Terraform.
-AgentLedger is sold as software the customer runs on their own stack, so the
+BadgerIQ is sold as software the customer runs on their own stack, so the
 packaging must be **cloud-agnostic** — it cannot assume a particular managed
 database, message bus, or cloud.
 
@@ -21,7 +21,7 @@ Ship a single **Helm chart** (`deploy/helm/agentledger`) that deploys the
 **application workloads only**, plus a **Terraform stub** (`deploy/terraform`)
 that documents the infrastructure contract without binding a cloud.
 
-- **App workloads, not infra.** The chart deploys the 11 AgentLedger services
+- **App workloads, not infra.** The chart deploys the 11 BadgerIQ services
   (gateway, api, collector, litellm-adapter, ch-insert, reconcile, risk-engine,
   risk-enrichment, slack-alerter, connector-sync, outcome-sync; attribution
   ships disabled). It does **not** bundle PostgreSQL, ClickHouse, Redpanda, or
@@ -59,7 +59,7 @@ that documents the infrastructure contract without binding a cloud.
 
 ## Consequences
 
-- **Positive:** AgentLedger is installable on any conformant cluster with one
+- **Positive:** BadgerIQ is installable on any conformant cluster with one
   `helm upgrade --install`; infra stays managed and cloud-portable; the chart
   carries zero secret material; adding/disabling a service is a values edit.
 - **Trade-offs / accepted:** operators must provision the data stores and create

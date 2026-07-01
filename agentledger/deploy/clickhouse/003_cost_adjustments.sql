@@ -1,4 +1,4 @@
--- AgentLedger ClickHouse migration 003 — reconciliation adjustments
+-- BadgerIQ ClickHouse migration 003 — reconciliation adjustments
 --
 -- The reconciliation worker (services/workers/cmd/reconcile) reads
 -- v_cost_reconciliation (gateway-observed vs provider-billed, per day/model),

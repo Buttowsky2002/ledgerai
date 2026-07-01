@@ -1,4 +1,4 @@
-# AgentLedger — Architecture Pivot
+# BadgerIQ — Architecture Pivot
 ### Repositioning into the market's blind spots
 
 *Companion to `ARCHITECTURE.md`. This document does not replace the existing system — most of the code you've built survives. It changes what sits at the center, what's a differentiator versus a feature, and the order you build in. Read the competitive rationale section first; the rest is the concrete plan.*
@@ -30,7 +30,7 @@ The old architecture put the **gateway** at the center and everything fed off it
 ```
         DATA SOURCES (any subset — adoption is incremental)
    ┌───────────────┬───────────────┬───────────────┬───────────────┐
-   │ AgentLedger   │ 3rd-party     │ Provider      │ OTel GenAI    │
+   │ BadgerIQ   │ 3rd-party     │ Provider      │ OTel GenAI    │
    │ gateway       │ gateways      │ billing APIs  │ spans + SDK   │
    │ (enforcement, │ (LiteLLM,     │ (OpenAI,      │ (Langfuse,    │
    │  optional)    │  Bifrost,     │  Anthropic,   │  LangSmith,   │

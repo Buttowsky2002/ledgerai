@@ -1,6 +1,6 @@
-# AgentLedger Helm chart
+# BadgerIQ Helm chart
 
-Deploys the AgentLedger **application workloads** to Kubernetes:
+Deploys the BadgerIQ **application workloads** to Kubernetes:
 
 | Service | Port | Kind | Notes |
 |---------|------|------|-------|

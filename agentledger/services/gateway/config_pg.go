@@ -10,7 +10,7 @@ import (
 	"github.com/lib/pq"
 )
 
-// PGConfigStore implements ConfigStore against the AgentLedger Postgres schema.
+// PGConfigStore implements ConfigStore against the BadgerIQ Postgres schema.
 // It reloads virtual_keys, DLP policies, and the per-agent tool/MCP allowlist on
 // each Load call; static fields (listen_addr, providers, events, redis) come
 // from the base Config.

@@ -13,7 +13,7 @@ The pivot's first job is "connect a source, see value" without requiring our
 gateway. LiteLLM is one of the most widely deployed OSS LLM gateways/proxies and
 emits a spend log per request (its `/spend/logs` API rows and the
 `StandardLoggingPayload` sent to logging callbacks). A customer already running
-LiteLLM should get attribution + cost in AgentLedger in an afternoon by pointing
+LiteLLM should get attribution + cost in BadgerIQ in an afternoon by pointing
 that log stream at us.
 
 This is the first **spend-log adapter** of the `services/ingest/adapters/`

@@ -1,4 +1,4 @@
-# AgentLedger — Coding-Tool Ingestion Adapters Spec
+# BadgerIQ — Coding-Tool Ingestion Adapters Spec
 ### GitHub Copilot & Cursor, mapped to their real export schemas
 
 <!--
@@ -115,7 +115,7 @@ Two tiers — detect and degrade gracefully:
 
 ## 6. The comparability layer (`_normalize/`) — the actual differentiator
 
-This is what makes AgentLedger answer the question ChatGPT couldn't. Rules:
+This is what makes BadgerIQ answer the question ChatGPT couldn't. Rules:
 
 1. **Never cross-compare across `mode`.** Acceptance rate is reported only for `completion` rows; agent contribution is reported as lines/commits, never as a rate. Surface both, clearly labeled, side by side.
 2. **One canonical "AI share of committed code"** computed the same way for both: `lines_ai / lines_total` from `coding_commit_attribution`. Cursor supplies this natively; for Copilot, derive it from the repo's `Co-Authored-By` commits (deterministic). Now the two are genuinely comparable.

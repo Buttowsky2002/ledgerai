@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# LedgerAI demo-mode launcher. No make required.
+# BadgerIQ demo-mode launcher. No make required.
 #
 # Usage:
 #   ./bin/demo.sh           — start stack + seed demo tenant
@@ -38,7 +38,7 @@ case "${1:-start}" in
     cat <<EOF
 
 ================================================================
-  LedgerAI demo backend is live  (tenant $TENANT)
+  BadgerIQ demo backend is live  (tenant $TENANT)
   No provider keys needed — all data is synthetic.
 
   Start the dashboard (new terminal):

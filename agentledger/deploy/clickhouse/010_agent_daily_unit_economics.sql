@@ -1,4 +1,4 @@
--- AgentLedger ClickHouse migration 010 — per-agent daily unit economics
+-- BadgerIQ ClickHouse migration 010 — per-agent daily unit economics
 --
 -- The Outcome Graph MVP needs a single per-agent/day rollup of the cost→outcome
 -- economics. Rather than re-derive the ROI math, this view aggregates the finance

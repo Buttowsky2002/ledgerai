@@ -1,4 +1,4 @@
--- AgentLedger Postgres migration 012 — per-virtual-key prompt-injection policy
+-- BadgerIQ Postgres migration 012 — per-virtual-key prompt-injection policy
 --
 -- Phase 5/6: deterministic inline prompt-injection shield (ADR-048). Mirrors the
 -- DLP policy wiring: injection_policy holds per-tenant policy rows; virtual_keys

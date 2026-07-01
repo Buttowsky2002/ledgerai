@@ -1,8 +1,8 @@
-# AgentLedger Terraform — infrastructure stub
+# BadgerIQ Terraform — infrastructure stub
 
 > **Status: intentional stub.** This directory defines the *shape* of the managed
-> infrastructure AgentLedger expects, but contains **no live provider resources**.
-> AgentLedger is cloud-agnostic; provisioning is deliberately deferred to the
+> infrastructure BadgerIQ expects, but contains **no live provider resources**.
+> BadgerIQ is cloud-agnostic; provisioning is deliberately deferred to the
 > operator's own platform (EKS/GKE/AKS + RDS/Cloud SQL, ClickHouse Cloud, MSK/
 > Redpanda Cloud, ElastiCache/Memorystore). See
 > [ADR-039](../../docs/ADRs/039-helm-terraform-deploy.md) for why.

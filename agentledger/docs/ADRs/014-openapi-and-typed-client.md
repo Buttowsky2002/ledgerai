@@ -41,7 +41,7 @@ scheme, applied globally.
 `packages/shared-types` (a standalone package — there is no npm workspace) generates:
 - `src/openapi.ts` via **`openapi-typescript`** (typed paths/params/responses),
 - `src/events.ts` via **`json-schema-to-typescript`** from `schemas/events/llm_call.schema.json`,
-- `src/client.ts` — `createAgentLedgerClient({ baseUrl, token })` wrapping **`openapi-fetch`**.
+- `src/client.ts` — `createBadgerIQClient({ baseUrl, token })` wrapping **`openapi-fetch`**.
 
 Generated files are **committed** so consumers need no toolchain; `npm run generate` + `build`
 refresh them. This stack is types-first with a tiny runtime — no Java/heavy codegen — matching

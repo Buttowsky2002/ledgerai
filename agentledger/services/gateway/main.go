@@ -1,4 +1,4 @@
-// AgentLedger Gateway — thin, low-latency, OpenAI-compatible LLM proxy.
+// BadgerIQ Gateway — thin, low-latency, OpenAI-compatible LLM proxy.
 //
 // Design principles (see docs/ARCHITECTURE.md):
 //   - Inline path stays thin: auth -> policy precheck -> budget check -> proxy.

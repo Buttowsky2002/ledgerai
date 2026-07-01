@@ -1,4 +1,4 @@
-# AgentLedger managed-infrastructure — STUB (ADR-039).
+# BadgerIQ managed-infrastructure — STUB (ADR-039).
 #
 # This file deliberately declares NO live resources. The blocks below document
 # the modules a concrete implementation would add, per target cloud. Uncomment

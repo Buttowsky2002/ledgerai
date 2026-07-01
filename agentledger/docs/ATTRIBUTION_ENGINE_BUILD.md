@@ -1,9 +1,9 @@
-# AgentLedger — Attribution Engine Build Plan (The Moat)
+# BadgerIQ — Attribution Engine Build Plan (The Moat)
 ### Confidence-scored causal attribution: a thorough refactor spec
 
 <!--
 HOW TO USE THIS FILE:
-This is the detailed build plan for the single most important feature in AgentLedger:
+This is the detailed build plan for the single most important feature in BadgerIQ:
 the confidence-scored causal attribution layer inside the Agent Outcome Graph.
 
 It EXPANDS Phase 3 of CLAUDE_CODE_BUILD_SPEC.md. It is a refactor: it restructures
@@ -23,7 +23,7 @@ constraints in §7 that are equally binding.
 
 ## 1. What this refactor builds, and why it is the moat
 
-Everything else in AgentLedger is infrastructure a funded competitor could clone. This engine is not, because it gets **more accurate with every customer's data** (the flywheel) and because it answers the one question a CFO needs — *"would this outcome have happened without the agent?"* — which a correlation engine cannot.
+Everything else in BadgerIQ is infrastructure a funded competitor could clone. This engine is not, because it gets **more accurate with every customer's data** (the flywheel) and because it answers the one question a CFO needs — *"would this outcome have happened without the agent?"* — which a correlation engine cannot.
 
 The engine has four attribution layers, plus the infrastructure that makes them defensible:
 

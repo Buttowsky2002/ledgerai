@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://agentledger.ai/schemas/focus/focus-1.2.columns.json",
-  "title": "AgentLedger FOCUS 1.2 export columns",
-  "description": "The FinOps Open Cost & Usage Specification (FOCUS) 1.2 columns AgentLedger populates on cost export, plus AgentLedger-specific x_ai_* extension columns. Export is generated on demand from the ClickHouse spend_daily materialized view (per day x team x app x provider x model) — it is never persisted. SECURITY: no raw prompt/completion content is ever exported (CLAUDE.md rule 2); cost/usage/attribution dimensions only. Column order in this file is the canonical CSV column order.",
+  "title": "BadgerIQ FOCUS 1.2 export columns",
+  "description": "The FinOps Open Cost & Usage Specification (FOCUS) 1.2 columns BadgerIQ populates on cost export, plus BadgerIQ-specific x_ai_* extension columns. Export is generated on demand from the ClickHouse spend_daily materialized view (per day x team x app x provider x model) — it is never persisted. SECURITY: no raw prompt/completion content is ever exported (CLAUDE.md rule 2); cost/usage/attribution dimensions only. Column order in this file is the canonical CSV column order.",
   "version": "1.2",
   "columns": [
-    { "name": "BillingAccountId", "kind": "focus", "type": "string", "source": "tenant_id", "description": "FOCUS billing account — the AgentLedger tenant." },
+    { "name": "BillingAccountId", "kind": "focus", "type": "string", "source": "tenant_id", "description": "FOCUS billing account — the BadgerIQ tenant." },
     { "name": "BillingCurrency", "kind": "focus", "type": "string", "source": "constant 'USD'", "description": "Currency of all cost columns." },
     { "name": "BillingPeriodStart", "kind": "focus", "type": "date", "source": "export window from", "description": "Inclusive start of the billing window requested." },
     { "name": "BillingPeriodEnd", "kind": "focus", "type": "date", "source": "export window to", "description": "Exclusive end of the billing window requested." },
@@ -13,7 +13,7 @@
     { "name": "ChargePeriodEnd", "kind": "focus", "type": "date", "source": "spend_daily.day + 1d", "description": "Exclusive end of the charge's day." },
     { "name": "ChargeCategory", "kind": "focus", "type": "string", "source": "constant 'Usage'", "description": "FOCUS charge category; AI consumption is metered usage." },
     { "name": "ChargeDescription", "kind": "focus", "type": "string", "source": "derived", "description": "Human description, e.g. 'openai gpt-4o usage'." },
-    { "name": "BilledCost", "kind": "focus", "type": "number", "source": "spend_daily.cost_usd", "description": "Cost billed for the period (AgentLedger observed cost)." },
+    { "name": "BilledCost", "kind": "focus", "type": "number", "source": "spend_daily.cost_usd", "description": "Cost billed for the period (BadgerIQ observed cost)." },
     { "name": "EffectiveCost", "kind": "focus", "type": "number", "source": "spend_daily.cost_usd", "description": "Amortized/effective cost; equals BilledCost for usage charges." },
     { "name": "ListCost", "kind": "focus", "type": "number", "source": "spend_daily.cost_usd", "description": "List (undiscounted) cost; equals BilledCost absent negotiated rates." },
     { "name": "ProviderName", "kind": "focus", "type": "string", "source": "spend_daily.provider", "description": "Upstream model provider (openai, anthropic, ...)." },

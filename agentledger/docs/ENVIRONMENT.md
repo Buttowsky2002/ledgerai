@@ -1,6 +1,6 @@
 # Environment variables
 
-Every variable uses the **`BADGERIQ_*`** prefix. The deprecated **`BADGERIQ_*`**
+Every variable uses the **`BADGERIQ_*`** prefix. The deprecated **`LEDGERAI_*`**
 and legacy **`AGENTLEDGER_*`** names are still read as aliases (a service prefers
 `BADGERIQ_*` and falls back to the older prefixes), so existing deployments keep
 working — migrate by renaming the prefix. See the repo README "Renaming to BadgerIQ".

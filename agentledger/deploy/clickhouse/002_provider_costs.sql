@@ -1,4 +1,4 @@
--- AgentLedger ClickHouse migration 002 — provider-billed costs
+-- BadgerIQ ClickHouse migration 002 — provider-billed costs
 --
 -- Connectors (Phase 2) import what each provider actually billed, at the
 -- granularity the provider reports (typically per day / model / line item).

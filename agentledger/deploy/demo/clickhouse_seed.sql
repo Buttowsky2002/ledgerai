@@ -1,4 +1,4 @@
--- LedgerAI demo seed — analytics plane (ClickHouse).
+-- BadgerIQ demo seed — analytics plane (ClickHouse).
 --
 -- Synthetic, content-free activity for one demo tenant across 8 named agents,
 -- engineered so the LARI engine returns a FULL SPREAD of recommendations on the

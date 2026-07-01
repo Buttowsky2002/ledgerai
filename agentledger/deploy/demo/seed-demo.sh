@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Seed (or reset) the LedgerAI demo tenant — no provider keys required.
+# Seed (or reset) the BadgerIQ demo tenant — no provider keys required.
 #
 #   Seed:  bash deploy/demo/seed-demo.sh
 #   Reset: LEDGERAI_DEMO_RESET=1 bash deploy/demo/seed-demo.sh   (clear, no reseed)

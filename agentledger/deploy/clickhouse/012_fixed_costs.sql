@@ -1,4 +1,4 @@
--- AgentLedger ClickHouse migration 012 — fixed / recurring AI overhead
+-- BadgerIQ ClickHouse migration 012 — fixed / recurring AI overhead
 --
 -- Seat licenses, subscriptions, platform fees, and committed-use charges that are
 -- NOT metered per token and NOT attributable to any agent or outcome. These rows

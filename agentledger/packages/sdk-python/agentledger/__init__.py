@@ -1,13 +1,13 @@
-"""LedgerAI Python SDK (MVP).
+"""BadgerIQ Python SDK (MVP).
 
 Stdlib-only tracing for agents and workflows. Emits events aligned with
 the OpenTelemetry GenAI semantic conventions (gen_ai.* attribute names)
-and LedgerAI's canonical schema, so the same data lands cleanly in
+and BadgerIQ's canonical schema, so the same data lands cleanly in
 ClickHouse and any OTel-compatible backend.
 
 Two integration paths:
 
-1. Route LLM traffic through the LedgerAI gateway and use this SDK
+1. Route LLM traffic through the BadgerIQ gateway and use this SDK
    only for run/step/outcome context (headers propagate run identity):
 
        import agentledger as al

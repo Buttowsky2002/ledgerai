@@ -1,4 +1,4 @@
--- AgentLedger Postgres migration 003 — API authz role + SSO identity lookup
+-- BadgerIQ Postgres migration 003 — API authz role + SSO identity lookup
 --
 -- Phase 3 task 2 adds OIDC login + RBAC. Two pieces live in the DB:
 --

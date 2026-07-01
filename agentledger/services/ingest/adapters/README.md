@@ -1,7 +1,7 @@
 # Ingestion adapters
 
 Normalizers that turn a **third-party gateway's spend/usage logs** into
-LedgerAI canonical `llm_call` events, then forward them to the collector.
+BadgerIQ canonical `llm_call` events, then forward them to the collector.
 This is the gateway-agnostic front door (ARCHITECTURE_PIVOT.md, Pillar 1): a
 customer already running LiteLLM/Bifrost/Portkey connects a source and sees
 attribution + cost **without routing traffic through our gateway**.

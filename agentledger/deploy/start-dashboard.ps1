@@ -1,4 +1,4 @@
-# Start the LedgerAI dashboard locally (Windows — no make required).
+# Start the BadgerIQ dashboard locally (Windows — no make required).
 # Stops any stale dashboard container on :3000, then runs Next dev with demo tenant.
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)

@@ -1,4 +1,4 @@
--- AgentLedger ClickHouse migration 006 — finance-grade ROI engine
+-- BadgerIQ ClickHouse migration 006 — finance-grade ROI engine
 --
 -- Phase 4 needs ROI with finance rigor: baseline capture, fully-loaded cost,
 -- redeployment discount, confidence intervals (propagate attribution_confidence)

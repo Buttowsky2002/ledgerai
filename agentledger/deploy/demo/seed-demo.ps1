@@ -2,7 +2,7 @@ param(
     [switch]$Reset
 )
 
-# Seed (or reset) the LedgerAI demo tenant - no provider keys required.
+# Seed (or reset) the BadgerIQ demo tenant - no provider keys required.
 #
 # Usage (from agentledger/):
 #   powershell -ExecutionPolicy Bypass -File deploy/demo/seed-demo.ps1

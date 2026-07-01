@@ -1,4 +1,4 @@
--- AgentLedger Postgres migration 004 — price_book write grants for the API
+-- BadgerIQ Postgres migration 004 — price_book write grants for the API
 --
 -- price_book is GLOBAL reference data (no tenant_id, no RLS). Migration 002 made
 -- it read-only for agentledger_api ("global reference data: read-only for the API

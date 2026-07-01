@@ -1,4 +1,4 @@
-# Default values for the AgentLedger chart.
+# Default values for the BadgerIQ chart.
 # This chart deploys APPLICATION workloads only. Stateful infrastructure
 # (PostgreSQL, ClickHouse, Redpanda/Kafka, Redis) must be provisioned externally
 # (managed services — see deploy/terraform) and referenced under

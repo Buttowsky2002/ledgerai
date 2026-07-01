@@ -1,4 +1,4 @@
--- LedgerAI migration 014 — generic API connector framework
+-- BadgerIQ migration 014 — generic API connector framework
 --
 -- Adds connector definitions (built-in presets + tenant custom), extends the
 -- existing connectors table for the NestJS control-plane engine, and adds sync

@@ -1,4 +1,4 @@
--- AgentLedger Postgres migration 009 — SCIM 2.0 provisioning (P6-D2)
+-- BadgerIQ Postgres migration 009 — SCIM 2.0 provisioning (P6-D2)
 --
 -- Phase 6 (P6-D2, pairs with ADR-033/SSO). Lets a tenant's IdP (Okta/Entra/...)
 -- provision and DEPROVISION users/groups via SCIM 2.0 (RFC 7643/7644):

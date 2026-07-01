@@ -1,5 +1,5 @@
 // LiteLLM ingestion adapter — a webhook that turns LiteLLM spend logs into
-// AgentLedger canonical events.
+// BadgerIQ canonical events.
 //
 // Point LiteLLM's logging callback (or a job replaying /spend/logs) at
 // POST /ingest/litellm. The adapter normalizes each record and forwards the

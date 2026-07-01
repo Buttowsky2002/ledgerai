@@ -1,4 +1,4 @@
--- AgentLedger Postgres migration 008 — enterprise SSO (per-tenant OIDC) + JIT
+-- BadgerIQ Postgres migration 008 — enterprise SSO (per-tenant OIDC) + JIT
 --
 -- Phase 6 (P6-D1). Today auth is a single GLOBAL Google/Microsoft OIDC app and an
 -- unknown email is rejected (ADR-011, no auto-provisioning). Enterprises bring

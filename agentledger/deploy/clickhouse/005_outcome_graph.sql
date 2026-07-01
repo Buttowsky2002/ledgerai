@@ -1,4 +1,4 @@
--- AgentLedger ClickHouse migration 005 — outcome graph trace view
+-- BadgerIQ ClickHouse migration 005 — outcome graph trace view
 --
 -- Phase 3 acceptance: `cost -> agent -> outcome -> value` must be queryable with
 -- a confidence on every edge. v_outcome_graph is that end-to-end trace — one row

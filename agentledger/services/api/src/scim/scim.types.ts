@@ -1,5 +1,5 @@
 // SCIM 2.0 (RFC 7643/7644) envelopes, mappers, and a focused PATCH-op parser.
-// AgentLedger maps SCIM Users → identities and SCIM Groups → teams; only the
+// BadgerIQ maps SCIM Users → identities and SCIM Groups → teams; only the
 // attributes those tables hold are honored (others are accepted and ignored).
 
 const USER_SCHEMA = 'urn:ietf:params:scim:schemas:core:2.0:User';

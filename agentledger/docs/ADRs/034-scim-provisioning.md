@@ -13,7 +13,7 @@ ADR-033 gave enterprises per-tenant SSO with JIT provisioning, but onboarding vi
 login is only half the lifecycle: enterprises run their directory (Okta/Entra/…)
 as the source of truth and expect it to **provision and — critically —
 deprovision** users automatically via SCIM 2.0 (RFC 7643/7644). Without it, a
-user offboarded in the IdP keeps a live AgentLedger identity until they happen to
+user offboarded in the IdP keeps a live BadgerIQ identity until they happen to
 try logging in. P6-D2 delivers the SCIM half. Scope (confirmed): **Users +
 Groups→teams**.
 
@@ -69,7 +69,7 @@ objects); unsupported ops are accepted and ignored rather than erroring.
 ## Consequences
 
 - **Positive:** the IdP becomes the lifecycle source of truth; offboarding in the
-  directory deactivates the AgentLedger identity within one sync and blocks login
+  directory deactivates the BadgerIQ identity within one sync and blocks login
   immediately. Every SCIM mutation is RLS-confined and audited (`actor =
   scim:<token_id>`, rule 10). No new runtime dependency.
 - **Trade-offs / accepted:** single primary-team membership (multi-group deferred);

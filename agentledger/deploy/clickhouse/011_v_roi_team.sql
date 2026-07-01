@@ -1,4 +1,4 @@
--- AgentLedger ClickHouse migration 011 — expose team_id on v_roi
+-- BadgerIQ ClickHouse migration 011 — expose team_id on v_roi
 --
 -- The dashboard overview adds a team filter. spend_daily / risk_daily / outcomes
 -- already carry team_id, but v_roi (migration 006) projected everything EXCEPT

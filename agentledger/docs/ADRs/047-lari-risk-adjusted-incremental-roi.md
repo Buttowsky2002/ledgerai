@@ -18,7 +18,7 @@ cost, expected risk loss, and the uncertainty of the evidence — and that recom
 
 ## Decision
 
-Add **LARI** — LedgerAI Risk-Adjusted Incremental ROI — as a pure TypeScript engine in
+Add **LARI** — BadgerIQ Risk-Adjusted Incremental ROI — as a pure TypeScript engine in
 `services/api/src/lari/` (framework-free functions + types), plus a thin `GET /v1/agents/:id/lari`
 endpoint that assembles its input from live data.
 

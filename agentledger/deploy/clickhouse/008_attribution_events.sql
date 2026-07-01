@@ -1,4 +1,4 @@
--- AgentLedger ClickHouse migration 008 — attribution decision log + daily rollup
+-- BadgerIQ ClickHouse migration 008 — attribution decision log + daily rollup
 --
 -- Phase 3 deepening (docs/ATTRIBUTION_ENGINE_BUILD.md §3; ADR-040). The attribution
 -- engine's relational source of truth is Postgres (attribution_edges et al.); this

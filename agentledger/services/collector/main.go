@@ -1,4 +1,4 @@
-// AgentLedger Collector — HTTP ingest for SDK and gateway events.
+// BadgerIQ Collector — HTTP ingest for SDK and gateway events.
 //
 // Responsibilities (see CLAUDE_CODE_BUILD_SPEC.md §3, Phase 1):
 //   - Accept events over HTTP (single object, JSON array, or NDJSON).

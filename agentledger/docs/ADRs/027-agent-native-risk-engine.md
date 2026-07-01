@@ -9,7 +9,7 @@
 
 ## Context
 
-Phase 5 turns AgentLedger's risk story agent-native: per-agent tool/MCP
+Phase 5 turns BadgerIQ's risk story agent-native: per-agent tool/MCP
 governance, governed risk events, and a risk signal that feeds the risk-adjusted
 ROI seam (`agent_risk`) ADR-026 built. The deterministic DLP regex tier
 (`gateway/dlp.go`) already exists and carries forward. There was no per-tool-call

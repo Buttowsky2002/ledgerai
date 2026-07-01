@@ -1,4 +1,4 @@
--- AgentLedger ClickHouse schema (analytics plane)
+-- BadgerIQ ClickHouse schema (analytics plane)
 --
 -- Design follows production-proven patterns for LLM event analytics:
 --   * MergeTree partitioned by month, ordered by (tenant_id, ts) so every

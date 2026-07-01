@@ -1,4 +1,4 @@
-# CLAUDE.md — AgentLedger AI Build Specification
+# CLAUDE.md — BadgerIQ AI Build Specification
 <!--
 HOW TO USE THIS FILE:
 1. Create a new git repository.
@@ -11,9 +11,9 @@ This file is binding standing instructions for the whole project. Where ARCHITEC
 
 ## 1. Project Context & Positioning
 
-You are building **AgentLedger AI**, the **agent FinOps & risk control plane**. It sits on top of whatever AI stack a customer already runs and answers the question no competitor productizes: **what is each AI agent costing, returning, and risking?**
+You are building **BadgerIQ AI**, the **agent FinOps & risk control plane**. It sits on top of whatever AI stack a customer already runs and answers the question no competitor productizes: **what is each AI agent costing, returning, and risking?**
 
-This is a deliberate pivot away from "an AI gateway with cost tracking and DLP." The market is saturated with AI gateways (Bifrost, LiteLLM, Portkey) and LLM observability (Langfuse, Helicone, LangSmith). AgentLedger does **not** compete with them on their turf — it **consumes** them as data sources and adds the layer none of them have: the **Agent Outcome Graph** and **risk-adjusted ROI**. The buyer is the **finance/FinOps lead and the CISO**, not the platform engineer.
+This is a deliberate pivot away from "an AI gateway with cost tracking and DLP." The market is saturated with AI gateways (Bifrost, LiteLLM, Portkey) and LLM observability (Langfuse, Helicone, LangSmith). BadgerIQ does **not** compete with them on their turf — it **consumes** them as data sources and adds the layer none of them have: the **Agent Outcome Graph** and **risk-adjusted ROI**. The buyer is the **finance/FinOps lead and the CISO**, not the platform engineer.
 
 Three consequences govern every decision:
 - **The gateway is optional, not the center.** It is the premium enforcement tier. Most customers will onboard by connecting an existing source. Never assume traffic flows through our gateway.

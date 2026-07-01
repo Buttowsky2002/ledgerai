@@ -1,6 +1,6 @@
 # Deployment & packaging
 
-LedgerAI runs in three modes. Pick by what you need:
+BadgerIQ runs in three modes. Pick by what you need:
 
 | Mode | Use it for | Provider keys? | Auth |
 |------|-----------|----------------|------|
@@ -121,7 +121,7 @@ localhost-only in dev unless you set an ops token (see production).
 
 ## 3. Production / self-host mode
 
-Goal: run LedgerAI safely for real workloads. Deploy the app workloads with the
+Goal: run BadgerIQ safely for real workloads. Deploy the app workloads with the
 Helm chart (`deploy/helm/agentledger`) against **externally-managed** Postgres,
 ClickHouse, Redpanda/Kafka, and Redis (the chart bundles no databases).
 

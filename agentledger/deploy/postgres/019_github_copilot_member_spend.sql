@@ -1,4 +1,4 @@
--- AgentLedger Postgres migration 019 — GitHub Copilot member spend attribution
+-- BadgerIQ Postgres migration 019 — GitHub Copilot member spend attribution
 --
 -- Adds org members, team membership, and persisted per-member daily allocated spend.
 -- Extends seats with raw_payload for debugging. ROI thresholds remain in

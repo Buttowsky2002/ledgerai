@@ -9,7 +9,7 @@
 
 ## Context
 
-AgentLedger's buyer is the FinOps lead, who already runs cloud bills through
+BadgerIQ's buyer is the FinOps lead, who already runs cloud bills through
 [FOCUS](https://focus.finops.org/)-aware tooling. There was **no way to get AI
 spend out** in that format — no `schemas/focus/`, no export. CLAUDE.md mandates a
 "FOCUS 1.2 export with `x_ai_*`."

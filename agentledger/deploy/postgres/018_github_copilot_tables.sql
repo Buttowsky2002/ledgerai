@@ -1,4 +1,4 @@
--- AgentLedger Postgres migration 018 — GitHub Copilot Business connector tables
+-- BadgerIQ Postgres migration 018 — GitHub Copilot Business connector tables
 --
 -- Extends the connector framework (014) with license/usage/ROI storage for
 -- GitHub Copilot Business. ai_provider_connections links to connectors for

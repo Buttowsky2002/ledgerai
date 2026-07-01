@@ -1,6 +1,6 @@
 # Agent Outcome Graph — schema
 
-`outcome_graph.schema.json` is the **formal contract** for AgentLedger's Agent
+`outcome_graph.schema.json` is the **formal contract** for BadgerIQ's Agent
 Outcome Graph (CLAUDE.md Phase 3 — "the moat"): the graph that makes
 `cost → agent → outcome → value` queryable with an **attribution confidence on
 every edge**. This directory is the abstract definition; the graph is physically

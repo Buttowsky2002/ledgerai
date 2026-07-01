@@ -1,4 +1,4 @@
-// Package connector is the AgentLedger provider-cost connector framework:
+// Package connector is the BadgerIQ provider-cost connector framework:
 // cursor-based incremental sync, per-connector rate limiting, retries with
 // jitter, and Postgres-persisted state. Provider importers (OpenAI, Anthropic,
 // Bedrock, Vertex) implement Connector; the Syncer drives them.

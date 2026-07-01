@@ -1,4 +1,4 @@
--- AgentLedger ClickHouse migration 007 — agent-native risk engine
+-- BadgerIQ ClickHouse migration 007 — agent-native risk engine
 --
 -- Phase 5: observe tool/MCP usage per agent, compare against the deny-by-default
 -- allowlist, and raise governed risk events that roll up into agent_risk (the

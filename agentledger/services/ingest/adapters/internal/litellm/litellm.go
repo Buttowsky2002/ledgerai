@@ -1,11 +1,11 @@
-// Package litellm normalizes LiteLLM spend/usage log records into AgentLedger
+// Package litellm normalizes LiteLLM spend/usage log records into BadgerIQ
 // canonical llm_call events.
 //
 // LiteLLM (a popular OSS LLM gateway/proxy) emits a spend log per request —
 // either as rows from its /spend/logs API or as the StandardLoggingPayload sent
 // to a logging callback/webhook. This package maps the fields we need onto the
 // canonical event so a customer already running LiteLLM gets attribution + cost
-// in AgentLedger without routing traffic through our gateway
+// in BadgerIQ without routing traffic through our gateway
 // (ARCHITECTURE_PIVOT.md, Pillar 1).
 //
 // SECURITY (CLAUDE.md rule 15): LiteLLM logs are untrusted third-party input. We

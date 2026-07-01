@@ -1,4 +1,4 @@
--- AgentLedger Postgres migration 007 — non-human identity (NHI) credentials
+-- BadgerIQ Postgres migration 007 — non-human identity (NHI) credentials
 --
 -- Phase 6 (deferred from P5): governance for the short-lived, scoped credentials
 -- an agent (a non-human identity) uses. Credentials are issued in a "pending"

@@ -1,4 +1,4 @@
--- AgentLedger Postgres migration 010 — attribution engine (the moat)
+-- BadgerIQ Postgres migration 010 — attribution engine (the moat)
 --
 -- Phase 3 deepening (docs/ATTRIBUTION_ENGINE_BUILD.md): the staged, confidence-
 -- scored causal attribution engine. This migration creates its relational source

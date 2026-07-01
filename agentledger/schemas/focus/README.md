@@ -1,6 +1,6 @@
 # FOCUS 1.2 export — column mapping
 
-AgentLedger exports cost data in the [FinOps Open Cost & Usage Specification
+BadgerIQ exports cost data in the [FinOps Open Cost & Usage Specification
 (FOCUS) 1.2](https://focus.finops.org/) so a customer's FinOps team can fold AI
 spend into the same tooling as their cloud bills. The export is **generated on
 demand** from the ClickHouse `spend_daily` materialized view (per day × team ×
@@ -21,7 +21,7 @@ Each row is one (day, team, app, provider, model) charge.
 | `ChargePeriodStart` / `ChargePeriodEnd` | `day` / `day + 1d` |
 | `ChargeCategory` | constant `Usage` |
 | `ChargeDescription` | `"<provider> <model> usage"` |
-| `BilledCost` / `EffectiveCost` / `ListCost` | `cost_usd` (AgentLedger has no negotiated-rate distinction today, so all three are equal) |
+| `BilledCost` / `EffectiveCost` / `ListCost` | `cost_usd` (BadgerIQ has no negotiated-rate distinction today, so all three are equal) |
 | `ProviderName` / `PublisherName` | `provider` |
 | `ServiceName` | `model` |
 | `ServiceCategory` | constant `AI and Machine Learning` |
@@ -30,7 +30,7 @@ Each row is one (day, team, app, provider, model) charge.
 
 ## `x_ai_*` extensions
 
-FOCUS reserves the `x_<...>` prefix for provider extensions. AgentLedger adds AI-native
+FOCUS reserves the `x_<...>` prefix for provider extensions. BadgerIQ adds AI-native
 dimensions so spend stays sliceable by model/team/tokens after import:
 
 `x_ai_provider`, `x_ai_model`, `x_ai_team_id`, `x_ai_app_id`,

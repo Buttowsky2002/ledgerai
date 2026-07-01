@@ -1,4 +1,4 @@
--- AgentLedger ClickHouse migration 015 — LARI CFO supplemental costs
+-- BadgerIQ ClickHouse migration 015 — LARI CFO supplemental costs
 --
 -- coding_agent_daily: Cursor / Claude Code / Copilot usage rolled up for LARI
 -- fully-loaded cost (coding_agent_cost_allocated). Populated by import/connector

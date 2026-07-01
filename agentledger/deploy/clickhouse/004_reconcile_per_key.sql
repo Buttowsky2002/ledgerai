@@ -1,4 +1,4 @@
--- AgentLedger ClickHouse migration 004 — per-key reconciliation granularity
+-- BadgerIQ ClickHouse migration 004 — per-key reconciliation granularity
 --
 -- The P2 spec reconciles cost drift "per day/model/key". Providers differ on
 -- whether they expose the key: OpenAI's Costs API attributes spend to a project

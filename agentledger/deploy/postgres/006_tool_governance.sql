@@ -1,4 +1,4 @@
--- AgentLedger Postgres migration 006 — agent tool/MCP governance allowlist
+-- BadgerIQ Postgres migration 006 — agent tool/MCP governance allowlist
 --
 -- Phase 5 (Agent-Native Risk Engine): a per-agent, deny-by-default allowlist of
 -- the tools / MCP servers an agent may use. The risk-engine worker flags any

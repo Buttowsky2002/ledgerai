@@ -1,4 +1,4 @@
-title = "AgentLedger gitleaks configuration"
+title = "BadgerIQ gitleaks configuration"
 
 # Extend the upstream default ruleset so all built-in secret patterns apply.
 [extend]
@@ -17,7 +17,7 @@ title = "AgentLedger gitleaks configuration"
     # clearly labelled, never used in production.
     '''dev_only_change_me''',
 
-    # AgentLedger virtual-key identifiers (alk_* prefix).  These are routing
+    # BadgerIQ virtual-key identifiers (alk_* prefix).  These are routing
     # identifiers stored as SHA-256 hashes in Postgres; the plaintext form
     # shown here is meaningless without the gateway.
     '''alk_[a-z][a-z0-9_]{3,}''',
@@ -34,13 +34,13 @@ title = "AgentLedger gitleaks configuration"
   ]
 
 # ---------------------------------------------------------------------------
-# Custom rule: detect real-looking AgentLedger virtual keys outside examples
+# Custom rule: detect real-looking BadgerIQ virtual keys outside examples
 # ---------------------------------------------------------------------------
 # If a developer accidentally commits a real alk_ key (e.g. copied from a
 # running instance) outside the allowed example files, catch it.
 [[rules]]
   id          = "agentledger-vkey-outside-example"
-  description = "AgentLedger virtual key committed outside example files"
+  description = "BadgerIQ virtual key committed outside example files"
   regex       = '''(?i)(virtual[_-]?key|vkey|api[_-]?key)\s*[=:\"']\s*(alk_[a-z][a-z0-9_]{8,})'''
   tags        = ["secret", "agentledger"]
 

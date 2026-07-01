@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://agentledger.ai/schemas/graph/outcome_graph.schema.json",
-  "title": "AgentLedger Agent Outcome Graph",
+  "title": "BadgerIQ Agent Outcome Graph",
   "version": "1.1.0",
   "description": "Formal contract for the Agent Outcome Graph (CLAUDE.md Phase 3): the moat that makes cost -> agent -> outcome -> value queryable with an attribution confidence on every edge. Nodes are identities (human AND non-human/agent), agent runs, and business outcomes; edges connect them and ALWAYS carry an attribution_confidence in [0,1] (1.0 for deterministic/agent-stamped links, <1.0 for probabilistic links from the attribution matcher). This document is the abstract serialization; its physical realization is the Postgres + ClickHouse tables/views described in README.md (identities/agents -> v_identities, agent_runs, outcomes, v_outcome_graph). VERSION 1.1.0 (additive, non-breaking — ADR-040): the `produced` edge may now also carry the attribution engine v2 enrichment (attribution_method, confidence_calibrated, signal_contributions, counterfactual_delta, coalition_id, shapley_value/cost, model_version), realized in Postgres attribution_edges. attribution_confidence remains required and equals confidence_calibrated of the winning edge. SECURITY: nodes carry identifiers and categorical/financial attributes only — never raw prompt/completion content (CLAUDE.md rule 2); signal_contributions hold evidence REFERENCES (PR URL, ticket id, timestamps, overlap %), never copied content (§7).",
   "type": "object",
