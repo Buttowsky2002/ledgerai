@@ -2,7 +2,9 @@
 // list-price feed. The live price book is immutable at runtime (ro mount / ConfigMap);
 // this worker writes only pricing/pricebook.candidate.json and pricing/pricebook.diff.json
 // for human PR review. Promotion path: review the diff, then
-//   mv pricing/pricebook.candidate.json pricing/pricebook.json && git commit && open PR
+//
+//	mv pricing/pricebook.candidate.json pricing/pricebook.json && git commit && open PR
+//
 // CI gates the change; redeploy rebuilds the ConfigMap. Never writes /etc/agentledger/pricing.
 package main
 
