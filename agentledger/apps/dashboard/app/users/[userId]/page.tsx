@@ -37,7 +37,7 @@ export default async function UserDetailPage({
     return (
       <>
         <PageHeader title="User not found" subtitle={userId} />
-        <Link href={`/users?from=${from}&to=${to}`} className="text-sm text-sky-400 hover:underline">
+        <Link href={`/users?from=${from}&to=${to}`} className="text-sm text-accent hover:text-accent-soft hover:underline">
           ← Back to users
         </Link>
       </>

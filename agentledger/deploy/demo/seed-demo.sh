@@ -34,7 +34,7 @@ if [ "$RESET" = "1" ]; then
   done
   if pg_up; then
     pg -v tenant="$TENANT" -c \
-      "DELETE FROM budgets WHERE tenant_id = :'tenant'; DELETE FROM agents WHERE tenant_id = :'tenant'; DELETE FROM identities WHERE tenant_id = :'tenant'; DELETE FROM teams WHERE tenant_id = :'tenant';"
+      "DELETE FROM attribution_edges WHERE tenant_id = :'tenant'; DELETE FROM attribution_baselines WHERE tenant_id = :'tenant'; DELETE FROM attribution_coalitions WHERE tenant_id = :'tenant'; DELETE FROM budgets WHERE tenant_id = :'tenant'; DELETE FROM agents WHERE tenant_id = :'tenant'; DELETE FROM identities WHERE tenant_id = :'tenant'; DELETE FROM teams WHERE tenant_id = :'tenant';"
   fi
   echo "Demo data cleared for tenant ${TENANT}."
   exit 0

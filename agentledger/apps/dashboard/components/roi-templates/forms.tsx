@@ -106,7 +106,7 @@ export function CreateRoiTemplate() {
 
       <div className="flex items-center gap-2">
         <button className={BTN} disabled={busy}>Create template</button>
-        {err && <span className="text-xs text-red-400">{err}</span>}
+        {err && <span className="text-xs text-neg">{err}</span>}
       </div>
     </form>
   );

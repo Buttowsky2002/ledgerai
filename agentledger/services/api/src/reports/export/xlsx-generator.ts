@@ -15,7 +15,7 @@ import { formatPct, formatPctShare } from '../formatters';
 
 export async function generateExecutiveXlsx(data: ExecutiveReportData): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'AgentLedger';
+  wb.creator = 'BadgerIQ';
   wb.created = new Date();
 
   if (shouldRenderSummary(data)) {

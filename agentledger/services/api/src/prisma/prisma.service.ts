@@ -19,11 +19,10 @@ import { env } from '../env';
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   constructor() {
-    // Resolve the connection string at runtime, preferring the new LEDGERAI_PG_DSN
-    // and falling back to the legacy AGENTLEDGER_PG_DSN alias (deprecated). This
-    // override is the backwards-compatible source of truth — Prisma's own env()
-    // in schema.prisma has no alias fallback.
-    const url = env('LEDGERAI_PG_DSN');
+    // Resolve the connection string at runtime via BADGERIQ_PG_DSN with
+    // LEDGERAI_* / AGENTLEDGER_* fallbacks (deprecated). Prisma schema.prisma
+    // reads BADGERIQ_PG_DSN directly; this override is the alias-aware source of truth.
+    const url = env('BADGERIQ_PG_DSN');
     super(url ? { datasources: { db: { url } } } : {});
   }
 

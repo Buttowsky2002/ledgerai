@@ -1,0 +1,137 @@
+{
+  "presentation": {
+    "from": "2026-04-01",
+    "to": "2026-06-30"
+  },
+  "agents": [
+    {
+      "name": "CodeReviewAgent",
+      "runtimeType": "claude_code",
+      "riskPosture": "medium",
+      "approvalStatus": "approved"
+    },
+    {
+      "name": "InvoiceReviewAgent",
+      "runtimeType": "sdk",
+      "riskPosture": "low",
+      "approvalStatus": "approved"
+    },
+    {
+      "name": "SupportBot",
+      "runtimeType": "sdk",
+      "riskPosture": "low",
+      "approvalStatus": "approved"
+    }
+  ],
+  "runs": [
+    {
+      "runId": "bootstrap_run_1",
+      "agentId": "CodeReviewAgent",
+      "appId": "studio-app",
+      "userId": "brandon.balams@studiodesigner.com",
+      "startedAt": "2026-06-08T14:00:00.000Z",
+      "endedAt": "2026-06-08T14:12:00.000Z",
+      "status": "completed",
+      "objective": "Review PR #101",
+      "outcomeId": "bootstrap:github:studio/pr-101",
+      "totalCostUsd": 18.5,
+      "totalTokens": 4200,
+      "llmCalls": 6,
+      "toolCalls": 1,
+      "riskEvents": 0
+    },
+    {
+      "runId": "bootstrap_run_2",
+      "agentId": "InvoiceReviewAgent",
+      "appId": "finance-app",
+      "userId": "david.jeong@studiodesigner.com",
+      "startedAt": "2026-06-12T09:30:00.000Z",
+      "endedAt": "2026-06-12T09:38:00.000Z",
+      "status": "completed",
+      "objective": "Process vendor invoice",
+      "outcomeId": "bootstrap:erp:inv-202",
+      "totalCostUsd": 7.2,
+      "totalTokens": 1800,
+      "llmCalls": 3,
+      "toolCalls": 0,
+      "riskEvents": 0
+    },
+    {
+      "runId": "bootstrap_run_3",
+      "agentId": "SupportBot",
+      "appId": "support-app",
+      "userId": "tim.bedow@studiodesigner.com",
+      "startedAt": "2026-06-18T16:00:00.000Z",
+      "endedAt": "2026-06-18T16:08:00.000Z",
+      "status": "completed",
+      "objective": "Resolve support ticket",
+      "outcomeId": "bootstrap:zendesk:ticket-303",
+      "totalCostUsd": 5.4,
+      "totalTokens": 1500,
+      "llmCalls": 4,
+      "toolCalls": 2,
+      "riskEvents": 0
+    }
+  ],
+  "outcomes": [
+    {
+      "outcomeId": "bootstrap:github:studio/pr-101",
+      "ts": "2026-06-08T14:15:00.000Z",
+      "sourceSystem": "github",
+      "outcomeType": "pr_merged",
+      "teamId": "Engineering",
+      "userId": "brandon.balams@studiodesigner.com",
+      "businessValueUsd": 420,
+      "qualityScore": 0.9,
+      "completionStatus": "merged"
+    },
+    {
+      "outcomeId": "bootstrap:erp:inv-202",
+      "ts": "2026-06-12T09:40:00.000Z",
+      "sourceSystem": "erp",
+      "outcomeType": "invoice_processed",
+      "teamId": "Finance",
+      "userId": "david.jeong@studiodesigner.com",
+      "businessValueUsd": 850,
+      "qualityScore": 0.95,
+      "completionStatus": "completed"
+    },
+    {
+      "outcomeId": "bootstrap:zendesk:ticket-303",
+      "ts": "2026-06-18T16:10:00.000Z",
+      "sourceSystem": "zendesk",
+      "outcomeType": "ticket_resolved",
+      "teamId": "Customer Support",
+      "userId": "tim.bedow@studiodesigner.com",
+      "businessValueUsd": 95,
+      "qualityScore": 0.8,
+      "completionStatus": "resolved"
+    }
+  ],
+  "roiRates": [
+    {
+      "sourceSystem": "github",
+      "outcomeType": "pr_merged",
+      "qaCostPerOutcome": 45,
+      "evalCostPerOutcome": 8,
+      "integrationCostPerOutcome": 12,
+      "platformOverheadPct": 0.12
+    },
+    {
+      "sourceSystem": "erp",
+      "outcomeType": "invoice_processed",
+      "qaCostPerOutcome": 6,
+      "evalCostPerOutcome": 1,
+      "integrationCostPerOutcome": 2,
+      "platformOverheadPct": 0.1
+    },
+    {
+      "sourceSystem": "zendesk",
+      "outcomeType": "ticket_resolved",
+      "qaCostPerOutcome": 3,
+      "evalCostPerOutcome": 0.5,
+      "integrationCostPerOutcome": 1,
+      "platformOverheadPct": 0.08
+    }
+  ]
+}

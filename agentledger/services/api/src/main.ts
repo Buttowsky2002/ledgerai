@@ -13,7 +13,7 @@ import { docsBearerGuard, docsToken, resolveDocsMode } from './docs';
 
 /** Parse a Go-style listen address (":8094") or a bare port; default 8094. */
 function resolvePort(): number {
-  const addr = env('LEDGERAI_API_ADDR');
+  const addr = env('BADGERIQ_API_ADDR');
   if (addr) {
     const port = Number(addr.replace(/^.*:/, ''));
     if (Number.isFinite(port) && port > 0) return port;
@@ -60,7 +60,7 @@ async function bootstrap(): Promise<void> {
   app.useGlobalFilters(new ProblemDetailsFilter());
 
   // Cap request bodies (control-plane writes are small). Portal CSV uploads need more headroom.
-  const defaultBodyLimit = env('LEDGERAI_API_BODY_LIMIT') ?? '256kb';
+  const defaultBodyLimit = env('BADGERIQ_API_BODY_LIMIT') ?? '256kb';
   const defaultJson = json({ limit: defaultBodyLimit });
   const portalJson = json({ limit: '5mb' });
   app.use((req: Request, res: Response, next: NextFunction) => {

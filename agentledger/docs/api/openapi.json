@@ -3624,7 +3624,7 @@
     }
   },
   "info": {
-    "title": "AgentLedger Control-Plane API",
+    "title": "BadgerIQ Control-Plane API",
     "description": "Tenant-scoped control plane: resources, auth, and analytics over the MVs.",
     "version": "0.1.0",
     "contact": {}

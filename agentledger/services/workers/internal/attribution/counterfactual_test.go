@@ -89,7 +89,7 @@ func TestEngineV2Counterfactual(t *testing.T) {
 	pg := newFakePG()
 	eng := NewEngineV2(ch, pg, 240*time.Minute, 30, nil)
 	eng.now = func() time.Time { return time.Date(2026, 6, 12, 0, 0, 0, 0, time.UTC) }
-	if err := eng.Process(context.Background()); err != nil {
+	if err := eng.Process(context.Background(), false); err != nil {
 		t.Fatalf("process: %v", err)
 	}
 

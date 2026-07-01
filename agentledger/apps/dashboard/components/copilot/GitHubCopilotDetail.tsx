@@ -23,11 +23,11 @@ import type {
 } from '@/types/github-copilot';
 
 const DEFAULT_ASSUMPTIONS: CopilotRoiAssumptions = {
-  avgEngineerHourlyRate: 75,
-  minutesSavedPerAcceptedLine: 1,
-  minutesSavedPerChatTurn: 5,
-  minutesSavedPerPrSummary: 10,
-  qualityAdjustmentFactor: 0.7,
+  avgEngineerHourlyRate: 55,
+  minutesSavedPerAcceptedLine: 0.25,
+  minutesSavedPerChatTurn: 2,
+  minutesSavedPerPrSummary: 5,
+  qualityAdjustmentFactor: 0.5,
   seatPriceUsd: 19,
   includedCreditsPerSeat: 1900,
   creditValueUsd: 0.01,

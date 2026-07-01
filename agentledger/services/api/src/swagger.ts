@@ -8,7 +8,7 @@ import { DocumentBuilder, OpenAPIObject, SwaggerModule } from '@nestjs/swagger';
  */
 export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
   const config = new DocumentBuilder()
-    .setTitle('AgentLedger Control-Plane API')
+    .setTitle('BadgerIQ Control-Plane API')
     .setDescription('Tenant-scoped control plane: resources, auth, and analytics over the MVs.')
     .setVersion('0.1.0')
     .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }, 'bearer')

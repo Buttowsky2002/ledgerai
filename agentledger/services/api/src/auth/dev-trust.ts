@@ -15,12 +15,11 @@
  * leftover legacy var can never be silently ignored by the production guard).
  */
 
-/** True if the current or the deprecated dev-trust flag is set to 'true'. */
+import { env } from '../env';
+
+/** True if the current or a deprecated dev-trust flag is set to 'true'. */
 export function devTrustHeaderRequested(): boolean {
-  return (
-    process.env.LEDGERAI_DEV_TRUST_HEADER === 'true' ||
-    process.env.AGENTLEDGER_DEV_TRUST_HEADER === 'true'
-  );
+  return env('BADGERIQ_DEV_TRUST_HEADER') === 'true';
 }
 
 /** The dev x-tenant-id header is trusted only outside production and when requested. */
@@ -37,7 +36,7 @@ export function assertDevTrustHeaderNotInProduction(): void {
   if (process.env.NODE_ENV === 'production' && devTrustHeaderRequested()) {
     throw new Error(
       'FATAL: dev tenant-header auth is enabled in production ' +
-        '(LEDGERAI_DEV_TRUST_HEADER / AGENTLEDGER_DEV_TRUST_HEADER === "true"). ' +
+        '(BADGERIQ_DEV_TRUST_HEADER / LEDGERAI_DEV_TRUST_HEADER / AGENTLEDGER_DEV_TRUST_HEADER === "true"). ' +
         'This bypasses authentication and must never run in production — refusing to start.',
     );
   }

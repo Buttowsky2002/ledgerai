@@ -1,4 +1,4 @@
-.PHONY: test test-go test-api test-sdk-typescript e2e load helm-lint build build-api build-shared-types build-sdk-typescript build-dashboard openapi delete-tenant up down lint lint-api lint-sdk-typescript api-install install-hooks security-check audit deps attr-calibration demo seed-demo reset-demo smoke
+.PHONY: test test-go test-api test-sdk-typescript e2e load helm-lint build build-api build-shared-types build-sdk-typescript build-dashboard openapi delete-tenant up down lint lint-api lint-sdk-typescript api-install install-hooks security-check audit deps attr-calibration demo seed seed-demo reset-demo bootstrap-graph smoke
 
 GATEWAY_DIR      := services/gateway
 COLLECTOR_DIR    := services/collector
@@ -73,6 +73,7 @@ build: build-api build-shared-types build-sdk-typescript build-dashboard
 	cd $(COLLECTOR_DIR) && CGO_ENABLED=0 go build -o ../../bin/collector .
 	cd $(WORKERS_DIR) && CGO_ENABLED=0 go build -o ../../bin/ch-insert ./cmd/ch-insert
 	cd $(WORKERS_DIR) && CGO_ENABLED=0 go build -o ../../bin/reconcile ./cmd/reconcile
+	cd $(WORKERS_DIR) && CGO_ENABLED=0 go build -o ../../bin/pricesync ./cmd/pricesync
 	cd $(CONNECTORS_DIR) && CGO_ENABLED=0 go build -o ../../bin/connector-sync ./cmd/connector-sync
 	cd $(CONNECTORS_DIR) && CGO_ENABLED=0 go build -o ../../bin/outcome-sync ./cmd/outcome-sync
 	cd $(ADAPTERS_DIR) && CGO_ENABLED=0 go build -o ../../../bin/litellm-adapter ./cmd/litellm
@@ -118,6 +119,7 @@ down:
 # Fresh volumes auto-apply on first postgres init; use this after pulling new SQL.
 migrate:
 	powershell -ExecutionPolicy Bypass -File deploy/postgres/migrate.ps1
+	powershell -ExecutionPolicy Bypass -File deploy/clickhouse/migrate.ps1
 
 migrate-api:
 	docker compose up -d --build api
@@ -147,19 +149,24 @@ demo:
 	@echo "Start the dashboard:"
 	@echo "  (cd $(SHARED_TYPES_DIR) && npm ci && npm run build)"
 	@echo "  (cd $(DASHBOARD_DIR) && npm ci && \\"
-	@echo "     LEDGERAI_API_URL=http://localhost:8094 LEDGERAI_DEV_TENANT_ID=$(DEMO_TENANT) \\"
-	@echo "     LEDGERAI_DEMO_MODE=true npm run dev)"
+	@echo "     BADGERIQ_API_URL=http://localhost:8094 BADGERIQ_DEV_TENANT_ID=$(DEMO_TENANT) \\"
+	@echo "     BADGERIQ_DEMO_MODE=true npm run dev)"
 	@echo "  → open http://localhost:3000  (a 'Demo mode' banner confirms seeded data)"
 	@echo "  Clear demo data later with: make reset-demo"
 
 # Seed (or re-seed) the demo tenant into ClickHouse + Postgres. Idempotent.
 # Requires the stack to be up (`make demo` does this first).
-seed-demo:
-	LEDGERAI_DEMO_TENANT=$(DEMO_TENANT) bash deploy/demo/seed-demo.sh
+seed seed-demo:
+	powershell -ExecutionPolicy Bypass -File deploy/demo/seed-demo.ps1
 
 # Clear the demo tenant's data (no reseed). `docker compose down -v` is the full reset.
 reset-demo:
-	LEDGERAI_DEMO_TENANT=$(DEMO_TENANT) LEDGERAI_DEMO_RESET=1 bash deploy/demo/seed-demo.sh
+	powershell -ExecutionPolicy Bypass -File deploy/demo/seed-demo.ps1 -Reset
+
+# Minimal agent + outcome graph for a live tenant (keeps connector spend).
+# Calls POST /v1/design-partner/onboard (preset studio-live).
+bootstrap-graph:
+	powershell -ExecutionPolicy Bypass -File deploy/demo/bootstrap-outcome-graph.ps1
 
 # Gateway smoke test: runs the real gateway against a built-in MOCK upstream
 # (no real provider key) and asserts the full inline path. Needs Go + python3.

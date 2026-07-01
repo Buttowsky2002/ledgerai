@@ -68,5 +68,9 @@
   "dedupe": {
     "strategy": "custom",
     "fields": ["ts", "user_email", "model", "cost_usd", "product"]
+  },
+  "schedule": {
+    "intervalMinutes": 60,
+    "enabled": true
   }
 }

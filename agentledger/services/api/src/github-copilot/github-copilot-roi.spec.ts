@@ -54,13 +54,14 @@ describe('calculateCopilotRoi', () => {
       chatTurns: 10,
       prSummaryCount: 5,
     });
-    // completion: 100 min, chat: 50 min, pr: 50 min → 200 min = 3.333h gross
-    // adjusted: 3.333 * 0.7 = 2.333h → value = 175
-    expect(r.grossHoursSaved).toBeCloseTo(3.3333, 3);
-    expect(r.adjustedHoursSaved).toBeCloseTo(2.3333, 3);
-    expect(r.estimatedValue).toBeCloseTo(175, 0);
+    // completion: 25 min, chat: 20 min, pr: 25 min → 70 min gross
+    // adjusted: 70 * 0.5 / 60 = 0.583h → value ≈ 32.08 at $55/hr
+    expect(r.grossHoursSaved).toBeCloseTo(70 / 60, 3);
+    expect(r.adjustedHoursSaved).toBeCloseTo((70 / 60) * 0.5, 3);
+    expect(r.estimatedValue).toBeCloseTo(32.08, 0);
     expect(r.totalCopilotCost).toBe(19);
-    expect(r.roiPercentage).toBeGreaterThan(700);
+    expect(r.roiPercentage).toBeGreaterThan(50);
+    expect(r.roiPercentage).toBeLessThan(150);
   });
 
   it('respects custom assumptions', () => {

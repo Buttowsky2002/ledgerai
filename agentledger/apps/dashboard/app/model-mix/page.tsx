@@ -1,5 +1,4 @@
 import { BarChartClient, PieChartClient } from '../../components/charts';
-import { DateRangeFilter } from '../../components/DateRangeFilter';
 import { Card, DataTable, PageHeader, num, usd } from '../../components/ui';
 import { apiClient, fetchData } from '../../lib/api';
 import { parseRange } from '../../lib/date-range';
@@ -38,7 +37,6 @@ export default async function ModelMixPage({
       <PageHeader
         title="Model mix"
         subtitle={`Spend by provider/model · ${from} → ${to}`}
-        actions={<DateRangeFilter basePath="/model-mix" from={from} to={to} />}
       />
       <div className="grid gap-6 lg:grid-cols-2">
         <Card title="Spend by platform">

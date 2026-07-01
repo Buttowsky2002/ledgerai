@@ -13,13 +13,17 @@ type fakeV2CH struct {
 	runs     []RunRow
 	evidence []EvidenceRow
 	events   []AttributionEvent
+	stamped  []OutcomeRow
 }
 
 func (f *fakeV2CH) FetchOutcomes(context.Context, string) ([]OutcomeRow, error) {
 	return f.outcomes, nil
 }
 func (f *fakeV2CH) FetchRuns(context.Context, string) ([]RunRow, error) { return f.runs, nil }
-func (f *fakeV2CH) WriteOutcomes(context.Context, []OutcomeRow) error   { return nil }
+func (f *fakeV2CH) WriteOutcomes(_ context.Context, rows []OutcomeRow) error {
+	f.stamped = append(f.stamped, rows...)
+	return nil
+}
 func (f *fakeV2CH) FetchEvidence(context.Context, string) ([]EvidenceRow, error) {
 	return f.evidence, nil
 }
@@ -30,10 +34,11 @@ func (f *fakeV2CH) WriteAttributionEvents(_ context.Context, e []AttributionEven
 
 // fakePG implements PGStore, recording what would be written.
 type fakePG struct {
-	ensured    []ModelVersion
-	edges      map[string][]Edge
-	baselines  map[string][]Baseline
-	coalitions map[string][]Coalition
+	ensured      []ModelVersion
+	edges        map[string][]Edge
+	baselines    map[string][]Baseline
+	coalitions   map[string][]Coalition
+	knownTenants map[string]bool // nil = all ids known (legacy tests)
 }
 
 func newFakePG() *fakePG {
@@ -42,6 +47,17 @@ func newFakePG() *fakePG {
 func (p *fakePG) EnsureModelVersion(_ context.Context, mv ModelVersion) error {
 	p.ensured = append(p.ensured, mv)
 	return nil
+}
+func (p *fakePG) KnownTenants(_ context.Context, ids []string) (map[string]bool, error) {
+	out := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		if p.knownTenants == nil {
+			out[id] = true
+		} else if p.knownTenants[id] {
+			out[id] = true
+		}
+	}
+	return out, nil
 }
 func (p *fakePG) UpsertEdges(_ context.Context, tenant string, e []Edge) error {
 	p.edges[tenant] = append(p.edges[tenant], e...)
@@ -82,7 +98,7 @@ func TestEngineV2ProcessDeterministic(t *testing.T) {
 	eng := NewEngineV2(ch, pg, 240*time.Minute, 30, nil)
 	eng.now = func() time.Time { return time.Date(2026, 6, 12, 0, 0, 0, 0, time.UTC) }
 
-	if err := eng.Process(context.Background()); err != nil {
+	if err := eng.Process(context.Background(), false); err != nil {
 		t.Fatalf("process: %v", err)
 	}
 
@@ -151,7 +167,7 @@ func TestEngineV2Coalition(t *testing.T) {
 	pg := newFakePG()
 	eng := NewEngineV2(ch, pg, 240*time.Minute, 30, nil)
 	eng.now = func() time.Time { return time.Date(2026, 6, 12, 0, 0, 0, 0, time.UTC) }
-	if err := eng.Process(context.Background()); err != nil {
+	if err := eng.Process(context.Background(), false); err != nil {
 		t.Fatalf("process: %v", err)
 	}
 
@@ -201,7 +217,7 @@ func TestEngineV2ProcessProbabilistic(t *testing.T) {
 	pg := newFakePG()
 	eng := NewEngineV2(ch, pg, 240*time.Minute, 30, nil)
 	eng.now = func() time.Time { return time.Date(2026, 6, 12, 0, 0, 0, 0, time.UTC) }
-	if err := eng.Process(context.Background()); err != nil {
+	if err := eng.Process(context.Background(), false); err != nil {
 		t.Fatalf("process: %v", err)
 	}
 
@@ -226,5 +242,67 @@ func TestEngineV2ProcessProbabilistic(t *testing.T) {
 	}
 	if len(ch.events) != 1 || ch.events[0].Method != "probabilistic" {
 		t.Fatalf("events = %+v, want one probabilistic", ch.events)
+	}
+}
+
+func TestEngineV2SkipsUnknownTenants(t *testing.T) {
+	ch := &fakeV2CH{
+		outcomes: []OutcomeRow{
+			{OutcomeID: "github:acme/web#1", TenantID: "known", SourceSystem: "github",
+				OutcomeType: "pr_merged", BusinessValueUSD: 100},
+			{OutcomeID: "jira:X-1", TenantID: "orphan", SourceSystem: "jira",
+				OutcomeType: "ticket_resolved", BusinessValueUSD: 50},
+		},
+		runs: []RunRow{
+			{RunID: "r1", TenantID: "known", AgentID: "a1", OutcomeID: "github:acme/web#1", TotalCostUSD: 5},
+			{RunID: "r2", TenantID: "orphan", AgentID: "a2", TotalCostUSD: 3},
+		},
+		evidence: []EvidenceRow{
+			{TenantID: "orphan", OutcomeID: "jira:X-1", EvidenceType: "co_authored_by", RunID: "r2"},
+		},
+	}
+	pg := newFakePG()
+	pg.knownTenants = map[string]bool{"known": true}
+	eng := NewEngineV2(ch, pg, 240*time.Minute, 30, nil)
+	eng.now = func() time.Time { return time.Date(2026, 6, 12, 0, 0, 0, 0, time.UTC) }
+	if err := eng.Process(context.Background(), false); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	if _, ok := pg.baselines["orphan"]; ok {
+		t.Fatal("baselines written for orphan tenant")
+	}
+	if len(pg.edges["known"]) != 1 {
+		t.Fatalf("known edges = %d, want 1", len(pg.edges["known"]))
+	}
+	if len(pg.edges["orphan"]) != 0 {
+		t.Fatalf("orphan edges = %d, want 0", len(pg.edges["orphan"]))
+	}
+}
+
+func TestEngineV2CutoverStampsOutcomes(t *testing.T) {
+	ch := &fakeV2CH{
+		outcomes: []OutcomeRow{
+			{OutcomeID: "github:acme/web#42", TenantID: "t1", SourceSystem: "github",
+				OutcomeType: "pr_merged", BusinessValueUSD: 500},
+		},
+		runs: []RunRow{
+			{RunID: "r1", TenantID: "t1", AgentID: "a1", OutcomeID: "github:acme/web#42", TotalCostUSD: 8},
+		},
+	}
+	pg := newFakePG()
+	metrics := &V2Metrics{}
+	eng := NewEngineV2(ch, pg, 240*time.Minute, 30, metrics)
+	eng.now = func() time.Time { return time.Date(2026, 6, 12, 0, 0, 0, 0, time.UTC) }
+	if err := eng.Process(context.Background(), true); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	if len(ch.stamped) != 1 {
+		t.Fatalf("stamped = %d, want 1", len(ch.stamped))
+	}
+	if ch.stamped[0].RunID != "r1" || ch.stamped[0].AttributionConfidence != ConfSDKStamp {
+		t.Fatalf("stamped = %+v, want r1/conf 1.0", ch.stamped[0])
+	}
+	if metrics.Stamped.Load() != 1 {
+		t.Fatalf("stamped metric = %d, want 1", metrics.Stamped.Load())
 	}
 }

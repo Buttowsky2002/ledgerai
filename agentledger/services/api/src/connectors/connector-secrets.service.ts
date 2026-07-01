@@ -3,10 +3,12 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { getTenantId } from '../tenant/tenant-context';
 
+import { env } from '../env';
+
 const ALGO = 'aes-256-gcm';
 
 function encryptionKey(): Buffer {
-  const raw = process.env.LEDGERAI_CONNECTOR_SECRET_KEY ?? process.env.AGENTLEDGER_JWT_SECRET ?? 'dev-only-connector-key';
+  const raw = env('BADGERIQ_CONNECTOR_SECRET_KEY') ?? env('BADGERIQ_JWT_SECRET') ?? 'dev-only-connector-key';
   return createHash('sha256').update(raw).digest();
 }
 

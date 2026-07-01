@@ -1,5 +1,5 @@
 /**
- * LARI — LedgerAI Risk-Adjusted Incremental ROI engine (deterministic).
+ * LARI — BadgerIQ Risk-Adjusted Incremental ROI engine (deterministic).
  *
  * Pure, framework-free functions: given an AgentROIInput they always return the
  * same AgentROIResult. No I/O, no clock, no randomness, no LLM calls (requirement

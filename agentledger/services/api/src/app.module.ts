@@ -35,6 +35,8 @@ import { TenantModule } from './tenant/tenant.module';
 import { TenantIdpConfigModule } from './tenant-idp-config/tenant-idp-config.module';
 import { VirtualKeysModule } from './virtual-keys/virtual-keys.module';
 import { ReportsModule } from './reports/reports.module';
+import { FixedCostsModule } from './fixed-costs/fixed-costs.module';
+import { DesignPartnerModule } from './design-partner/design-partner.module';
 
 @Module({
   imports: [
@@ -90,6 +92,8 @@ import { ReportsModule } from './reports/reports.module';
     ConnectorsModule,
     GitHubCopilotModule,
     ReportsModule,
+    FixedCostsModule,
+    DesignPartnerModule,
   ],
   providers: [
     // Guard order matters: rate-limit → authenticate → authorize.

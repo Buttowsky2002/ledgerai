@@ -1,0 +1,25 @@
+{
+  "changes": [
+    {
+      "provider": "anthropic",
+      "model": "claude-haiku",
+      "token_type": "input",
+      "old_usd_per_million": 0.8,
+      "new_usd_per_million": 1,
+      "pct_change": 25,
+      "kind": "changed"
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-haiku",
+      "token_type": "output",
+      "old_usd_per_million": 4,
+      "new_usd_per_million": 5,
+      "pct_change": 25,
+      "kind": "changed"
+    }
+  ],
+  "unchanged": 10,
+  "generated_at": "2026-06-16T12:00:00Z",
+  "feed_url": "https://example.test/feed.json"
+}

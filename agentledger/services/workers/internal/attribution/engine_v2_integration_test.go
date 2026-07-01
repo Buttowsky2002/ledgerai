@@ -112,7 +112,7 @@ func TestEngineV2DeterministicIntegration(t *testing.T) {
 
 	eng := NewEngineV2(NewHTTPClient(chURL, "agentledger", "", ""), pg, 240*time.Minute, 35, nil)
 	eng.now = func() time.Time { return time.Date(2026, 6, 12, 0, 0, 0, 0, time.UTC) }
-	if err := eng.Process(context.Background()); err != nil {
+	if err := eng.Process(context.Background(), false); err != nil {
 		t.Fatalf("engine v2 process: %v", err)
 	}
 

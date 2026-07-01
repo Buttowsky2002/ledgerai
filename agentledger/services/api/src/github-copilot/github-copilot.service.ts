@@ -84,7 +84,7 @@ export class GitHubCopilotService {
 
     const secretRef = await this.secrets.storeSecret(dto.githubToken.trim());
     const roiAssumptions = mergeRoiAssumptions(dto.roiAssumptions);
-    const scheduleJson = dto.scheduleJson ?? { frequency: 'daily' };
+    const scheduleJson = dto.scheduleJson ?? { intervalMinutes: 60, enabled: true };
 
     return this.prisma.withTenant(tenantId, async (tx) => {
       const connector = await tx.connector.create({

@@ -50,9 +50,9 @@ type Coalition = {
 // (the §3.7 acceptance). Tailwind classes only; no untrusted data in the class.
 function methodBadge(method: string) {
   const styles: Record<string, string> = {
-    deterministic: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
-    probabilistic: 'bg-sky-500/20 text-sky-300 border-sky-500/40',
-    shapley: 'bg-violet-500/20 text-violet-300 border-violet-500/40',
+    deterministic: 'bg-pos/15 text-pos border-pos/40',
+    probabilistic: 'bg-accent/15 text-accent border-accent/40',
+    shapley: 'bg-accent-soft/15 text-accent-soft border-accent-soft/40',
   };
   const cls = styles[method] ?? 'bg-white/10 text-muted border-edge';
   return <span className={`rounded border px-2 py-0.5 text-xs font-medium ${cls}`}>{method}</span>;

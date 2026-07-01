@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import { BarChartClient } from '../../components/charts';
-import { DateRangeFilter } from '../../components/DateRangeFilter';
 import { Card, DataTable, PageHeader, num, usd } from '../../components/ui';
 import { apiClient, fetchData } from '../../lib/api';
 import { parseRange } from '../../lib/date-range';
@@ -34,14 +33,7 @@ export default async function AllocationPage({
         title="Allocation"
         subtitle={`Spend by ${dimension} · ${from} → ${to}`}
         actions={
-          <div className="flex flex-col items-end gap-2">
-            <DateRangeFilter
-              basePath="/allocation"
-              from={from}
-              to={to}
-              extraParams={{ dimension }}
-            />
-            <div className="flex gap-2">
+          <div className="flex gap-2">
             {DIMENSIONS.map((d) => (
               <Link
                 key={d}
@@ -53,7 +45,6 @@ export default async function AllocationPage({
                 {d}
               </Link>
             ))}
-            </div>
           </div>
         }
       />

@@ -81,9 +81,9 @@ export class LariRecommendationsService {
       ),
       this.ch.queryScoped<{ agent_id: string; provider: string; cost_usd: number }>(
         `SELECT agent_id, provider, sum(cost_usd) AS cost_usd
-         FROM spend_hourly_by_key
+         FROM llm_calls
          WHERE tenant_id = {tenant:String}
-           AND toDate(hour) BETWEEN {from:Date} AND {to:Date}
+           AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
            AND agent_id != ''
          GROUP BY agent_id, provider`,
         params,

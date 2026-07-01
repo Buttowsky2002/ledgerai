@@ -1,0 +1,14 @@
+[
+  {"provider":"openai","model":"gpt-4o-mini","token_type":"input","usd_per_million":0.15,"effective_start":"2024-07-18T00:00:00Z","source":"https://openai.com/api/pricing"},
+  {"provider":"openai","model":"gpt-4o-mini","token_type":"output","usd_per_million":0.60,"effective_start":"2024-07-18T00:00:00Z","source":"https://openai.com/api/pricing"},
+  {"provider":"openai","model":"gpt-4o-mini","token_type":"cache_read","usd_per_million":0.075,"effective_start":"2024-10-01T00:00:00Z","source":"https://openai.com/api/pricing"},
+  {"provider":"openai","model":"gpt-4o","token_type":"input","usd_per_million":2.50,"effective_start":"2024-08-06T00:00:00Z","source":"https://openai.com/api/pricing"},
+  {"provider":"openai","model":"gpt-4o","token_type":"output","usd_per_million":10.00,"effective_start":"2024-08-06T00:00:00Z","source":"https://openai.com/api/pricing"},
+  {"provider":"openai","model":"gpt-4o","token_type":"cache_read","usd_per_million":1.25,"effective_start":"2024-10-01T00:00:00Z","source":"https://openai.com/api/pricing"},
+  {"provider":"anthropic","model":"claude-sonnet","token_type":"input","usd_per_million":3.00,"effective_start":"2024-06-20T00:00:00Z","source":"https://docs.claude.com/en/docs/about-claude/pricing"},
+  {"provider":"anthropic","model":"claude-sonnet","token_type":"output","usd_per_million":15.00,"effective_start":"2024-06-20T00:00:00Z","source":"https://docs.claude.com/en/docs/about-claude/pricing"},
+  {"provider":"anthropic","model":"claude-sonnet","token_type":"cache_read","usd_per_million":0.30,"effective_start":"2024-08-14T00:00:00Z","source":"https://docs.claude.com/en/docs/about-claude/pricing"},
+  {"provider":"anthropic","model":"claude-sonnet","token_type":"cache_write","usd_per_million":3.75,"effective_start":"2024-08-14T00:00:00Z","source":"https://docs.claude.com/en/docs/about-claude/pricing"},
+  {"provider":"anthropic","model":"claude-haiku","token_type":"input","usd_per_million":0.80,"effective_start":"2024-11-04T00:00:00Z","source":"https://docs.claude.com/en/docs/about-claude/pricing"},
+  {"provider":"anthropic","model":"claude-haiku","token_type":"output","usd_per_million":4.00,"effective_start":"2024-11-04T00:00:00Z","source":"https://docs.claude.com/en/docs/about-claude/pricing"}
+]

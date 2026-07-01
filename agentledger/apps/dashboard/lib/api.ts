@@ -3,25 +3,26 @@ import createClient from 'openapi-fetch';
 import { cookies } from 'next/headers';
 import { env } from './env';
 
-const API_URL = env('LEDGERAI_API_URL') ?? 'http://localhost:8094';
+const API_URL = env('BADGERIQ_API_URL') ?? 'http://localhost:8094';
 
 /** Dev/demo tenant for server-side BFF calls when no session cookie is present. */
 function devTenantId(): string | undefined {
-  const id = env('LEDGERAI_DEV_TENANT_ID');
+  const id = env('BADGERIQ_DEV_TENANT_ID');
   if (!id) return undefined;
   if (process.env.NODE_ENV !== 'production') return id;
-  if (env('LEDGERAI_DEMO_MODE') === 'true') return id;
+  // Standalone Docker runs NODE_ENV=production; honor dev tenant for local stacks
+  // (API only accepts x-tenant-id when DEV_TRUST_HEADER is enabled).
+  if (env('BADGERIQ_DEMO_MODE') === 'true') return id;
+  if (env('BADGERIQ_DEV_TRUST_TENANT') === 'true') return id;
   return undefined;
 }
-
-const DEV_TENANT = devTenantId();
 
 /**
  * Server-side typed client for the control-plane API (BFF pattern — never runs in
  * the browser, so no token is exposed and there's no CORS). Auth resolution:
  *   1. `al_access` session cookie → `Authorization: Bearer` (post-OIDC, prod).
- *   2. else, outside production only, `LEDGERAI_DEV_TENANT_ID` → `x-tenant-id`
- *      (dev, API trusts the header). Never sent in production.
+ *   2. else, when configured, `BADGERIQ_DEV_TENANT_ID` → `x-tenant-id`
+ *      (dev / local docker; API trusts the header only with DEV_TRUST_HEADER).
  * If neither is set, requests are unauthenticated and the API returns 401.
  */
 export function apiClient() {
@@ -29,8 +30,9 @@ export function apiClient() {
   const token = cookies().get('al_access')?.value;
   if (token) {
     headers.Authorization = `Bearer ${token}`;
-  } else if (DEV_TENANT) {
-    headers['x-tenant-id'] = DEV_TENANT;
+  } else {
+    const devTenant = devTenantId();
+    if (devTenant) headers['x-tenant-id'] = devTenant;
   }
   return createClient<paths>({ baseUrl: API_URL, headers });
 }
@@ -40,7 +42,10 @@ export function apiAuthHeaders(): Record<string, string> {
   const headers: Record<string, string> = { Accept: 'application/json' };
   const token = cookies().get('al_access')?.value;
   if (token) headers.Authorization = `Bearer ${token}`;
-  else if (DEV_TENANT) headers['x-tenant-id'] = DEV_TENANT;
+  else {
+    const devTenant = devTenantId();
+    if (devTenant) headers['x-tenant-id'] = devTenant;
+  }
   return headers;
 }
 

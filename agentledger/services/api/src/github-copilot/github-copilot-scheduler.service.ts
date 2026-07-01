@@ -2,7 +2,7 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import { PrismaService } from '../prisma/prisma.service';
 import { GitHubCopilotSyncService } from './github-copilot-sync.service';
 
-const DAILY_MS = 24 * 60 * 60 * 1000;
+const HOURLY_MS = 60 * 60 * 1000;
 const INITIAL_DELAY_MS = 60_000;
 
 interface ScheduledConnection {
@@ -10,7 +10,7 @@ interface ScheduledConnection {
   tenant_id: string;
 }
 
-/** Runs daily GitHub Copilot sync for connections with scheduleJson.frequency = daily. */
+/** Runs hourly GitHub Copilot sync for connections with auto-sync enabled. */
 @Injectable()
 export class GitHubCopilotSchedulerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(GitHubCopilotSchedulerService.name);
@@ -26,7 +26,7 @@ export class GitHubCopilotSchedulerService implements OnModuleInit, OnModuleDest
   onModuleInit(): void {
     this.initialHandle = setTimeout(() => {
       void this.runScheduledSync();
-      this.intervalHandle = setInterval(() => void this.runScheduledSync(), DAILY_MS);
+      this.intervalHandle = setInterval(() => void this.runScheduledSync(), HOURLY_MS);
     }, INITIAL_DELAY_MS);
   }
 

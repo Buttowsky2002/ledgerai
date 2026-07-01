@@ -1,22 +1,33 @@
 /**
  * Environment-variable resolution with backwards-compatible aliasing.
  *
- * The project is being rebranded from AgentLedger to LedgerAI. Pass the new
- * `LEDGERAI_*` name; if it is unset we fall back to the legacy `AGENTLEDGER_*`
- * alias (deprecated — kept so existing deployments keep working). See the
- * "Renaming to LedgerAI" note in the repo README.
+ * Prefer the `BADGERIQ_*` prefix. If unset, we fall back to the deprecated
+ * `LEDGERAI_*` and legacy `AGENTLEDGER_*` aliases so existing deployments
+ * keep working. See the "Renaming to BadgerIQ" note in the repo README.
  */
-export function env(name: string): string | undefined {
-  const current = process.env[name];
-  if (current !== undefined && current !== '') {
-    return current;
+const ENV_PREFIXES = ['BADGERIQ_', 'LEDGERAI_', 'AGENTLEDGER_'] as const;
+
+function envSuffix(name: string): string | null {
+  for (const prefix of ENV_PREFIXES) {
+    if (name.startsWith(prefix)) return name.slice(prefix.length);
   }
-  if (name.startsWith('LEDGERAI_')) {
-    const legacy = 'AGENTLEDGER_' + name.slice('LEDGERAI_'.length);
-    const legacyVal = process.env[legacy];
-    if (legacyVal !== undefined && legacyVal !== '') {
-      return legacyVal;
+  return null;
+}
+
+export function env(name: string): string | undefined {
+  const direct = process.env[name];
+  if (direct !== undefined && direct !== '') {
+    return direct;
+  }
+  const suffix = envSuffix(name);
+  if (!suffix) return direct;
+  for (const prefix of ENV_PREFIXES) {
+    const key = prefix + suffix;
+    if (key === name) continue;
+    const val = process.env[key];
+    if (val !== undefined && val !== '') {
+      return val;
     }
   }
-  return current;
+  return direct;
 }

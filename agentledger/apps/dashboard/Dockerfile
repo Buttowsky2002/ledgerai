@@ -1,4 +1,4 @@
-# LedgerAI dashboard — rebuild after UI changes:
+# BadgerIQ dashboard — rebuild after UI changes:
 #   docker compose up -d --build dashboard
 #
 # Layout mirrors the monorepo so file:../../packages/shared-types resolves during npm ci.
@@ -24,8 +24,8 @@ RUN test -f package-lock.json && npm ci
 COPY apps/dashboard /repo/apps/dashboard
 RUN mkdir -p public
 ENV NEXT_TELEMETRY_DISABLED=1
-ARG LEDGERAI_API_URL=http://api:8094
-ENV LEDGERAI_API_URL=$LEDGERAI_API_URL
+ARG BADGERIQ_API_URL=http://api:8094
+ENV BADGERIQ_API_URL=$BADGERIQ_API_URL
 RUN npm run build
 
 FROM node:20-slim AS run

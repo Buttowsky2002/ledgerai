@@ -39,6 +39,7 @@ type V2Metrics struct {
 	Probabilistic atomic.Int64 // outcomes scored to a probabilistic link
 	Coalitions    atomic.Int64 // outcomes resolved to a multi-agent coalition
 	EdgesWritten  atomic.Int64 // attribution_edges rows upserted
+	Stamped       atomic.Int64 // outcomes re-inserted with V2 winning edge (cutover)
 }
 
 // ModelVersionDeterministic is the lineage id stamped on deterministic edges. It
@@ -83,8 +84,10 @@ func (e *EngineV2) WithScorer(model ScorerModel, minConfidence float64) *EngineV
 	return e
 }
 
-// Process runs one deterministic attribution pass over the lookback window.
-func (e *EngineV2) Process(ctx context.Context) error {
+// Process runs one V2 attribution pass over the lookback window. When stamp is
+// true (cutover mode, ADR-040), the winning edge per outcome is written back to
+// ClickHouse outcomes; otherwise the pass is shadow-only.
+func (e *EngineV2) Process(ctx context.Context, stamp bool) error {
 	e.metrics.Passes.Add(1)
 	now := e.now().UTC()
 	outcomeSince := now.AddDate(0, 0, -e.lookbackDays).Format(chTime)
@@ -101,6 +104,18 @@ func (e *EngineV2) Process(ctx context.Context) error {
 	evidence, err := e.ch.FetchEvidence(ctx, outcomeSince)
 	if err != nil {
 		return err
+	}
+
+	known, err := e.pg.KnownTenants(ctx, collectTenantIDs(outcomes, runs, evidence))
+	if err != nil {
+		return err
+	}
+	rawCount := len(outcomes)
+	outcomes = filterOutcomesByTenant(outcomes, known)
+	runs = filterRunsByTenant(runs, known)
+	evidence = filterEvidenceByTenant(evidence, known)
+	if skipped := rawCount - len(outcomes); skipped > 0 {
+		slog.Warn("attribution v2 skipped outcomes for unknown tenants", "skipped", skipped)
 	}
 
 	// Ensure all model lineages exist before any edge/baseline references them (FK).
@@ -242,6 +257,16 @@ func (e *EngineV2) Process(ctx context.Context) error {
 		return err
 	}
 
+	if stamp {
+		allEdges := make([]Edge, 0, written)
+		for _, edges := range edgesByTenant {
+			allEdges = append(allEdges, edges...)
+		}
+		if err := e.stampWinningOutcomes(ctx, outcomes, allEdges); err != nil {
+			return err
+		}
+	}
+
 	e.metrics.Examined.Add(int64(len(outcomes)))
 	e.metrics.Deterministic.Add(int64(deterministic))
 	e.metrics.Probabilistic.Add(int64(probabilistic))
@@ -249,7 +274,7 @@ func (e *EngineV2) Process(ctx context.Context) error {
 	e.metrics.EdgesWritten.Add(int64(written))
 	slog.Info("attribution v2 pass complete",
 		"examined", len(outcomes), "deterministic", deterministic, "probabilistic", probabilistic,
-		"coalitions", coalitions, "baselines", len(baselines), "edges", written)
+		"coalitions", coalitions, "baselines", len(baselines), "edges", written, "stamp", stamp)
 	return nil
 }
 

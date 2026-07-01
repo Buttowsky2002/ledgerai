@@ -91,3 +91,13 @@ export function resolveSyncChunks(
 
   return chunks;
 }
+
+/** Rolling UTC day window for scheduled (incremental) connector sync. */
+export function rollingSyncWindow(days = MAX_RANGE_DAYS): { from: string; to: string } {
+  const syncEnd = utcDayStart(new Date());
+  const syncStart = new Date(syncEnd.getTime() - (days - 1) * MS_PER_DAY);
+  return {
+    from: syncStart.toISOString().slice(0, 10),
+    to: syncEnd.toISOString().slice(0, 10),
+  };
+}

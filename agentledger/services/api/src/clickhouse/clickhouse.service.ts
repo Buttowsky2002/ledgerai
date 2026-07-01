@@ -38,10 +38,10 @@ export function requireTenantFilter(sql: string): void {
 @Injectable()
 export class ClickHouseService {
   private readonly logger = new Logger(ClickHouseService.name);
-  private readonly url = (env('LEDGERAI_CLICKHOUSE_URL') ?? 'http://localhost:8123').replace(/\/$/, '');
-  private readonly db = env('LEDGERAI_CLICKHOUSE_DB') ?? 'agentledger';
-  private readonly user = env('LEDGERAI_CLICKHOUSE_USER') ?? 'default';
-  private readonly password = env('LEDGERAI_CLICKHOUSE_PASSWORD') ?? '';
+  private readonly url = (env('BADGERIQ_CLICKHOUSE_URL') ?? 'http://localhost:8123').replace(/\/$/, '');
+  private readonly db = env('BADGERIQ_CLICKHOUSE_DB') ?? 'agentledger';
+  private readonly user = env('BADGERIQ_CLICKHOUSE_USER') ?? 'default';
+  private readonly password = env('BADGERIQ_CLICKHOUSE_PASSWORD') ?? '';
 
   /** Run a query with bound parameters. Returns the JSON `data` rows. */
   async query<T = Record<string, unknown>>(sql: string, params: Record<string, ChParam> = {}): Promise<T[]> {

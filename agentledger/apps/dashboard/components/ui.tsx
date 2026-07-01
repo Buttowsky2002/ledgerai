@@ -41,7 +41,7 @@ export function Card({
       {(title || actions) && (
         <div className="flex items-center justify-between gap-4 border-b border-edge/70 px-5 py-3.5">
           <div>
-            {title && <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-300">{title}</h2>}
+            {title && <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-200">{title}</h2>}
             {subtitle && <p className="mt-0.5 text-xs text-muted">{subtitle}</p>}
           </div>
           {actions}

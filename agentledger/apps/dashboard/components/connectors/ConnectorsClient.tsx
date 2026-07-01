@@ -226,8 +226,17 @@ export function ConnectorsClient() {
         fetch('/api/connector-definitions'),
         fetchCopilotConnections(),
       ]);
-      if (connRes.ok) setConnectors(await connRes.json());
-      if (presetRes.ok) setPresets(await presetRes.json());
+      if (connRes.ok) {
+        const data: unknown = await connRes.json();
+        setConnectors(Array.isArray(data) ? data : []);
+      } else {
+        setConnectors([]);
+        setError('Could not load connectors — check that the API is running and you are signed in.');
+      }
+      if (presetRes.ok) {
+        const data: unknown = await presetRes.json();
+        setPresets(Array.isArray(data) ? data : []);
+      }
       setCopilotConnections(copilotRes);
     } finally {
       setLoading(false);
@@ -634,7 +643,7 @@ export function ConnectorsClient() {
         subtitle={
           syncBatches > 1
             ? `${rangeDays} days total — the API splits this into ${syncBatches}×${MAX_SYNC_DAYS}-day windows server-side. Large Cursor ranges can take several minutes; sync one connector at a time. Test previews the latest ${MAX_SYNC_DAYS} days only.`
-            : `Test previews usage; Sync imports spend for the selected range.`
+            : `Enabled connectors auto-sync every hour (last 31 days). Test previews usage; Sync now imports spend for the selected range.`
         }
       >
         <div className="flex flex-wrap items-end gap-4">
@@ -724,7 +733,9 @@ export function ConnectorsClient() {
                         </dd>
                         <dt className="text-muted">Spend synced</dt>
                         <dd className="num">
-                          {sync?.spendSyncedUsd != null ? `$${sync.spendSyncedUsd.toFixed(2)}` : '—'}
+                          {sync?.spendSyncedUsd != null && Number.isFinite(Number(sync.spendSyncedUsd))
+                            ? `$${Number(sync.spendSyncedUsd).toFixed(2)}`
+                            : '—'}
                         </dd>
                       </>
                     )}
@@ -886,7 +897,7 @@ export function ConnectorsClient() {
               </pre>
             </div>
           </div>
-          {preview.normalizedPreview.length > 0 && (
+          {Array.isArray(preview.normalizedPreview) && preview.normalizedPreview.length > 0 && (
             <div className="mt-4">
               <h3 className="mb-2 text-xs font-semibold uppercase text-muted">Preview summary</h3>
               <p className="text-sm text-muted">
@@ -915,7 +926,7 @@ export function ConnectorsClient() {
               />
             </div>
           )}
-          {preview.suggestedMappings.length > 0 && (
+          {Array.isArray(preview.suggestedMappings) && preview.suggestedMappings.length > 0 && (
             <div className="mt-4">
               <h3 className="mb-2 text-xs font-semibold uppercase text-muted">Suggested mappings</h3>
               <DataTable
@@ -932,7 +943,7 @@ export function ConnectorsClient() {
               />
             </div>
           )}
-          {preview.errors.length > 0 && (
+          {Array.isArray(preview.errors) && preview.errors.length > 0 && (
             <div className="mt-4">
               <h3 className="mb-2 text-xs font-semibold uppercase text-neg">Validation errors</h3>
               <ul className="text-sm text-neg">

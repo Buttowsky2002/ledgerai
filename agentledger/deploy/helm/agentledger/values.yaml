@@ -243,8 +243,11 @@ services:
   # Attribution matcher (P3). Exists as a worker but is not in docker-compose;
   # enable to run it as a scheduled background matcher.
   attribution:
-    enabled: false
+    enabled: true
     port: 8096
     clickhouse: true
+    secretEnv: [AGENTLEDGER_PG_DSN]
     env:
       AGENTLEDGER_ATTR_INTERVAL_SEC: "900"
+      ATTRIBUTION_ENGINE_V2: "true"
+      # ATTRIBUTION_ENGINE_V2_CUTOVER: "true"  # flip only after pilot gates (ADR-040)

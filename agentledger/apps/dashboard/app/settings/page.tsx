@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Suspense } from 'react';
 import { DeleteButton } from '../../components/settings/DeleteButton';
 import { CreateBudget, CreateKey, CreatePolicy } from '../../components/settings/forms';
 import { Card, DataTable, PageHeader, usd } from '../../components/ui';
@@ -18,7 +19,11 @@ type TabKey = SettingsTab | 'connectors';
 export default async function SettingsPage({ searchParams }: { searchParams: { tab?: string } }) {
   if (searchParams.tab === 'connectors') {
     const { ConnectorsClient } = await import('../../components/connectors/ConnectorsClient');
-    return <ConnectorsClient />;
+    return (
+      <Suspense fallback={<p className="p-8 text-sm text-muted">Loading data sources…</p>}>
+        <ConnectorsClient />
+      </Suspense>
+    );
   }
 
   const tab: SettingsTab = (['keys', 'policies', 'budgets'] as const).includes(searchParams.tab as SettingsTab)

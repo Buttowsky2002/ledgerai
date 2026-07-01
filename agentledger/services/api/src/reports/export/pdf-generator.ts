@@ -78,7 +78,7 @@ function paintFixedFooters(doc: PdfDoc, data: ExecutiveReportData): void {
   const range = doc.bufferedPageRange();
   const total = range.count;
   const footerY = doc.page.height - FOOTER_Y_OFFSET;
-  const footerText = `AgentLedger Executive Report · ${data.tenantName} · ${dateRangeLabel(
+  const footerText = `BadgerIQ Executive Report · ${data.tenantName} · ${dateRangeLabel(
     data.window.from,
     data.window.to,
     data.window.days,
@@ -333,7 +333,7 @@ function drawPlatformSection(ctx: LayoutCtx, platforms: PlatformBreakdownRow[]):
 
 function drawBrandHeader(doc: PdfDoc): void {
   doc.rect(0, 0, doc.page.width, 56).fill(BRAND);
-  doc.fillColor('#ffffff').fontSize(18).text('AgentLedger', 48, 18, { lineBreak: false });
+  doc.fillColor('#ffffff').fontSize(18).text('BadgerIQ', 48, 18, { lineBreak: false });
   doc.fontSize(10).text('Executive AI Report', 48, 38, { lineBreak: false });
 }
 

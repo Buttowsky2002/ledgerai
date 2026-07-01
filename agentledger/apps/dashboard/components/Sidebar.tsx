@@ -42,6 +42,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/settings/connectors', label: 'Data sources' },
       { href: '/admin/billing', label: 'Billing import' },
+      { href: '/admin/fixed-overhead', label: 'Fixed overhead' },
       { href: '/settings', label: 'Settings' },
     ],
   },
@@ -111,9 +112,9 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="w-60 shrink-0 border-r border-edge bg-panel p-4">
-      <div className="mb-8 px-2 text-lg font-semibold">
-        Agent<span className="text-accent">Ledger</span>
+    <aside className="sticky top-0 flex h-screen w-60 shrink-0 self-start flex-col overflow-y-auto border-r border-edge bg-panel p-4">
+      <div className="mb-8 px-2 text-lg font-semibold tracking-tight">
+        Badger<span className="text-accent">IQ</span>
       </div>
       <nav className="space-y-1">
         {NAV_GROUPS.map((group) => {
@@ -140,8 +141,10 @@ export function Sidebar() {
                       <Link
                         key={item.href}
                         href={item.href}
-                        className={`block rounded py-2 pl-7 pr-3 text-sm ${
-                          active ? 'bg-accent/20 text-white' : 'text-muted hover:bg-white/5'
+                        className={`block rounded py-2 text-sm ${
+                          active
+                            ? 'border-l-2 border-accent bg-accent/10 pr-3 pl-[10px] text-white ring-1 ring-inset ring-accent/30'
+                            : 'pl-7 pr-3 text-muted hover:bg-white/[0.04] hover:text-gray-200'
                         }`}
                       >
                         {item.label}

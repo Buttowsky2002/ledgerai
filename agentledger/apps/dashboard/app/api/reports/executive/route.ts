@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiAuthHeaders } from '@/lib/api';
 import { env } from '@/lib/env';
 
-const API_URL = env('LEDGERAI_API_URL') ?? 'http://localhost:8094';
+const API_URL = env('BADGERIQ_API_URL') ?? 'http://localhost:8094';
 
 /** Proxy executive report binary export (PDF / XLSX) from the control-plane API. */
 export async function GET(req: NextRequest) {

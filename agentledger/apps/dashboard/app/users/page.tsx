@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import { DateRangeFilter } from '../../components/DateRangeFilter';
 import { Badge, Card, DataTable, PageHeader, num, usd } from '../../components/ui';
 import { proxyApi } from '../../lib/api';
 import { parseRange } from '../../lib/date-range';
@@ -106,16 +105,9 @@ export default async function UsersPage({
     <>
       <PageHeader
         title="Users"
-        subtitle={`${tabSubtitle} · ${sourceNote} · ${from} → ${to}`}
+        subtitle={`${tabSubtitle} · ${sourceNote}`}
         actions={
-          <div className="flex flex-col items-end gap-2">
-            <DateRangeFilter
-              basePath="/users"
-              from={from}
-              to={to}
-              extraParams={{ q: q || undefined, tab: tab !== 'all' ? tab : undefined }}
-            />
-            <div className="flex flex-wrap justify-end gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
               {MEMBER_TABS.map((t) => {
                 const count =
                   t.id === 'all'
@@ -136,7 +128,6 @@ export default async function UsersPage({
                   </Link>
                 );
               })}
-            </div>
           </div>
         }
       />
@@ -191,7 +182,7 @@ export default async function UsersPage({
           rows={users.map((u) => ({
             user: (
               <span className="inline-flex flex-wrap items-center gap-2">
-                <Link href={`/users/${encodeURIComponent(u.user_id)}?from=${from}&to=${to}`} className="text-sky-400 hover:underline">
+                <Link href={`/users/${encodeURIComponent(u.user_id)}?from=${from}&to=${to}`} className="text-accent hover:text-accent-soft hover:underline">
                   {u.display_name}
                 </Link>
                 {showUnlinkedBadge && !u.resolved && (

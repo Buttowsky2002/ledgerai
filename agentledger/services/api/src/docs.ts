@@ -15,12 +15,12 @@ export type DocsMode = 'enabled' | 'enabled_protected' | 'disabled' | 'disabled_
 
 /** Docs are exposed outside production, or when explicitly opted in. */
 export function docsEnabled(): boolean {
-  return process.env.NODE_ENV !== 'production' || env('LEDGERAI_EXPOSE_DOCS') === 'true';
+  return process.env.NODE_ENV !== 'production' || env('BADGERIQ_EXPOSE_DOCS') === 'true';
 }
 
 /** Bearer token required to view docs in production (LEDGERAI_DOCS_TOKEN). */
 export function docsToken(): string | undefined {
-  return env('LEDGERAI_DOCS_TOKEN');
+  return env('BADGERIQ_DOCS_TOKEN');
 }
 
 /** Resolve how the docs endpoints should be served. */

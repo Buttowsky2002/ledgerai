@@ -118,7 +118,7 @@ export function resolveCapabilities(
 export function attributionWarning(capabilities: ConnectorCapabilities): string | undefined {
   if (capabilities.supportsUserLevelCost) return undefined;
   return (
-    'This provider does not expose direct user-level cost data. AgentLedger is attributing spend ' +
+    'This provider does not expose direct user-level cost data. BadgerIQ is attributing spend ' +
     'using project, workspace, or API key mappings.'
   );
 }

@@ -66,7 +66,7 @@ func (g *Gateway) handleMessages(w http.ResponseWriter, r *http.Request) {
 	vk, ok := g.authenticate(snap, r)
 	if !ok {
 		writeAnthropicErr(w, http.StatusUnauthorized, "authentication_error",
-			"unknown or missing AgentLedger virtual key")
+			"unknown or missing BadgerIQ virtual key")
 		return
 	}
 

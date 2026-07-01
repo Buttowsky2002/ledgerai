@@ -1,5 +1,12 @@
 import { BadRequestException } from '@nestjs/common';
-import { DEFAULT_BACKFILL_DAYS, MAX_RANGE_DAYS, resolvePreviewWindow, resolveSyncChunks, resolveSyncWindow } from './sync-range';
+import {
+  DEFAULT_BACKFILL_DAYS,
+  MAX_RANGE_DAYS,
+  resolvePreviewWindow,
+  resolveSyncChunks,
+  resolveSyncWindow,
+  rollingSyncWindow,
+} from './sync-range';
 
 describe('resolveSyncWindow', () => {
   it('defaults to a 30-day inclusive window ending today', () => {
@@ -44,5 +51,16 @@ describe('resolveSyncChunks', () => {
     expect(chunks).toHaveLength(3);
     expect(chunks[0].syncStart.toISOString().slice(0, 10)).toBe('2026-01-01');
     expect(chunks[chunks.length - 1].syncEnd.toISOString().slice(0, 10)).toBe('2026-03-31');
+  });
+});
+
+describe('rollingSyncWindow', () => {
+  it('returns a 31-day inclusive window ending today', () => {
+    const { from, to } = rollingSyncWindow();
+    expect(to).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    const start = new Date(`${from}T00:00:00.000Z`);
+    const end = new Date(`${to}T00:00:00.000Z`);
+    const days = Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1;
+    expect(days).toBe(MAX_RANGE_DAYS);
   });
 });

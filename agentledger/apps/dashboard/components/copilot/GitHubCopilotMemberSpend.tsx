@@ -8,6 +8,7 @@ import {
 } from '@/components/charts';
 import { Badge, Card, Stat, usd } from '@/components/ui';
 import { fetchCopilotMemberSpend } from '@/lib/api/github-copilot';
+import { copilotNetValueUsd, formatCopilotRoiMultiple } from '@/lib/copilot-metrics';
 import type { CopilotMemberSpendResponse, CopilotMemberSpendRow } from '@/types/github-copilot';
 
 const STATUS_TONE: Record<string, 'info' | 'warn' | 'neg' | 'pos'> = {
@@ -20,7 +21,7 @@ const STATUS_TONE: Record<string, 'info' | 'warn' | 'neg' | 'pos'> = {
 };
 
 const SPEND_TOOLTIP =
-  'GitHub Copilot Business does not provide a per-user invoice. LedgerAI estimates member spend using seat allocation, usage metrics, AI credit usage, and proportional overage allocation.';
+  'GitHub Copilot Business does not provide a per-user invoice. BadgerIQ estimates member spend using seat allocation, usage metrics, AI credit usage, and proportional overage allocation.';
 
 function FilterSelect({
   label,
@@ -74,12 +75,17 @@ function MemberTable({ rows }: { rows: CopilotMemberSpendRow[] }) {
             <th className="py-2 pr-3 text-right">PR sum.</th>
             <th className="py-2 pr-3 text-right">Hrs saved (est.)</th>
             <th className="py-2 pr-3 text-right">Value (est.)</th>
-            <th className="py-2 pr-3 text-right">ROI % (est.)</th>
+            <th className="py-2 pr-3 text-right">Net value (est.)</th>
+            <th className="py-2 pr-3 text-right" title="Estimated value ÷ allocated cost; capped at 10×">
+              Multiple (est.)
+            </th>
             <th className="py-2">Status</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((m) => (
+          {rows.map((m) => {
+            const net = copilotNetValueUsd(m.estimatedValueCreated, m.totalAllocatedCost);
+            return (
             <tr key={m.githubLogin} className="border-b border-edge/40 hover:bg-white/[0.02]">
               <td className="py-2 pr-3 font-medium text-gray-100">{m.displayName ?? m.githubLogin}</td>
               <td className="py-2 pr-3 capitalize text-muted">{m.seatStatus.replace('_', ' ')}</td>
@@ -96,16 +102,21 @@ function MemberTable({ rows }: { rows: CopilotMemberSpendRow[] }) {
               <td className="py-2 pr-3 text-right">{m.prSummaryCount}</td>
               <td className="py-2 pr-3 text-right">{m.estimatedHoursSaved.toFixed(1)}</td>
               <td className="py-2 pr-3 text-right">{usd(m.estimatedValueCreated)}</td>
+              <td className={`py-2 pr-3 text-right font-medium ${net < 0 ? 'text-neg' : 'text-pos'}`}>
+                {usd(net)}
+              </td>
               <td
-                className={`py-2 pr-3 text-right ${m.roiPercentage != null && m.roiPercentage < 0 ? 'text-neg' : 'text-pos'}`}
+                className={`py-2 pr-3 text-right ${net < 0 ? 'text-neg' : 'text-muted'}`}
+                title="Value ÷ allocated cost (capped at 10×)"
               >
-                {m.roiPercentage != null ? `${m.roiPercentage.toFixed(0)}%` : '—'}
+                {formatCopilotRoiMultiple(m.estimatedValueCreated, m.totalAllocatedCost)}
               </td>
               <td className="py-2">
                 <Badge tone={STATUS_TONE[m.utilizationStatus] ?? 'info'}>{m.utilizationStatus}</Badge>
               </td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>

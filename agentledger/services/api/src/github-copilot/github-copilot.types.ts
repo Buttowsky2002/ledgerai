@@ -22,18 +22,19 @@ export interface CopilotRoiAssumptions {
   highRoiThreshold: number;
 }
 
+/** Conservative defaults — underestimate productivity vs. headline vendor claims. */
 export const DEFAULT_ROI_ASSUMPTIONS: CopilotRoiAssumptions = {
-  avgEngineerHourlyRate: 75,
-  minutesSavedPerAcceptedLine: 1,
-  minutesSavedPerChatTurn: 5,
-  minutesSavedPerPrSummary: 10,
-  qualityAdjustmentFactor: 0.7,
+  avgEngineerHourlyRate: 55,
+  minutesSavedPerAcceptedLine: 0.25,
+  minutesSavedPerChatTurn: 2,
+  minutesSavedPerPrSummary: 5,
+  qualityAdjustmentFactor: 0.5,
   seatPriceUsd: DEFAULT_SEAT_PRICE_USD,
   includedCreditsPerSeat: DEFAULT_INCLUDED_CREDITS_PER_SEAT,
   creditValueUsd: DEFAULT_CREDIT_VALUE_USD,
   inactiveDaysThreshold: 30,
   lowUsageDaysThreshold: 14,
-  highRoiThreshold: 100,
+  highRoiThreshold: 50,
 };
 
 export interface CopilotSeatRow {

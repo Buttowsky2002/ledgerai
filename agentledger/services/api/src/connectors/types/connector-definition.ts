@@ -1,6 +1,6 @@
 import type { ConnectorCapabilities } from './connector-capabilities';
 
-/** LedgerAI connector definition schema — config-driven API connector framework. */
+/** BadgerIQ connector definition schema — config-driven API connector framework. */
 
 export type ConnectorCategory =
   | 'provider_spend'

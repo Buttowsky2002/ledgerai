@@ -24,7 +24,7 @@ export interface MemberSpendQuery {
 }
 
 const DISCLAIMER =
-  'GitHub Copilot Business does not provide a per-user invoice. LedgerAI estimates member spend using seat allocation, usage metrics, AI credit usage, and proportional overage allocation. All spend and ROI values are estimated or allocated — not exact invoice amounts.';
+  'GitHub Copilot Business does not provide a per-user invoice. BadgerIQ estimates member spend using seat allocation, usage metrics, AI credit usage, and proportional overage allocation. All spend and ROI values are estimated or allocated — not exact invoice amounts.';
 
 @Injectable()
 export class CopilotMemberSpendService {

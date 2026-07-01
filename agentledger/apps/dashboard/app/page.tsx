@@ -1,12 +1,13 @@
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { AreaChartClient, Sparkline } from '../components/charts';
-import { DateRangeFilter } from '../components/DateRangeFilter';
 import { OverviewAiSourcesPanel } from '../components/overview/OverviewAiSourcesPanel';
+import { FixedOverheadPanel } from '../components/overview/FixedOverheadPanel';
 import { ExecutiveReportExport } from '../components/overview/ExecutiveReportExport';
 import { LariRecommendationsPanel } from '../components/lari/LariRecommendationsPanel';
 import { Badge, BadgeTone, Card, DataTable, PageHeader, Stat, num, usd } from '../components/ui';
-import { apiClient, fetchData } from '../lib/api';
+import { apiClient, fetchData, proxyApi } from '../lib/api';
+import { combinedAiCost } from '../lib/combined-ai-cost';
 import { parseRange } from '../lib/date-range';
 
 export const dynamic = 'force-dynamic';
@@ -70,7 +71,7 @@ const BAR_BG: Record<BadgeTone, string> = {
 };
 
 const meta = (rec: Recommendation) => REC[rec] ?? REC.maintain;
-const roiTone = (v: number) => (v > 0 ? 'text-pos' : v < 0 ? 'text-neg' : 'text-gray-200');
+const roiTone = (v: number) => (v > 0 ? 'text-pos' : v < 0 ? 'text-neg' : 'text-muted');
 const fmtLari = (v: number) => `${num(Math.round(Number(v)))}×`;
 
 // Inline confidence meter (0–100): a numeric read plus a slim track.
@@ -79,7 +80,7 @@ function ConfMeter({ score }: { score: number }) {
   const tone = pct >= 67 ? 'bg-pos' : pct >= 34 ? 'bg-warn' : 'bg-neg';
   return (
     <span className="inline-flex items-center justify-end gap-2">
-      <span className="num text-gray-300">{pct}</span>
+      <span className="num text-muted">{pct}</span>
       <span className="h-1.5 w-12 overflow-hidden rounded-full bg-edge">
         <span className={`block h-full rounded-full ${tone}`} style={{ width: `${pct}%` }} />
       </span>
@@ -94,10 +95,16 @@ export default async function OverviewPage({
 }) {
   const { from, to } = parseRange(searchParams);
   const source = searchParams.source || undefined;
-  const rangeParams = { from, to, source };
   const api = apiClient();
 
-  const [spend, economics, costByUser, platformSpend, modelMix] = await Promise.all([
+  type TotalCostRow = {
+    month: string;
+    attributable_cost_usd: number | string;
+    fixed_cost_usd: number | string;
+    total_cost_of_ai_usd: number | string;
+  };
+
+  const [spend, economics, costByUser, platformSpend, modelMix, totalCostRows] = await Promise.all([
     fetchData(
       api.GET('/v1/analytics/spend', { params: { query: { from, to } } }),
       [],
@@ -118,6 +125,11 @@ export default async function OverviewPage({
       api.GET('/v1/analytics/model-mix', { params: { query: { from, to } } }),
       [],
     ) as Promise<unknown> as Promise<ModelRow[]>,
+    (async () => {
+      const qs = new URLSearchParams({ from, to }).toString();
+      const res = await proxyApi(`/v1/fixed-costs/total-cost-of-ai?${qs}`);
+      return res.ok && Array.isArray(res.data) ? (res.data as TotalCostRow[]) : [];
+    })(),
   ]);
 
   const platforms = platformSpend
@@ -135,8 +147,12 @@ export default async function OverviewPage({
     calls: Number(r.calls),
   }));
 
-  const totalCost = spend.reduce((s, r) => s + Number(r.cost_usd), 0);
+  const meteredCost = spend.reduce((s, r) => s + Number(r.cost_usd), 0);
   const totalCalls = spend.reduce((s, r) => s + Number(r.calls), 0);
+  const costOfAi = combinedAiCost(meteredCost, totalCostRows);
+  const totalCostOfAi = costOfAi.total;
+  const attributableCost = costOfAi.attributable;
+  const fixedOverhead = costOfAi.fixed;
   const blocked = spend.reduce((s, r) => s + Number(r.blocked_calls), 0);
   const chart = spend.map((r) => ({ day: String(r.day).slice(5), cost_usd: Number(r.cost_usd) }));
 
@@ -158,20 +174,20 @@ export default async function OverviewPage({
         eyebrow="FinOps control plane"
         title="Overview"
         subtitle={`${from} → ${to}`}
-        actions={
-          <div className="flex flex-col items-end gap-2">
-            <ExecutiveReportExport from={from} to={to} />
-            <DateRangeFilter basePath="/" from={from} to={to} extraParams={rangeParams} />
-          </div>
-        }
+        actions={<ExecutiveReportExport from={from} to={to} />}
       />
 
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Stat
-          label="Total spend"
-          value={usd(totalCost)}
+          label="Total cost of AI"
+          value={usd(totalCostOfAi)}
           accent
-          sub={`${num(totalCalls)} calls`}
+          sub={
+            <>
+              {usd(attributableCost)} metered · {usd(fixedOverhead)} fixed
+              <span className="mt-0.5 block">{num(totalCalls)} calls</span>
+            </>
+          }
           chart={chart.length > 1 ? <Sparkline data={chart} yKey="cost_usd" /> : undefined}
         />
         <Stat
@@ -197,6 +213,8 @@ export default async function OverviewPage({
       <Card title="Daily spend" subtitle="USD">
         <AreaChartClient data={chart} xKey="day" yKey="cost_usd" />
       </Card>
+
+      <FixedOverheadPanel from={from} to={to} />
 
       <Suspense
         fallback={

@@ -133,13 +133,17 @@ func writeMetrics(w http.ResponseWriter, m *riskenrich.Metrics) {
 	}
 }
 
-// lookupEnv resolves an environment variable, preferring the new LEDGERAI_*
+// lookupEnv resolves an environment variable, preferring BADGERIQ_* and falling back to LEDGERAI_*
 // name and falling back to the legacy AGENTLEDGER_* alias (deprecated; kept for
-// backwards compatibility — see the README "Renaming to LedgerAI" note).
+// backwards compatibility — see the README "Renaming to BadgerIQ" note).
 func lookupEnv(name string) string {
 	const legacy = "AGENTLEDGER_"
 	if len(name) > len(legacy) && name[:len(legacy)] == legacy {
-		if v := os.Getenv("LEDGERAI_" + name[len(legacy):]); v != "" {
+	suffix := name[len(legacy):]
+		if v := os.Getenv("BADGERIQ_" + suffix); v != "" {
+			return v
+		}
+		if v := os.Getenv("LEDGERAI_" + suffix); v != "" {
 			return v
 		}
 	}

@@ -2,7 +2,7 @@
   "name": "@agentledger/api",
   "version": "0.1.0",
   "private": true,
-  "description": "LedgerAI control-plane API (NestJS + Prisma on Postgres)",
+  "description": "BadgerIQ control-plane API (NestJS + Prisma on Postgres)",
   "license": "UNLICENSED",
   "engines": {
     "node": ">=20"
