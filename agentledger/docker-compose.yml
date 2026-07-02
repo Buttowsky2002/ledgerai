@@ -281,7 +281,6 @@ services:
       # Connects as the least-privilege agentledger_api role (NON-superuser, so
       # it is subject to RLS). The bootstrap `agentledger` user would bypass RLS.
       BADGERIQ_PG_DSN: postgres://agentledger_api:dev_only_change_me@postgres:5432/agentledger?sslmode=disable
-      BADGERIQ_PG_DSN: postgres://agentledger_api:dev_only_change_me@postgres:5432/agentledger?sslmode=disable
       BADGERIQ_CLICKHOUSE_URL: http://clickhouse:8123
       BADGERIQ_CLICKHOUSE_DB: agentledger
       BADGERIQ_API_ADDR: ":8094"
