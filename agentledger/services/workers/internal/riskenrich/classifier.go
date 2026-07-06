@@ -8,20 +8,17 @@
 //	agent_tool_calls (sequences) ─▶ [risk-enrichment] ─▶ risk_events (category: semantic_*)
 //
 // The LLM call is async and opt-in (never on any inline path), gated on the
-// deterministic tier per ADR-027. The Anthropic Messages API is reached over
-// stdlib net/http to stay consistent with the rest of the workers/connectors
-// (no vendor SDK; CLAUDE.md rule 12). See ADR-030.
+// deterministic tier per ADR-027. Inference runs against BadgerIQ's own
+// self-hosted model over an OpenAI-compatible endpoint (stdlib net/http, no
+// vendor SDK; CLAUDE.md rule 12) — no external AI API is ever called. See
+// ADR-030 (original tier) and ADR-050 (self-hosted pivot).
 package riskenrich
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
-	"time"
 )
 
 // Finding is one semantic risk the classifier attributes to a run's behavior.
@@ -42,6 +39,19 @@ type Assessment struct {
 type Classifier interface {
 	Classify(ctx context.Context, b AgentBehavior) (Assessment, error)
 }
+
+// validCategories / validSeverities bound what a (possibly small, self-hosted)
+// model is allowed to emit. Anything outside these sets is dropped rather than
+// trusted — the guardrail matters MORE with a smaller model, not less.
+var validCategories = map[string]bool{
+	"injection_suspected":  true,
+	"data_egress":          true,
+	"privilege_escalation": true,
+	"anomalous_sequence":   true,
+	"none":                 true,
+}
+
+var validSeverities = map[string]bool{"low": true, "medium": true, "high": true}
 
 // classifierSystemPrompt instructs the model to reason over tool-call metadata
 // only. It must never request or infer prompt/completion content (none is
@@ -64,10 +74,11 @@ Classify whether the sequence suggests any of these risks:
 Return findings ONLY for genuine concerns. If the behavior is benign, return an
 empty findings array (or a single finding with category "none"). Set confidence
 in 0..1 reflecting how strongly the metadata supports the finding; be conservative.
-Keep each rationale to one sentence about the pattern — never invent content.`
+Keep each rationale to one sentence about the pattern — never invent content.
+Respond with ONLY a JSON object matching the schema: {"findings":[...]}.`
 
-// assessmentSchema is the JSON Schema the Messages API constrains output to.
-// Structured outputs require additionalProperties:false and explicit required.
+// assessmentSchema is the JSON Schema output is constrained to. Structured
+// outputs require additionalProperties:false and explicit required.
 func assessmentSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
@@ -98,121 +109,139 @@ func assessmentSchema() map[string]any {
 	}
 }
 
-// AnthropicClassifier calls the Anthropic Messages API over stdlib HTTP.
-type AnthropicClassifier struct {
-	apiKey  string
-	model   string
-	baseURL string
-	version string
-	client  *http.Client
+// LLMClassifier classifies a behavior by asking a self-hosted model over an
+// OpenAI-compatible endpoint, then re-validating the output. Guardrails, in
+// order: (1) metadata-only prompt, (2) JSON-schema-constrained request,
+// (3) tolerant JSON extraction, (4) post-parse validation against the allowed
+// category/severity/confidence sets, (5) retry-then-deterministic-fallback
+// (malformed → one retry → empty assessment, so the deterministic tier stays
+// authoritative and a bad model output never fabricates a risk_event).
+type LLMClassifier struct {
+	llm       LLMChatClient
+	maxTokens int
+	metrics   *LLMMetrics
 }
 
-// NewAnthropicClassifier builds a classifier. model defaults to claude-opus-4-8
-// when empty; baseURL defaults to the public API. The API key is read from the
-// caller (operator env) and never logged.
-func NewAnthropicClassifier(apiKey, model, baseURL string) *AnthropicClassifier {
-	if model == "" {
-		model = "claude-opus-4-8"
+// NewLLMClassifier wires a classifier over any LLMChatClient. maxTokens
+// defaults to 2000 when non-positive.
+func NewLLMClassifier(llm LLMChatClient, maxTokens int, m *LLMMetrics) *LLMClassifier {
+	if maxTokens <= 0 {
+		maxTokens = 2000
 	}
-	if baseURL == "" {
-		baseURL = "https://api.anthropic.com"
+	if m == nil {
+		m = &LLMMetrics{}
 	}
-	return &AnthropicClassifier{
-		apiKey:  apiKey,
-		model:   model,
-		baseURL: strings.TrimRight(baseURL, "/"),
-		version: "2023-06-01",
-		client:  &http.Client{Timeout: 60 * time.Second},
+	return &LLMClassifier{llm: llm, maxTokens: maxTokens, metrics: m}
+}
+
+// Classify sends one behavior's metadata to the model and returns a validated
+// assessment. A transport failure is surfaced as an error (the engine logs and
+// skips the run). A 200 whose content will not parse/validate is retried once,
+// then falls back to an empty assessment rather than inventing findings.
+func (c *LLMClassifier) Classify(ctx context.Context, b AgentBehavior) (Assessment, error) {
+	req := ChatRequest{
+		System:      classifierSystemPrompt,
+		User:        behaviorPrompt(b),
+		JSONSchema:  assessmentSchema(),
+		SchemaName:  "risk_assessment",
+		MaxTokens:   c.maxTokens,
+		Temperature: 0.2,
 	}
-}
 
-type anthropicReq struct {
-	Model        string         `json:"model"`
-	MaxTokens    int            `json:"max_tokens"`
-	System       string         `json:"system,omitempty"`
-	Messages     []anthropicMsg `json:"messages"`
-	OutputConfig *outputConfig  `json:"output_config,omitempty"`
-}
-
-type anthropicMsg struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
-type outputConfig struct {
-	Format jsonFormat `json:"format"`
-}
-
-type jsonFormat struct {
-	Type   string         `json:"type"`
-	Schema map[string]any `json:"schema"`
-}
-
-type anthropicResp struct {
-	StopReason string `json:"stop_reason"`
-	Content    []struct {
-		Type string `json:"type"`
-		Text string `json:"text"`
-	} `json:"content"`
-}
-
-// Classify sends one behavior's metadata to the model and parses the verdict.
-// A safety refusal yields an empty Assessment (the run is simply not enriched),
-// never an error that would stall the pass.
-func (c *AnthropicClassifier) Classify(ctx context.Context, b AgentBehavior) (Assessment, error) {
-	reqBody := anthropicReq{
-		Model:     c.model,
-		MaxTokens: 1024,
-		System:    classifierSystemPrompt,
-		Messages:  []anthropicMsg{{Role: "user", Content: behaviorPrompt(b)}},
-		OutputConfig: &outputConfig{Format: jsonFormat{
-			Type:   "json_schema",
-			Schema: assessmentSchema(),
-		}},
-	}
-	buf, err := json.Marshal(reqBody)
+	resp, err := c.llm.Chat(ctx, req)
 	if err != nil {
 		return Assessment{}, err
 	}
+	if a, ok := parseAssessment(resp.Content); ok {
+		return a, nil
+	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/v1/messages", bytes.NewReader(buf))
+	// 200 but unparseable/invalid → one retry (a smaller model occasionally
+	// wraps or truncates JSON), then deterministic fallback.
+	c.metrics.Malformed.Add(1)
+	resp, err = c.llm.Chat(ctx, req)
 	if err != nil {
 		return Assessment{}, err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", c.apiKey)
-	req.Header.Set("anthropic-version", c.version)
+	if a, ok := parseAssessment(resp.Content); ok {
+		return a, nil
+	}
+	c.metrics.Fallbacks.Add(1)
+	return Assessment{}, nil
+}
 
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return Assessment{}, fmt.Errorf("anthropic request: %w", err)
+// parseAssessment extracts JSON from possibly-decorated model output, unmarshals
+// it, and validates every finding. It returns ok=false if nothing parseable is
+// found — never an assessment built from invalid findings.
+func parseAssessment(content string) (Assessment, bool) {
+	raw := extractJSONObject(content)
+	if raw == "" {
+		return Assessment{}, false
 	}
-	defer func() { _ = resp.Body.Close() }()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if resp.StatusCode != http.StatusOK {
-		return Assessment{}, fmt.Errorf("anthropic status %d: %s", resp.StatusCode, bytes.TrimSpace(body))
+	var a Assessment
+	if err := json.Unmarshal([]byte(raw), &a); err != nil {
+		return Assessment{}, false
 	}
+	return validateAssessment(a), true
+}
 
-	var ar anthropicResp
-	if err := json.Unmarshal(body, &ar); err != nil {
-		return Assessment{}, fmt.Errorf("anthropic decode: %w", err)
+// validateAssessment drops any finding outside the allowed category/confidence
+// bounds and normalizes severity, so a hallucinated category or out-of-range
+// score can never reach risk_events.
+func validateAssessment(a Assessment) Assessment {
+	kept := make([]Finding, 0, len(a.Findings))
+	for _, f := range a.Findings {
+		if !validCategories[f.Category] {
+			continue
+		}
+		if f.Confidence < 0 || f.Confidence > 1 {
+			continue
+		}
+		if !validSeverities[f.Severity] {
+			f.Severity = "low"
+		}
+		kept = append(kept, f)
 	}
-	if ar.StopReason == "refusal" {
-		// Safety classifier declined; skip enrichment for this run.
-		return Assessment{}, nil
-	}
+	return Assessment{Findings: kept}
+}
 
-	// With output_config.format, the first text block is valid JSON.
-	for _, blk := range ar.Content {
-		if blk.Type == "text" && strings.TrimSpace(blk.Text) != "" {
-			var a Assessment
-			if err := json.Unmarshal([]byte(blk.Text), &a); err != nil {
-				return Assessment{}, fmt.Errorf("assessment decode: %w", err)
+// extractJSONObject returns the first balanced top-level JSON object in s,
+// tolerating code fences or prose around it. Empty string if none is found.
+func extractJSONObject(s string) string {
+	s = strings.TrimSpace(s)
+	start := strings.IndexByte(s, '{')
+	if start < 0 {
+		return ""
+	}
+	depth := 0
+	inStr := false
+	esc := false
+	for i := start; i < len(s); i++ {
+		ch := s[i]
+		if inStr {
+			switch {
+			case esc:
+				esc = false
+			case ch == '\\':
+				esc = true
+			case ch == '"':
+				inStr = false
 			}
-			return a, nil
+			continue
+		}
+		switch ch {
+		case '"':
+			inStr = true
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return s[start : i+1]
+			}
 		}
 	}
-	return Assessment{}, nil
+	return ""
 }
 
 // behaviorPrompt renders a behavior as the user message — metadata only.

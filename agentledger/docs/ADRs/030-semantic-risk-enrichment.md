@@ -1,7 +1,7 @@
 # ADR-030 — Semantic risk-enrichment worker (LLM tier)
 
 **Date:** 2026-06-20
-**Status:** Accepted
+**Status:** Accepted — the *provider* choice below (Anthropic Messages API) is superseded by ADR-050 (self-hosted, OpenAI-compatible inference); the tier's design (metadata-only, opt-in, async, deterministic-gated) still stands.
 **Deciders:** Platform team
 **Relates to:** Phase 6; ADR-027 (agent-native risk engine — the deterministic tier this complements); ADR-029 (OTel tool-span ingestion — the producer of the data this reads)
 

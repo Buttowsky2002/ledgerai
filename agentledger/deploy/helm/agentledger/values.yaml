@@ -212,12 +212,16 @@ services:
     enabled: true
     port: 8100
     clickhouse: true
-    secretEnv: [ANTHROPIC_API_KEY]
+    # Self-hosted LLM is served OUT-OF-CHART (a GPU workload / managed vLLM), like
+    # the stateful infra: point BADGERIQ_LLM_BASE_URL at it. No external AI API is
+    # ever called (ADR-050). For an authenticated gateway in front of the model,
+    # add BADGERIQ_LLM_API_KEY to secretEnv and your existingSecret.
     env:
       BADGERIQ_RISK_ENRICH_ENABLED: "false"
       BADGERIQ_RISK_ENRICH_INTERVAL_SEC: "3600"
       BADGERIQ_RISK_ENRICH_MIN_CONFIDENCE: "0.5"
-      BADGERIQ_RISK_ENRICH_MODEL: claude-opus-4-8
+      BADGERIQ_LLM_BASE_URL: http://badger-llm:8000
+      BADGERIQ_LLM_MODEL: badger-ai-8b
 
   slack-alerter:
     enabled: true

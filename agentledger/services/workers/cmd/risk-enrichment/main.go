@@ -4,9 +4,12 @@
 // anomalous sequences), and writes the findings as governed risk_events.
 //
 // Opt-in and async by design (never on any inline path): the enrichment loop runs
-// only when BADGERIQ_RISK_ENRICH_ENABLED=true and ANTHROPIC_API_KEY is set —
-// otherwise the process serves health endpoints and does nothing, so it is safe
-// to deploy disabled and gate on the deterministic tier's precision (ADR-027/030).
+// only when BADGERIQ_RISK_ENRICH_ENABLED=true — otherwise the process serves
+// health endpoints and does nothing, so it is safe to deploy disabled and gate on
+// the deterministic tier's precision (ADR-027/030).
+//
+// Inference runs against BadgerIQ's own self-hosted model over an OpenAI-compatible
+// endpoint (BADGERIQ_LLM_BASE_URL); no external AI API is called (ADR-050).
 //
 //	agent_tool_calls (sequences) ─▶ [risk-enrichment + LLM] ─▶ risk_events (semantic_*)
 package main
@@ -35,8 +38,8 @@ func main() {
 	)
 
 	metrics := &riskenrich.Metrics{}
+	llmMetrics := &riskenrich.LLMMetrics{}
 	enabled := lookupEnv("BADGERIQ_RISK_ENRICH_ENABLED") == "true"
-	apiKey := os.Getenv("ANTHROPIC_API_KEY")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -58,7 +61,7 @@ func main() {
 	})
 	mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
-		writeMetrics(w, metrics)
+		writeMetrics(w, metrics, llmMetrics)
 	})
 	srv := &http.Server{Addr: env("BADGERIQ_WORKER_ADDR", ":8100"), Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 	go func() {
@@ -67,24 +70,27 @@ func main() {
 		}
 	}()
 
-	switch {
-	case !enabled:
+	if !enabled {
 		slog.Warn("semantic risk enrichment disabled (set BADGERIQ_RISK_ENRICH_ENABLED=true to enable); serving health only")
-	case apiKey == "":
-		slog.Warn("ANTHROPIC_API_KEY not set; semantic risk enrichment cannot run; serving health only")
-	default:
+	} else {
 		cfg := riskenrich.Config{
 			LookbackHours: envIntLocal("BADGERIQ_RISK_ENRICH_LOOKBACK_HOURS", 24),
 			MinCalls:      envIntLocal("BADGERIQ_RISK_ENRICH_MIN_CALLS", 2),
 			MinConfidence: envFloat("BADGERIQ_RISK_ENRICH_MIN_CONFIDENCE", 0.5),
 		}
-		classifier := riskenrich.NewAnthropicClassifier(
-			apiKey,
-			env("BADGERIQ_RISK_ENRICH_MODEL", "claude-opus-4-8"),
-			env("BADGERIQ_ANTHROPIC_BASE_URL", "https://api.anthropic.com"),
+		baseURL := env("BADGERIQ_LLM_BASE_URL", "http://localhost:8000")
+		model := env("BADGERIQ_LLM_MODEL", "badger-ai-8b")
+		llm := riskenrich.NewOpenAICompatibleClient(
+			baseURL,
+			model,
+			lookupEnv("BADGERIQ_LLM_API_KEY"),
+			time.Duration(envInt("BADGERIQ_LLM_TIMEOUT_S", 60))*time.Second,
+			llmMetrics,
 		)
+		classifier := riskenrich.NewLLMClassifier(llm, envIntLocal("BADGERIQ_AI_MAX_TOKENS", 2000), llmMetrics)
 		e := riskenrich.New(ch, classifier, cfg, metrics)
 		interval := time.Duration(envInt("BADGERIQ_RISK_ENRICH_INTERVAL_SEC", 3600)) * time.Second
+		slog.Info("semantic risk enrichment enabled", "base_url", baseURL, "model", model)
 		go runLoop(ctx, e, interval)
 	}
 
@@ -117,16 +123,25 @@ func runLoop(ctx context.Context, e *riskenrich.Engine, every time.Duration) {
 	}
 }
 
-func writeMetrics(w http.ResponseWriter, m *riskenrich.Metrics) {
+func writeMetrics(w http.ResponseWriter, m *riskenrich.Metrics, llm *riskenrich.LLMMetrics) {
 	type row struct {
 		name, help string
 		val        int64
 	}
+	// Aggregate counters only — never any request/response body (ADR-050).
 	for _, mt := range []row{
 		{"risk_enrich_runs_total", "Enrichment passes executed.", m.Runs.Load()},
 		{"risk_enrich_behaviors_total", "Run behaviors classified.", m.BehaviorsScanned.Load()},
 		{"risk_enrich_findings_total", "Semantic risk events written.", m.FindingsRaised.Load()},
 		{"risk_enrich_errors_total", "Classifier calls that failed.", m.ClassifyErrors.Load()},
+		{"risk_enrich_llm_requests_total", "LLM chat requests attempted.", llm.Requests.Load()},
+		{"risk_enrich_llm_retries_total", "LLM request retries (5xx/timeout).", llm.Retries.Load()},
+		{"risk_enrich_llm_failures_total", "LLM requests that failed after retries.", llm.Failures.Load()},
+		{"risk_enrich_llm_malformed_total", "LLM responses that failed parse/validate.", llm.Malformed.Load()},
+		{"risk_enrich_llm_fallbacks_total", "Classifications that fell back to empty.", llm.Fallbacks.Load()},
+		{"risk_enrich_llm_prompt_tokens_total", "Prompt tokens reported by the server.", llm.PromptTokens.Load()},
+		{"risk_enrich_llm_completion_tokens_total", "Completion tokens reported by the server.", llm.CompletionTokens.Load()},
+		{"risk_enrich_llm_latency_ms_total", "Cumulative LLM request latency (ms).", llm.LatencyMsTotal.Load()},
 	} {
 		_, _ = w.Write([]byte("# HELP " + mt.name + " " + mt.help + "\n# TYPE " + mt.name + " counter\n" +
 			mt.name + " " + strconv.FormatInt(mt.val, 10) + "\n"))
