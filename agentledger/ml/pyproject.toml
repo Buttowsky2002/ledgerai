@@ -1,0 +1,49 @@
+[project]
+name = "badger-ai"
+version = "0.1.0"
+description = "BadgerAI: synthetic data, QLoRA fine-tune, eval, and export for the self-hosted risk-enrichment model. Heavy training deps stay OUT of the backend/worker images."
+requires-python = ">=3.11"
+
+# Base deps are light (data generation + eval compute run in CI without a GPU).
+dependencies = [
+  "numpy>=1.26",
+  "pydantic>=2.6",
+  "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+# Heavy training/serving stack — install only on a GPU box: `pip install -e '.[train]'`.
+# Justification (CLAUDE.md rule 3): QLoRA fine-tune of an open-weights base.
+#   transformers/peft/trl = SFTTrainer + LoRA; bitsandbytes = 4-bit NF4;
+#   accelerate = launch/offload; datasets = JSONL loading; torch = runtime.
+train = [
+  "torch>=2.3",
+  "transformers>=4.44",
+  "peft>=0.12",
+  "trl>=0.9",
+  "bitsandbytes>=0.43",
+  "accelerate>=0.33",
+  "datasets>=2.20",
+]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.6",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["badgerdata", "datagen", "eval", "train", "export"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "W"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

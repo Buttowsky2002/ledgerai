@@ -1,0 +1,18 @@
+# Ollama Modelfile for BadgerAI (Mac / no-GPU dev). Build after `export.py gguf`:
+#   ollama create badger-ai -f ml/export/Modelfile
+#   ollama serve            # exposes an OpenAI-compatible API on :11434
+# Then point the worker at it:
+#   BADGERIQ_LLM_BASE_URL=http://localhost:11434  BADGERIQ_LLM_MODEL=badger-ai
+FROM ./out/gguf/badger-ai-8b-Q4_K_M.gguf
+
+PARAMETER temperature 0.2
+PARAMETER num_ctx 8192
+
+# ChatML template (Qwen2.5 base). Keep in sync if you change the base family.
+TEMPLATE """{{ if .System }}<|im_start|>system
+{{ .System }}<|im_end|>
+{{ end }}{{ if .Prompt }}<|im_start|>user
+{{ .Prompt }}<|im_end|>
+{{ end }}<|im_start|>assistant
+{{ .Response }}<|im_end|>
+"""
