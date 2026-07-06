@@ -149,25 +149,70 @@ services:
     depends_on:
       clickhouse: { condition: service_healthy }
 
-  # Semantic risk-enrichment tier (Phase 6, deferred from P5): LLM classifies
-  # per-run tool-call sequences for injection / data-egress / anomalous patterns
-  # → semantic_* risk_events. Opt-in and async (never inline): serves health only
-  # unless BADGERIQ_RISK_ENRICH_ENABLED=true AND ANTHROPIC_API_KEY is set.
+  # Semantic risk-enrichment tier (Phase 6, deferred from P5): the LLM classifies
+  # per-run tool-call SEQUENCES (metadata only) for injection / data-egress /
+  # anomalous patterns → semantic_* risk_events. Opt-in and async (never inline).
+  #
+  # This tier and its self-hosted model (badger-llm) form ONE opt-in unit behind the
+  # "llm" profile, so the default stack (make demo) needs no GPU. Bring both up with:
+  #   docker compose --profile llm up -d badger-llm risk-enrichment
+  # Inference runs against our own model over an OpenAI-compatible API — no external
+  # AI API is ever called (ADR-050).
   risk-enrichment:
+    profiles: ["llm"]
     build:
       context: ./services/workers
       args: { CMD: risk-enrichment }
     environment:
       BADGERIQ_CLICKHOUSE_URL: http://clickhouse:8123
       BADGERIQ_CLICKHOUSE_DB: agentledger
-      BADGERIQ_RISK_ENRICH_ENABLED: "${BADGERIQ_RISK_ENRICH_ENABLED:-false}"
+      BADGERIQ_RISK_ENRICH_ENABLED: "${BADGERIQ_RISK_ENRICH_ENABLED:-true}"
       BADGERIQ_RISK_ENRICH_INTERVAL_SEC: "3600"
       BADGERIQ_RISK_ENRICH_MIN_CONFIDENCE: "0.5"
-      BADGERIQ_RISK_ENRICH_MODEL: "${BADGERIQ_RISK_ENRICH_MODEL:-claude-opus-4-8}"
-      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}" # env-var name only; never commit a key (rule 1)
+      BADGERIQ_LLM_BASE_URL: http://badger-llm:8000
+      BADGERIQ_LLM_MODEL: "${BADGERIQ_LLM_MODEL:-badger-ai-8b}"
+      # Optional bearer for a gateway in front of the model; blank = none (rule 1).
+      BADGERIQ_LLM_API_KEY: "${BADGERIQ_LLM_API_KEY:-}"
     ports: ["8100:8100"]
     depends_on:
       clickhouse: { condition: service_healthy }
+      badger-llm: { condition: service_healthy }
+
+  # Self-hosted BadgerAI model server (opt-in "llm" profile; requires an NVIDIA GPU).
+  # Serves the fine-tuned badger-ai-8b over an OpenAI-compatible API. Nothing here
+  # egresses to the internet at inference time (ADR-050). Export a merged model into
+  # ./models/badger-ai-8b first (see ml/export/) and pin the image to a release that
+  # matches your CUDA/driver.
+  badger-llm:
+    profiles: ["llm"]
+    image: vllm/vllm-openai:v0.6.6
+    command:
+      - --model=/models/badger-ai-8b
+      - --served-model-name=badger-ai-8b
+      - --max-model-len=8192
+    volumes:
+      - "${BADGERIQ_MODELS_DIR:-./models}:/models:ro"
+    ports: ["8000:8000"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/v1/models')\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 180s
+  # Mac / no-GPU dev alternative — Ollama instead of badger-llm above:
+  #   1. ollama create badger-ai -f ml/export/Modelfile   (built from the GGUF export)
+  #   2. ollama serve                                      (host, listens on :11434)
+  #   3. point the worker at the host:
+  #        BADGERIQ_LLM_BASE_URL=http://host.docker.internal:11434
+  #        BADGERIQ_LLM_MODEL=badger-ai
+  # Ollama serves the same /v1/chat/completions surface, so no code change is needed.
 
   # Slack alerting (Phase 6 F2): polls budgets (Postgres) + spend (ClickHouse
   # spend_daily / spend_hourly_by_key) for alert_pcts crossings, and risk_events

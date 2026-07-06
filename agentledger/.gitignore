@@ -6,6 +6,9 @@ events.ndjson
 /bin/
 services/gateway/gateway
 
+# Self-hosted model weights mounted into badger-llm (see docker-compose "llm" profile)
+/models/
+
 # Go build cache
 *.test
 *.out
