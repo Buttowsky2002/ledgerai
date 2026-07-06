@@ -121,14 +121,26 @@ def parse_and_validate(text: str) -> Assessment | None:
         data = json.loads(raw)
     except (ValueError, TypeError):
         return None
-    if not isinstance(data, dict) or not isinstance(data.get("findings"), list):
+    if not isinstance(data, dict):
+        return None
+    findings_raw = data.get("findings")
+    if findings_raw is None:  # missing or null → empty (mirrors Go's nil slice)
+        return Assessment(findings=[])
+    if not isinstance(findings_raw, list):
         return None
     findings: list[Finding] = []
-    for item in data["findings"]:
+    for item in findings_raw:
         if not isinstance(item, dict):
             return None
         try:
-            findings.append(Finding(**item))
+            # Default missing fields (Go zero-values them on unmarshal); a genuine
+            # type mismatch still raises → whole payload unparseable, matching Go.
+            findings.append(Finding(
+                category=item.get("category", ""),
+                severity=item.get("severity", ""),
+                confidence=item.get("confidence", 0.0),
+                rationale=item.get("rationale", ""),
+            ))
         except (TypeError, ValueError):
             return None
     return Assessment(findings=filter_valid_findings(findings))

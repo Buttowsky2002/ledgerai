@@ -34,7 +34,10 @@ over the *behavioral pattern*, not over text.
 The Anthropic Messages API is called over stdlib `net/http`, consistent with how
 every other worker/connector reaches ClickHouse and provider APIs (no vendor SDK;
 CLAUDE.md rule 12 / dependency minimalism). The default model is
-`claude-opus-4-8` (override via `BADGERIQ_RISK_ENRICH_MODEL`). Output is
+`claude-opus-4-8` (override via `BADGERIQ_RISK_ENRICH_MODEL`).
+**[Superseded by ADR-050: inference is now self-hosted over an OpenAI-compatible
+endpoint; the model/env named here are replaced by `BADGERIQ_LLM_MODEL` /
+`BADGERIQ_LLM_BASE_URL`, and no external AI API is called.]** Output is
 constrained with `output_config.format` (JSON Schema) so the verdict parses
 deterministically; `temperature`/`thinking` are omitted (rejected on the 4.8
 surface). A `stop_reason: "refusal"` yields an empty assessment (the run is simply
