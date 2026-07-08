@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { UserValueModule } from '../analytics/user-value.module';
 import { GitHubCopilotModule } from '../github-copilot/github-copilot.module';
 import { LariCfoViewService } from './lari-cfo-view.service';
 import { LariController } from './lari.controller';
@@ -8,7 +9,7 @@ import { LariService } from './lari.service';
 /** Exposes the LARI engine so both AgentsModule (per-agent endpoint) and
  *  AnalyticsModule (the agent-economics rollup) can reuse one service. */
 @Module({
-  imports: [GitHubCopilotModule],
+  imports: [GitHubCopilotModule, UserValueModule],
   controllers: [LariController],
   providers: [LariService, LariCfoViewService, LariRecommendationsService],
   exports: [LariService, LariCfoViewService, LariRecommendationsService],

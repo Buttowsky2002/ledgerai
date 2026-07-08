@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { computeMeteredCostUsd } from '../connectors/metered-cost';
 
 /**
  * Maps a raw import row (the supported flat fields) to one or more canonical
@@ -95,6 +96,10 @@ export function mapRow(data: unknown): MappedRow {
   const inputTokens = num(r.input_tokens, 'input_tokens');
   const outputTokens = num(r.output_tokens, 'output_tokens');
   const costUsd = num(r.cost_usd, 'cost_usd');
+  const usageValueUsd = num(r.usage_value_usd, 'usage_value_usd');
+  const costSource = str(r.cost_source, 'cost_source') ?? '';
+  const meteredCostUsdRaw = num(r.metered_cost_usd, 'metered_cost_usd');
+  const operationName = str(r.operation_name, 'operation_name');
   const callStatus = str(r.status, 'status') ?? 'ok';
   const toolName = str(r.tool_name, 'tool_name');
   const outcomeType = str(r.outcome_type, 'outcome_type');
@@ -105,7 +110,13 @@ export function mapRow(data: unknown): MappedRow {
     throw new ImportRowError(`field "risk_severity" must be one of ${RISK_SEVERITIES.join('|')}`);
   }
 
-  const hasUsage = provider || model || inputTokens !== undefined || outputTokens !== undefined || costUsd !== undefined;
+  const hasUsage =
+    provider ||
+    model ||
+    inputTokens !== undefined ||
+    outputTokens !== undefined ||
+    costUsd !== undefined ||
+    usageValueUsd !== undefined;
   if (!hasUsage && !outcomeType && !toolName && riskSeverity === undefined) {
     throw new ImportRowError('row has no importable fields (need usage, tool_name, outcome_type, or risk_severity)');
   }
@@ -125,10 +136,22 @@ export function mapRow(data: unknown): MappedRow {
         provider: provider ?? '',
         request_model: model ?? '',
         response_model: model ?? '',
-        operation_name: 'chat',
+        operation_name: operationName ?? 'chat',
         input_tokens: Math.round(inputTokens ?? 0),
         output_tokens: Math.round(outputTokens ?? 0),
         cost_usd: costUsd ?? 0,
+        usage_value_usd: usageValueUsd ?? costUsd ?? 0,
+        metered_cost_usd:
+          meteredCostUsdRaw ??
+          computeMeteredCostUsd({
+            provider: provider ?? '',
+            cost_usd: costUsd ?? 0,
+            cost_source: costSource,
+            operation_name: operationName ?? '',
+            usage_value_usd: usageValueUsd,
+            product: str(r.product, 'product') ?? '',
+          }),
+        cost_source: costSource,
         status: callStatus,
         app_id: platformDisplayName ?? provider ?? '',
         // A risk severity on a usage row marks the call as risk-flagged so it

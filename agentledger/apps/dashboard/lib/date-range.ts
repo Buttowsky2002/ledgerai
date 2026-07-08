@@ -1,5 +1,24 @@
 import { defaultRange } from './auth';
 
+export const RANGE_COOKIE = 'bq_range';
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Cookie-safe encoding: `YYYY-MM-DD_YYYY-MM-DD`. */
+export function encodeRange(r: { from: string; to: string }): string {
+  return `${r.from}_${r.to}`;
+}
+
+export function decodeRange(raw: string | undefined): { from: string; to: string } | null {
+  if (!raw) return null;
+  const idx = raw.indexOf('_');
+  if (idx <= 0 || idx >= raw.length - 1) return null;
+  const from = raw.slice(0, idx);
+  const to = raw.slice(idx + 1);
+  if (!ISO_DATE.test(from) || !ISO_DATE.test(to) || from > to) return null;
+  return { from, to };
+}
+
 /** UTC ISO date (YYYY-MM-DD) for today. */
 export function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -16,6 +35,28 @@ export function parseRange(
     return { from, to };
   }
   return defaultRange(defaultDays);
+}
+
+function validSearchParams(searchParams: { from?: string; to?: string }): { from: string; to: string } | null {
+  const from = searchParams.from?.slice(0, 10);
+  const to = searchParams.to?.slice(0, 10);
+  if (from && to && /^\d{4}-\d{2}-\d{2}$/.test(from) && /^\d{4}-\d{2}-\d{2}$/.test(to) && from <= to) {
+    return { from, to };
+  }
+  return null;
+}
+
+/** URL params win; else cookie; else trailing-N-days default. Safe for client components. */
+export function resolveRangeWithCookie(
+  searchParams: { from?: string; to?: string },
+  cookieRaw: string | undefined,
+  defaultDays = 90,
+): { from: string; to: string } {
+  const fromUrl = validSearchParams(searchParams);
+  if (fromUrl) return fromUrl;
+  const fromCookie = decodeRange(cookieRaw);
+  if (fromCookie) return fromCookie;
+  return parseRange({}, defaultDays);
 }
 
 export function rangeHref(

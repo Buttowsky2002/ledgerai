@@ -5,13 +5,22 @@ import { ConnectorSecretsService } from '../connectors/connector-secrets.service
 import { GitHubCopilotClient, GitHubCopilotApiError } from './github-copilot-client';
 import {
   calculateMemberDailySpend,
+  calculateMemberDailySpendSeatOnly,
   usageScore,
   type MemberDailyUsage,
   type MemberSeatInfo,
   type OrgDailyOverage,
 } from './github-copilot-member-spend';
+import {
+  aggregateBillingByUserDay,
+  billingLookupKey,
+  billingMonthsFromUserDay,
+  billingMonthKey,
+  calculateMemberDailySpendWithBilling,
+} from './github-copilot-billing';
 import { calculateCopilotRoi, mergeRoiAssumptions } from './github-copilot-roi';
 import {
+  CopilotBillingLineRow,
   CopilotMemberRow,
   CopilotRoiAssumptions,
   CopilotUsageRow,
@@ -24,6 +33,7 @@ export interface SyncResult {
   membersImported: number;
   teamLinksImported: number;
   usageRowsImported: number;
+  billingRowsImported: number;
   roiRowsComputed: number;
   memberSpendRowsComputed: number;
   errorCode?: string;
@@ -77,6 +87,7 @@ export class GitHubCopilotSyncService {
     let membersImported = 0;
     let teamLinksImported = 0;
     let usageRowsImported = 0;
+    let billingRowsImported = 0;
     let roiRowsComputed = 0;
     let memberSpendRowsComputed = 0;
 
@@ -141,6 +152,29 @@ export class GitHubCopilotSyncService {
       }
 
       usageRowsImported = await this.upsertUsage(tenantId, conn.connectionId, conn.orgSlug, usageRows);
+
+      try {
+        const seatLogins = (await this.prisma.withTenant(tenantId, (tx) =>
+          tx.githubCopilotSeat.findMany({
+            where: { tenantId, connectionId: conn.connectionId, isActive: true },
+            select: { githubLogin: true },
+          }),
+        )).map((s) => s.githubLogin);
+        const billingLines = await client.fetchAiCreditUsageForLookback(seatLogins, 35);
+        billingRowsImported = await this.upsertBillingLines(
+          tenantId,
+          conn.connectionId,
+          conn.orgSlug,
+          billingLines,
+        );
+      } catch (err) {
+        if (err instanceof GitHubCopilotApiError && err.status === 403) {
+          this.logger.warn(`copilot billing usage sync skipped (403): ${safeMsg(err)}`);
+        } else {
+          this.logger.warn(`copilot billing usage sync skipped: ${safeMsg(err)}`);
+        }
+      }
+
       roiRowsComputed = await this.computeRoiDaily(tenantId, conn.connectionId, conn.orgSlug, assumptions);
       memberSpendRowsComputed = await this.computeMemberSpendDaily(
         tenantId,
@@ -154,6 +188,7 @@ export class GitHubCopilotSyncService {
         membersImported +
         teamLinksImported +
         usageRowsImported +
+        billingRowsImported +
         roiRowsComputed +
         memberSpendRowsComputed;
 
@@ -188,6 +223,7 @@ export class GitHubCopilotSyncService {
         membersImported,
         teamLinksImported,
         usageRowsImported,
+        billingRowsImported,
         roiRowsComputed,
         memberSpendRowsComputed,
       };
@@ -223,12 +259,69 @@ export class GitHubCopilotSyncService {
         membersImported,
         teamLinksImported,
         usageRowsImported,
+        billingRowsImported,
         roiRowsComputed,
         memberSpendRowsComputed,
         errorCode,
         errorMessage,
       };
     }
+  }
+
+  private async upsertBillingLines(
+    tenantId: string,
+    connectionId: string,
+    orgSlug: string,
+    lines: CopilotBillingLineRow[],
+  ): Promise<number> {
+    let count = 0;
+    await this.prisma.withTenant(tenantId, async (tx) => {
+      for (const line of lines) {
+        const usageDate = new Date(`${line.usageDate}T00:00:00.000Z`);
+        await tx.githubCopilotBillingLine.upsert({
+          where: {
+            tenantId_connectionId_usageDate_githubLogin_sku_model: {
+              tenantId,
+              connectionId,
+              usageDate,
+              githubLogin: line.githubLogin,
+              sku: line.sku,
+              model: line.model,
+            },
+          },
+          create: {
+            tenantId,
+            connectionId,
+            orgSlug,
+            usageDate,
+            githubLogin: line.githubLogin,
+            product: line.product,
+            sku: line.sku,
+            model: line.model,
+            unitType: line.unitType,
+            grossQuantity: line.grossQuantity,
+            grossAmount: line.grossAmount,
+            discountAmount: line.discountAmount,
+            netAmount: line.netAmount,
+            rawPayload: (line.rawPayload ?? {}) as Prisma.InputJsonValue,
+            syncedAt: new Date(),
+          },
+          update: {
+            product: line.product,
+            unitType: line.unitType,
+            grossQuantity: line.grossQuantity,
+            grossAmount: line.grossAmount,
+            discountAmount: line.discountAmount,
+            netAmount: line.netAmount,
+            rawPayload: (line.rawPayload ?? {}) as Prisma.InputJsonValue,
+            syncedAt: new Date(),
+            updatedAt: new Date(),
+          },
+        });
+        count += 1;
+      }
+    });
+    return count;
   }
 
   private async upsertSeats(
@@ -607,24 +700,40 @@ export class GitHubCopilotSyncService {
     orgSlug: string,
     assumptions: CopilotRoiAssumptions,
   ): Promise<number> {
-    const [seats, usage, roiRows, memberTeams] = await Promise.all([
-      this.prisma.withTenant(tenantId, (tx) =>
-        tx.githubCopilotSeat.findMany({ where: { tenantId, connectionId } }),
-      ),
-      this.prisma.withTenant(tenantId, (tx) =>
-        tx.githubCopilotUsageDaily.findMany({
-          where: { tenantId, connectionId },
-        }),
-      ),
-      this.prisma.withTenant(tenantId, (tx) =>
-        tx.githubCopilotRoiDaily.findMany({
-          where: { tenantId, connectionId, teamSlug: '' },
-        }),
-      ),
-      this.prisma.withTenant(tenantId, (tx) =>
-        tx.githubCopilotMemberTeam.findMany({ where: { tenantId, connectionId } }),
-      ),
-    ]);
+    const [seats, usage, roiRows, memberTeams, billingLines] = await this.prisma.withTenant(
+      tenantId,
+      async (tx) => {
+        const [seats, usage, roiRows, memberTeams, billingLines] = await Promise.all([
+          tx.githubCopilotSeat.findMany({ where: { tenantId, connectionId } }),
+          tx.githubCopilotUsageDaily.findMany({
+            where: { tenantId, connectionId },
+          }),
+          tx.githubCopilotRoiDaily.findMany({
+            where: { tenantId, connectionId, teamSlug: '' },
+          }),
+          tx.githubCopilotMemberTeam.findMany({ where: { tenantId, connectionId } }),
+          tx.githubCopilotBillingLine.findMany({ where: { tenantId, connectionId } }),
+        ]);
+        return [seats, usage, roiRows, memberTeams, billingLines] as const;
+      },
+    );
+
+    const billingByUserDay = aggregateBillingByUserDay(
+      billingLines.map((b) => ({
+        usageDate: b.usageDate.toISOString().slice(0, 10),
+        githubLogin: b.githubLogin,
+        product: b.product,
+        sku: b.sku,
+        model: b.model,
+        unitType: b.unitType,
+        grossQuantity: Number(b.grossQuantity),
+        grossAmount: Number(b.grossAmount),
+        discountAmount: Number(b.discountAmount),
+        netAmount: Number(b.netAmount),
+        rawPayload: (b.rawPayload ?? {}) as Record<string, unknown>,
+      })),
+    );
+    const billingMonthsByUser = billingMonthsFromUserDay(billingByUserDay);
 
     const seatByLogin = new Map<string, MemberSeatInfo>();
     for (const s of seats) {
@@ -738,14 +847,29 @@ export class GitHubCopilotSyncService {
 
         for (const u of dayUsage) {
           const seat = seatByLogin.get(u.githubLogin);
-          const result = calculateMemberDailySpend({
+          const billingKey = billingLookupKey(u.usageDate, u.githubLogin);
+          const billing = billingByUserDay.get(billingKey);
+          const monthHasBilling = billingMonthsByUser.has(
+            billingMonthKey(u.usageDate, u.githubLogin),
+          );
+          const baseInput = {
             usage: u,
             seat,
             orgOverage,
             assumptions,
             peerUsage,
             now,
-          });
+          };
+          const result = billing
+            ? calculateMemberDailySpendWithBilling(baseInput, billing)
+            : monthHasBilling
+              ? calculateMemberDailySpendSeatOnly(baseInput)
+              : calculateMemberDailySpend(baseInput);
+          const costSource = billing || monthHasBilling ? 'billing_api' : 'estimate';
+          const calculationVersion = billing || monthHasBilling ? 'v2_billing' : 'v1';
+          const billedNetUsd = billing ? billing.netAmount : 0;
+          const billedGrossUsd = billing ? billing.grossAmount : 0;
+          const billingCredits = billing ? billing.grossQuantity : 0;
 
           const usageDate = new Date(`${u.usageDate}T00:00:00.000Z`);
           await tx.githubCopilotMemberSpendDaily.upsert({
@@ -778,7 +902,11 @@ export class GitHubCopilotSyncService {
               roiPercentage: result.roiPercentage,
               utilizationStatus: result.utilizationStatus,
               confidenceScore: result.confidenceScore,
-              calculationVersion: 'v1',
+              calculationVersion,
+              billedNetUsd,
+              billedGrossUsd,
+              billingCredits,
+              costSource,
             },
             update: {
               seatCost: result.seatCost,
@@ -794,6 +922,11 @@ export class GitHubCopilotSyncService {
               roiPercentage: result.roiPercentage,
               utilizationStatus: result.utilizationStatus,
               confidenceScore: result.confidenceScore,
+              calculationVersion,
+              billedNetUsd,
+              billedGrossUsd,
+              billingCredits,
+              costSource,
               updatedAt: new Date(),
             },
           });
@@ -812,6 +945,7 @@ function emptySyncResult(ok: boolean, errorCode: string, errorMessage: string): 
     membersImported: 0,
     teamLinksImported: 0,
     usageRowsImported: 0,
+    billingRowsImported: 0,
     roiRowsComputed: 0,
     memberSpendRowsComputed: 0,
     errorCode,

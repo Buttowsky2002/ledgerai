@@ -66,46 +66,44 @@ export class CopilotAnalyticsService {
     const start = new Date(`${from}T00:00:00.000Z`);
     const end = new Date(`${to}T00:00:00.000Z`);
 
-    const [usage, roiRows, seats, memberSpendRows] = await Promise.all([
-      this.prisma.withTenant(tenantId, (tx) =>
-        tx.githubCopilotUsageDaily.findMany({
-          where: {
-            tenantId,
-            connectionId: { in: connectionIds },
-            usageDate: { gte: start, lte: end },
-          },
-        }),
-      ),
-      this.prisma.withTenant(tenantId, (tx) =>
-        tx.githubCopilotRoiDaily.findMany({
-          where: {
-            tenantId,
-            connectionId: { in: connectionIds },
-            usageDate: { gte: start, lte: end },
-            teamSlug: '',
-          },
-        }),
-      ),
-      this.prisma.withTenant(tenantId, (tx) =>
-        tx.githubCopilotSeat.findMany({
-          where: { tenantId, connectionId: { in: connectionIds }, isActive: true },
-        }),
-      ),
-      this.prisma.withTenant(tenantId, (tx) =>
-        tx.githubCopilotMemberSpendDaily.findMany({
-          where: {
-            tenantId,
-            connectionId: { in: connectionIds },
-            usageDate: { gte: start, lte: end },
-          },
-          select: {
-            usageDate: true,
-            totalAllocatedCost: true,
-            estimatedValueCreated: true,
-          },
-        }),
-      ),
-    ]);
+    const [usage, roiRows, seats, memberSpendRows] = await this.prisma.withTenant(
+      tenantId,
+      async (tx) => {
+        const [usage, roiRows, seats, memberSpendRows] = await Promise.all([
+          tx.githubCopilotUsageDaily.findMany({
+            where: {
+              tenantId,
+              connectionId: { in: connectionIds },
+              usageDate: { gte: start, lte: end },
+            },
+          }),
+          tx.githubCopilotRoiDaily.findMany({
+            where: {
+              tenantId,
+              connectionId: { in: connectionIds },
+              usageDate: { gte: start, lte: end },
+              teamSlug: '',
+            },
+          }),
+          tx.githubCopilotSeat.findMany({
+            where: { tenantId, connectionId: { in: connectionIds }, isActive: true },
+          }),
+          tx.githubCopilotMemberSpendDaily.findMany({
+            where: {
+              tenantId,
+              connectionId: { in: connectionIds },
+              usageDate: { gte: start, lte: end },
+            },
+            select: {
+              usageDate: true,
+              totalAllocatedCost: true,
+              estimatedValueCreated: true,
+            },
+          }),
+        ]);
+        return [usage, roiRows, seats, memberSpendRows] as const;
+      },
+    );
 
     if (memberSpendRows.length > 0) {
       return this.buildSummaryFromMemberSpend(memberSpendRows, usage);
@@ -258,8 +256,8 @@ export class CopilotAnalyticsService {
     const start = new Date(`${from}T00:00:00.000Z`);
     const end = new Date(`${to}T00:00:00.000Z`);
 
-    const [memberSpend, usage] = await Promise.all([
-      this.prisma.withTenant(tenantId, (tx) =>
+    const [memberSpend, usage] = await this.prisma.withTenant(tenantId, async (tx) => {
+      const [memberSpend, usage] = await Promise.all([
         tx.githubCopilotMemberSpendDaily.findMany({
           where: {
             tenantId,
@@ -274,8 +272,6 @@ export class CopilotAnalyticsService {
             prSummaryCount: true,
           },
         }),
-      ),
-      this.prisma.withTenant(tenantId, (tx) =>
         tx.githubCopilotUsageDaily.findMany({
           where: {
             tenantId,
@@ -292,8 +288,9 @@ export class CopilotAnalyticsService {
             prSummaryCount: true,
           },
         }),
-      ),
-    ]);
+      ]);
+      return [memberSpend, usage] as const;
+    });
 
     if (memberSpend.length > 0) {
       const byLogin = new Map<string, { cost: number; calls: number; modelWeights: Map<string, number> }>();

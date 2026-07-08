@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { ClickHouseService } from '../clickhouse/clickhouse.service';
+import { AnalyticsStore } from '../analytics-store/analytics-store';
 import { PrismaService } from '../prisma/prisma.service';
 import { getPrincipal, getTenantId } from '../tenant/tenant-context';
 import {
@@ -9,6 +9,7 @@ import {
   ListFixedCostsQueryDto,
   UpdateFixedCostDto,
 } from './fixed-costs.dto';
+import { prorateMonthlyCost, sumProratedMonthlyCosts } from './fixed-cost-prorate';
 
 export interface FixedCostRow {
   tenant_id: string;
@@ -36,7 +37,7 @@ export class FixedCostsService {
   private readonly logger = new Logger(FixedCostsService.name);
 
   constructor(
-    private readonly ch: ClickHouseService,
+    private readonly ch: AnalyticsStore,
     private readonly prisma: PrismaService,
   ) {}
 
@@ -48,6 +49,15 @@ export class FixedCostsService {
     return { from: from ?? iso(start), to: to ?? iso(today) };
   }
 
+  /**
+   * Fixed costs are keyed by month-start (period_month = YYYY-MM-01). Compare using
+   * start-of-month bounds so a mid-month overview range still includes that month.
+   */
+  private monthRangeWhere(column: string): string {
+    return `${column} >= toStartOfMonth(toDate({from:String}))
+         AND ${column} <= toStartOfMonth(toDate({to:String}))`;
+  }
+
   list(q: ListFixedCostsQueryDto): Promise<FixedCostRow[]> {
     const r = this.range(q.from, q.to);
     return this.ch.queryScoped<FixedCostRow>(
@@ -56,37 +66,120 @@ export class FixedCostsService {
               imported_at
        FROM agentledger.fixed_costs FINAL
        WHERE tenant_id = {tenant:String}
-         AND period_month BETWEEN {from:Date} AND {to:Date}
+         AND ${this.monthRangeWhere('period_month')}
          AND attributable = 0
        ORDER BY period_month DESC, vendor, cost_type, line_item`,
       { ...r },
     );
   }
 
-  monthlySummary(from?: string, to?: string): Promise<Record<string, unknown>[]> {
+  async monthlySummary(from?: string, to?: string): Promise<Record<string, unknown>[]> {
     const r = this.range(from, to);
-    return this.ch.queryScoped(
+    const rows = await this.ch.queryScoped<{
+      period_month: string;
+      vendor: string;
+      cost_type: string;
+      cost_usd: unknown;
+      seats: unknown;
+      last_imported_at: string;
+    }>(
       `SELECT period_month, vendor, cost_type,
               cost_usd, seats, last_imported_at
        FROM agentledger.v_fixed_cost_monthly
        WHERE tenant_id = {tenant:String}
-         AND period_month BETWEEN {from:Date} AND {to:Date}
+         AND ${this.monthRangeWhere('period_month')}
        ORDER BY period_month DESC, vendor, cost_type`,
       { ...r },
     );
+    return rows.map((row) => {
+      const monthlyCostUsd = Number(row.cost_usd ?? 0);
+      const periodMonth = String(row.period_month);
+      return {
+        period_month: periodMonth,
+        vendor: row.vendor,
+        cost_type: row.cost_type,
+        monthly_cost_usd: monthlyCostUsd,
+        cost_usd: prorateMonthlyCost(monthlyCostUsd, periodMonth, r.from, r.to),
+        seats: row.seats,
+        last_imported_at: row.last_imported_at,
+      };
+    });
   }
 
-  totalCostOfAi(from?: string, to?: string): Promise<Record<string, unknown>[]> {
+  async totalCostOfAi(from?: string, to?: string): Promise<Record<string, unknown>[]> {
     const r = this.range(from, to);
-    return this.ch.queryScoped(
-      `SELECT month, attributable_cost_usd, fixed_cost_usd,
-              total_cost_of_ai_usd, fixed_cost_pct
-       FROM agentledger.v_total_cost_of_ai
-       WHERE tenant_id = {tenant:String}
-         AND month BETWEEN {from:Date} AND {to:Date}
-       ORDER BY month`,
-      { ...r },
+    const [monthRows, fixedRows] = await Promise.all([
+      this.ch.queryScoped<{
+        month: string;
+        attributable_cost_usd: unknown;
+        fixed_cost_usd: unknown;
+      }>(
+        `SELECT month, attributable_cost_usd, fixed_cost_usd
+         FROM agentledger.v_total_cost_of_ai
+         WHERE tenant_id = {tenant:String}
+           AND ${this.monthRangeWhere('month')}
+         ORDER BY month`,
+        { ...r },
+      ),
+      this.ch.queryScoped<{ period_month: string; cost_usd: unknown }>(
+        `SELECT period_month, cost_usd
+         FROM agentledger.fixed_costs FINAL
+         WHERE tenant_id = {tenant:String}
+           AND ${this.monthRangeWhere('period_month')}
+           AND attributable = 0`,
+        { ...r },
+      ),
+    ]);
+
+    const proratedFixedTotal = sumProratedMonthlyCosts(
+      fixedRows.map((row) => ({
+        period_month: String(row.period_month),
+        cost_usd: Number(row.cost_usd ?? 0),
+      })),
+      r.from,
+      r.to,
     );
+
+    if (monthRows.length === 0 && proratedFixedTotal <= 0) {
+      return [];
+    }
+
+    const proratedByMonth = new Map<string, number>();
+    for (const row of fixedRows) {
+      const month = String(row.period_month).slice(0, 10);
+      const prorated = prorateMonthlyCost(Number(row.cost_usd ?? 0), month, r.from, r.to);
+      proratedByMonth.set(month, (proratedByMonth.get(month) ?? 0) + prorated);
+    }
+
+    const rows = monthRows.map((row) => {
+      const month = String(row.month).slice(0, 10);
+      const attributable = Number(row.attributable_cost_usd ?? 0);
+      const fixed = proratedByMonth.get(month) ?? 0;
+      const total = attributable + fixed;
+      return {
+        month,
+        attributable_cost_usd: attributable,
+        fixed_cost_usd: Math.round(fixed * 100) / 100,
+        monthly_fixed_cost_usd: Number(row.fixed_cost_usd ?? 0),
+        total_cost_of_ai_usd: Math.round(total * 100) / 100,
+        fixed_cost_pct: total > 0 ? fixed / total : 0,
+      };
+    });
+
+    if (rows.length === 0 && proratedFixedTotal > 0) {
+      return [
+        {
+          month: r.from.slice(0, 7) + '-01',
+          attributable_cost_usd: 0,
+          fixed_cost_usd: proratedFixedTotal,
+          monthly_fixed_cost_usd: fixedRows.reduce((s, row) => s + Number(row.cost_usd ?? 0), 0),
+          total_cost_of_ai_usd: proratedFixedTotal,
+          fixed_cost_pct: 1,
+        },
+      ];
+    }
+
+    return rows;
   }
 
   async create(dto: CreateFixedCostDto): Promise<FixedCostRow> {

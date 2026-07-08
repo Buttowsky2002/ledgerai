@@ -2,16 +2,28 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { AreaChartClient, Sparkline } from '../components/charts';
 import { OverviewAiSourcesPanel } from '../components/overview/OverviewAiSourcesPanel';
+import type { CursorSpendSummary } from '../components/overview/CursorPlatformDetail';
+import { CostByUserPanel } from '../components/overview/CostByUserPanel';
 import { FixedOverheadPanel } from '../components/overview/FixedOverheadPanel';
 import { ExecutiveReportExport } from '../components/overview/ExecutiveReportExport';
+import { OverviewLiveRefresh } from '../components/overview/OverviewLiveRefresh';
 import { LariRecommendationsPanel } from '../components/lari/LariRecommendationsPanel';
 import { Badge, BadgeTone, Card, DataTable, PageHeader, Stat, num, usd } from '../components/ui';
 import { DateRangePicker } from '../components/DateRangePicker';
 import { apiClient, fetchData, proxyApi } from '../lib/api';
 import { combinedAiCost } from '../lib/combined-ai-cost';
-import { parseRange, resolveRange, todayIso, type DateBounds } from '../lib/date-range';
+import { fetchDataBounds } from '../lib/data-bounds';
+import { env } from '../lib/env';
+import { resolvePageRange } from '../lib/resolve-range';
 
 export const dynamic = 'force-dynamic';
+
+function liveRefreshIntervalMs(): number {
+  const raw = env('BADGERIQ_DASHBOARD_LIVE_REFRESH_MS');
+  if (!raw) return 30_000;
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) && n >= 0 ? n : 30_000;
+}
 
 type SpendRow = {
   day: string;
@@ -82,38 +94,6 @@ const meta = (rec: Recommendation) => REC[rec] ?? REC.maintain;
 const roiTone = (v: number) => (v > 0 ? 'text-pos' : v < 0 ? 'text-neg' : 'text-muted');
 const fmtLari = (v: number) => `${num(Math.round(Number(v)))}×`;
 
-type SpendTrendDir = NonNullable<AllocationRow['spend_trend']>;
-
-function SpendTrendCell({
-  trend,
-  changePct,
-  changeUsd,
-}: {
-  trend?: SpendTrendDir;
-  changePct?: number;
-  changeUsd?: number;
-}) {
-  if (!trend || trend === 'insufficient') {
-    return <span className="text-xs text-muted">—</span>;
-  }
-  const label = trend === 'up' ? '↑ Up' : trend === 'down' ? '↓ Down' : '→ Flat';
-  const tone = trend === 'up' ? 'text-warn' : trend === 'down' ? 'text-pos' : 'text-muted';
-  const delta =
-    changeUsd != null && changeUsd !== 0
-      ? `${changeUsd > 0 ? '+' : ''}${usd(changeUsd)}/day`
-      : null;
-  const title =
-    changePct != null
-      ? `${changePct > 0 ? '+' : ''}${changePct}% avg daily spend (latter half vs first)`
-      : undefined;
-  return (
-    <span className={`inline-flex flex-col items-end text-xs font-medium ${tone}`} title={title}>
-      <span>{label}</span>
-      {delta && trend !== 'flat' && <span className="num text-[11px] opacity-90">{delta}</span>}
-    </span>
-  );
-}
-
 // Inline confidence meter (0–100): a numeric read plus a slim track.
 function ConfMeter({ score }: { score: number }) {
   const pct = Math.max(0, Math.min(100, Math.round(score)));
@@ -136,19 +116,8 @@ export default async function OverviewPage({
   const source = searchParams.source || undefined;
   const api = apiClient();
 
-  const dataBounds: DateBounds = await (async () => {
-    const res = await proxyApi('/v1/analytics/data-bounds');
-    if (res.ok && res.data && typeof res.data === 'object') {
-      const b = res.data as { earliest_day?: string; latest_day?: string };
-      if (b.earliest_day && b.latest_day) {
-        return { earliest_day: b.earliest_day, latest_day: b.latest_day };
-      }
-    }
-    const fallback = parseRange(searchParams);
-    return { earliest_day: fallback.from, latest_day: fallback.to ?? todayIso() };
-  })();
-
-  const { from, to, isAllTime } = resolveRange(searchParams, dataBounds);
+  const dataBounds = await fetchDataBounds(searchParams);
+  const { from, to, isAllTime } = resolvePageRange(searchParams, dataBounds);
 
   type TotalCostRow = {
     month: string;
@@ -200,6 +169,20 @@ export default async function OverviewPage({
     calls: Number(r.calls),
   }));
 
+  const hasCursorPlatform = platforms.some((p) => p.platform.toLowerCase() === 'cursor');
+  let cursorSpend: CursorSpendSummary | null = null;
+  let cursorSpendError = false;
+  if (hasCursorPlatform) {
+    const cursorRes = await proxyApi(
+      `/v1/analytics/cursor-spend?${new URLSearchParams({ from, to })}`,
+    );
+    cursorSpendError = !cursorRes.ok;
+    cursorSpend =
+      cursorRes.ok && cursorRes.data && typeof cursorRes.data === 'object'
+        ? (cursorRes.data as CursorSpendSummary)
+        : null;
+  }
+
   const meteredCost = spend.reduce((s, r) => s + Number(r.cost_usd), 0);
   const totalCalls = spend.reduce((s, r) => s + Number(r.calls), 0);
   const costOfAi = combinedAiCost(meteredCost, totalCostRows);
@@ -238,13 +221,16 @@ export default async function OverviewPage({
           />
         }
         actions={
-          <Suspense
-            fallback={
-              <div className="text-sm text-muted">Export report…</div>
-            }
-          >
-            <ExecutiveReportExport from={from} to={to} bounds={dataBounds} />
-          </Suspense>
+          <div className="flex flex-wrap items-center gap-4">
+            <OverviewLiveRefresh intervalMs={liveRefreshIntervalMs()} />
+            <Suspense
+              fallback={
+                <div className="text-sm text-muted">Export report…</div>
+              }
+            >
+              <ExecutiveReportExport from={from} to={to} bounds={dataBounds} />
+            </Suspense>
+          </div>
         }
       />
 
@@ -300,35 +286,20 @@ export default async function OverviewPage({
           from={from}
           to={to}
           initialSource={source}
+          cursorSpend={hasCursorPlatform ? cursorSpend : undefined}
+          cursorSpendError={cursorSpendError}
         />
       </Suspense>
 
-      <Card title="Cost by user" subtitle="Includes API-synced and gateway spend">
-        <DataTable
-          columns={[
-            { key: 'user', label: 'User' },
-            { key: 'cost', label: 'Spend', align: 'right' },
-            { key: 'trend', label: 'Daily trend', align: 'right' },
-            { key: 'calls', label: 'Calls', align: 'right' },
-          ]}
-          rows={costByUser.map((r) => ({
-            user: r.key === 'Unassigned' ? (
-              <span className="text-warn">{r.key}</span>
-            ) : (
-              r.key
-            ),
-            cost: usd(Number(r.cost_usd)),
-            trend: (
-              <SpendTrendCell
-                trend={r.spend_trend}
-                changePct={r.trend_change_pct}
-                changeUsd={r.trend_change_usd}
-              />
-            ),
-            calls: num(r.calls),
-          }))}
-        />
-      </Card>
+      <Suspense
+        fallback={
+          <Card title="Cost by user">
+            <p className="py-8 text-center text-sm text-muted">Loading user spend…</p>
+          </Card>
+        }
+      >
+        <CostByUserPanel initialRows={costByUser} initialFrom={from} initialTo={to} />
+      </Suspense>
 
       <Card
         title="Recommended actions"

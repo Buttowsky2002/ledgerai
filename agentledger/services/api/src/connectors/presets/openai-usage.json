@@ -44,6 +44,7 @@
     { "type": "fallback", "target": "id", "sources": ["line_item", "project_id", "start_time"] },
     { "type": "constant", "target": "provider", "value": "openai" },
     { "type": "constant", "target": "platform_display_name", "value": "OpenAI" },
+    { "type": "constant", "target": "cost_source", "value": "openai_cost_api" },
     { "type": "fallback", "target": "ts", "sources": ["start_time", "end_time"] },
     { "type": "fallback", "target": "period_start", "sources": ["start_time"] },
     { "type": "fallback", "target": "period_end", "sources": ["end_time"] },

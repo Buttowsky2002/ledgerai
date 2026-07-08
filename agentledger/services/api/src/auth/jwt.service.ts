@@ -26,9 +26,11 @@ export class JwtService {
   private readonly refreshTtl: string;
 
   constructor() {
-    const raw = env('BADGERIQ_JWT_SECRET');
+    // BADGERIQ_JWT_SECRET (with legacy prefix aliases) wins; the unprefixed
+    // JWT_SECRET is accepted for Cloud Run MVP deployments.
+    const raw = env('BADGERIQ_JWT_SECRET') ?? process.env.JWT_SECRET;
     if (!raw) {
-      throw new Error('BADGERIQ_JWT_SECRET (or legacy BADGERIQ_JWT_SECRET) is required');
+      throw new Error('BADGERIQ_JWT_SECRET (or JWT_SECRET) is required');
     }
     this.secret = new TextEncoder().encode(raw);
     this.accessTtl = env('BADGERIQ_JWT_ACCESS_TTL') ?? '15m';

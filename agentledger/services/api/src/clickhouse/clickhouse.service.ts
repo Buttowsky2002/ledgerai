@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { getTenantId } from '../tenant/tenant-context';
 import { env } from '../env';
+import { AnalyticsStore } from '../analytics-store/analytics-store';
 
 export type ChParam = string | number;
 
@@ -36,7 +37,7 @@ export function requireTenantFilter(sql: string): void {
  * principal — never from request input (security rule 3).
  */
 @Injectable()
-export class ClickHouseService {
+export class ClickHouseService extends AnalyticsStore {
   private readonly logger = new Logger(ClickHouseService.name);
   private readonly url = (env('BADGERIQ_CLICKHOUSE_URL') ?? 'http://localhost:8123').replace(/\/$/, '');
   private readonly db = env('BADGERIQ_CLICKHOUSE_DB') ?? 'agentledger';

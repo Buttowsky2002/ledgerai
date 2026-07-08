@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { BarChartClient } from '../../components/charts';
 import { Card, DataTable, PageHeader, num, usd } from '../../components/ui';
 import { apiClient, fetchData } from '../../lib/api';
-import { parseRange } from '../../lib/date-range';
+import { resolveRange } from '../../lib/resolve-range';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,7 +18,7 @@ export default async function AllocationPage({
   const dimension: Dimension = DIMENSIONS.includes(searchParams.dimension as Dimension)
     ? (searchParams.dimension as Dimension)
     : 'user';
-  const { from, to } = parseRange(searchParams);
+  const { from, to } = resolveRange(searchParams);
   const api = apiClient();
   const rows = (await fetchData(
     api.GET('/v1/analytics/allocation', { params: { query: { from, to, dimension } } }),

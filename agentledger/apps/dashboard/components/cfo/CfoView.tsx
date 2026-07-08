@@ -2,18 +2,25 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { DateRangeFilter } from '@/components/DateRangeFilter';
+import { DateRangePicker } from '@/components/DateRangePicker';
 import { BarChartClient } from '@/components/charts';
 import { LariRecommendationsPanel } from '@/components/lari/LariRecommendationsPanel';
 import { Card, DataTable, PageHeader, Stat, usd } from '@/components/ui';
-import { fetchCfoView } from '@/lib/api/lari';
-import { rangeHref } from '@/lib/date-range';
-import type { CfoViewResponse } from '@/types/lari';
+import { ForecastHorizonLinks, forecastContextLabel } from '@/components/ForecastHorizonLinks';
+import { CostPerOutcomeStat } from '@/components/cfo/CostPerOutcomeStat';
+import { fetchCfoView, fetchUserValue } from '@/lib/api/lari';
+import { rangeHref, type DateBounds } from '@/lib/date-range';
+import { forecastHorizonLabel } from '@/lib/forecast-horizon';
+import type { CostBasisMode, CfoViewResponse, UserValueResponse } from '@/types/lari';
 
-const LEVELS = [0, 0.3, 0.5, 0.7, 0.9] as const;
-const DEFAULT_LEVEL = 0.5;
+const BASIS_OPTIONS: { value: CostBasisMode; label: string }[] = [
+  { value: 'reconciled', label: 'Reconciled' },
+  { value: 'computed', label: 'Computed' },
+  { value: 'metered', label: 'Metered' },
+];
 
 const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
+const basisLabel = (b: CostBasisMode) => BASIS_OPTIONS.find((o) => o.value === b)?.label ?? b;
 
 function SkeletonStat() {
   return (
@@ -24,24 +31,135 @@ function SkeletonStat() {
   );
 }
 
-export function CfoView({
+function UtilizationMeter({ score }: { score: number }) {
+  const tone = score >= 60 ? 'bg-pos' : score >= 30 ? 'bg-warn' : 'bg-neg';
+  return (
+    <div className="flex items-center gap-2">
+      <div className="h-2 w-20 overflow-hidden rounded-full bg-edge">
+        <div className={`h-full ${tone}`} style={{ width: `${Math.min(100, score)}%` }} />
+      </div>
+      <span className="text-xs tabular-nums text-muted">{score}</span>
+    </div>
+  );
+}
+
+function StatusBadge({ status }: { status: 'active' | 'low_use' | 'inactive' }) {
+  const label = status === 'low_use' ? 'low use' : status;
+  const tone =
+    status === 'active' ? 'text-pos border-pos/40 bg-pos/10' : status === 'low_use'
+      ? 'text-warn border-warn/40 bg-warn/10'
+      : 'text-neg border-neg/40 bg-neg/10';
+  return (
+    <span className={`rounded border px-2 py-0.5 text-xs capitalize ${tone}`}>{label}</span>
+  );
+}
+
+function PlatformUtilizationCard({
   from,
   to,
-  minConfidence,
+  data,
+  loading,
 }: {
   from: string;
   to: string;
-  minConfidence: number;
+  data: UserValueResponse | null;
+  loading: boolean;
+}) {
+  const empty =
+    !loading &&
+    data &&
+    (data.mode === 'team'
+      ? data.aggregates.provisionedSeats === 0
+      : data.users.length === 0);
+
+  return (
+    <Card title="Platform utilization" subtitle={`License & usage proxy · ${from} → ${to}`}>
+      {loading ? (
+        <div className="animate-pulse py-8 text-center text-sm text-muted">Loading utilization…</div>
+      ) : empty ? (
+        <p className="py-8 text-center text-sm text-muted">
+          Connect a provider import or assign seats to populate utilization.
+        </p>
+      ) : data?.mode === 'team' ? (
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <Stat
+            label="Active seats"
+            value={String(data.aggregates.activeSeats)}
+            sub={`of ${data.aggregates.provisionedSeats} provisioned`}
+          />
+          <Stat
+            label="Inactive seats"
+            value={String(data.aggregates.inactiveSeats)}
+            sub={`${data.aggregates.lowUseSeats} low use`}
+          />
+          <Stat
+            label="Reclaimable / mo"
+            value={usd(data.aggregates.reclaimableMonthlyUsd)}
+            sub="unused license spend"
+          />
+          <Stat
+            label="Plans flagged"
+            value={String(data.aggregates.byPlan.length)}
+            sub="with inactive assignments"
+          />
+        </div>
+      ) : data?.mode === 'individual' ? (
+        <DataTable
+          columns={[
+            { key: 'user', label: 'User' },
+            { key: 'providers', label: 'Providers' },
+            { key: 'calls', label: 'Calls', align: 'right' },
+            { key: 'days', label: 'Active days', align: 'right' },
+            { key: 'util', label: 'Utilization' },
+            { key: 'seat', label: 'Seat $/mo', align: 'right' },
+            { key: 'status', label: 'Status' },
+          ]}
+          rows={data.users.map((u) => ({
+            user: u.displayName,
+            providers: u.providers.join(', ') || '—',
+            calls: String(u.calls),
+            days: String(u.activeDays),
+            util: <UtilizationMeter score={u.utilizationScore} />,
+            seat: u.seatMonthlyCostUsd > 0 ? usd(u.seatMonthlyCostUsd) : '—',
+            status: <StatusBadge status={u.status} />,
+          }))}
+        />
+      ) : null}
+    </Card>
+  );
+}
+
+export function CfoView({
+  from,
+  to,
+  isAllTime,
+  dataBounds,
+  forecastDays,
+  costBasis,
+}: {
+  from: string;
+  to: string;
+  isAllTime: boolean;
+  dataBounds: DateBounds;
+  forecastDays: number;
+  costBasis: CostBasisMode;
 }) {
   const [data, setData] = useState<CfoViewResponse | null>(null);
+  const [userValue, setUserValue] = useState<UserValueResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [utilLoading, setUtilLoading] = useState(true);
   const [error, setError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(false);
-    fetchCfoView({ startDate: from, endDate: to, confidenceThreshold: minConfidence })
+    fetchCfoView({
+      startDate: from,
+      endDate: to,
+      costBasis,
+      forecastDays,
+    })
       .then((res) => {
         if (!cancelled) {
           setData(res);
@@ -57,7 +175,26 @@ export function CfoView({
     return () => {
       cancelled = true;
     };
-  }, [from, to, minConfidence]);
+  }, [from, to, forecastDays, costBasis]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setUtilLoading(true);
+    fetchUserValue({ from, to })
+      .then((res) => {
+        if (!cancelled) setUserValue(res);
+      })
+      .finally(() => {
+        if (!cancelled) setUtilLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [from, to]);
+
+  const outcomeCount = data?.outcomeBreakdown.reduce((s, r) => s + r.outcomes, 0) ?? 0;
+  const noOutcomesButSpend =
+    !loading && !error && data && outcomeCount === 0 && data.summary.fullyLoadedCost > 0;
 
   const empty =
     !loading &&
@@ -71,25 +208,37 @@ export function CfoView({
     <>
       <PageHeader
         title="CFO view"
-        subtitle={`Risk-adjusted ROI · confidence ≥ ${minConfidence} · ${from} → ${to}`}
+        subtitle={
+          <DateRangePicker
+            basePath="/cfo"
+            from={from}
+            to={to}
+            earliestDay={dataBounds.earliest_day}
+            latestDay={dataBounds.latest_day}
+            isAllTime={isAllTime}
+            extraParams={{ horizon: String(forecastDays), basis: costBasis }}
+            label="Run-rate window"
+          />
+        }
         actions={
           <div className="flex flex-wrap items-center justify-end gap-3">
-            <DateRangeFilter
+            <ForecastHorizonLinks
               basePath="/cfo"
               from={from}
               to={to}
-              extraParams={{ min: String(minConfidence) }}
+              forecastDays={forecastDays}
+              extraParams={{ basis: costBasis }}
             />
             <div className="flex gap-2">
-              {LEVELS.map((lvl) => (
+              {BASIS_OPTIONS.map((opt) => (
                 <Link
-                  key={lvl}
-                  href={rangeHref('/cfo', from, to, { min: String(lvl) })}
-                  className={`rounded px-3 py-1.5 text-sm tabular-nums ${
-                    lvl === minConfidence ? 'bg-accent/20 text-white' : 'border border-edge text-muted hover:bg-white/5'
+                  key={opt.value}
+                  href={rangeHref('/cfo', from, to, { horizon: String(forecastDays), basis: opt.value })}
+                  className={`rounded px-3 py-1.5 text-sm ${
+                    opt.value === costBasis ? 'bg-accent/20 text-white' : 'border border-edge text-muted hover:bg-white/5'
                   }`}
                 >
-                  ≥ {lvl}
+                  {opt.label}
                 </Link>
               ))}
             </div>
@@ -97,15 +246,22 @@ export function CfoView({
         }
       />
 
+      <p className="mb-4 text-xs text-muted">
+        {data
+          ? forecastContextLabel(data.summary.forecastDays, data.summary.observedPeriodDays)
+          : `${forecastHorizonLabel(forecastDays)} project spend · ${basisLabel(costBasis)} basis · ${from} → ${to}`}
+      </p>
+
       {error && (
         <p className="mb-4 rounded-lg border border-neg/30 bg-neg/10 px-4 py-3 text-sm text-neg">
           Could not load CFO metrics. Check API connectivity and try again.
         </p>
       )}
 
-      <div className="mb-2 grid grid-cols-4 gap-4">
+      <div className="mb-2 grid grid-cols-2 gap-4 lg:grid-cols-5">
         {loading ? (
           <>
+            <SkeletonStat />
             <SkeletonStat />
             <SkeletonStat />
             <SkeletonStat />
@@ -124,18 +280,37 @@ export function CfoView({
               sub={`ROI margin ${pct(data.summary.roiMargin)}`}
             />
             <Stat
-              label="Fully-loaded cost"
+              label="Projected spend"
               value={usd(data.summary.fullyLoadedCost)}
-              sub="tokens + QA + eval + integration + platform + seats + coding agents"
+              sub={`${forecastHorizonLabel(data.summary.forecastDays)} · observed ${usd(data.summary.observedFullyLoadedCost)}`}
             />
             <Stat
-              label="Forecast / month"
-              value={usd(data.summary.forecastPerMonth)}
-              sub={`run-rate over ${data.summary.runRateMonths} mo`}
+              label="Projected token / API"
+              value={usd(data.costProvenance.stack.tokenUsageUsd)}
+              sub={`${basisLabel(data.summary.costBasis)} per-token or metered`}
+            />
+            <CostPerOutcomeStat summary={data.summary} outcomeCount={outcomeCount} />
+            <Stat
+              label="Fixed cost (seats)"
+              value={usd(data.costProvenance.stack.fixedCostUsd)}
+              sub="from fixed_costs licenses & subscriptions"
             />
           </>
         ) : null}
       </div>
+
+      {!loading && data && (
+        <p className="mb-4 rounded-lg border border-edge bg-panel/50 px-4 py-2 text-xs text-muted">
+          Projected stack ({forecastHorizonLabel(data.summary.forecastDays)}): tokens{' '}
+          {usd(data.costProvenance.stack.tokenUsageUsd)} ({basisLabel(data.summary.costBasis)}) · fixed cost{' '}
+          {usd(data.costProvenance.stack.fixedCostUsd)} · coding agents {usd(data.costProvenance.stack.codingAgentUsd)} ·
+          Copilot {usd(data.costProvenance.stack.copilotUsd)} · overhead{' '}
+          {usd(data.costProvenance.stack.qaEvalOverheadUsd)} · computed{' '}
+          {usd(data.costProvenance.computedCostUsd)} · metered {usd(data.costProvenance.meteredCostUsd)} · variance{' '}
+          {data.costProvenance.variancePct.toFixed(1)}% · coverage{' '}
+          {data.costProvenance.meteredCoveragePct.toFixed(0)}%
+        </p>
+      )}
 
       {!loading && data && data.warnings.length > 0 && (
         <div className="mb-4 space-y-2">
@@ -148,18 +323,34 @@ export function CfoView({
       )}
 
       <p className="mb-6 text-xs text-muted">
-        Risk-adjusted ROI discounts value by attribution confidence and agent risk exposure, net of fully-loaded
-        cost. Links below confidence {minConfidence} are excluded from these headline figures.
+        Projected spend uses the selected run-rate window extrapolated to the forecast horizon. Token costs use
+        per-token price-book math or metered connector imports; seat licenses use fixed_costs entries.
       </p>
 
       <div className="mb-6">
         <LariRecommendationsPanel from={from} to={to} />
       </div>
 
-      {empty ? (
-        <Card title="No LARI outcomes">
+      <div className="mb-6">
+        <PlatformUtilizationCard from={from} to={to} data={userValue} loading={utilLoading} />
+      </div>
+
+      {noOutcomesButSpend && (
+        <Card title="Spend without attributed outcomes">
           <p className="text-sm text-muted">
-            No LARI outcomes found for this period. Connect providers, import usage, or create outcome mappings.
+            {usd(data!.summary.fullyLoadedCost)} projected spend ({forecastHorizonLabel(data!.summary.forecastDays)})
+            with tokens, fixed seat licenses, and meter/connector imports but no linked outcomes. Cost per outcome
+            requires outcome mappings — LARI below flags seat waste and model right-sizing from meter data.
+          </p>
+        </Card>
+      )}
+
+      {empty ? (
+        <Card title="Spend without attributed outcomes">
+          <p className="text-sm text-muted">
+            {data && data.summary.fullyLoadedCost > 0
+              ? `You have ${usd(data.summary.fullyLoadedCost)} in projected spend but no linked outcomes. Connect outcome sources or review LARI recommendations for seat and model optimization.`
+              : 'No LARI outcomes found for this period. Connect providers, import usage, or create outcome mappings.'}
           </p>
         </Card>
       ) : (
@@ -187,6 +378,7 @@ export function CfoView({
                   { key: 'outcomes', label: 'Outcomes', align: 'right' },
                   { key: 'value', label: 'Value', align: 'right' },
                   { key: 'cost', label: 'Fully-loaded cost', align: 'right' },
+                  { key: 'costPerOutcome', label: 'Cost / outcome', align: 'right' },
                   { key: 'nominal', label: 'Nominal ROI', align: 'right' },
                   { key: 'riskAdj', label: 'Risk-adj ROI', align: 'right' },
                   { key: 'conf', label: 'Avg conf', align: 'right' },
@@ -196,6 +388,7 @@ export function CfoView({
                   outcomes: String(r.outcomes),
                   value: usd(r.businessValue),
                   cost: usd(r.fullyLoadedCost),
+                  costPerOutcome: usd(r.costPerOutcome),
                   nominal: usd(r.nominalRoi),
                   riskAdj: usd(r.riskAdjustedRoi),
                   conf: r.avgConfidence.toFixed(2),

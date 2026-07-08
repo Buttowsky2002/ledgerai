@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { ChParam, ClickHouseService } from '../clickhouse/clickhouse.service';
+import { ChParam } from '../clickhouse/clickhouse.service';
+import { AnalyticsStore } from '../analytics-store/analytics-store';
 import { PrismaService } from '../prisma/prisma.service';
 import { getTenantId } from '../tenant/tenant-context';
 import { calculateRiskAdjustedROI } from './lari';
@@ -168,7 +169,7 @@ export function buildAgentROIInput(a: AssembleInputs): AgentROIInput {
 @Injectable()
 export class LariService {
   constructor(
-    private readonly ch: ClickHouseService,
+    private readonly ch: AnalyticsStore,
     private readonly prisma: PrismaService,
   ) {}
 
@@ -191,42 +192,40 @@ export class LariService {
     const r = this.range(from, to);
     const params: Record<string, ChParam> = { ...r, agent: agentId };
 
-    const [vroi, metaRows, spendRows, riskRows] = await Promise.all([
-      this.ch.queryScoped<VRoiOutcomeRow>(
-        `SELECT outcome_id, outcome_type, value_usd, qa_cost_usd, eval_cost_usd,
-                integration_cost_usd, platform_overhead_usd, attribution_confidence,
-                risk_exposure_pct, outcome_ts
-         FROM agentledger.v_roi
-         WHERE tenant_id = {tenant:String} AND agent_id = {agent:String}
-           AND toDate(outcome_ts) BETWEEN {from:Date} AND {to:Date}`,
-        params,
-      ),
-      this.ch.queryScoped<OutcomeMetaRow>(
-        `SELECT o.outcome_id AS outcome_id, o.source_system AS source_system,
-                o.completion_status AS completion_status
-         FROM agentledger.outcomes o FINAL
-         INNER JOIN agentledger.agent_runs r FINAL
-           ON r.tenant_id = o.tenant_id AND r.run_id = o.run_id
-         WHERE o.tenant_id = {tenant:String} AND r.agent_id = {agent:String}
-           AND toDate(o.ts) BETWEEN {from:Date} AND {to:Date}`,
-        params,
-      ),
-      this.ch.queryScoped<{ cost_usd: number }>(
-        `SELECT sum(cost_usd) AS cost_usd
-         FROM agentledger.spend_hourly_by_key
-         WHERE tenant_id = {tenant:String} AND agent_id = {agent:String}
-           AND toDate(hour) BETWEEN {from:Date} AND {to:Date}`,
-        params,
-      ),
-      this.ch.queryScoped<{ severity: string; events: number }>(
-        `SELECT severity, count() AS events
-         FROM agentledger.risk_events FINAL
-         WHERE tenant_id = {tenant:String} AND agent_id = {agent:String}
-           AND toDate(detected_at) BETWEEN {from:Date} AND {to:Date}
-         GROUP BY severity`,
-        params,
-      ),
-    ]);
+    const vroi = await this.ch.queryScoped<VRoiOutcomeRow>(
+      `SELECT outcome_id, outcome_type, value_usd, qa_cost_usd, eval_cost_usd,
+              integration_cost_usd, platform_overhead_usd, attribution_confidence,
+              risk_exposure_pct, outcome_ts
+       FROM agentledger.v_roi
+       WHERE tenant_id = {tenant:String} AND agent_id = {agent:String}
+         AND toDate(outcome_ts) BETWEEN {from:Date} AND {to:Date}`,
+      params,
+    );
+    const metaRows = await this.ch.queryScoped<OutcomeMetaRow>(
+      `SELECT o.outcome_id AS outcome_id, o.source_system AS source_system,
+              o.completion_status AS completion_status
+       FROM agentledger.outcomes o FINAL
+       INNER JOIN agentledger.agent_runs r FINAL
+         ON r.tenant_id = o.tenant_id AND r.run_id = o.run_id
+       WHERE o.tenant_id = {tenant:String} AND r.agent_id = {agent:String}
+         AND toDate(o.ts) BETWEEN {from:Date} AND {to:Date}`,
+      params,
+    );
+    const spendRows = await this.ch.queryScoped<{ cost_usd: number }>(
+      `SELECT sum(cost_usd) AS cost_usd
+       FROM agentledger.spend_hourly_by_key
+       WHERE tenant_id = {tenant:String} AND agent_id = {agent:String}
+         AND toDate(hour) BETWEEN {from:Date} AND {to:Date}`,
+      params,
+    );
+    const riskRows = await this.ch.queryScoped<{ severity: string; events: number }>(
+      `SELECT severity, count() AS events
+       FROM agentledger.risk_events FINAL
+       WHERE tenant_id = {tenant:String} AND agent_id = {agent:String}
+         AND toDate(detected_at) BETWEEN {from:Date} AND {to:Date}
+       GROUP BY severity`,
+      params,
+    );
 
     // attribution_edges has no Prisma model (worker-owned table) — read via raw SQL
     // inside withTenant so RLS scopes to the tenant (no tenant_id in the query),

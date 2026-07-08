@@ -38,6 +38,17 @@ services:
       interval: 5s
       retries: 10
 
+  # One-shot: apply numbered ClickHouse migrations on existing volumes (018+ etc.).
+  ch-migrate:
+    image: clickhouse/clickhouse-server:24.8
+    volumes:
+      - ./deploy/clickhouse:/migrations:ro
+      - ./deploy/clickhouse/migrate.sh:/migrate.sh:ro
+    entrypoint: ["sh", "-c", "tr -d '\\r' < /migrate.sh | sh"]
+    restart: "no"
+    depends_on:
+      clickhouse: { condition: service_healthy }
+
   redpanda:
     image: redpandadata/redpanda:v24.2.7
     command:
@@ -131,8 +142,8 @@ services:
       BADGERIQ_PRICESYNC_OUT: pricing/pricebook.candidate.json
       BADGERIQ_PRICESYNC_DIFF: pricing/pricebook.diff.json
       BADGERIQ_PRICESYNC_INTERVAL_SEC: "86400"
-      BADGERIQ_WORKER_ADDR: ":8094"
-    ports: ["8094:8094"]
+      BADGERIQ_WORKER_ADDR: ":8098"
+    ports: ["8098:8098"]
 
   # Agent-Native Risk Engine (Phase 5): observed tool usage vs the deny-by-default
   # allowlist → governed risk_events + agent_risk → risk-adjusted ROI.
@@ -339,6 +350,11 @@ services:
       BADGERIQ_DEV_TRUST_HEADER: "true"
       BADGERIQ_DESIGN_PARTNER_ONBOARD_ENABLED: "true"
       BADGERIQ_ATTRIBUTION_WORKER_URL: http://attribution:8096
+      # Near-live spend: background connector sync every 5 minutes (recent 3-day window).
+      BADGERIQ_CONNECTOR_SCHEDULER_ENABLED: "${BADGERIQ_CONNECTOR_SCHEDULER_ENABLED:-true}"
+      BADGERIQ_CONNECTOR_SCHEDULER_INTERVAL_MS: "${BADGERIQ_CONNECTOR_SCHEDULER_INTERVAL_MS:-300000}"
+      BADGERIQ_COPILOT_SCHEDULER_ENABLED: "${BADGERIQ_COPILOT_SCHEDULER_ENABLED:-true}"
+      BADGERIQ_COPILOT_SCHEDULER_INTERVAL_MS: "${BADGERIQ_COPILOT_SCHEDULER_INTERVAL_MS:-300000}"
       # OIDC providers are configured by env-var NAMES (rule 1); unset → provider
       # unavailable. Uncomment + supply real values to enable live SSO:
       # BADGERIQ_OIDC_REDIRECT_BASE: http://localhost:8094
@@ -351,6 +367,7 @@ services:
       postgres: { condition: service_healthy }
       pg-dev-init: { condition: service_completed_successfully }
       clickhouse: { condition: service_healthy }
+      ch-migrate: { condition: service_completed_successfully }
 
   dashboard:
     build:
@@ -367,6 +384,8 @@ services:
       # Docker standalone image runs NODE_ENV=production — keep BFF auth for local stacks.
       BADGERIQ_DEV_TRUST_TENANT: "${BADGERIQ_DEV_TRUST_TENANT:-true}"
       NODE_ENV: development
+      # Overview spend auto-refresh interval (ms) while the page is open.
+      BADGERIQ_DASHBOARD_LIVE_REFRESH_MS: "${BADGERIQ_DASHBOARD_LIVE_REFRESH_MS:-30000}"
     ports: ["3000:3000"]
     depends_on:
       api: { condition: service_started }

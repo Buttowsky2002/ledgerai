@@ -1,5 +1,7 @@
 import { computeDedupeHash } from './engine/dedupe';
 import { enrichRecordCost } from './cost-estimator';
+import { enrichCursorBilling } from './cursor-billing';
+import { computeMeteredCostUsd } from './metered-cost';
 import {
   applyAttributionToMetrics,
   isUnmapped,
@@ -17,7 +19,8 @@ export function finalizeConnectorRecord(
   mappings: AttributionMapping[],
   entities: ProviderEntity[],
 ): { record: NormalizedRecord; unmapped: boolean } {
-  const enriched = enrichRecordCost(rec.metrics as NormalizedUsageMetrics);
+  const enriched = enrichCursorBilling(enrichRecordCost(rec.metrics as NormalizedUsageMetrics) as Record<string, unknown>);
+  enriched.metered_cost_usd = computeMeteredCostUsd(enriched);
   const dedupeHash = computeDedupeHash(
     definition.dedupe,
     enriched,

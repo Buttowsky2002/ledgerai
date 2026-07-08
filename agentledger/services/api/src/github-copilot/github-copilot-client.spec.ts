@@ -145,4 +145,36 @@ describe('GitHubCopilotClient', () => {
     await client().fetchBilling();
     expect(mockFetch).toHaveBeenCalledTimes(2);
   });
+
+  it('normalizes AI credit billing usage items', async () => {
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse({
+        timePeriod: { year: 2024, month: 6 },
+        usageItems: [
+          {
+            username: 'alice',
+            date: '2024-06-01',
+            grossQuantity: 1000,
+            grossAmount: 10,
+            discountAmount: 8,
+            netAmount: 2,
+            model: 'gpt-4o',
+          },
+        ],
+      }),
+    );
+    const rows = await client().fetchAiCreditUsage({ year: 2024, month: 6 });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].githubLogin).toBe('alice');
+    expect(rows[0].netAmount).toBe(2);
+    expect(rows[0].grossAmount).toBe(10);
+  });
+
+  it('returns billing permission hint on 403', async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({ message: 'Forbidden' }, 403));
+    await expect(client().fetchAiCreditUsage({ year: 2024, month: 6 })).rejects.toMatchObject({
+      status: 403,
+      hint: expect.stringContaining('Billing'),
+    });
+  });
 });

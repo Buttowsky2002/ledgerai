@@ -3,6 +3,7 @@ import { Suspense } from 'react';
 import { DeleteButton } from '../../components/settings/DeleteButton';
 import { CreateBudget, CreateKey, CreatePolicy } from '../../components/settings/forms';
 import { AddIdpForm, IssueScimTokenForm, RevokeButton } from '../../components/settings/IntegrationsForms';
+import { PrivacySettings } from '../../components/settings/PrivacySettings';
 import { Card, DataTable, PageHeader, usd } from '../../components/ui';
 import { apiClient, fetchData } from '../../lib/api';
 
@@ -34,6 +35,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: { t
     ? (searchParams.tab as SettingsTab)
     : 'keys';
   const api = apiClient();
+  const tenant = (await fetchData(api.GET('/v1/tenant'), null)) as {
+    complianceFlags?: Record<string, unknown>;
+  } | null;
+  const complianceFlags = (tenant?.complianceFlags ?? {}) as Record<string, unknown>;
+  const individualAnalytics = complianceFlags.perUserAnalytics === 'individual';
 
   return (
     <>
@@ -57,6 +63,13 @@ export default async function SettingsPage({ searchParams }: { searchParams: { t
           </div>
         }
       />
+
+      <Card title="Privacy & analytics">
+        <PrivacySettings
+          initialIndividualAnalytics={individualAnalytics}
+          initialComplianceFlags={complianceFlags}
+        />
+      </Card>
 
       {tab === 'keys' && <KeysTab api={api} />}
       {tab === 'policies' && <PoliciesTab api={api} />}

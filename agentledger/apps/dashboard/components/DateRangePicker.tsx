@@ -2,7 +2,11 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useId, useRef, useState } from 'react';
-import { allTimeHref, presetRange, rangeHref, todayIso } from '../lib/date-range';
+import { allTimeHref, encodeRange, presetRange, RANGE_COOKIE, rangeHref, todayIso } from '../lib/date-range';
+
+function writeRangeCookie(r: { from: string; to: string }) {
+  document.cookie = `${RANGE_COOKIE}=${encodeRange(r)}; path=/; max-age=31536000; samesite=lax`;
+}
 
 type Props = {
   basePath: string;
@@ -75,6 +79,7 @@ export function DateRangePicker({
   };
 
   const navigate = (nextFrom: string, nextTo: string) => {
+    writeRangeCookie({ from: nextFrom, to: nextTo });
     go(rangeHref(basePath, nextFrom, nextTo, extraParams));
   };
 

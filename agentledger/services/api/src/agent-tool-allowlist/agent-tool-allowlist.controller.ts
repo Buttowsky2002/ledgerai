@@ -1,7 +1,8 @@
 import { Body, Controller, Delete, Get, Logger, Param, Post, Query } from '@nestjs/common';
 import { IsOptional, IsString, IsUUID } from 'class-validator';
 import { Roles } from '../auth/decorators';
-import { ChParam, ClickHouseService } from '../clickhouse/clickhouse.service';
+import { ChParam } from '../clickhouse/clickhouse.service';
+import { AnalyticsStore } from '../analytics-store/analytics-store';
 import { CrudService } from '../common/crud.service';
 import { parsePagination } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
@@ -24,7 +25,7 @@ export class AgentToolAllowlistController {
   private readonly crud: CrudService;
   constructor(
     prisma: PrismaService,
-    private readonly ch: ClickHouseService,
+    private readonly ch: AnalyticsStore,
   ) {
     this.crud = new CrudService(prisma, {
       model: 'agentToolAllowlist',

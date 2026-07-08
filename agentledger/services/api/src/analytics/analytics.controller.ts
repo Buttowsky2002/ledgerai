@@ -12,6 +12,7 @@ import {
   UsersQueryDto,
 } from './analytics.dto';
 import { AnalyticsService } from './analytics.service';
+import { UserValueService } from './user-value.service';
 import { toCsv } from './focus.mapper';
 import { renderMarkdown } from './report.renderer';
 
@@ -21,7 +22,10 @@ import { renderMarkdown } from './report.renderer';
  */
 @Controller('v1/analytics')
 export class AnalyticsController {
-  constructor(private readonly analytics: AnalyticsService) {}
+  constructor(
+    private readonly analytics: AnalyticsService,
+    private readonly userValueService: UserValueService,
+  ) {}
 
   @Roles('viewer') @Get('spend')
   spend(@Query() q: RangeQueryDto) {
@@ -64,6 +68,17 @@ export class AnalyticsController {
   @Roles('viewer') @Get('copilot-spend')
   copilotSpend(@Query() q: RangeQueryDto) {
     return this.analytics.copilotSpend(q.from, q.to);
+  }
+
+  @Roles('viewer') @Get('cursor-spend')
+  cursorSpend(@Query() q: RangeQueryDto) {
+    return this.analytics.cursorSpend(q.from, q.to);
+  }
+
+  /** Per-user cost↔utilization correlation — team aggregates by default; individual rows opt-in. */
+  @Roles('viewer') @Get('user-value')
+  userValue(@Query() q: RangeQueryDto) {
+    return this.userValueService.getUserValue(q.from, q.to);
   }
 
   @Roles('viewer') @Get('burndown')

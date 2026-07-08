@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { recordAudit } from '../common/audit';
-import { ClickHouseService } from '../clickhouse/clickhouse.service';
+import { AnalyticsStore } from '../analytics-store/analytics-store';
 import { env } from '../env';
 import { LariService } from '../lari/lari.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -27,7 +27,7 @@ export class DesignPartnerOnboardingService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly ch: ClickHouseService,
+    private readonly ch: AnalyticsStore,
     private readonly lari: LariService,
   ) {
     this.loadPresets();
