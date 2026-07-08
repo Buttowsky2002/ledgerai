@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { GitHubCopilotDetail } from '@/components/copilot/GitHubCopilotDetail';
+import { CursorPlatformDetail, type CursorSpendSummary } from '@/components/overview/CursorPlatformDetail';
 import { Card, DataTable, Stat, num, usd } from '@/components/ui';
 
 export type PlatformSpendRow = {
@@ -21,6 +22,10 @@ export type ModelMixRow = {
 function isCopilotPlatform(platform: string): boolean {
   const p = platform.toLowerCase();
   return p === 'github copilot' || p === 'github_copilot' || p.includes('copilot');
+}
+
+function isCursorPlatform(platform: string): boolean {
+  return platform.toLowerCase() === 'cursor';
 }
 
 function modelsForPlatform(platform: string, modelMix: ModelMixRow[]): ModelMixRow[] {
@@ -147,12 +152,16 @@ export function OverviewAiSourcesPanel({
   from,
   to,
   initialSource,
+  cursorSpend,
+  cursorSpendError = false,
 }: {
   platforms: PlatformSpendRow[];
   modelMix: ModelMixRow[];
   from: string;
   to: string;
   initialSource?: string;
+  cursorSpend?: CursorSpendSummary | null;
+  cursorSpendError?: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -204,11 +213,20 @@ export function OverviewAiSourcesPanel({
           subtitle={
             isCopilotPlatform(selected)
               ? `${from} → ${to} · ${usd(selectedRow.cost_usd)} allocated (est.) · not a GitHub invoice`
-              : `${from} → ${to} · ${usd(selectedRow.cost_usd)} · ${num(selectedRow.calls)} calls`
+              : isCursorPlatform(selected)
+                ? `${from} → ${to} · platform list shows metered overage only · drill down for seats`
+                : `${from} → ${to} · ${usd(selectedRow.cost_usd)} · ${num(selectedRow.calls)} calls`
           }
         >
           {isCopilotPlatform(selected) ? (
             <GitHubCopilotDetail from={from} to={to} embedded />
+          ) : isCursorPlatform(selected) ? (
+            <CursorPlatformDetail
+              from={from}
+              to={to}
+              initialData={cursorSpend}
+              initialLoadError={cursorSpendError}
+            />
           ) : (
             <GenericPlatformDetail
               platform={selected}

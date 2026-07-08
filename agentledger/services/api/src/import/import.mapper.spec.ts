@@ -123,4 +123,32 @@ describe('import mapRow', () => {
   it('rejects an invalid timestamp', () => {
     expect(() => mapRow({ model: 'gpt-4o', input_tokens: 1, timestamp: 'not-a-date' })).toThrow(/date\/time/i);
   });
+
+  it('stamps metered_cost_usd and excludes price-book estimates', () => {
+    const { events } = mapRow({
+      provider: 'openai',
+      model: 'gpt-4o',
+      cost_usd: 1.25,
+      cost_source: 'pricebook_estimate',
+      metered_cost_usd: 0,
+    });
+    expect(events[0].row).toMatchObject({
+      cost_usd: 1.25,
+      cost_source: 'pricebook_estimate',
+      metered_cost_usd: 0,
+    });
+  });
+
+  it('includes provider-reported costs in metered_cost_usd', () => {
+    const { events } = mapRow({
+      provider: 'anthropic',
+      model: 'claude-3-5-sonnet',
+      cost_usd: 3.5,
+      cost_source: 'anthropic_cost_report',
+    });
+    expect(events[0].row).toMatchObject({
+      metered_cost_usd: 3.5,
+      cost_source: 'anthropic_cost_report',
+    });
+  });
 });

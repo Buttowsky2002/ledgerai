@@ -1,7 +1,9 @@
 import { BadRequestException } from '@nestjs/common';
 import {
   DEFAULT_BACKFILL_DAYS,
+  INCREMENTAL_SYNC_DAYS,
   MAX_RANGE_DAYS,
+  incrementalSyncWindow,
   resolvePreviewWindow,
   resolveSyncChunks,
   resolveSyncWindow,
@@ -52,6 +54,15 @@ describe('resolveSyncChunks', () => {
     expect(chunks[0].syncStart.toISOString().slice(0, 10)).toBe('2026-01-01');
     expect(chunks[chunks.length - 1].syncEnd.toISOString().slice(0, 10)).toBe('2026-03-31');
   });
+
+  it('respects per-provider maxDaysPerRequest (Cursor 30-day cap)', () => {
+    const chunks = resolveSyncChunks('2026-01-01', '2026-03-31', DEFAULT_BACKFILL_DAYS, 30);
+    expect(chunks.length).toBeGreaterThanOrEqual(3);
+    for (const c of chunks) {
+      const days = Math.round((c.syncEnd.getTime() - c.syncStart.getTime()) / 86_400_000) + 1;
+      expect(days).toBeLessThanOrEqual(30);
+    }
+  });
 });
 
 describe('rollingSyncWindow', () => {
@@ -62,5 +73,16 @@ describe('rollingSyncWindow', () => {
     const end = new Date(`${to}T00:00:00.000Z`);
     const days = Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1;
     expect(days).toBe(MAX_RANGE_DAYS);
+  });
+});
+
+describe('incrementalSyncWindow', () => {
+  it(`returns a ${INCREMENTAL_SYNC_DAYS}-day inclusive window ending today`, () => {
+    const { from, to } = incrementalSyncWindow();
+    const start = new Date(`${from}T00:00:00.000Z`);
+    const end = new Date(`${to}T00:00:00.000Z`);
+    const days = Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1;
+    expect(days).toBe(INCREMENTAL_SYNC_DAYS);
+    expect(to).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 });

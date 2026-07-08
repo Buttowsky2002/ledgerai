@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { Badge, Card, DataTable, PageHeader, num, usd } from '../../components/ui';
 import { proxyApi } from '../../lib/api';
-import { parseRange } from '../../lib/date-range';
+import { resolveRange } from '../../lib/resolve-range';
 import { discoverModelFamilies } from '../../lib/model-family';
 
 export const dynamic = 'force-dynamic';
@@ -61,7 +61,7 @@ export default async function UsersPage({
 }: {
   searchParams: { from?: string; to?: string; q?: string; tab?: string };
 }) {
-  const { from, to } = parseRange(searchParams);
+  const { from, to } = resolveRange(searchParams);
   const q = searchParams.q?.trim() ?? '';
   const tab: MemberTab = MEMBER_TABS.some((t) => t.id === searchParams.tab)
     ? (searchParams.tab as MemberTab)
@@ -98,7 +98,7 @@ export default async function UsersPage({
 
   const sourceNote =
     sources != null
-      ? `${allUsers.length} members · ${sources.llm_call_users} from token usage · ${sources.copilot_members} from GitHub Copilot`
+      ? `${allUsers.length} members · ${sources.llm_call_users} from metered API usage · ${sources.copilot_members} from GitHub Copilot`
       : `${allUsers.length} members`;
 
   return (

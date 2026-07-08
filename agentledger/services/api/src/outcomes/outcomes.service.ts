@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { ChParam, ClickHouseService } from '../clickhouse/clickhouse.service';
+import { ChParam } from '../clickhouse/clickhouse.service';
+import { AnalyticsStore } from '../analytics-store/analytics-store';
 import { parsePagination } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { getPrincipal, getTenantId } from '../tenant/tenant-context';
@@ -29,7 +30,7 @@ export class OutcomesService {
   private readonly logger = new Logger(OutcomesService.name);
 
   constructor(
-    private readonly ch: ClickHouseService,
+    private readonly ch: AnalyticsStore,
     private readonly prisma: PrismaService,
   ) {}
 

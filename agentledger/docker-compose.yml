@@ -127,12 +127,12 @@ services:
     volumes:
       - .:/w
     environment:
-      AGENTLEDGER_PRICESYNC_LIVE: pricing/pricebook.json
-      AGENTLEDGER_PRICESYNC_OUT: pricing/pricebook.candidate.json
-      AGENTLEDGER_PRICESYNC_DIFF: pricing/pricebook.diff.json
-      AGENTLEDGER_PRICESYNC_INTERVAL_SEC: "86400"
-      AGENTLEDGER_WORKER_ADDR: ":8094"
-    ports: ["8094:8094"]
+      BADGERIQ_PRICESYNC_LIVE: pricing/pricebook.json
+      BADGERIQ_PRICESYNC_OUT: pricing/pricebook.candidate.json
+      BADGERIQ_PRICESYNC_DIFF: pricing/pricebook.diff.json
+      BADGERIQ_PRICESYNC_INTERVAL_SEC: "86400"
+      BADGERIQ_WORKER_ADDR: ":8098"
+    ports: ["8098:8098"]
 
   # Agent-Native Risk Engine (Phase 5): observed tool usage vs the deny-by-default
   # allowlist → governed risk_events + agent_risk → risk-adjusted ROI.

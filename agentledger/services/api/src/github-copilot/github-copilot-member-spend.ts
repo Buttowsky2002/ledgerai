@@ -193,6 +193,55 @@ export function resolveUtilizationStatus(args: {
   return 'active';
 }
 
+/** Seat-only day when invoice credit for the month is already on the billing row. */
+export function calculateMemberDailySpendSeatOnly(
+  input: MemberDailySpendInput,
+): MemberDailySpendResult {
+  const { usage, seat, assumptions } = input;
+  const now = input.now ?? new Date();
+  const monthlyCost = seat?.isActive ? (seat.monthlySeatCost ?? DEFAULT_SEAT_PRICE_USD) : 0;
+  const seatCost = seat?.isActive ? dailySeatCost(monthlyCost, usage.usageDate) : 0;
+
+  const roi = calculateMemberRoi({
+    linesAccepted: usage.linesAccepted,
+    chatTurns: usage.chatTurns,
+    prSummaryCount: usage.prSummaryCount,
+    totalAllocatedCost: seatCost,
+    assumptions,
+  });
+
+  const score = usageScore(usage);
+  const peerScores = input.peerUsage ?? [];
+  const utilizationStatus = resolveUtilizationStatus({
+    seat,
+    usageInPeriod: score,
+    roiPercentage: roi.roiPercentage,
+    score,
+    peerScores,
+    assumptions,
+    now,
+  });
+
+  return {
+    githubLogin: usage.githubLogin,
+    teamSlug: usage.teamSlug,
+    usageDate: usage.usageDate,
+    seatCost: round2(seatCost),
+    estimatedCreditCost: 0,
+    allocatedOverageCost: 0,
+    totalAllocatedCost: round2(seatCost),
+    aiCreditsUsed: round2(usage.aiCreditsUsed),
+    linesAccepted: usage.linesAccepted,
+    chatTurns: usage.chatTurns,
+    prSummaryCount: usage.prSummaryCount,
+    estimatedHoursSaved: roi.estimatedHoursSaved,
+    estimatedValueCreated: roi.estimatedValueCreated,
+    roiPercentage: roi.roiPercentage,
+    utilizationStatus,
+    confidenceScore: 0.98,
+  };
+}
+
 /** Compute one member-day allocated spend row. */
 export function calculateMemberDailySpend(input: MemberDailySpendInput): MemberDailySpendResult {
   const { usage, seat, orgOverage, assumptions } = input;

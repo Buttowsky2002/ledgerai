@@ -82,11 +82,12 @@ Full tables: `services/workers/README.md`.
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `NODE_ENV` | _(unset)_ | Set `production` in prod (disables dev auth + Swagger by default). |
-| 🔒 `BADGERIQ_PG_DSN` | _(required)_ | Postgres DSN (`agentledger_api` role). |
-| ClickHouse vars | — | Analytics reads. |
+| 🔒 `BADGERIQ_PG_DSN` | _(required)_ | Postgres DSN (`agentledger_api` role). Alternatively set `DB_HOST`/`DB_NAME`/`DB_USER`/🔒 `DB_PASSWORD` (+ optional `DB_PORT`, `DB_SSLMODE`; `DB_HOST` may be a `/cloudsql/...` unix socket) — Cloud Run MVP convention. |
+| `BADGERIQ_ANALYTICS_BACKEND` | `clickhouse` | Analytics store: `clickhouse` (full stack) or `postgres` (Cloud Run MVP, single database; requires migration `023_analytics_mvp.sql`). |
+| ClickHouse vars | — | Analytics reads (unused when `BADGERIQ_ANALYTICS_BACKEND=postgres`). |
 | `BADGERIQ_API_ADDR` | `:8094` | Listen address. |
 | `BADGERIQ_API_BODY_LIMIT` | `256kb` | Max request body. |
-| 🔒 `BADGERIQ_JWT_SECRET` | _(required)_ | Session-JWT HS256 secret. |
+| 🔒 `BADGERIQ_JWT_SECRET` | _(required)_ | Session-JWT HS256 secret (unprefixed `JWT_SECRET` also accepted). |
 | `BADGERIQ_JWT_ACCESS_TTL` / `_REFRESH_TTL` | `15m` / `7d` | Token lifetimes. |
 | `BADGERIQ_OIDC_REDIRECT_BASE` | `http://localhost:8094` | OIDC callback base URL. |
 | 🔒 OIDC client id/secret env vars | _(unset)_ | Per provider; unset → provider unavailable. |

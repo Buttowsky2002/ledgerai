@@ -28,7 +28,7 @@
     "retryOn": [429, 500, 502, 503, 504]
   },
   "syncRange": {
-    "maxDaysPerRequest": 31,
+    "maxDaysPerRequest": 30,
     "defaultBackfillDays": 90
   },
   "destinationRecordType": "spend_usage_record",
@@ -48,6 +48,7 @@
     { "type": "direct", "source": "userEmail", "target": "user_id" },
     { "type": "direct", "source": "model", "target": "model" },
     { "type": "direct", "source": "kind", "target": "product" },
+    { "type": "direct", "source": "isChargeable", "target": "is_chargeable" },
     { "type": "direct", "source": "chargedCents", "target": "amount_cents" },
     { "type": "derived", "target": "cost_usd", "expression": "amount_cents / 100" },
     { "type": "fallback", "target": "input_tokens", "sources": ["tokenUsage.inputTokens"] },
@@ -58,8 +59,7 @@
       "sources": ["timestamp", "userEmail", "model", "chargedCents", "kind"]
     },
     { "type": "constant", "target": "provider", "value": "cursor" },
-    { "type": "constant", "target": "platform_display_name", "value": "Cursor" },
-    { "type": "constant", "target": "cost_source", "value": "cursor_admin_api" }
+    { "type": "constant", "target": "platform_display_name", "value": "Cursor" }
   ],
   "validationRules": [
     { "field": "cost_usd", "type": "currency", "required": true, "min": 0.000001 },
@@ -67,7 +67,7 @@
   ],
   "dedupe": {
     "strategy": "custom",
-    "fields": ["ts", "user_email", "model", "cost_usd", "product"]
+    "fields": ["ts", "user_email", "model", "product"]
   },
   "schedule": {
     "intervalMinutes": 60,

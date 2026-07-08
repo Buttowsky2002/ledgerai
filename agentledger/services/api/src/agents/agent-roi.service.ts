@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { ChParam, ClickHouseService } from '../clickhouse/clickhouse.service';
+import { ChParam } from '../clickhouse/clickhouse.service';
+import { AnalyticsStore } from '../analytics-store/analytics-store';
 
 /** Coerce a ClickHouse scalar (numbers can arrive as strings) to a number. */
 const n = (v: unknown): number => (typeof v === 'number' ? v : Number(v) || 0);
@@ -32,7 +33,7 @@ export interface AgentRoiResponse {
  */
 @Injectable()
 export class AgentRoiService {
-  constructor(private readonly ch: ClickHouseService) {}
+  constructor(private readonly ch: AnalyticsStore) {}
 
   /** Resolve an optional ISO-date range, defaulting to the last `days` days. */
   private range(from?: string, to?: string, days = 365): { from: string; to: string } {

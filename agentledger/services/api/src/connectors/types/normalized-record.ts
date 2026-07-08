@@ -34,6 +34,11 @@ export interface ImportFlatRow {
   total_tokens?: number;
   cost_usd?: number;
   cost_source?: string;
+  metered_cost_usd?: number;
+  usage_value_usd?: number;
+  billed_cost_usd?: number;
+  operation_name?: string;
+  billing_kind?: string;
   status?: string;
   team_id?: string;
   user_id?: string;
@@ -158,6 +163,11 @@ export function toImportRow(record: NormalizedRecord): ImportFlatRow {
   }
 
   assign('cost_source', 'cost_source');
+  assign('usage_value_usd', 'usage_value_usd');
+  assign('metered_cost_usd', 'metered_cost_usd');
+  assign('billed_cost_usd', 'billed_cost_usd');
+  assign('operation_name', 'operation_name');
+  assign('billing_kind', 'billing_kind');
   assign('status', 'status');
   assign('team_id', 'team_id');
   assign('user_id', 'user_id', 'provider_user_id', 'user_email', 'email');

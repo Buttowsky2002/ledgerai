@@ -82,6 +82,21 @@ export interface CopilotUsageRow {
   rawPayload: Record<string, unknown>;
 }
 
+/** One line from GitHub billing AI credit usage API (matches CSV export fields). */
+export interface CopilotBillingLineRow {
+  usageDate: string;
+  githubLogin: string;
+  product: string;
+  sku: string;
+  model: string;
+  unitType: string;
+  grossQuantity: number;
+  grossAmount: number;
+  discountAmount: number;
+  netAmount: number;
+  rawPayload: Record<string, unknown>;
+}
+
 export interface CopilotRoiResult {
   assignedSeats: number;
   activeSeats: number;
@@ -177,7 +192,10 @@ export interface CopilotMemberSpendRow {
   estimatedValueCreated: number;
   roiPercentage: number | null;
   utilizationStatus: string;
-  isEstimated: true;
+  isEstimated: boolean;
+  costSource?: 'billing_api' | 'estimate';
+  billedNetUsd?: number;
+  billedGrossUsd?: number;
 }
 
 export interface CopilotMemberSpendSummary {
@@ -191,7 +209,7 @@ export interface CopilotMemberSpendSummary {
   highestSpendMember: { login: string; cost: number } | null;
   highestRoiMember: { login: string; roiPct: number } | null;
   lowestRoiMember: { login: string; roiPct: number } | null;
-  isEstimated: true;
+  isEstimated: boolean;
 }
 
 export interface CopilotMemberSpendCharts {

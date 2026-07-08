@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { useCallback, useMemo, useState } from 'react';
+import { usePathname, useSearchParams } from 'next/navigation';
+import { Suspense, useCallback, useMemo, useState } from 'react';
 
 type NavItem = { href: string; label: string };
 type NavGroup = { label: string; items: NavItem[] };
@@ -49,6 +49,7 @@ const NAV_GROUPS: NavGroup[] = [
 ];
 
 const ALL_NAV_ITEMS = NAV_GROUPS.flatMap((group) => group.items);
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 function matchesHref(path: string, href: string): boolean {
   if (href === '/') return path === '/';
@@ -72,6 +73,13 @@ function findActiveGroupLabel(path: string): string | null {
   return null;
 }
 
+function navHref(itemHref: string, from: string | null, to: string | null): string {
+  if (from && to) {
+    return `${itemHref}?from=${from}&to=${to}`;
+  }
+  return itemHref;
+}
+
 function Chevron({ expanded }: { expanded: boolean }) {
   return (
     <svg
@@ -93,10 +101,19 @@ function Chevron({ expanded }: { expanded: boolean }) {
   );
 }
 
-export function Sidebar() {
+function SidebarNav() {
   const path = usePathname();
+  const searchParams = useSearchParams();
   const activeGroupLabel = useMemo(() => findActiveGroupLabel(path), [path]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  const fromParam = searchParams.get('from')?.slice(0, 10) ?? null;
+  const toParam = searchParams.get('to')?.slice(0, 10) ?? null;
+  const rangeFrom =
+    fromParam && toParam && ISO_DATE.test(fromParam) && ISO_DATE.test(toParam) && fromParam <= toParam
+      ? fromParam
+      : null;
+  const rangeTo = rangeFrom ? toParam : null;
 
   const isGroupExpanded = useCallback(
     (label: string) => {
@@ -112,51 +129,59 @@ export function Sidebar() {
   };
 
   return (
+    <nav className="space-y-1">
+      {NAV_GROUPS.map((group) => {
+        const open = isGroupExpanded(group.label);
+        const panelId = `nav-group-${group.label.toLowerCase().replace(/\s+/g, '-')}`;
+
+        return (
+          <div key={group.label}>
+            <button
+              type="button"
+              onClick={() => toggleGroup(group.label)}
+              aria-expanded={open}
+              aria-controls={panelId}
+              className="flex w-full items-center justify-between rounded px-3 py-2 text-left text-sm font-medium text-gray-300 hover:bg-white/5"
+            >
+              <span>{group.label}</span>
+              <Chevron expanded={open} />
+            </button>
+            {open && (
+              <div id={panelId} className="mt-0.5 space-y-0.5 pb-1">
+                {group.items.map((item) => {
+                  const active = isNavActive(path, item.href);
+                  return (
+                    <Link
+                      key={item.href}
+                      href={navHref(item.href, rangeFrom, rangeTo)}
+                      className={`block rounded py-2 text-sm ${
+                        active
+                          ? 'border-l-2 border-accent bg-accent/10 pr-3 pl-[10px] text-white ring-1 ring-inset ring-accent/30'
+                          : 'pl-7 pr-3 text-muted hover:bg-white/[0.04] hover:text-gray-200'
+                      }`}
+                    >
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </nav>
+  );
+}
+
+export function Sidebar() {
+  return (
     <aside className="sticky top-0 flex h-screen w-60 shrink-0 self-start flex-col overflow-y-auto border-r border-edge bg-panel p-4">
       <div className="mb-8 px-2 text-lg font-semibold tracking-tight">
         Badger<span className="text-accent">IQ</span>
       </div>
-      <nav className="space-y-1">
-        {NAV_GROUPS.map((group) => {
-          const open = isGroupExpanded(group.label);
-          const panelId = `nav-group-${group.label.toLowerCase().replace(/\s+/g, '-')}`;
-
-          return (
-            <div key={group.label}>
-              <button
-                type="button"
-                onClick={() => toggleGroup(group.label)}
-                aria-expanded={open}
-                aria-controls={panelId}
-                className="flex w-full items-center justify-between rounded px-3 py-2 text-left text-sm font-medium text-gray-300 hover:bg-white/5"
-              >
-                <span>{group.label}</span>
-                <Chevron expanded={open} />
-              </button>
-              {open && (
-                <div id={panelId} className="mt-0.5 space-y-0.5 pb-1">
-                  {group.items.map((item) => {
-                    const active = isNavActive(path, item.href);
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        className={`block rounded py-2 text-sm ${
-                          active
-                            ? 'border-l-2 border-accent bg-accent/10 pr-3 pl-[10px] text-white ring-1 ring-inset ring-accent/30'
-                            : 'pl-7 pr-3 text-muted hover:bg-white/[0.04] hover:text-gray-200'
-                        }`}
-                      >
-                        {item.label}
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </nav>
+      <Suspense fallback={<nav className="space-y-1 text-sm text-muted">Loading…</nav>}>
+        <SidebarNav />
+      </Suspense>
     </aside>
   );
 }

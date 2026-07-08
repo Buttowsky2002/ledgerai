@@ -4,17 +4,17 @@ import { PrismaService } from '../prisma/prisma.service';
 import { runWithTenant } from '../tenant/tenant-context';
 import { ConnectorsService } from './connectors.service';
 import { resolveConnectorSyncRange } from './sync-handoff';
-import { rollingSyncWindow } from './sync-range';
+import { incrementalSyncWindow } from './sync-range';
 
-const DEFAULT_INTERVAL_MS = 60 * 60 * 1000;
-const INITIAL_DELAY_MS = 60_000;
+const DEFAULT_INTERVAL_MS = 5 * 60 * 1000;
+const INITIAL_DELAY_MS = 15_000;
 
 interface ScheduledConnector {
   connector_id: string;
   tenant_id: string;
 }
 
-/** Background hourly sync for enabled API connectors (Anthropic, Cursor, OpenAI, custom). */
+/** Background auto-sync for enabled API connectors (Anthropic, Cursor, OpenAI, custom). */
 @Injectable()
 export class ConnectorSchedulerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ConnectorSchedulerService.name);
@@ -63,7 +63,7 @@ export class ConnectorSchedulerService implements OnModuleInit, OnModuleDestroy 
               if (!connector?.enabled) return;
 
               const cfg = (connector.config ?? {}) as Record<string, unknown>;
-              const window = rollingSyncWindow();
+              const window = incrementalSyncWindow();
               const range = resolveConnectorSyncRange(window, cfg);
 
               const result = await this.connectors.sync(row.connector_id, range);
@@ -107,7 +107,7 @@ function schedulerIntervalMs(): number {
   const raw = env('BADGERIQ_CONNECTOR_SCHEDULER_INTERVAL_MS');
   if (!raw) return DEFAULT_INTERVAL_MS;
   const n = Number.parseInt(raw, 10);
-  return Number.isFinite(n) && n >= 60_000 ? n : DEFAULT_INTERVAL_MS;
+  return Number.isFinite(n) && n >= 60_000 ? n : DEFAULT_INTERVAL_MS; // floor: 1 minute
 }
 
 function safeMsg(err: unknown): string {

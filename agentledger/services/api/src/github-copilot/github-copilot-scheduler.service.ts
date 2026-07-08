@@ -1,16 +1,17 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { env } from '../env';
 import { PrismaService } from '../prisma/prisma.service';
 import { GitHubCopilotSyncService } from './github-copilot-sync.service';
 
-const HOURLY_MS = 60 * 60 * 1000;
-const INITIAL_DELAY_MS = 60_000;
+const DEFAULT_INTERVAL_MS = 5 * 60 * 1000;
+const INITIAL_DELAY_MS = 15_000;
 
 interface ScheduledConnection {
   connection_id: string;
   tenant_id: string;
 }
 
-/** Runs hourly GitHub Copilot sync for connections with auto-sync enabled. */
+/** Runs auto-sync for GitHub Copilot connections with scheduling enabled. */
 @Injectable()
 export class GitHubCopilotSchedulerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(GitHubCopilotSchedulerService.name);
@@ -24,9 +25,15 @@ export class GitHubCopilotSchedulerService implements OnModuleInit, OnModuleDest
   ) {}
 
   onModuleInit(): void {
+    if (!schedulerEnabled()) {
+      this.logger.log('copilot auto-sync scheduler disabled (BADGERIQ_COPILOT_SCHEDULER_ENABLED=false)');
+      return;
+    }
+    const intervalMs = schedulerIntervalMs();
+    this.logger.log({ intervalMs }, 'copilot auto-sync scheduler starting');
     this.initialHandle = setTimeout(() => {
       void this.runScheduledSync();
-      this.intervalHandle = setInterval(() => void this.runScheduledSync(), HOURLY_MS);
+      this.intervalHandle = setInterval(() => void this.runScheduledSync(), intervalMs);
     }, INITIAL_DELAY_MS);
   }
 
@@ -64,6 +71,18 @@ export class GitHubCopilotSchedulerService implements OnModuleInit, OnModuleDest
       this.running = false;
     }
   }
+}
+
+function schedulerEnabled(): boolean {
+  const v = env('BADGERIQ_COPILOT_SCHEDULER_ENABLED');
+  return v !== 'false' && v !== '0';
+}
+
+function schedulerIntervalMs(): number {
+  const raw = env('BADGERIQ_COPILOT_SCHEDULER_INTERVAL_MS');
+  if (!raw) return DEFAULT_INTERVAL_MS;
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) && n >= 60_000 ? n : DEFAULT_INTERVAL_MS;
 }
 
 function safeMsg(err: unknown): string {

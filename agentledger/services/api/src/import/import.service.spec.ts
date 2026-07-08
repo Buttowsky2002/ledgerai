@@ -114,10 +114,13 @@ describe('ImportService.importEvents', () => {
     expect(queryRaw.mock.invocationCallOrder[0]).toBeLessThan(insertRows.mock.invocationCallOrder[0]);
   });
 
-  it('propagates a ClickHouse insert failure (so the transaction rolls back)', async () => {
-    const { svc, insertRows } = harness();
+  it('propagates an analytics insert failure after keys are reserved', async () => {
+    const { svc, insertRows, queryRaw } = harness({ reserveReturns: ['k1'] });
     insertRows.mockRejectedValueOnce(new Error('clickhouse 500'));
-    await expect(run(svc, { events: [{ model: 'gpt-4o', input_tokens: 1 }] })).rejects.toThrow(/clickhouse 500/);
+    await expect(run(svc, { events: [{ idempotency_key: 'k1', model: 'gpt-4o', input_tokens: 1 }] })).rejects.toThrow(
+      /clickhouse 500/,
+    );
+    expect(queryRaw).toHaveBeenCalledTimes(1);
   });
 
   it('rejects the whole batch with line numbers when any row is invalid', async () => {

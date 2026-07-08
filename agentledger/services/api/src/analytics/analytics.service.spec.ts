@@ -27,6 +27,16 @@ function emptyCopilotMemberSpend(): CopilotMemberSpendService {
   } as unknown as CopilotMemberSpendService;
 }
 
+function emptyCursorAnalytics() {
+  return {
+    getSpendSummary: jest.fn(async () => null),
+    getDailyBilledSpend: jest.fn(async () => []),
+    getUserBilledSpend: jest.fn(async () => []),
+    getUserBilledBreakdown: jest.fn(async () => []),
+    getUserDailyBilledSpend: jest.fn(async () => []),
+  };
+}
+
 /** Build an AnalyticsService with mocked ClickHouse + LARI. */
 function harness(agentIds: string[]) {
   const queryScoped = jest.fn(async () => agentIds.map((id) => ({ agent_id: id })));
@@ -46,8 +56,86 @@ function harness(agentIds: string[]) {
   const copilotAnalytics = {
     getSpendSummary: jest.fn(async () => null),
   } as unknown as CopilotAnalyticsService;
-  return { svc: new AnalyticsService(ch, prisma, lari, copilotAnalytics, emptyCopilotMemberSpend()), computeForAgent };
+  return { svc: new AnalyticsService(ch, prisma, lari, copilotAnalytics, emptyCopilotMemberSpend(), emptyCursorAnalytics() as never), computeForAgent };
 }
+
+describe('AnalyticsService.meteredSpend', () => {
+  it('merges Copilot daily spend from Postgres into llm_calls metered totals', async () => {
+    const queryScoped = jest.fn(async (sql: string) => {
+      if (sql.includes('toDate(ts) AS day')) {
+        return [
+          { day: '2026-07-01', cost_usd: 100, calls: 10, tokens: 1000, blocked_calls: 0, error_calls: 0 },
+          { day: '2026-07-02', cost_usd: 50, calls: 5, tokens: 500, blocked_calls: 0, error_calls: 0 },
+        ];
+      }
+      return [];
+    });
+    const ch = { queryScoped } as unknown as ClickHouseService;
+    const copilotAnalytics = {
+      getSpendSummary: jest.fn(async () => ({
+        totalCostUsd: 30,
+        daily: [{ day: '2026-07-01', cost_usd: 30 }],
+        platform: { platform: 'GitHub Copilot', cost_usd: 30, calls: 3 },
+        modelMix: [],
+        estimatedValueUsd: 0,
+        totalCalls: 3,
+      })),
+    } as unknown as CopilotAnalyticsService;
+    const cursorAnalytics = {
+      getSpendSummary: jest.fn(async () => null),
+      getDailyBilledSpend: jest.fn(async () => [
+        { day: '2026-07-02', cost_usd: 208.51, calls: 115 },
+      ]),
+    };
+    const svc = new AnalyticsService(
+      ch,
+      {} as PrismaService,
+      {} as LariService,
+      copilotAnalytics,
+      emptyCopilotMemberSpend(),
+      cursorAnalytics as never,
+    );
+
+    const rows = await svc.spend('2026-07-01', '2026-07-02');
+    expect(queryScoped).toHaveBeenCalled();
+    expect(rows).toEqual([
+      expect.objectContaining({ day: '2026-07-01', cost_usd: 130 }),
+      expect.objectContaining({ day: '2026-07-02', cost_usd: 50, calls: 5 }),
+    ]);
+  });
+
+  it('uses metered cost for platform spend across all connectors', async () => {
+    const queryScoped = jest.fn(async () => [
+      { platform: 'openai', cost_usd: 100, calls: 10 },
+      { platform: 'cursor', cost_usd: 208.51, calls: 115 },
+    ]);
+    const ch = { queryScoped } as unknown as ClickHouseService;
+    const cursorAnalytics = {
+      getSpendSummary: jest.fn(async () => null),
+      getDailyBilledSpend: jest.fn(async () => []),
+      getUserBilledSpend: jest.fn(async () => []),
+      getUserBilledBreakdown: jest.fn(async () => []),
+      getUserDailyBilledSpend: jest.fn(async () => []),
+    };
+    const svc = new AnalyticsService(
+      ch,
+      {} as PrismaService,
+      {} as LariService,
+      { getSpendSummary: jest.fn(async () => null) } as unknown as CopilotAnalyticsService,
+      emptyCopilotMemberSpend(),
+      cursorAnalytics as never,
+    );
+
+    const rows = await svc.platformSpend('2026-07-01', '2026-07-06');
+    expect(queryScoped).toHaveBeenCalled();
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        { platform: 'openai', cost_usd: 100, calls: 10 },
+        { platform: 'cursor', cost_usd: 208.51, calls: 115 },
+      ]),
+    );
+  });
+});
 
 describe('AnalyticsService.agentEconomics', () => {
   it('runs LARI per agent and sorts by risk-adjusted ROI descending', async () => {
@@ -101,7 +189,7 @@ describe('AnalyticsService.sourceReconciliation', () => {
     const ch = { queryScoped } as unknown as ClickHouseService;
     const svc = new AnalyticsService(ch, {} as PrismaService, {} as LariService, {
       getSpendSummary: jest.fn(async () => null),
-    } as unknown as CopilotAnalyticsService, emptyCopilotMemberSpend());
+    } as unknown as CopilotAnalyticsService, emptyCopilotMemberSpend(), emptyCursorAnalytics() as never);
     const result = await svc.sourceReconciliation('2026-03-01', '2026-04-30');
     expect(result.summary.portalTotalUsd).toBeCloseTo(17.5);
     expect(result.summary.apiTotalUsd).toBeCloseTo(13);
@@ -158,17 +246,20 @@ describe('AnalyticsService.users', () => {
           },
         ];
       }
-      return [
-        { user_id: uuidAlice, total_spend_usd: 50, calls: 15 },
-        { user_id: 'cursor-user-99', total_spend_usd: 8, calls: 2 },
-        { user_id: 'orphan-handle', total_spend_usd: 4, calls: 1 },
-        { user_id: 'zero-spend', total_spend_usd: 0, calls: 0 },
-      ];
+      if (sql.includes('GROUP BY user_id')) {
+        return [
+          { user_id: uuidAlice, total_spend_usd: 50, calls: 15 },
+          { user_id: 'cursor-user-99', total_spend_usd: 8, calls: 2 },
+          { user_id: 'orphan-handle', total_spend_usd: 4, calls: 1 },
+          { user_id: 'zero-spend', total_spend_usd: 0, calls: 0 },
+        ];
+      }
+      return [];
     });
     const ch = { queryScoped } as unknown as ClickHouseService;
     const svc = new AnalyticsService(ch, {} as PrismaService, {} as LariService, {
       getSpendSummary: jest.fn(async () => null),
-    } as unknown as CopilotAnalyticsService, emptyCopilotMemberSpend());
+    } as unknown as CopilotAnalyticsService, emptyCopilotMemberSpend(), emptyCursorAnalytics() as never);
     return { svc, queryScoped };
   }
 
@@ -226,7 +317,7 @@ describe('AnalyticsService.users', () => {
     const ch = { queryScoped } as unknown as ClickHouseService;
     const svc = new AnalyticsService(ch, {} as PrismaService, {} as LariService, {
       getSpendSummary: jest.fn(async () => null),
-    } as unknown as CopilotAnalyticsService, emptyCopilotMemberSpend());
+    } as unknown as CopilotAnalyticsService, emptyCopilotMemberSpend(), emptyCursorAnalytics() as never);
     const result = await svc.users('2026-06-01', '2026-06-30');
     expect(result.users).toHaveLength(1);
     expect(result.users[0]).toMatchObject({
@@ -282,6 +373,7 @@ describe('AnalyticsService.users', () => {
       {} as LariService,
       { getSpendSummary: jest.fn(async () => null) } as unknown as CopilotAnalyticsService,
       { getMemberSpend } as unknown as CopilotMemberSpendService,
+      emptyCursorAnalytics() as never,
     );
 
     const result = await svc.users('2026-06-01', '2026-06-30');
@@ -303,5 +395,41 @@ describe('AnalyticsService.users', () => {
     expect(row?.user_id).toBe(uuidAlice);
     expect(row?.model_breakdown).toHaveLength(2);
     expect(await svc.userDetail('missing-user', '2026-06-01', '2026-06-30')).toBeNull();
+  });
+
+  it('merges Cursor billed overage into user spend via metered llm_calls query', async () => {
+    const queryScoped = jest.fn(async (sql: string) => {
+      if (sql.includes('GROUP BY user_id, provider, model')) {
+        return [
+          { user_id: 'dev@company.com', platform: 'openai', model: 'gpt-4o', spend_usd: 10, calls: 2 },
+          { user_id: 'brandon@example.com', platform: 'cursor', model: 'claude-opus', spend_usd: 170.12, calls: 90 },
+        ];
+      }
+      if (sql.includes('GROUP BY user_id')) {
+        return [
+          { user_id: 'dev@company.com', total_spend_usd: 10, calls: 2 },
+          { user_id: 'brandon@example.com', total_spend_usd: 170.12, calls: 90 },
+        ];
+      }
+      return [];
+    });
+    const ch = { queryScoped } as unknown as ClickHouseService;
+    const svc = new AnalyticsService(
+      ch,
+      {} as PrismaService,
+      {} as LariService,
+      { getSpendSummary: jest.fn(async () => null) } as unknown as CopilotAnalyticsService,
+      emptyCopilotMemberSpend(),
+      emptyCursorAnalytics() as never,
+    );
+
+    const result = await svc.users('2026-07-01', '2026-07-06');
+    const cursorUser = result.users.find((u) => u.user_id === 'brandon@example.com');
+    expect(cursorUser?.total_spend_usd).toBe(170.12);
+    expect(cursorUser?.model_breakdown).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ platform: 'cursor', spend_usd: 170.12 }),
+      ]),
+    );
   });
 });

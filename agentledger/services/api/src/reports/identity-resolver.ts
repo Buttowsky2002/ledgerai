@@ -160,7 +160,12 @@ export function rollupUserSpendForChart(rows: UserSpendRow[], topN = 15): UserSp
   return out;
 }
 
-/** Resolve spend rows via v_identities + aliases; bucket unresolved into one row. */
+/**
+ * Resolve spend rows via v_identities + aliases. Unresolved identifiers keep their
+ * own row (email local-part or raw handle as display name) so the report lists the
+ * same real users as the dashboard directory; only empty/'Unassigned' ids are
+ * bucketed into a single Unassigned row.
+ */
 export async function resolveUserIdentities(
   prisma: PrismaService,
   tenantId: string,
@@ -171,9 +176,6 @@ export async function resolveUserIdentities(
   const { byId, byEmail, byAlias } = await loadIdentityLookups(prisma, tenantId);
 
   const resolved: UserSpendRow[] = [];
-  let unattributedCost = 0;
-  let unattributedCalls = 0;
-  let unattributedIds = 0;
   let unassignedCost = 0;
   let unassignedCalls = 0;
 
@@ -183,28 +185,16 @@ export async function resolveUserIdentities(
       unassignedCalls += row.calls;
       continue;
     }
-    const hit = matchIdentity(row.userId, byId, byEmail, byAlias);
-    if (hit) {
-      resolved.push({ ...row, displayName: hit.displayName, teamName: hit.teamName });
-    } else {
-      unattributedCost += row.costUsd;
-      unattributedCalls += row.calls;
-      unattributedIds += 1;
-    }
+    const identity = resolveUserDirectoryIdentity(row.userId, byId, byEmail, byAlias);
+    resolved.push({
+      ...row,
+      displayName: identity.display_name,
+      teamName: identity.team,
+    });
   }
 
   const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
   const merged = [...resolved];
-  if (unattributedIds > 0 && unattributedCost > 0) {
-    const suffix = unattributedIds === 1 ? '' : ` (${unattributedIds} identifiers)`;
-    merged.push({
-      userId: '__unattributed__',
-      displayName: `${UNATTRIBUTED_LABEL}${suffix}`,
-      teamName: '',
-      costUsd: round2(unattributedCost),
-      calls: unattributedCalls,
-    });
-  }
   if (unassignedCost > 0) {
     merged.push({
       userId: '__unassigned__',

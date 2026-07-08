@@ -42,7 +42,7 @@ export async function FixedOverheadPanel({ from, to }: { from: string; to: strin
   return (
     <Card
       title="Fixed / overhead costs"
-      subtitle="Un-attributable overhead — not assigned to any agent"
+      subtitle={`${from} → ${to} · seat subscriptions prorated by days in range`}
       actions={
         <Link href="/admin/fixed-overhead" className="text-xs text-accent hover:underline">
           Manage seats & plans

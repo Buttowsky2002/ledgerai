@@ -1,7 +1,10 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { ChParam, ClickHouseService } from '../clickhouse/clickhouse.service';
+import { ChParam } from '../clickhouse/clickhouse.service';
+import { AnalyticsStore } from '../analytics-store/analytics-store';
+import { UserValueService } from '../analytics/user-value.service';
 import { COPILOT_PROVIDER } from '../github-copilot/github-copilot.types';
 import { PrismaService } from '../prisma/prisma.service';
+import { getPerUserAnalyticsMode } from '../tenant/per-user-analytics';
 import { getTenantId } from '../tenant/tenant-context';
 import { generateLariRecommendations } from './lari-recommendations';
 import {
@@ -9,6 +12,7 @@ import {
   LariRecommendationsInput,
   LariRecommendationsResponse,
 } from './lari-recommendations.types';
+import { ModelRate } from './model-equivalence';
 import { LariService } from './lari.service';
 import { Recommendation } from './lari.types';
 
@@ -24,9 +28,10 @@ const MS_DAY = 86_400_000;
 @Injectable()
 export class LariRecommendationsService {
   constructor(
-    private readonly ch: ClickHouseService,
+    private readonly ch: AnalyticsStore,
     private readonly prisma: PrismaService,
     private readonly lari: LariService,
+    private readonly userValue: UserValueService,
   ) {}
 
   async getRecommendations(from?: string, to?: string): Promise<LariRecommendationsResponse> {
@@ -47,9 +52,12 @@ export class LariRecommendationsService {
       unmappedSpend,
       agentIds,
       agentProviderSpend,
+      modelUsageRows,
+      priceBook,
       seatStats,
       subscriptionPlans,
       copilotInactive,
+      perUserMode,
     ] = await Promise.all([
       this.ch.queryScoped<{ provider: string; cost_usd: number; calls: number }>(
         `SELECT provider, sum(cost_usd) AS cost_usd, sum(calls) AS calls
@@ -88,10 +96,33 @@ export class LariRecommendationsService {
          GROUP BY agent_id, provider`,
         params,
       ),
+      this.ch.queryScoped<{
+        provider: string;
+        model: string;
+        input_tokens: number;
+        output_tokens: number;
+        cost_usd: number;
+        calls: number;
+      }>(
+        `SELECT provider, model,
+                sum(input_tokens) AS input_tokens,
+                sum(output_tokens) AS output_tokens,
+                sum(cost_usd) AS cost_usd,
+                sum(calls) AS calls
+         FROM spend_daily
+         WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date}
+         GROUP BY provider, model
+         ORDER BY cost_usd DESC`,
+        params,
+      ),
+      this.loadPriceBookAt(r.to),
       this.seatStats(tenantId),
       this.subscriptionPlans(tenantId),
       this.copilotInactiveSeats(tenantId),
+      getPerUserAnalyticsMode(this.prisma, tenantId),
     ]);
+
+    const userUtilization = await this.userValue.assembleUserUtilization(tenantId, r, perUserMode);
 
     const agentEconomics = await this.buildAgentEconomics(
       agentIds.map((a) => a.agent_id),
@@ -123,6 +154,17 @@ export class LariRecommendationsService {
       })),
       copilotInactiveSeats: copilotInactive.count,
       copilotSeatMonthlyCost: copilotInactive.seatPrice,
+      modelUsage: modelUsageRows.map((row) => ({
+        provider: String(row.provider),
+        model: String(row.model),
+        inputTokens: n(row.input_tokens),
+        outputTokens: n(row.output_tokens),
+        costUsd: n(row.cost_usd),
+        calls: n(row.calls),
+      })),
+      priceBook,
+      userUtilization,
+      perUserMode,
     };
 
     const { recommendations, providerRankings } = generateLariRecommendations(engineInput);
@@ -171,20 +213,19 @@ export class LariRecommendationsService {
       if (top) topProviderByAgent.set(agentId, top);
     }
 
-    const rows = await Promise.all(
-      agentIds.map(async (agentId): Promise<AgentEconomicsHighlight> => {
-        const result = await this.lari.computeForAgent(agentId, r.from, r.to);
-        return {
-          agentId,
-          costUsd: result.fullyLoadedCostUsd,
-          valueUsd: result.attributedIncrementalValueUsd,
-          lari: result.lari,
-          confidenceScore: result.confidenceScore,
-          recommendation: result.recommendation as Recommendation,
-          topProvider: topProviderByAgent.get(agentId),
-        };
-      }),
-    );
+    const rows: AgentEconomicsHighlight[] = [];
+    for (const agentId of agentIds) {
+      const result = await this.lari.computeForAgent(agentId, r.from, r.to);
+      rows.push({
+        agentId,
+        costUsd: result.fullyLoadedCostUsd,
+        valueUsd: result.attributedIncrementalValueUsd,
+        lari: result.lari,
+        confidenceScore: result.confidenceScore,
+        recommendation: result.recommendation as Recommendation,
+        topProvider: topProviderByAgent.get(agentId),
+      });
+    }
     return rows.sort((a, b) => b.valueUsd - a.valueUsd);
   }
 
@@ -248,26 +289,66 @@ export class LariRecommendationsService {
   private async copilotInactiveSeats(
     tenantId: string,
   ): Promise<{ count: number; seatPrice: number }> {
-    const connections = await this.prisma.withTenant(tenantId, (tx) =>
-      tx.aiProviderConnection.findMany({
+    const connections = await this.prisma.withTenant(tenantId, async (tx) => {
+      const conns = await tx.aiProviderConnection.findMany({
         where: { tenantId, provider: COPILOT_PROVIDER },
         select: { connectionId: true },
-      }),
-    );
-    if (connections.length === 0) return { count: 0, seatPrice: 19 };
-
-    const connectionIds = connections.map((c) => c.connectionId);
-    const seats = await this.prisma.withTenant(tenantId, (tx) =>
-      tx.githubCopilotSeat.findMany({
+      });
+      if (conns.length === 0) return { connections: conns, seats: [] as { lastActivityAt: Date | null }[] };
+      const connectionIds = conns.map((c) => c.connectionId);
+      const seatRows = await tx.githubCopilotSeat.findMany({
         where: { tenantId, connectionId: { in: connectionIds }, isActive: true },
         select: { lastActivityAt: true },
-      }),
-    );
+      });
+      return { connections: conns, seats: seatRows };
+    });
+    if (connections.connections.length === 0) return { count: 0, seatPrice: 19 };
+
+    const seats = connections.seats;
     const now = Date.now();
     const inactive = seats.filter((s) => {
       if (!s.lastActivityAt) return true;
       return (now - s.lastActivityAt.getTime()) / MS_DAY >= 14;
     });
     return { count: inactive.length, seatPrice: 19 };
+  }
+
+  /** Global price book rows effective at range end — pivoted to input/output ModelRate pairs. */
+  private async loadPriceBookAt(effectiveDate: string): Promise<ModelRate[]> {
+    const at = new Date(`${effectiveDate}T23:59:59.999Z`);
+    const rows = await this.prisma.priceBook.findMany({
+      where: {
+        effectiveStart: { lte: at },
+        OR: [{ effectiveEnd: null }, { effectiveEnd: { gt: at } }],
+        tokenType: { in: ['input', 'output'] },
+      },
+      select: {
+        provider: true,
+        modelPrefix: true,
+        tokenType: true,
+        usdPerMillion: true,
+      },
+    });
+
+    const byModel = new Map<string, Partial<ModelRate>>();
+    for (const row of rows) {
+      const key = `${row.provider}::${row.modelPrefix}`;
+      const entry = byModel.get(key) ?? {
+        provider: row.provider,
+        model: row.modelPrefix,
+      };
+      const rate = n(row.usdPerMillion);
+      if (row.tokenType === 'input') entry.inputUsdPerM = rate;
+      if (row.tokenType === 'output') entry.outputUsdPerM = rate;
+      byModel.set(key, entry);
+    }
+
+    return [...byModel.values()].filter(
+      (r): r is ModelRate =>
+        r.inputUsdPerM !== undefined &&
+        r.outputUsdPerM !== undefined &&
+        r.provider !== undefined &&
+        r.model !== undefined,
+    );
   }
 }

@@ -23,6 +23,7 @@ describe('GitHubCopilotSyncService integration', () => {
     githubCopilotUsageDaily: { upsert: jest.fn(), findMany: jest.fn(async () => []) },
     githubCopilotRoiDaily: { upsert: jest.fn(), findMany: jest.fn(async () => []) },
     githubCopilotMemberSpendDaily: { upsert: jest.fn() },
+    githubCopilotBillingLine: { upsert: jest.fn(), findMany: jest.fn(async () => []) },
   };
 
   beforeEach(() => {
@@ -67,6 +68,7 @@ describe('GitHubCopilotSyncService integration', () => {
         },
       ]),
       fetchUsers1DayUsage: jest.fn(async () => []),
+      fetchAiCreditUsageForLookback: jest.fn(async () => []),
     }));
   });
 
@@ -79,7 +81,13 @@ describe('GitHubCopilotSyncService integration', () => {
     });
     mockTx.connector.findUnique.mockResolvedValue({ secretRef: 'secret-1' });
     mockTx.githubCopilotSeat.findMany.mockResolvedValue([
-      { assigningTeamSlug: 'eng', isActive: true, lastActivityAt: new Date() },
+      {
+        githubLogin: 'alice',
+        assigningTeamSlug: 'eng',
+        isActive: true,
+        lastActivityAt: new Date(),
+        monthlySeatCost: 19,
+      },
     ]);
 
     const svc = new GitHubCopilotSyncService(

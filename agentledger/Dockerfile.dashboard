@@ -1,0 +1,71 @@
+# =============================================================================
+# BadgerIQ dashboard (Next.js) — production image for Google Cloud Run
+# =============================================================================
+#
+# The dashboard is a Next.js server app with server-side BFF/proxy routes, so
+# it runs as its OWN Cloud Run service (one process per container) and talks
+# to the API service over HTTP. It cannot be folded into the API image as
+# static files.
+#
+# Build from the repo root (context must include packages/shared-types):
+#   docker build -f Dockerfile.dashboard \
+#     -t us-central1-docker.pkg.dev/badgeriq-prod/badgeriq/badgeriq-dashboard:latest \
+#     --build-arg BADGERIQ_API_URL=https://badgeriq-api-<hash>-uc.a.run.app .
+#
+# Cloud Run contract:
+#   - Next standalone server.js reads $PORT at startup (ENV PORT=8080 below is
+#     only the local default; Cloud Run's value wins)
+#   - node is PID 1 (exec-form CMD) → receives SIGTERM for graceful shutdown
+#   - Runs as the non-root `node` user
+
+# -----------------------------------------------------------------------------
+# Stage 1 — build. Layout mirrors the monorepo so the dashboard's
+# "file:../../packages/shared-types" dependency resolves during npm ci.
+# -----------------------------------------------------------------------------
+FROM node:20-slim AS build
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /repo
+
+# shared-types (local file: dependency of the dashboard)
+COPY packages/shared-types/package.json packages/shared-types/package-lock.json packages/shared-types/
+COPY packages/shared-types/tsconfig.json packages/shared-types/
+COPY packages/shared-types/src packages/shared-types/src
+WORKDIR /repo/packages/shared-types
+RUN npm ci && npm run build
+
+# Dashboard dependencies (cached until the lockfile changes)
+COPY apps/dashboard/package.json apps/dashboard/package-lock.json /repo/apps/dashboard/
+WORKDIR /repo/apps/dashboard
+RUN npm ci
+
+# Dashboard source + production build (standalone output)
+COPY apps/dashboard /repo/apps/dashboard
+RUN mkdir -p public
+ENV NEXT_TELEMETRY_DISABLED=1
+# Where the server-side BFF proxies API calls. A build-time default only —
+# override at runtime with the BADGERIQ_API_URL env var on the Cloud Run service.
+ARG BADGERIQ_API_URL=http://api:8094
+ENV BADGERIQ_API_URL=$BADGERIQ_API_URL
+RUN npm run build
+
+# -----------------------------------------------------------------------------
+# Stage 2 — runtime: only the standalone server + static assets, non-root.
+# -----------------------------------------------------------------------------
+FROM node:20-slim AS run
+WORKDIR /app
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    # Local default; Cloud Run injects its own PORT which server.js reads.
+    PORT=8080 \
+    HOSTNAME=0.0.0.0
+
+COPY --from=build --chown=node:node /repo/apps/dashboard/public ./public
+COPY --from=build --chown=node:node /repo/apps/dashboard/.next/standalone ./
+COPY --from=build --chown=node:node /repo/apps/dashboard/.next/static ./.next/static
+
+USER node
+
+EXPOSE 8080
+CMD ["node", "server.js"]
