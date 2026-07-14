@@ -17,7 +17,7 @@ resource "aws_kms_alias" "postgres" {
 
 resource "aws_security_group" "postgres" {
   name_prefix = "${var.name}-postgres-"
-  description = "RDS PostgreSQL — ingress from ECS tasks only"
+  description = "RDS PostgreSQL - ingress from ECS tasks only"
   vpc_id      = var.vpc_id
   tags        = merge(var.tags, { Name = "${var.name}-postgres" })
 
@@ -55,7 +55,7 @@ resource "aws_db_subnet_group" "main" {
 resource "aws_db_parameter_group" "main" {
   name_prefix = "${var.name}-pg16-"
   family      = "postgres16"
-  description = "BadgerIQ PostgreSQL 16 — force SSL, log slow queries"
+  description = "BadgerIQ PostgreSQL 16 - force SSL, log slow queries"
 
   parameter {
     name  = "rds.force_ssl"

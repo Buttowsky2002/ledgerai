@@ -14,7 +14,7 @@ variable "private_subnet_ids" {
 }
 
 variable "ecs_task_security_group_id" {
-  description = "ECS task SG — only source allowed to reach Postgres."
+  description = "ECS task SG - only source allowed to reach Postgres."
   type        = string
 }
 

@@ -1,7 +1,7 @@
 # ── Core ──────────────────────────────────────────────────────────────────────
 
 variable "environment" {
-  description = "Deployment environment (pilot or prod). No default — force explicit choice."
+  description = "Deployment environment (pilot or prod). No default - force explicit choice."
   type        = string
 
   validation {

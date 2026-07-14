@@ -44,7 +44,7 @@ resource "aws_efs_file_system" "redpanda" {
 
 resource "aws_security_group" "efs" {
   name_prefix = "${var.name}-redpanda-efs-"
-  description = "EFS mount targets — ingress from ECS tasks only"
+  description = "EFS mount targets - ingress from ECS tasks only"
   vpc_id      = var.vpc_id
   tags        = merge(var.tags, { Name = "${var.name}-redpanda-efs" })
 
@@ -240,7 +240,7 @@ resource "aws_vpc_security_group_ingress_rule" "redpanda_from_ecs" {
   from_port                    = 9092
   to_port                      = 9092
   ip_protocol                  = "tcp"
-  description                  = "Kafka wire protocol — Redpanda from ECS tasks"
+  description                  = "Kafka wire protocol - Redpanda from ECS tasks"
 }
 
 resource "aws_ecs_service" "redpanda" {

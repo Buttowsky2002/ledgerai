@@ -14,7 +14,7 @@ variable "private_subnet_ids" {
 }
 
 variable "ecs_task_security_group_id" {
-  description = "ECS task SG — Redpanda accepts Kafka-protocol connections from this group."
+  description = "ECS task SG - Redpanda accepts Kafka-protocol connections from this group."
   type        = string
 }
 

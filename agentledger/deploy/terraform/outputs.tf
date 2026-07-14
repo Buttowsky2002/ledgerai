@@ -76,6 +76,6 @@ output "clickhouse_secret_arn" {
 # ── Placeholder for Phase 4 ──────────────────────────────────────────────────
 
 output "alb_dns_name" {
-  description = "ALB DNS name (populated in Phase 4 — ECS + ALB)."
+  description = "ALB DNS name (populated in Phase 4 - ECS + ALB)."
   value       = null
 }

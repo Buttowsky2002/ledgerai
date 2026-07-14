@@ -2,7 +2,7 @@
 
 resource "aws_security_group" "redis" {
   name_prefix = "${var.name}-redis-"
-  description = "ElastiCache Redis — ingress from ECS tasks only"
+  description = "ElastiCache Redis - ingress from ECS tasks only"
   vpc_id      = var.vpc_id
   tags        = merge(var.tags, { Name = "${var.name}-redis" })
 
