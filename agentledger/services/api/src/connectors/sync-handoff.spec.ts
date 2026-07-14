@@ -5,12 +5,29 @@ import {
 } from './sync-handoff';
 
 describe('sync-handoff', () => {
-  it('clamps sync from date to apiSyncBaselineFrom', () => {
+  it('clamps sync from date to apiSyncBaselineFrom when to is on or after baseline', () => {
     const range = resolveConnectorSyncRange(
       { from: '2026-01-01', to: '2026-06-01' },
       { apiSyncBaselineFrom: '2026-04-01' },
     );
     expect(range).toEqual({ from: '2026-04-01', to: '2026-06-01' });
+  });
+
+  it('allows manual re-backfill when to is before apiSyncBaselineFrom', () => {
+    const range = resolveConnectorSyncRange(
+      { from: '2026-06-08', to: '2026-07-08' },
+      { apiSyncBaselineFrom: '2026-07-09' },
+    );
+    expect(range).toEqual({ from: '2026-06-08', to: '2026-07-08' });
+  });
+
+  it('skips incremental sync when window ends before apiSyncBaselineFrom', () => {
+    const range = resolveConnectorSyncRange(
+      { from: '2026-07-06', to: '2026-07-08' },
+      { apiSyncBaselineFrom: '2026-07-09' },
+      { incremental: true },
+    );
+    expect(range).toBeNull();
   });
 
   it('defaults API sync to baseline through today when no range given', () => {

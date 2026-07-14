@@ -21,6 +21,47 @@ describe('cursor-usage preset', () => {
     expect(preset.endpoints[0].path).toBe('/teams/filtered-usage-events');
     expect(preset.endpoints[0].method).toBe('POST');
     expect(preset.capabilities?.supportsUserLevelCost).toBe(true);
+    expect(preset.capabilities?.supportsUsers).toBe(true);
+  });
+
+  it('includes companion fetch for daily code activity', () => {
+    expect(preset.companionFetches).toHaveLength(1);
+    const companion = preset.companionFetches![0];
+    expect(companion.id).toBe('codingActivity');
+    expect(companion.destinationRecordType).toBe('coding_activity_record');
+    expect(companion.endpoint.path).toBe('/teams/daily-usage-data');
+    expect(companion.pagination?.itemsPath).toBe('data');
+    expect(companion.pagination?.type).toBe('page');
+    const toolName = companion.fieldMappings.find(
+      (m) => m.type === 'constant' && m.target === 'tool_name',
+    );
+    expect(toolName && toolName.type === 'constant' ? toolName.value : undefined).toBe('cursor-usage');
+  });
+
+  it('maps daily usage rows to coding activity metrics', () => {
+    const companion = preset.companionFetches![0];
+    const raw = {
+      email: 'developer@company.com',
+      day: '2026-06-15',
+      acceptedLinesAdded: 120,
+      acceptedLinesDeleted: 30,
+      totalLinesAdded: 200,
+      totalLinesDeleted: 50,
+      totalTabsAccepted: 42,
+      composerRequests: 10,
+      chatRequests: 25,
+    };
+    const { metrics } = mapFields(raw, companion.fieldMappings);
+    const errors = validateMetrics(metrics, companion.validationRules);
+    expect(errors).toEqual([]);
+    expect(metrics.user_email).toBe('developer@company.com');
+    expect(metrics.lines_accepted).toBe(150);
+    expect(metrics.lines_committed).toBe(200);
+    expect(metrics.tabs_accepted).toBe(42);
+    expect(metrics.composer_requests).toBe(10);
+    expect(metrics.chat_requests).toBe(25);
+    expect(metrics.tool_name).toBe('cursor-usage');
+    expect(metrics.provider).toBe('cursor');
   });
 
   it('builds POST body with unix ms date range and page', () => {

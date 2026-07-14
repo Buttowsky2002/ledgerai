@@ -1,4 +1,5 @@
 import {
+  CompanionFetchConfig,
   ConnectorDefinition,
   SupplementalFetchConfig,
   TemplateContext,
@@ -38,6 +39,7 @@ export interface FetchAllResult {
   errors: { recordRef: string; code: string; message: string }[];
   requestCount: number;
   finalCursor?: string;
+  companionStepsCompleted?: string[];
 }
 
 import { buildTemplateContext } from './sync-context';
@@ -55,6 +57,32 @@ function mergeDefinition(
     validationRules: patch.validationRules ?? base.validationRules,
     fallbackDefinition: undefined,
   };
+}
+
+function buildFetchDefinition(
+  base: ConnectorDefinition,
+  override: Pick<
+    ConnectorDefinition,
+    'endpoints' | 'pagination' | 'fieldMappings' | 'validationRules' | 'dedupe' | 'destinationRecordType'
+  >,
+): ConnectorDefinition {
+  return {
+    ...base,
+    endpoints: override.endpoints,
+    pagination: override.pagination ?? { type: 'none' },
+    fieldMappings: override.fieldMappings,
+    validationRules: override.validationRules,
+    dedupe: override.dedupe ?? base.dedupe,
+    destinationRecordType: override.destinationRecordType,
+    supplementalFetch: undefined,
+    companionFetches: undefined,
+    fallbackDefinition: undefined,
+  };
+}
+
+function companionStepName(config: CompanionFetchConfig): string {
+  const id = config.id ?? config.destinationRecordType.replace(/_record$/, '');
+  return `fetch${id.charAt(0).toUpperCase()}${id.slice(1)}`;
 }
 
 function shouldUseFallback(err: unknown): boolean {
@@ -151,39 +179,17 @@ function mergeSupplementalMetrics(
   });
 }
 
-async function fetchSupplementalMetricsMap(
+/** Paginate a single endpoint and normalize rows — no supplemental or companion fetches. */
+export async function fetchEndpointRecords(
   ctx: SyncContext,
-  config: SupplementalFetchConfig,
   maxPages?: number,
-): Promise<{
-  map: Map<string, Record<string, unknown>>;
-  requestCount: number;
-  errors: FetchAllResult['errors'];
-}> {
-  const supplementalDef: ConnectorDefinition = {
-    ...ctx.definition,
-    endpoints: [config.endpoint],
-    pagination: config.pagination ?? { type: 'none' },
-    fieldMappings: config.fieldMappings,
-    validationRules: config.validationRules,
-  };
-  const subCtx: SyncContext = { ...ctx, definition: supplementalDef };
-  const fetched = await fetchAllRecords(subCtx, maxPages);
-  const map = new Map<string, Record<string, unknown>>();
-  for (const rec of fetched.records) {
-    map.set(metricsMergeKey(rec.metrics, config.mergeOn), rec.metrics);
-  }
-  return { map, requestCount: fetched.requestCount, errors: fetched.errors };
-}
-
-/** Fetch and normalize all pages from the connector API. */
-export async function fetchAllRecords(ctx: SyncContext, maxPages?: number): Promise<FetchAllResult> {
+): Promise<FetchAllResult> {
   const def = ctx.definition;
   const pagination = def.pagination ?? { type: 'none' as const };
   const pageSize = pagination.pageSize ?? 100;
   const limit = maxPages ?? pagination.maxPages ?? 50;
 
-  let records: NormalizedRecord[] = [];
+  const records: NormalizedRecord[] = [];
   const errors: FetchAllResult['errors'] = [];
   let requestCount = 0;
   let page = 1;
@@ -234,6 +240,44 @@ export async function fetchAllRecords(ctx: SyncContext, maxPages?: number): Prom
     }
   }
 
+  return { records, errors, requestCount, finalCursor };
+}
+
+async function fetchSupplementalMetricsMap(
+  ctx: SyncContext,
+  config: SupplementalFetchConfig,
+  maxPages?: number,
+): Promise<{
+  map: Map<string, Record<string, unknown>>;
+  requestCount: number;
+  errors: FetchAllResult['errors'];
+}> {
+  const supplementalDef = buildFetchDefinition(ctx.definition, {
+    endpoints: [config.endpoint],
+    pagination: config.pagination ?? { type: 'none' },
+    fieldMappings: config.fieldMappings,
+    validationRules: config.validationRules,
+    destinationRecordType: ctx.definition.destinationRecordType,
+  });
+  const subCtx: SyncContext = { ...ctx, definition: supplementalDef };
+  const fetched = await fetchEndpointRecords(subCtx, maxPages);
+  const map = new Map<string, Record<string, unknown>>();
+  for (const rec of fetched.records) {
+    map.set(metricsMergeKey(rec.metrics, config.mergeOn), rec.metrics);
+  }
+  return { map, requestCount: fetched.requestCount, errors: fetched.errors };
+}
+
+/** Fetch and normalize all pages from the connector API. */
+export async function fetchAllRecords(ctx: SyncContext, maxPages?: number): Promise<FetchAllResult> {
+  const def = ctx.definition;
+  const primary = await fetchEndpointRecords(ctx, maxPages);
+  let records = primary.records;
+  const errors: FetchAllResult['errors'] = [...primary.errors];
+  let requestCount = primary.requestCount;
+  const finalCursor = primary.finalCursor;
+  const primaryCount = records.length;
+
   if (def.supplementalFetch && records.length > 0) {
     try {
       const sup = await fetchSupplementalMetricsMap(ctx, def.supplementalFetch, maxPages);
@@ -250,7 +294,45 @@ export async function fetchAllRecords(ctx: SyncContext, maxPages?: number): Prom
     }
   }
 
-  return { records, errors, requestCount, finalCursor };
+  const companionStepsCompleted: string[] = [];
+  if (def.companionFetches?.length) {
+    for (const companion of def.companionFetches) {
+      if (companion.skipWhenPrimaryEmpty && primaryCount === 0) continue;
+      try {
+        const companionDef = buildFetchDefinition(ctx.definition, {
+          endpoints: [companion.endpoint],
+          pagination: companion.pagination ?? { type: 'none' },
+          fieldMappings: companion.fieldMappings,
+          validationRules: companion.validationRules,
+          dedupe: companion.dedupe,
+          destinationRecordType: companion.destinationRecordType,
+        });
+        const subCtx: SyncContext = { ...ctx, definition: companionDef };
+        const fetched = await fetchEndpointRecords(subCtx, maxPages);
+        requestCount += fetched.requestCount;
+        errors.push(...fetched.errors);
+        if (fetched.records.length > 0) {
+          records.push(...fetched.records);
+          companionStepsCompleted.push(companionStepName(companion));
+        }
+      } catch (err) {
+        const e = err as { code?: string; message?: string };
+        errors.push({
+          recordRef: `companionFetch:${companion.id ?? companion.destinationRecordType}`,
+          code: e.code ?? 'REQUEST_FAILED',
+          message: e.message ?? 'companion fetch failed',
+        });
+      }
+    }
+  }
+
+  return {
+    records,
+    errors,
+    requestCount,
+    finalCursor,
+    companionStepsCompleted: companionStepsCompleted.length ? companionStepsCompleted : undefined,
+  };
 }
 
 

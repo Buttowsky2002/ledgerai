@@ -120,8 +120,8 @@ export function CursorPlatformDetail({
           value={usd(seat)}
           accent={seat > 0}
           sub={
-            data.seatCount > 0
-              ? `${data.seatCount} seats · ${usd(data.seatUnitUsdPerMonth)}/mo · ${seatSourceLabel(data.seatSource)}`
+            data.seatCount > 0 && data.seatUnitUsdPerMonth > 0
+              ? `${data.seatCount} active members × ${usd(data.seatUnitUsdPerMonth)}/mo · ${seatSourceLabel(data.seatSource)}`
               : `${seatSourceLabel(data.seatSource)}`
           }
         />

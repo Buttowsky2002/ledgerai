@@ -58,7 +58,7 @@ export const PRESET_CAPABILITIES: Record<string, ConnectorCapabilities> = {
   'cursor-usage': {
     supportsUsage: true,
     supportsBilling: true,
-    supportsUsers: false,
+    supportsUsers: true,
     supportsProjects: false,
     supportsWorkspaces: false,
     supportsApiKeys: false,

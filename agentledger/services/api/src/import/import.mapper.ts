@@ -159,6 +159,7 @@ export function mapRow(data: unknown): MappedRow {
         dlp_action: riskSeverity ? 'warn' : 'allow',
         risk_severity: riskSeverity ?? '',
         source: str(r.source, 'source') ?? 'sdk',
+        import_run_id: str(r.import_run_id, 'import_run_id') ?? '',
       },
     });
   }
@@ -200,6 +201,13 @@ export function mapRow(data: unknown): MappedRow {
     });
     const codingProvider = codingAgentProvider(provider, toolName);
     if (codingProvider) {
+      const linesAccepted = num(r.lines_accepted, 'lines_accepted');
+      const linesAdded = num(r.lines_added, 'lines_added');
+      const linesDeleted = num(r.lines_deleted, 'lines_deleted');
+      const linesCommitted = num(r.lines_committed, 'lines_committed');
+      const tabsAccepted = num(r.tabs_accepted, 'tabs_accepted');
+      const composerRequests = num(r.composer_requests, 'composer_requests');
+      const chatRequests = num(r.chat_requests, 'chat_requests');
       events.push({
         table: 'coding_agent_daily',
         row: {
@@ -210,7 +218,14 @@ export function mapRow(data: unknown): MappedRow {
           agent_id: agentId,
           cost_usd: costUsd ?? 0,
           sessions: 1,
-          requests: 1,
+          requests: Math.max(1, Math.round(composerRequests ?? 0) + Math.round(chatRequests ?? 0)),
+          lines_accepted: Math.round(linesAccepted ?? 0),
+          lines_added: Math.round(linesAdded ?? 0),
+          lines_deleted: Math.round(linesDeleted ?? 0),
+          lines_committed: Math.round(linesCommitted ?? linesAdded ?? 0),
+          tabs_accepted: Math.round(tabsAccepted ?? 0),
+          composer_requests: Math.round(composerRequests ?? 0),
+          chat_requests: Math.round(chatRequests ?? 0),
         },
       });
     }

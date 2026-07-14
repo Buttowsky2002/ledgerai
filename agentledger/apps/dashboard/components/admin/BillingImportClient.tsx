@@ -39,6 +39,8 @@ type PortalPreview = {
   headers: string[];
   format?: FormatInfo;
   mapping: ColumnMapping | null;
+  provider?: string | null;
+  requiresProvider?: boolean;
   importable: boolean;
   parsed: number;
   skipped: number;
@@ -58,6 +60,8 @@ type StagedFile = {
   mapping: ColumnMapping | null;
   headerRoles: Record<string, string>;
   costUnit: 'usd' | 'cents';
+  /** User-selected billing provider when format is ambiguous. */
+  provider: string;
 };
 
 type UploadResult = {
@@ -78,6 +82,29 @@ type Reconciliation = {
   days: { day: string; portalCostUsd: number; apiCostUsd: number }[];
   summary: { portalTotalUsd: number; apiTotalUsd: number; overlapDays: number };
 };
+
+type ImportRun = {
+  id: string;
+  legacy: boolean;
+  createdAt: string;
+  actor: string;
+  provider: string;
+  providers: string[];
+  fileNames: string[];
+  dateRange: { from: string | null; to: string | null };
+  rowsImported: number;
+  rowsSkipped: number;
+  totalCostUsd: number;
+  deletable: boolean;
+};
+
+const BILLING_PROVIDERS = [
+  { value: 'anthropic', label: 'Anthropic' },
+  { value: 'cursor', label: 'Cursor' },
+  { value: 'openai', label: 'OpenAI' },
+  { value: 'google', label: 'Google' },
+  { value: 'azure', label: 'Azure OpenAI' },
+] as const;
 
 const COLUMN_ROLES = [
   { value: 'ignore', label: 'Ignore' },
@@ -201,10 +228,16 @@ export function BillingImportClient() {
   const [rangeTo, setRangeTo] = useState(() => defaultRange().to);
   const [reconciliation, setReconciliation] = useState<Reconciliation | null>(null);
   const [loadingRecon, setLoadingRecon] = useState(false);
+  const [importRuns, setImportRuns] = useState<ImportRun[]>([]);
+  const [loadingRuns, setLoadingRuns] = useState(false);
+  const [deletingRunId, setDeletingRunId] = useState<string | null>(null);
 
   const anthropicConnectors = useMemo(
     () => connectors.filter((c) => c.provider === 'anthropic' || c.kind === 'anthropic-usage'),
     [connectors],
+  );
+  const hasAnthropicImport = stagedFiles.some(
+    (f) => (f.provider || f.preview?.provider) === 'anthropic',
   );
   const selectedConnector = connectors.find((c) => c.connectorId === connectorId);
   const handoff = readHandoff(selectedConnector?.config);
@@ -216,8 +249,6 @@ export function BillingImportClient() {
     if (!res.ok) return;
     const list = Array.isArray(body) ? body : [];
     setConnectors(list);
-    const anthropic = list.filter((c) => c.provider === 'anthropic' || c.kind === 'anthropic-usage');
-    if (anthropic.length === 1) setConnectorId(anthropic[0].connectorId);
   }, []);
 
   const loadReconciliation = useCallback(async () => {
@@ -232,6 +263,17 @@ export function BillingImportClient() {
     }
   }, [rangeFrom, rangeTo]);
 
+  const loadImportRuns = useCallback(async () => {
+    setLoadingRuns(true);
+    try {
+      const res = await fetch('/api/portal-import/runs?limit=40');
+      const body = (await res.json()) as { runs?: ImportRun[] };
+      if (res.ok) setImportRuns(body.runs ?? []);
+    } finally {
+      setLoadingRuns(false);
+    }
+  }, []);
+
   useEffect(() => {
     void loadConnectors();
   }, [loadConnectors]);
@@ -239,6 +281,10 @@ export function BillingImportClient() {
   useEffect(() => {
     void loadReconciliation();
   }, [loadReconciliation]);
+
+  useEffect(() => {
+    void loadImportRuns();
+  }, [loadImportRuns]);
 
   const runPreview = useCallback(async (file: StagedFile, mapping?: ColumnMapping | null) => {
     const res = await fetch('/api/portal-import/anthropic/preview', {
@@ -248,6 +294,7 @@ export function BillingImportClient() {
         csv: file.csv,
         fileName: file.name,
         mapping: mapping ?? undefined,
+        provider: file.provider || undefined,
       }),
     });
     const body = (await res.json()) as PortalPreview & Record<string, unknown>;
@@ -271,15 +318,18 @@ export function BillingImportClient() {
           mapping: null,
           headerRoles: {},
           costUnit: 'usd',
+          provider: '',
         };
         const preview = await runPreview(stub);
         const mapping = preview.mapping;
         const costUnit = mapping?.costUnit ?? preview.suggestion?.inferredCostUnit ?? 'usd';
+        const provider = preview.provider ?? '';
         next.push({
           ...stub,
           preview,
           mapping,
           costUnit,
+          provider,
           headerRoles: mappingToRoles(mapping, preview.headers),
         });
       }
@@ -340,6 +390,24 @@ export function BillingImportClient() {
     );
   }
 
+  async function onProviderChange(provider: string) {
+    if (!activeFile) return;
+    const updated = { ...activeFile, provider };
+    setStagedFiles((prev) => prev.map((f, i) => (i === activeFileIdx ? updated : f)));
+    setPreviewing(true);
+    setError(null);
+    try {
+      const preview = await runPreview(updated, updated.mapping);
+      setStagedFiles((prev) =>
+        prev.map((f, i) => (i === activeFileIdx ? { ...f, preview, provider } : f)),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Preview failed');
+    } finally {
+      setPreviewing(false);
+    }
+  }
+
   async function onImport(dryRun: boolean) {
     if (!stagedFiles.length) {
       setError('Choose one or more CSV files first');
@@ -360,9 +428,10 @@ export function BillingImportClient() {
               name: f.name,
               csv: f.csv,
               mapping: f.mapping ?? rolesToMapping(f.headerRoles, f.costUnit, reportThroughDay) ?? undefined,
+              provider: f.provider || f.preview?.provider || undefined,
             };
           }),
-          connectorId: connectorId || undefined,
+          connectorId: hasAnthropicImport ? connectorId || undefined : undefined,
           dryRun,
         }),
       });
@@ -375,21 +444,93 @@ export function BillingImportClient() {
       if (!dryRun) {
         await loadConnectors();
         await loadReconciliation();
+        await loadImportRuns();
       }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Import failed');
     } finally {
       setUploading(false);
     }
   }
 
+  async function onDeleteRun(run: ImportRun) {
+    const label = run.legacy
+      ? `legacy import (${run.dateRange.from ?? '?'} → ${run.dateRange.to ?? '?'})`
+      : run.fileNames[0] ?? run.provider;
+    const msg = run.legacy
+      ? `Delete all portal import spend for ${label}? This removes every import row in that date window for the listed provider(s) — not just one file.`
+      : `Delete imported spend for "${label}"? This removes ${run.rowsImported} rows (${usd(run.totalCostUsd)}) from platform totals.`;
+    if (!window.confirm(msg)) return;
+
+    setDeletingRunId(run.id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/portal-import/runs/${encodeURIComponent(run.id)}`, { method: 'DELETE' });
+      const body = (await res.json()) as Record<string, unknown>;
+      if (!res.ok) {
+        setError(formatApiError(body, 'Delete failed'));
+        return;
+      }
+      await loadImportRuns();
+      await loadReconciliation();
+    } finally {
+      setDeletingRunId(null);
+    }
+  }
+
   const canImport = stagedFiles.some(
-    (f) => f.preview?.importable && f.preview?.format?.billable !== false,
+    (f) =>
+      f.preview?.importable &&
+      f.preview?.format?.billable !== false &&
+      !f.preview?.requiresProvider,
   );
   const previewRows = (activeFile?.preview?.preview ?? []).map((r) => ({
     day: String(r.timestamp ?? '').slice(0, 10),
     user: String(r.user_id ?? '—'),
+    provider: String(r.provider ?? '—'),
     model: String(r.model ?? '—'),
     cost: usd(Number(r.cost_usd ?? 0)),
   }));
+
+  const historyRows = importRuns.map((run) => {
+    const providerLabel =
+      BILLING_PROVIDERS.find((p) => p.value === run.provider)?.label ?? run.provider;
+    const files =
+      run.fileNames.length > 0
+        ? run.fileNames.join(', ')
+        : run.legacy
+          ? 'Legacy import (audit log)'
+          : '—';
+    const range =
+      run.dateRange.from && run.dateRange.to
+        ? `${run.dateRange.from} → ${run.dateRange.to}`
+        : '—';
+    return {
+      when: new Date(run.createdAt).toLocaleString(),
+      provider: (
+        <span className="inline-flex items-center gap-2">
+          {providerLabel}
+          {run.legacy ? <Badge tone="warn">Legacy</Badge> : null}
+        </span>
+      ),
+      files,
+      range,
+      imported: `${run.rowsImported}${run.rowsSkipped > 0 ? ` (+${run.rowsSkipped} dup)` : ''}`,
+      total: usd(run.totalCostUsd),
+      actions: run.deletable ? (
+        <button
+          type="button"
+          disabled={deletingRunId === run.id}
+          onClick={() => void onDeleteRun(run)}
+          className="rounded-md border border-neg/40 px-2 py-1 text-xs text-neg hover:bg-neg/10 disabled:opacity-50"
+        >
+          {deletingRunId === run.id ? 'Deleting…' : 'Delete'}
+        </button>
+      ) : (
+        <span className="text-xs text-muted">—</span>
+      ),
+    };
+  });
 
   const reconRows = (reconciliation?.days ?? []).map((d) => {
     const status = dayStatus(d.portalCostUsd, d.apiCostUsd);
@@ -406,7 +547,7 @@ export function BillingImportClient() {
       <PageHeader
         eyebrow="Admin"
         title="Billing import"
-        subtitle="Upload Anthropic spend report or Console billing CSVs. Cursor analytics and Claude Code line reports are detected but cannot be imported as billing data."
+        subtitle="Upload provider billing CSVs. Format is auto-detected; ambiguous files require you to pick the billing provider. Cursor analytics and Claude Code line reports are detected but cannot be imported as billing data."
       />
 
       {error && (
@@ -427,22 +568,29 @@ export function BillingImportClient() {
       <Card title="Upload CSVs" subtitle="Select one or more files. Each file is analyzed before import.">
         <div className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
-            <label className="block text-sm">
-              <span className="mb-1 block text-muted">Anthropic connector (optional)</span>
-              <select
-                className="w-full rounded-lg border border-edge bg-black/20 px-3 py-2 text-sm"
-                value={connectorId}
-                onChange={(e) => setConnectorId(e.target.value)}
-              >
-                <option value="">— None —</option>
-                {anthropicConnectors.map((c) => (
-                  <option key={c.connectorId} value={c.connectorId}>
-                    {c.displayName}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-sm">
+            {hasAnthropicImport && (
+              <label className="block text-sm">
+                <span className="mb-1 block text-muted">
+                  Anthropic API sync handoff (optional)
+                </span>
+                <span className="mb-2 block text-xs text-muted">
+                  Only updates connector sync dates after Anthropic imports — does not set the billing provider.
+                </span>
+                <select
+                  className="w-full rounded-lg border border-edge bg-black/20 px-3 py-2 text-sm"
+                  value={connectorId}
+                  onChange={(e) => setConnectorId(e.target.value)}
+                >
+                  <option value="">— None —</option>
+                  {anthropicConnectors.map((c) => (
+                    <option key={c.connectorId} value={c.connectorId}>
+                      {c.displayName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <label className={`block text-sm ${hasAnthropicImport ? '' : 'md:col-span-2'}`}>
               <span className="mb-1 block text-muted">Billing CSV(s)</span>
               <input
                 type="file"
@@ -516,8 +664,10 @@ export function BillingImportClient() {
           {!activeFile.preview?.importable && activeFile.preview && (
             <div className="mb-4 rounded-lg border border-warn/30 bg-warn/10 px-4 py-3 text-sm text-warn">
               {activeFile.preview.format?.billable === false
-                ? 'This file is not billable — use the Anthropic spend report CSV instead.'
-                : activeFile.preview.skippedZeroCost > 0
+                ? 'This file is not billable — use a provider spend/billing export CSV instead.'
+                : activeFile.preview.requiresProvider
+                  ? 'Select a billing provider below — imports are stamped with the provider you choose, not the Anthropic connector.'
+                  : activeFile.preview.skippedZeroCost > 0
                   ? `${activeFile.preview.skippedZeroCost} rows have zero/missing cost — verify the cost column or switch cost unit to cents.`
                   : 'Could not parse importable rows — adjust column mapping below.'}
               {activeFile.preview.parseErrors[0] && (
@@ -527,6 +677,25 @@ export function BillingImportClient() {
           )}
 
           <div className="mb-4 flex flex-wrap items-center gap-4">
+            <label className="flex items-center gap-2 text-sm text-muted">
+              Billing provider:
+              <select
+                value={activeFile.provider}
+                onChange={(e) => void onProviderChange(e.target.value)}
+                className="rounded border border-edge bg-black/20 px-2 py-1 text-sm text-gray-200"
+              >
+                <option value="">
+                  {activeFile.preview?.provider
+                    ? `Auto: ${BILLING_PROVIDERS.find((p) => p.value === activeFile.preview?.provider)?.label ?? activeFile.preview.provider}`
+                    : '— Select provider —'}
+                </option>
+                {BILLING_PROVIDERS.map((p) => (
+                  <option key={p.value} value={p.value}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label className="flex items-center gap-2 text-sm text-muted">
               Cost unit:
               <select
@@ -596,6 +765,7 @@ export function BillingImportClient() {
                 columns={[
                   { key: 'day', label: 'Day' },
                   { key: 'user', label: 'User' },
+                  { key: 'provider', label: 'Provider' },
                   { key: 'model', label: 'Model' },
                   { key: 'cost', label: 'Cost', align: 'right' },
                 ]}
@@ -659,6 +829,38 @@ export function BillingImportClient() {
               </ul>
             )}
           </div>
+        )}
+      </Card>
+
+      <Card
+        title="Import history"
+        subtitle="Past billing CSV imports. Deleting a run removes its spend from overview, users, and reconciliation."
+        actions={
+          <button
+            type="button"
+            disabled={loadingRuns}
+            onClick={() => void loadImportRuns()}
+            className="rounded-md border border-edge px-3 py-1.5 text-xs text-muted hover:bg-white/5"
+          >
+            {loadingRuns ? 'Loading…' : 'Refresh'}
+          </button>
+        }
+      >
+        {importRuns.length === 0 && !loadingRuns ? (
+          <p className="text-sm text-muted">No import runs yet. Imports after this deploy are tracked individually.</p>
+        ) : (
+          <DataTable
+            columns={[
+              { key: 'when', label: 'When' },
+              { key: 'provider', label: 'Provider' },
+              { key: 'files', label: 'Files' },
+              { key: 'range', label: 'Date range' },
+              { key: 'imported', label: 'Rows', align: 'right' },
+              { key: 'total', label: 'Total', align: 'right' },
+              { key: 'actions', label: '' },
+            ]}
+            rows={historyRows}
+          />
         )}
       </Card>
 

@@ -30,6 +30,12 @@ export interface UserValueTeamAggregate {
   inactiveSeats: number;
   lowUseSeats: number;
   reclaimableMonthlyUsd: number;
+  /** Users with metered spend/usage when no seat assignments exist. */
+  meteredUsers: number;
+  activeMeteredUsers: number;
+  lowUseMeteredUsers: number;
+  inactiveMeteredUsers: number;
+  meteredSpendUsd: number;
   byPlan: Array<{
     planId: string;
     planName: string;

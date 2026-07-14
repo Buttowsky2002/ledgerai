@@ -1,34 +1,96 @@
-# BadgerIQ Terraform — infrastructure stub
+# BadgerIQ Terraform — AWS managed infrastructure
 
-> **Status: intentional stub.** This directory defines the *shape* of the managed
-> infrastructure BadgerIQ expects, but contains **no live provider resources**.
-> BadgerIQ is cloud-agnostic; provisioning is deliberately deferred to the
-> operator's own platform (EKS/GKE/AKS + RDS/Cloud SQL, ClickHouse Cloud, MSK/
-> Redpanda Cloud, ElastiCache/Memorystore). See
-> [ADR-039](../../docs/ADRs/039-helm-terraform-deploy.md) for why.
+Provisions all stateful backing services for the BadgerIQ ECS Fargate deployment.
+Application compute (ECS cluster, services, ALB) is added in Phase 4.
 
-## What the Helm chart needs from infrastructure
+## Modules
 
-The chart (`deploy/helm/agentledger`) deploys **application workloads only** and
-expects these to already exist and be reachable from the cluster:
+| Module | What it creates |
+|--------|----------------|
+| `modules/network/` | VPC, 3 public + 3 private subnets, NAT gateway, VPC endpoints (S3, ECR, Secrets Manager, CloudWatch Logs), ECS task security group |
+| `modules/postgres/` | RDS PostgreSQL 16, KMS encryption, parameter group (force SSL, slow-query log), least-privilege `app_rw` role, DSN in Secrets Manager |
+| `modules/redis/` | ElastiCache Serverless Redis 7, TLS required, endpoint in Secrets Manager |
+| `modules/kafka/` | MSK Serverless (IAM SASL auth), 3-AZ networking |
+| `modules/clickhouse-secret/` | Stores externally provisioned ClickHouse Cloud creds in Secrets Manager |
 
-| Component | Purpose | Surfaced to the chart as |
-|-----------|---------|--------------------------|
-| Kubernetes cluster | Runs the workloads | `kubeconfig` / context |
-| PostgreSQL 16 | Control plane (RLS-enabled) | `BADGERIQ_PG_DSN` (Secret) |
-| ClickHouse | Analytics store | `externalServices.clickhouse.url` |
-| Redpanda / Kafka | Event bus (`events.raw`) | `externalServices.redpanda.brokers` |
-| Redis (optional) | Gateway budget store | `externalServices.redis.addr` |
+## Prerequisites
 
-## Intended usage (once implemented)
+1. Complete the [bootstrap stack](bootstrap/README.md) — S3 backend, DynamoDB lock, OIDC role, Route 53 zone
+2. Provision a ClickHouse Cloud instance (free/dev tier) and note the URL, user, and password
+3. Create `backend.hcl` with the S3 backend config from the bootstrap outputs
+4. Create `pilot.tfvars` (gitignored) with the required variables
+
+## Usage
 
 ```bash
-terraform init
-terraform plan  -var-file=env/prod.tfvars
-terraform apply -var-file=env/prod.tfvars
-# then feed the outputs into the Helm release (see ../helm/agentledger/README.md)
+cd agentledger/deploy/terraform
+
+terraform init -backend-config=backend.hcl
+
+terraform plan -var-file=pilot.tfvars
+terraform apply -var-file=pilot.tfvars
 ```
 
-The variables and outputs here are real and stable; the resource blocks in
-`main.tf` are commented module placeholders to be filled per target cloud. Wiring
-a concrete cloud is its own ADR + PR.
+### Minimum `pilot.tfvars`
+
+```hcl
+environment         = "pilot"
+clickhouse_url      = "https://xxx.clickhouse.cloud:8443"
+clickhouse_user     = "default"
+clickhouse_password = "..."
+```
+
+All other variables have sensible defaults. See `variables.tf` for the full list.
+
+## Post-apply manual steps
+
+1. **Create Kafka topics** — MSK Serverless doesn't support Terraform-managed topics:
+   ```bash
+   # See the kafka module TODO block for the full commands
+   ```
+
+2. **Verify Postgres connectivity** from a bastion or Cloud9:
+   ```bash
+   psql "$(aws secretsmanager get-secret-value \
+     --secret-id badgeriq/pilot/postgres \
+     --query SecretString --output text | jq -r .dsn)"
+   ```
+
+3. **Verify Redis connectivity**:
+   ```bash
+   ENDPOINT=$(aws secretsmanager get-secret-value \
+     --secret-id badgeriq/pilot/redis \
+     --query SecretString --output text | jq -r .endpoint)
+   redis-cli -h "$ENDPOINT" --tls PING
+   ```
+
+## Security notes
+
+- No connection strings appear in Terraform state outputs — all DSNs are written to Secrets Manager
+- Postgres `rds.force_ssl=1` — plaintext connections are rejected
+- Redis `transit_encryption_enabled` via ElastiCache Serverless (always TLS)
+- MSK uses IAM SASL — no static Kafka credentials
+- All data stores accept ingress only from the ECS task security group
+- RDS encryption at rest via a dedicated KMS key with automatic rotation
+- The superuser password is only in Secrets Manager; the app uses the `app_rw` role
+
+## Outputs
+
+| Output | Sensitive | Description |
+|--------|-----------|-------------|
+| `vpc_id` | no | VPC ID |
+| `private_subnet_ids` | no | For ECS task placement |
+| `public_subnet_ids` | no | For ALB placement |
+| `ecs_task_security_group_id` | no | Shared SG for Fargate tasks |
+| `postgres_dsn_secret_arn` | yes | Secrets Manager ARN for the app DSN |
+| `postgres_address` | no | RDS endpoint hostname |
+| `redis_endpoint` | no | ElastiCache endpoint |
+| `redis_secret_arn` | yes | Secrets Manager ARN for Redis URL |
+| `kafka_bootstrap_brokers` | no | MSK bootstrap string |
+| `kafka_cluster_arn` | no | MSK cluster ARN |
+| `clickhouse_secret_arn` | yes | Secrets Manager ARN for ClickHouse creds |
+| `alb_dns_name` | no | Placeholder (Phase 4) |
+
+## Next phase
+
+Once the gate passes (plan clean, apply succeeds, psql/redis connectivity verified), proceed to **Phase 3** — schema migrations + seed data.

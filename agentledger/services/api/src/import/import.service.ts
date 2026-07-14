@@ -410,6 +410,72 @@ export class ImportService {
 
   }
 
+  /** Drop portal CSV rows in a date window before a fresh billing import. */
+  async purgePortalImportWindow(provider: string, from: string, to: string): Promise<void> {
+    const tenantId = getTenantId();
+    if (!tenantId) throw new BadRequestException('no tenant in context');
+    await this.ch.command(
+      `ALTER TABLE agentledger.llm_calls DELETE
+       WHERE tenant_id = {tenant:String}
+         AND source = 'portal_import'
+         AND provider = {provider:String}
+         AND toDate(ts) BETWEEN {from:Date} AND {to:Date}`,
+      { tenant: tenantId, provider, from, to },
+    );
+  }
+
+  /** Remove all rows from one portal import run and release their idempotency keys. */
+  async deletePortalImportRun(importRunId: string): Promise<{ rowsDeleted: number; keysReleased: number }> {
+    const tenantId = getTenantId();
+    if (!tenantId) throw new BadRequestException('no tenant in context');
+    if (!importRunId?.trim()) throw new BadRequestException('import_run_id is required');
+
+    const [{ c: rowsDeleted }] = await this.ch.queryScoped<{ c: number }>(
+      `SELECT count() AS c
+       FROM agentledger.llm_calls
+       WHERE tenant_id = {tenant:String}
+         AND import_run_id = {runId:String}
+         AND source = 'portal_import'`,
+      { runId: importRunId },
+    );
+
+    const keyRows = await this.ch.queryScoped<{ idempotency_key: string }>(
+      `SELECT DISTINCT substring(call_id, 5) AS idempotency_key
+       FROM agentledger.llm_calls
+       WHERE tenant_id = {tenant:String}
+         AND import_run_id = {runId:String}
+         AND source = 'portal_import'
+         AND call_id LIKE 'imp_%'`,
+      { runId: importRunId },
+    );
+    const keys = keyRows.map((r) => r.idempotency_key).filter(Boolean);
+
+    await this.ch.command(
+      `ALTER TABLE agentledger.llm_calls DELETE
+       WHERE tenant_id = {tenant:String}
+         AND import_run_id = {runId:String}
+         AND source = 'portal_import'`,
+      { tenant: tenantId, runId: importRunId },
+    );
+
+    await this.releaseImportKeys(keys);
+
+    return { rowsDeleted: Number(rowsDeleted ?? 0), keysReleased: keys.length };
+  }
+
+  /** Allow specific import keys to be re-written (e.g. corrected billing CSV). */
+  async releaseImportKeys(keys: string[]): Promise<void> {
+    const tenantId = getTenantId();
+    if (!tenantId) throw new BadRequestException('no tenant in context');
+    const unique = [...new Set(keys.filter(Boolean))];
+    if (unique.length === 0) return;
+    await this.prisma.withTenant(tenantId, (tx) =>
+      tx.importIdempotency.deleteMany({
+        where: { tenantId, idempotencyKey: { in: unique } },
+      }),
+    );
+  }
+
 }
 
 

@@ -600,3 +600,26 @@ model ImportIdempotency {
   @@id([tenantId, idempotencyKey])
   @@map("import_idempotency")
 }
+
+/// One portal/billing CSV import batch — used for run history and surgical delete.
+model PortalImportRun {
+  importRunId    String    @id @default(dbgenerated("gen_random_uuid()")) @map("import_run_id") @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  source         String    @default("portal_import")
+  provider       String    @default("mixed")
+  providers      String[]  @default([])
+  fileNames      String[]  @default([]) @map("file_names")
+  dateFrom       DateTime? @map("date_from") @db.Date
+  dateTo         DateTime? @map("date_to") @db.Date
+  rowsParsed     Int       @default(0) @map("rows_parsed")
+  rowsImported   Int       @default(0) @map("rows_imported")
+  rowsSkipped    Int       @default(0) @map("rows_skipped")
+  totalCostUsd   Float     @default(0) @map("total_cost_usd")
+  actor          String    @default("system")
+  status         String    @default("active")
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@map("portal_import_runs")
+}

@@ -1,4 +1,11 @@
-import { computeMeteredCostUsd, isNonMeteredCostSource } from './metered-cost';
+import {
+  computeMeteredCostUsd,
+  isNonMeteredCostSource,
+  RECONCILED_MODEL_USAGE_SQL,
+  RECONCILED_PROVIDER_SPEND_SQL,
+  RECONCILED_TENANT_DAILY_SPEND_SQL,
+  RECONCILED_USER_DAILY_SPEND_SQL,
+} from './metered-cost';
 
 describe('metered-cost', () => {
   it('excludes price-book estimates', () => {
@@ -58,5 +65,21 @@ describe('metered-cost', () => {
         cost_source: 'estimate',
       }),
     ).toBe(0);
+  });
+
+  it('reconciled LARI SQL prefers portal_import over api per day', () => {
+    for (const sql of [
+      RECONCILED_USER_DAILY_SPEND_SQL,
+      RECONCILED_TENANT_DAILY_SPEND_SQL,
+      RECONCILED_PROVIDER_SPEND_SQL,
+      RECONCILED_MODEL_USAGE_SQL,
+    ]) {
+      expect(sql).toContain("llm_calls.source = 'portal_import'");
+      expect(sql).toContain("llm_calls.source = 'api'");
+      expect(sql).toContain('CASE WHEN portal_usd > 0 THEN portal_usd ELSE api_usd END');
+    }
+    expect(RECONCILED_USER_DAILY_SPEND_SQL).toContain('AS calls');
+    expect(RECONCILED_MODEL_USAGE_SQL).toContain('reconciled_input_tokens');
+    expect(RECONCILED_TENANT_DAILY_SPEND_SQL).toContain('GROUP BY key, day');
   });
 });

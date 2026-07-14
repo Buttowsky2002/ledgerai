@@ -1,5 +1,5 @@
 {
-  "name": "Cursor Admin API",
+  "name": "Cursor Admin API (usage + code activity)",
   "provider": "cursor",
   "category": "coding_tool",
   "authType": "basic_auth",
@@ -35,7 +35,7 @@
   "capabilities": {
     "supportsUsage": true,
     "supportsBilling": true,
-    "supportsUsers": false,
+    "supportsUsers": true,
     "supportsProjects": false,
     "supportsWorkspaces": false,
     "supportsApiKeys": false,
@@ -69,6 +69,56 @@
     "strategy": "custom",
     "fields": ["ts", "user_email", "model", "product"]
   },
+  "companionFetches": [
+    {
+      "id": "codingActivity",
+      "destinationRecordType": "coding_activity_record",
+      "endpoint": {
+        "path": "/teams/daily-usage-data",
+        "method": "POST",
+        "bodyTemplate": "{\"startDate\":{{sync_start_unix_ms}},\"endDate\":{{sync_end_unix_ms}}}"
+      },
+      "pagination": {
+        "type": "page",
+        "itemsPath": "data",
+        "pageSize": 100,
+        "maxPages": 500
+      },
+      "fieldMappings": [
+        { "type": "direct", "source": "email", "target": "user_email" },
+        { "type": "direct", "source": "email", "target": "user_id" },
+        { "type": "direct", "source": "acceptedLinesAdded", "target": "acceptedLinesAdded" },
+        { "type": "direct", "source": "acceptedLinesDeleted", "target": "acceptedLinesDeleted" },
+        {
+          "type": "derived",
+          "target": "lines_accepted",
+          "expression": "acceptedLinesAdded + acceptedLinesDeleted"
+        },
+        { "type": "direct", "source": "totalLinesAdded", "target": "lines_added" },
+        { "type": "direct", "source": "totalLinesDeleted", "target": "lines_deleted" },
+        { "type": "direct", "source": "totalLinesAdded", "target": "lines_committed" },
+        { "type": "direct", "source": "totalTabsAccepted", "target": "tabs_accepted" },
+        { "type": "direct", "source": "composerRequests", "target": "composer_requests" },
+        { "type": "direct", "source": "chatRequests", "target": "chat_requests" },
+        { "type": "fallback", "target": "ts", "sources": ["date", "day"] },
+        {
+          "type": "fallback",
+          "target": "id",
+          "sources": ["day", "date", "email", "userId"]
+        },
+        { "type": "constant", "target": "provider", "value": "cursor" },
+        { "type": "constant", "target": "tool_name", "value": "cursor-usage" },
+        { "type": "constant", "target": "platform_display_name", "value": "Cursor" }
+      ],
+      "validationRules": [
+        { "field": "user_email", "type": "string", "required": true }
+      ],
+      "dedupe": {
+        "strategy": "custom",
+        "fields": ["ts", "user_email", "tool_name"]
+      }
+    }
+  ],
   "schedule": {
     "intervalMinutes": 60,
     "enabled": true

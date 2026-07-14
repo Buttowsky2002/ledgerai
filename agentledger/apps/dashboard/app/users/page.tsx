@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Badge, Card, DataTable, PageHeader, num, usd } from '../../components/ui';
+import { SourceMixCell } from '../../components/SourceMixCell';
 import { proxyApi } from '../../lib/api';
 import { resolveRange } from '../../lib/resolve-range';
 import { discoverModelFamilies } from '../../lib/model-family';
@@ -15,6 +16,8 @@ type UserRow = {
   team: string;
   resolved: boolean;
   total_spend_usd: number;
+  portal_import_usd?: number;
+  connector_usd?: number;
   calls: number;
   models: string[];
   model_breakdown: ModelBreakdown[];
@@ -176,6 +179,7 @@ export default async function UsersPage({
             { key: 'email', label: 'Email' },
             { key: 'team', label: 'Team' },
             { key: 'spend', label: 'Total spend', align: 'right' },
+            { key: 'sources', label: 'Sources' },
             { key: 'calls', label: 'Calls', align: 'right' },
             { key: 'models', label: 'Models used' },
           ]}
@@ -195,6 +199,7 @@ export default async function UsersPage({
             email: u.email || (isEmailLike(u.user_id) ? u.user_id : '—'),
             team: u.team || '—',
             spend: usd(u.total_spend_usd),
+            sources: <SourceMixCell portalUsd={u.portal_import_usd} connectorUsd={u.connector_usd} />,
             calls: num(u.calls),
             models: <ModelChips families={discoverModelFamilies(u.model_breakdown)} />,
           }))}

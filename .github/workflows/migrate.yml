@@ -1,0 +1,115 @@
+name: Run migrations
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        type: choice
+        options:
+          - pilot
+          - prod
+      target:
+        description: "Migration target"
+        required: true
+        type: choice
+        options:
+          - postgres
+          - clickhouse
+          - both
+      seed:
+        description: "Also run demo + pilot seed (Postgres only, first run)"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  migrate:
+    name: "Migrate ${{ inputs.target }} (${{ inputs.environment }})"
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOYER_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Install ClickHouse client
+        if: inputs.target == 'clickhouse' || inputs.target == 'both'
+        run: |
+          curl -fsSL 'https://packages.clickhouse.com/rpm/lts/repodata/repomd.xml' >/dev/null 2>&1 || true
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq apt-transport-https ca-certificates curl gnupg
+          curl -fsSL 'https://packages.clickhouse.com/deb/repository.gpg' | sudo gpg --dearmor -o /usr/share/keyrings/clickhouse-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/clickhouse-keyring.gpg] https://packages.clickhouse.com/deb stable main" | sudo tee /etc/apt/sources.list.d/clickhouse.list
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq clickhouse-client
+
+      - name: Install PostgreSQL client
+        if: inputs.target == 'postgres' || inputs.target == 'both'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client jq
+
+      - name: Run migrations
+        id: migrate
+        run: |
+          chmod +x agentledger/deploy/terraform/scripts/migrate.sh
+          agentledger/deploy/terraform/scripts/migrate.sh \
+            --env "${{ inputs.environment }}" \
+            --target "${{ inputs.target }}" \
+            2>&1 | tee migration.log
+
+      - name: Run demo + pilot seed
+        if: inputs.seed && (inputs.target == 'postgres' || inputs.target == 'both')
+        run: |
+          SECRET_JSON=$(aws secretsmanager get-secret-value \
+            --secret-id "badgeriq/${{ inputs.environment }}/postgres" \
+            --query SecretString --output text)
+          DSN=$(echo "$SECRET_JSON" | jq -r '.dsn')
+          TENANT="00000000-0000-4000-8000-000000000001"
+
+          echo "==> Running demo seed..."
+          psql "$DSN" -v ON_ERROR_STOP=1 -v tenant="$TENANT" \
+            -f agentledger/deploy/demo/postgres_seed.sql 2>&1 | tee -a migration.log
+
+          echo "==> Running pilot seed overlay..."
+          psql "$DSN" -v ON_ERROR_STOP=1 -v tenant="$TENANT" \
+            -f agentledger/deploy/demo/pilot_seed.sql 2>&1 | tee -a migration.log
+
+          echo "==> Verifying identity count..."
+          COUNT=$(psql "$DSN" -tAc \
+            "SELECT COUNT(*) FROM identities WHERE tenant_id = '$TENANT'")
+          echo "Identities seeded: $COUNT"
+          echo "seed_identity_count=$COUNT" >> "$GITHUB_OUTPUT"
+
+      - name: Upload migration log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-log-${{ inputs.environment }}-${{ inputs.target }}
+          path: migration.log
+
+      - name: Job summary
+        if: always()
+        run: |
+          echo "## Migration results" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Field | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Environment | \`${{ inputs.environment }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Target | \`${{ inputs.target }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Seed | \`${{ inputs.seed }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          tail -20 migration.log >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "No log captured" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"

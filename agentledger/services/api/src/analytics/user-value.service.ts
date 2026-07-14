@@ -1,6 +1,11 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ChParam } from '../clickhouse/clickhouse.service';
 import { AnalyticsStore } from '../analytics-store/analytics-store';
+import {
+  RECONCILED_USER_DAILY_SPEND_SQL,
+  RECONCILED_USER_DAY_SPEND_SQL,
+  RECONCILED_USER_MODEL_BREAKDOWN_SQL,
+} from '../connectors/metered-cost';
 import { loadIdentityLookups, resolveUserDirectoryIdentity } from '../reports/identity-resolver';
 import { PrismaService } from '../prisma/prisma.service';
 import { getPerUserAnalyticsMode } from '../tenant/per-user-analytics';
@@ -83,26 +88,18 @@ export class UserValueService {
     );
     const params: Record<string, ChParam> = { ...r };
 
-    const [spendRows, codingRows, seatRows, lookups] = await Promise.all([
+    const [spendRows, modelRows, codingRows, seatRows, lookups] = await Promise.all([
       this.ch.queryScoped<{
-        user_id: string;
+        key: string;
         cost_usd: number;
         calls: number;
-        active_days: number;
-        providers: string[];
-      }>(
-        `SELECT user_id,
-                sum(cost_usd) AS cost_usd,
-                sum(calls) AS calls,
-                uniqExact(day) AS active_days,
-                groupUniqArray(provider) AS providers
-         FROM spend_daily_by_user
-         WHERE tenant_id = {tenant:String}
-           AND day BETWEEN {from:Date} AND {to:Date}
-           AND user_id != '' AND user_id != 'Unassigned'
-         GROUP BY user_id`,
-        params,
-      ),
+      }>(`${RECONCILED_USER_DAY_SPEND_SQL} ORDER BY cost_usd DESC`, params),
+      this.ch.queryScoped<{
+        user_id: string;
+        platform: string;
+        spend_usd: number;
+        calls: number;
+      }>(RECONCILED_USER_MODEL_BREAKDOWN_SQL, params),
       this.ch.queryScoped<{
         user_id: string;
         provider: string;
@@ -123,19 +120,12 @@ export class UserValueService {
       loadIdentityLookups(this.prisma, tenantId),
     ]);
 
-    const dailySpendByUser =
-      mode === 'individual'
-        ? await this.ch.queryScoped<{ user_id: string; day: string; cost_usd: number; calls: number }>(
-            `SELECT user_id, day, sum(cost_usd) AS cost_usd, sum(calls) AS calls
-             FROM spend_daily_by_user
-             WHERE tenant_id = {tenant:String}
-               AND day BETWEEN {from:Date} AND {to:Date}
-               AND user_id != '' AND user_id != 'Unassigned'
-             GROUP BY user_id, day
-             ORDER BY user_id, day`,
-            params,
-          )
-        : [];
+    const dailySpendByUser = await this.ch.queryScoped<{
+      user_id: string;
+      day: string;
+      cost_usd: number;
+      calls: number;
+    }>(RECONCILED_USER_DAILY_SPEND_SQL, params);
 
     const byKey = new Map<string, MutableUserRow>();
 
@@ -176,13 +166,18 @@ export class UserValueService {
     };
 
     for (const row of spendRows) {
-      const user = ensure(String(row.user_id));
+      const rawUserId = String(row.key);
+      if (!rawUserId || rawUserId === 'Unassigned') continue;
+      const user = ensure(rawUserId);
       user.costUsd += n(row.cost_usd);
       user.calls += n(row.calls);
-      user.activeDays = Math.max(user.activeDays, n(row.active_days));
-      for (const p of row.providers ?? []) {
-        if (p) user.providers.add(String(p));
-      }
+    }
+
+    for (const row of modelRows) {
+      const rawUserId = String(row.user_id);
+      if (!rawUserId || rawUserId === 'Unassigned') continue;
+      const user = ensure(rawUserId);
+      if (row.platform) user.providers.add(String(row.platform));
     }
 
     for (const row of codingRows) {
@@ -207,15 +202,41 @@ export class UserValueService {
       user.providers.add(seat.provider);
     }
 
+    const activeDaysByKey = new Map<string, Set<string>>();
+
     if (mode === 'individual') {
       for (const row of dailySpendByUser) {
-        const user = ensure(String(row.user_id));
+        const rawUserId = String(row.user_id);
+        if (!rawUserId || rawUserId === 'Unassigned') continue;
+        const user = ensure(rawUserId);
         const day = String(row.day).slice(0, 10);
         if (!user.dailyCost) user.dailyCost = new Map();
         if (!user.dailyCalls) user.dailyCalls = new Map();
-        user.dailyCost.set(day, (user.dailyCost.get(day) ?? 0) + n(row.cost_usd));
+        const cost = n(row.cost_usd);
+        user.dailyCost.set(day, (user.dailyCost.get(day) ?? 0) + cost);
         user.dailyCalls.set(day, (user.dailyCalls.get(day) ?? 0) + n(row.calls));
+        if (cost > 0) {
+          const key = resolveKey(rawUserId);
+          const days = activeDaysByKey.get(key) ?? new Set<string>();
+          days.add(day);
+          activeDaysByKey.set(key, days);
+        }
       }
+    } else {
+      for (const row of dailySpendByUser) {
+        const rawUserId = String(row.user_id);
+        if (!rawUserId || rawUserId === 'Unassigned') continue;
+        if (n(row.cost_usd) <= 0) continue;
+        const key = resolveKey(rawUserId);
+        const days = activeDaysByKey.get(key) ?? new Set<string>();
+        days.add(String(row.day).slice(0, 10));
+        activeDaysByKey.set(key, days);
+      }
+    }
+
+    for (const [key, days] of activeDaysByKey) {
+      const user = byKey.get(key);
+      if (user) user.activeDays = days.size;
     }
 
     return [...byKey.values()].map((row) => {
@@ -270,6 +291,14 @@ export class UserValueService {
       .filter((r) => r.hasSeat && r.status === 'inactive')
       .reduce((s, r) => s + r.seatMonthlyCostUsd, 0);
 
+    const meteredRows = rows.filter(
+      (r) => r.costUsd > 0 || r.calls > 0 || r.sessions > 0 || r.activeDays > 0,
+    );
+    const activeMeteredUsers = meteredRows.filter((r) => r.status === 'active').length;
+    const lowUseMeteredUsers = meteredRows.filter((r) => r.status === 'low_use').length;
+    const inactiveMeteredUsers = meteredRows.filter((r) => r.status === 'inactive').length;
+    const meteredSpendUsd = meteredRows.reduce((s, r) => s + r.costUsd, 0);
+
     const byPlanMap = new Map<
       string,
       { planId: string; planName: string; provider: string; inactiveCount: number; reclaimableMonthlyUsd: number }
@@ -309,6 +338,11 @@ export class UserValueService {
       inactiveSeats,
       lowUseSeats,
       reclaimableMonthlyUsd: round(reclaimableMonthlyUsd),
+      meteredUsers: meteredRows.length,
+      activeMeteredUsers,
+      lowUseMeteredUsers,
+      inactiveMeteredUsers,
+      meteredSpendUsd: round(meteredSpendUsd),
       byPlan: [...byPlanMap.values()].map((p) => ({
         ...p,
         reclaimableMonthlyUsd: round(p.reclaimableMonthlyUsd),

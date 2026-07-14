@@ -126,6 +126,20 @@ export interface SupplementalFetchConfig {
   mergeOn: string[];
 }
 
+/** Optional parallel API fetch producing separate normalized records (e.g. Cursor daily activity). */
+export interface CompanionFetchConfig {
+  /** Step id for stepsCompleted, e.g. 'codingActivity'. */
+  id?: string;
+  destinationRecordType: DestinationRecordType;
+  endpoint: ConnectorEndpoint;
+  pagination?: PaginationConfig;
+  fieldMappings: FieldMappingRule[];
+  validationRules?: ValidationRule[];
+  dedupe?: DedupeConfig;
+  /** If true, skip when primary fetch returned zero rows (default false). */
+  skipWhenPrimaryEmpty?: boolean;
+}
+
 export interface ConnectorDefinition {
   id?: string;
   name: string;
@@ -150,6 +164,7 @@ export interface ConnectorDefinition {
   schedule?: ScheduleConfig;
   destinationRecordType: DestinationRecordType;
   supplementalFetch?: SupplementalFetchConfig;
+  companionFetches?: CompanionFetchConfig[];
   /** When the primary endpoint is unavailable (e.g. Enterprise-only), retry with this config. */
   fallbackDefinition?: Pick<
     ConnectorDefinition,

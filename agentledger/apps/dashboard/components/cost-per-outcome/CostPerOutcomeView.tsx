@@ -184,7 +184,7 @@ export function CostPerOutcomeView({
               value={usd(data.costProvenance.stack.fixedCostUsd)}
               sub="fixed_costs licenses & subscriptions"
             />
-            <Stat label="Business value" value={usd(data.summary.businessValue)} sub="attributed outcomes" />
+            <Stat label="Business value" value={usd(data.summary.businessValue)} sub="outcomes + Copilot + Cursor activity" />
           </>
         ) : null}
       </div>

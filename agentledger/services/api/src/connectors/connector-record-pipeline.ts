@@ -21,11 +21,10 @@ export function finalizeConnectorRecord(
 ): { record: NormalizedRecord; unmapped: boolean } {
   const enriched = enrichCursorBilling(enrichRecordCost(rec.metrics as NormalizedUsageMetrics) as Record<string, unknown>);
   enriched.metered_cost_usd = computeMeteredCostUsd(enriched);
-  const dedupeHash = computeDedupeHash(
-    definition.dedupe,
-    enriched,
-    rec.lineage.external_record_id,
-  );
+  const dedupeHash =
+    rec.record_type === definition.destinationRecordType
+      ? computeDedupeHash(definition.dedupe, enriched, rec.lineage.external_record_id)
+      : rec.lineage.dedupe_hash;
   const metrics = applyAttributionToMetrics(enriched, mappings, entities);
   const attribution = {
     userId: String(metrics.user_id ?? ''),
