@@ -1,0 +1,16 @@
+[
+  {"provider":"anthropic","model":"claude-haiku","token_type":"cache_read","usd_per_million":0.1,"effective_start":"2026-07-11T19:29:19.471301004Z","source":"https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"},
+  {"provider":"anthropic","model":"claude-haiku","token_type":"cache_write","usd_per_million":1.25,"effective_start":"2026-07-11T19:29:19.471301004Z","source":"https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"},
+  {"provider":"anthropic","model":"claude-haiku","token_type":"input","usd_per_million":1.0,"effective_start":"2026-07-11T19:29:19.471301004Z","source":"https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"},
+  {"provider":"anthropic","model":"claude-haiku","token_type":"output","usd_per_million":5.0,"effective_start":"2026-07-11T19:29:19.471301004Z","source":"https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"},
+  {"provider":"anthropic","model":"claude-sonnet","token_type":"cache_read","usd_per_million":0.3,"effective_start":"2024-08-14T00:00:00Z","source":"https://docs.claude.com/en/docs/about-claude/pricing"},
+  {"provider":"anthropic","model":"claude-sonnet","token_type":"cache_write","usd_per_million":3.75,"effective_start":"2024-08-14T00:00:00Z","source":"https://docs.claude.com/en/docs/about-claude/pricing"},
+  {"provider":"anthropic","model":"claude-sonnet","token_type":"input","usd_per_million":3.0,"effective_start":"2024-06-20T00:00:00Z","source":"https://docs.claude.com/en/docs/about-claude/pricing"},
+  {"provider":"anthropic","model":"claude-sonnet","token_type":"output","usd_per_million":15.0,"effective_start":"2024-06-20T00:00:00Z","source":"https://docs.claude.com/en/docs/about-claude/pricing"},
+  {"provider":"openai","model":"gpt-4o","token_type":"cache_read","usd_per_million":1.25,"effective_start":"2024-10-01T00:00:00Z","source":"https://openai.com/api/pricing"},
+  {"provider":"openai","model":"gpt-4o","token_type":"input","usd_per_million":2.5,"effective_start":"2024-08-06T00:00:00Z","source":"https://openai.com/api/pricing"},
+  {"provider":"openai","model":"gpt-4o","token_type":"output","usd_per_million":10.0,"effective_start":"2024-08-06T00:00:00Z","source":"https://openai.com/api/pricing"},
+  {"provider":"openai","model":"gpt-4o-mini","token_type":"cache_read","usd_per_million":0.075,"effective_start":"2024-10-01T00:00:00Z","source":"https://openai.com/api/pricing"},
+  {"provider":"openai","model":"gpt-4o-mini","token_type":"input","usd_per_million":0.15,"effective_start":"2024-07-18T00:00:00Z","source":"https://openai.com/api/pricing"},
+  {"provider":"openai","model":"gpt-4o-mini","token_type":"output","usd_per_million":0.6,"effective_start":"2024-07-18T00:00:00Z","source":"https://openai.com/api/pricing"}
+]

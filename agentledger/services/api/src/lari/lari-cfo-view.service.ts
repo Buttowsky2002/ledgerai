@@ -5,6 +5,15 @@ import { ChParam } from '../clickhouse/clickhouse.service';
 import { AnalyticsStore } from '../analytics-store/analytics-store';
 
 import { CopilotAnalyticsService, COPILOT_ANALYTICS_PLATFORM } from '../github-copilot/github-copilot-analytics.service';
+import { CursorAnalyticsService } from '../connectors/cursor-analytics.service';
+import { CursorProductivityService } from '../connectors/cursor-productivity.service';
+import {
+  RECONCILED_COST_BASIS_MONTHLY_SQL,
+  RECONCILED_COST_BASIS_TOTALS_SQL,
+  RECONCILED_MODEL_USAGE_SQL,
+  RECONCILED_PROVIDER_SPEND_SQL,
+  RECONCILED_UNMAPPED_SPEND_SQL,
+} from '../connectors/metered-cost';
 
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -123,6 +132,10 @@ export class LariCfoViewService {
 
     private readonly copilotAnalytics: CopilotAnalyticsService,
 
+    private readonly cursorAnalytics: CursorAnalyticsService,
+
+    private readonly cursorProductivity: CursorProductivityService,
+
   ) {}
 
 
@@ -195,34 +208,49 @@ export class LariCfoViewService {
 
     );
 
-    const providerRows = await this.ch.queryScoped<{ provider: string; cost_usd: number; calls: number }>(
-
-      `SELECT provider, sum(cost_usd) AS cost_usd, sum(calls) AS calls
-
+    const providerRows =
+      basis === 'reconciled'
+        ? await this.ch.queryScoped<{ provider: string; cost_usd: number; calls: number }>(
+            RECONCILED_PROVIDER_SPEND_SQL,
+            params,
+          )
+        : await this.ch.queryScoped<{ provider: string; cost_usd: number; calls: number }>(
+            `SELECT provider, sum(cost_usd) AS cost_usd, sum(calls) AS calls
        FROM spend_daily
-
        WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date}
-
        GROUP BY provider ORDER BY cost_usd DESC`,
-
-      params,
-
-    );
-
-    const costBasisTotals = await this.queryCostBasisTotals(params);
-
-    const costBasisMonthly = await this.queryCostBasisMonthly(params);
-
-    const [modelUsageRows, modelBasisRows] = await Promise.all([
-      this.ch.queryScoped<{
-        provider: string;
-        model: string;
-        input_tokens: number;
-        output_tokens: number;
-        calls: number;
-        computed_cost_usd: number;
-      }>(
-        `SELECT provider, model,
+            params,
+          );
+    const costBasisTotals = await this.queryCostBasisTotals(params, basis);
+    const costBasisMonthly = await this.queryCostBasisMonthly(params, basis);
+    const modelUsageRows =
+      basis === 'reconciled'
+        ? await this.ch.queryScoped<{
+            provider: string;
+            model: string;
+            input_tokens: number;
+            output_tokens: number;
+            calls: number;
+            cost_usd: number;
+          }>(RECONCILED_MODEL_USAGE_SQL, params).then((rows) =>
+            rows.map((row) => ({
+              provider: String(row.provider),
+              model: String(row.model),
+              input_tokens: n(row.input_tokens),
+              output_tokens: n(row.output_tokens),
+              calls: n(row.calls),
+              computed_cost_usd: n(row.cost_usd),
+            })),
+          )
+        : await this.ch.queryScoped<{
+            provider: string;
+            model: string;
+            input_tokens: number;
+            output_tokens: number;
+            calls: number;
+            computed_cost_usd: number;
+          }>(
+            `SELECT provider, model,
                 sum(input_tokens) AS input_tokens,
                 sum(output_tokens) AS output_tokens,
                 sum(calls) AS calls,
@@ -231,10 +259,18 @@ export class LariCfoViewService {
          WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date}
          GROUP BY provider, model
          ORDER BY computed_cost_usd DESC`,
-        params,
-      ),
-      this.queryModelCostBasis(params),
-    ]);
+            params,
+          );
+    const modelBasisRows =
+      basis === 'reconciled'
+        ? modelUsageRows.map((row) => ({
+            provider: row.provider,
+            model: row.model,
+            computed_cost_usd: row.computed_cost_usd,
+            metered_cost_usd: row.computed_cost_usd,
+            effective_cost_usd: row.computed_cost_usd,
+          }))
+        : await this.queryModelCostBasis(params);
 
     const codingAgentCost = await this.ch.queryScoped<{ cost_usd: number }>(
 
@@ -249,20 +285,17 @@ export class LariCfoViewService {
     );
 
     const unmappedSpend = await this.ch.queryScoped<{ unmapped_cost: number }>(
-
-      `SELECT sum(cost_usd) AS unmapped_cost
-
+      basis === 'reconciled'
+        ? RECONCILED_UNMAPPED_SPEND_SQL
+        : `SELECT sum(cost_usd) AS unmapped_cost
        FROM spend_daily_by_user
-
        WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date}
-
          AND user_id = 'Unassigned'`,
-
       params,
-
     );
 
-    const [subscriptionCost, fixedCostObserved, seatStats, copilotSpend] = await Promise.all([
+    const [subscriptionCost, fixedCostObserved, seatStats, copilotSpend, cursorSpendSummary, cursorProductivity] =
+      await Promise.all([
 
       this.subscriptionCostForPeriod(tenantId, r),
 
@@ -271,6 +304,10 @@ export class LariCfoViewService {
       this.seatStats(tenantId),
 
       this.copilotAnalytics.getSpendSummary(tenantId, r.from, r.to),
+
+      this.cursorAnalytics.getSpendSummary(tenantId, r.from, r.to),
+
+      this.cursorProductivity.getProductivitySummary(tenantId, r.from, r.to),
 
     ]);
 
@@ -303,6 +340,9 @@ export class LariCfoViewService {
     const copilotCost = copilotSpend?.totalCostUsd ?? 0;
 
     const copilotValue = copilotSpend?.estimatedValueUsd ?? 0;
+    const cursorProductivityValue = cursorProductivity?.estimatedValueUsd ?? 0;
+    const cursorSpendUsd =
+      (cursorSpendSummary?.meteredOverageUsd ?? 0) + (cursorSpendSummary?.seatLicenseUsd ?? 0);
 
     const supplementalCost = n(codingAgentCost[0]?.cost_usd) + fixedCostBase + copilotCost;
 
@@ -312,7 +352,8 @@ export class LariCfoViewService {
 
 
 
-    const businessValue = roiRows.reduce((s, row) => s + n(row.value_usd), 0) + copilotValue;
+    const businessValue =
+      roiRows.reduce((s, row) => s + n(row.value_usd), 0) + copilotValue + cursorProductivityValue;
 
     const outcomeFullyLoaded = roiRows.reduce((s, row) => s + n(row.fully_loaded_cost_usd), 0);
 
@@ -328,7 +369,7 @@ export class LariCfoViewService {
 
     // Copilot estimated value already applies qualityAdjustmentFactor (default 0.5) — treat as
     // risk-adjusted productivity value with no additional risk_exposure discount.
-    const riskAdjustedValue = outcomeRiskAdjustedValue + copilotValue;
+    const riskAdjustedValue = outcomeRiskAdjustedValue + copilotValue + cursorProductivityValue;
 
 
 
@@ -358,15 +399,18 @@ export class LariCfoViewService {
     const fullyLoadedCost =
       forecastToken + forecastFixed + forecastCoding + forecastCopilot + forecastOverhead;
 
-    const nominalRoi = businessValue - fullyLoadedCost;
+    // Headline ROI uses observed window — projected spend is shown separately on the forecast card.
+    const observedNominalRoi = businessValue - observedFullyLoadedCost;
+    const observedRiskAdjustedRoi = riskAdjustedValue - observedFullyLoadedCost;
 
-    const riskAdjustedRoi = riskAdjustedValue - fullyLoadedCost;
-
-    const costPerOutcome = outcomeCount > 0 ? usd(fullyLoadedCost / outcomeCount) : null;
+    const effectiveOutcomeCount =
+      outcomeCount + (cursorProductivity?.activeUserDays ?? 0);
+    const costPerOutcome =
+      effectiveOutcomeCount > 0 ? usd(observedFullyLoadedCost / effectiveOutcomeCount) : null;
     const cpoFallback =
-      outcomeCount === 0
+      effectiveOutcomeCount === 0
         ? this.computeCostPerOutcomeFallback(
-            fullyLoadedCost,
+            observedFullyLoadedCost,
             n(totals.calls),
             modelUsageRows.reduce((s, row) => s + n(row.input_tokens) + n(row.output_tokens), 0),
             copilotSpend?.totalCalls ?? 0,
@@ -396,17 +440,18 @@ export class LariCfoViewService {
 
     const runRateMonths = monthly.length;
 
-    const forecastPerMonth = runRateMonths > 0 ? riskAdjustedRoi / runRateMonths : 0;
+    const forecastPerMonth = runRateMonths > 0 ? observedRiskAdjustedRoi / runRateMonths : 0;
 
-    const roiMargin = fullyLoadedCost > 0 ? riskAdjustedRoi / fullyLoadedCost : 0;
+    const roiMargin =
+      observedFullyLoadedCost > 0 ? observedRiskAdjustedRoi / observedFullyLoadedCost : 0;
 
 
 
     const summary: CfoViewSummary = {
 
-      riskAdjustedRoi: usd(riskAdjustedRoi),
+      riskAdjustedRoi: usd(observedRiskAdjustedRoi),
 
-      nominalRoi: usd(nominalRoi),
+      nominalRoi: usd(observedNominalRoi),
 
       businessValue: usd(businessValue),
 
@@ -439,11 +484,17 @@ export class LariCfoViewService {
 
 
     const outcomeBreakdown = this.buildOutcomeBreakdown(roiRows, {
-      usageCost: forecastToken,
-      supplementalCost: forecastFixed + forecastCoding + forecastCopilot,
+      usageCost,
+      supplementalCost: fixedCostBase + n(codingAgentCost[0]?.cost_usd) + copilotCost,
       outcomeAiCost,
       outcomeCount,
     });
+    if (cursorProductivity && cursorProductivity.estimatedValueUsd > 0) {
+      outcomeBreakdown.push(
+        this.cursorProductivity.toOutcomeBreakdownRow(cursorProductivity, cursorSpendUsd),
+      );
+      outcomeBreakdown.sort((a, b) => b.riskAdjustedRoi - a.riskAdjustedRoi);
+    }
 
     const modelBreakdown = this.buildModelBreakdown(
       modelUsageRows,
@@ -501,6 +552,8 @@ export class LariCfoViewService {
       supplementalCost,
 
       copilotValue,
+
+      cursorProductivityValue,
 
       costBasis: basis,
 
@@ -627,7 +680,13 @@ export class LariCfoViewService {
       .sort((a, b) => b.observedCostUsd - a.observedCostUsd);
   }
 
-  private async queryCostBasisTotals(params: Record<string, ChParam>): Promise<CostBasisTotals[]> {
+  private async queryCostBasisTotals(
+    params: Record<string, ChParam>,
+    basis: CostBasisMode,
+  ): Promise<CostBasisTotals[]> {
+    if (basis === 'reconciled') {
+      return this.ch.queryScoped<CostBasisTotals>(RECONCILED_COST_BASIS_TOTALS_SQL, params);
+    }
     try {
       return await this.ch.queryScoped<CostBasisTotals>(
         `SELECT sum(computed_cost_usd) AS computed_cost_usd,
@@ -655,7 +714,13 @@ export class LariCfoViewService {
     }
   }
 
-  private async queryCostBasisMonthly(params: Record<string, ChParam>): Promise<CostBasisMonthlyRow[]> {
+  private async queryCostBasisMonthly(
+    params: Record<string, ChParam>,
+    basis: CostBasisMode,
+  ): Promise<CostBasisMonthlyRow[]> {
+    if (basis === 'reconciled') {
+      return this.ch.queryScoped<CostBasisMonthlyRow>(RECONCILED_COST_BASIS_MONTHLY_SQL, params);
+    }
     try {
       return await this.ch.queryScoped<CostBasisMonthlyRow>(
         `SELECT toStartOfMonth(day) AS month,
@@ -1162,6 +1227,8 @@ export class LariCfoViewService {
 
     copilotValue: number;
 
+    cursorProductivityValue: number;
+
     costBasis: CostBasisMode;
 
     costProvenance: CostProvenance;
@@ -1175,6 +1242,16 @@ export class LariCfoViewService {
       w.push(
 
         'Business value includes estimated GitHub Copilot productivity value — not exact measures from GitHub.',
+
+      );
+
+    }
+
+    if (ctx.cursorProductivityValue > 0) {
+
+      w.push(
+
+        'Business value includes estimated Cursor productivity (accepted AI lines, tabs, composer/chat) from daily usage sync — not git commit revenue.',
 
       );
 
@@ -1220,7 +1297,9 @@ export class LariCfoViewService {
 
     if (ctx.unmappedCost > 0) {
 
-      w.push('Provider spend exists with unmapped users — assign user attribution for accurate allocation.');
+      w.push(
+        `$${ctx.unmappedCost.toFixed(2)} in provider spend has no user assignment — open Settings → Connectors, expand your connector, and add a provider-user mapping if needed.`,
+      );
 
     }
 

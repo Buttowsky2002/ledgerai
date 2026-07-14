@@ -18,6 +18,7 @@ import type { ApiCredentials } from './engine/api-client';
 import { sanitizeForPreview, safeErrorMessage } from './engine/sanitizer';
 import { DEFAULT_BACKFILL_DAYS, resolvePreviewWindow, resolveSyncChunks } from './sync-range';
 import {
+  dayBeforeIso,
   readConnectorHandoff,
   resolveConnectorSyncRange,
   resolveFirstSyncBaseline,
@@ -342,14 +343,12 @@ export class ConnectorsService {
     const safe = omitSecretRef(created);
 
     if (secretRef && dto.enabled !== false) {
-      try {
-        await this.sync(created.connectorId, { from: undefined, to: undefined });
-      } catch (e) {
+      void this.sync(created.connectorId, { from: undefined, to: undefined }).catch((e) => {
         this.logger.warn(
           { connectorId: created.connectorId, err: safeErrorMessage((e as Error).message) },
           'initial sync after create failed',
         );
-      }
+      });
     }
 
     return safe;
@@ -554,9 +553,16 @@ export class ConnectorsService {
     const cfg = (row.config ?? {}) as Record<string, unknown>;
     const handoff = readConnectorHandoff(cfg);
     const effectiveRange = resolveConnectorSyncRange(range, cfg);
+    if (effectiveRange === null) {
+      throw new BadRequestException(
+        handoff.apiSyncBaselineFrom
+          ? `Already synced through ${dayBeforeIso(handoff.apiSyncBaselineFrom)}. Choose a To date on or after ${handoff.apiSyncBaselineFrom}, or widen the range for a re-backfill.`
+          : 'no sync window to process',
+      );
+    }
     const maxDaysPerRequest = definition.syncRange?.maxDaysPerRequest ?? undefined;
     const backfillDays = definition.syncRange?.defaultBackfillDays ?? DEFAULT_BACKFILL_DAYS;
-    const chunks = resolveSyncChunks(effectiveRange?.from, effectiveRange?.to, backfillDays, maxDaysPerRequest);
+    const chunks = resolveSyncChunks(effectiveRange.from, effectiveRange.to, backfillDays, maxDaysPerRequest);
     if (chunks.length === 0) {
       throw new BadRequestException(
         handoff.apiSyncBaselineFrom

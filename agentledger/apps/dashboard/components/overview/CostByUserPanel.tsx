@@ -4,12 +4,17 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Card, DataTable, num, usd } from '@/components/ui';
+import { SpendBillingCell, BillingTypeBadge } from '@/components/SpendBillingCell';
 import { decodeRange, RANGE_COOKIE, resolveRangeWithCookie } from '@/lib/date-range';
 
 type AllocationRow = {
   key: string;
   cost_usd: number | string;
   calls: string | number;
+  portal_import_usd?: number | string;
+  connector_usd?: number | string;
+  metered_usd?: number | string;
+  seat_usd?: number | string;
   spend_trend?: 'up' | 'down' | 'flat' | 'insufficient';
   trend_change_pct?: number;
   trend_change_usd?: number;
@@ -101,7 +106,7 @@ export function CostByUserPanel({
   return (
     <Card
       title="Cost by user"
-      subtitle={`${range.from} → ${range.to} · provider-reported metered spend + coding-agent usage (excludes subscription-included usage value)`}
+      subtitle={`${range.from} → ${range.to} · metered usage vs per-seat license allocation`}
       actions={
         <Link
           href={`/users?from=${range.from}&to=${range.to}`}
@@ -120,6 +125,7 @@ export function CostByUserPanel({
           columns={[
             { key: 'user', label: 'User' },
             { key: 'cost', label: 'Spend', align: 'right' },
+            { key: 'billing', label: 'Billing', align: 'right' },
             { key: 'trend', label: 'Daily trend', align: 'right' },
             { key: 'calls', label: 'Calls', align: 'right' },
           ]}
@@ -135,7 +141,20 @@ export function CostByUserPanel({
                   {r.key}
                 </Link>
               ),
-            cost: usd(Number(r.cost_usd)),
+            cost: (
+              <span className="inline-flex flex-col items-end gap-1">
+                <span>{usd(Number(r.cost_usd))}</span>
+                <BillingTypeBadge meteredUsd={r.metered_usd} seatUsd={r.seat_usd} />
+              </span>
+            ),
+            billing: (
+              <SpendBillingCell
+                meteredUsd={r.metered_usd}
+                seatUsd={r.seat_usd}
+                portalUsd={r.portal_import_usd}
+                connectorUsd={r.connector_usd}
+              />
+            ),
             trend: (
               <SpendTrendCell
                 trend={r.spend_trend}

@@ -69,8 +69,14 @@ function PlatformUtilizationCard({
     !loading &&
     data &&
     (data.mode === 'team'
-      ? data.aggregates.provisionedSeats === 0
+      ? data.aggregates.provisionedSeats === 0 && data.aggregates.meteredUsers === 0
       : data.users.length === 0);
+
+  const showMeteredProxy =
+    !loading &&
+    data?.mode === 'team' &&
+    data.aggregates.provisionedSeats === 0 &&
+    data.aggregates.meteredUsers > 0;
 
   return (
     <Card title="Platform utilization" subtitle={`License & usage proxy · ${from} → ${to}`}>
@@ -80,6 +86,29 @@ function PlatformUtilizationCard({
         <p className="py-8 text-center text-sm text-muted">
           Connect a provider import or assign seats to populate utilization.
         </p>
+      ) : showMeteredProxy ? (
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <Stat
+            label="Active users"
+            value={String(data.aggregates.activeMeteredUsers)}
+            sub={`of ${data.aggregates.meteredUsers} with metered usage`}
+          />
+          <Stat
+            label="Low use"
+            value={String(data.aggregates.lowUseMeteredUsers)}
+            sub={`${data.aggregates.inactiveMeteredUsers} inactive`}
+          />
+          <Stat
+            label="Metered spend"
+            value={usd(data.aggregates.meteredSpendUsd)}
+            sub="observed in window"
+          />
+          <Stat
+            label="Seat licenses"
+            value="—"
+            sub="assign in Settings → Plans to track seats"
+          />
+        </div>
       ) : data?.mode === 'team' ? (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <Stat
@@ -272,7 +301,7 @@ export function CfoView({
             <Stat
               label="Risk-adjusted ROI"
               value={usd(data.summary.riskAdjustedRoi)}
-              sub={`nominal ${usd(data.summary.nominalRoi)}`}
+              sub={`observed window · nominal ${usd(data.summary.nominalRoi)}`}
             />
             <Stat
               label="Business value"
@@ -323,8 +352,9 @@ export function CfoView({
       )}
 
       <p className="mb-6 text-xs text-muted">
-        Projected spend uses the selected run-rate window extrapolated to the forecast horizon. Token costs use
-        per-token price-book math or metered connector imports; seat licenses use fixed_costs entries.
+        ROI and cost per outcome use observed spend in the selected window. Projected spend extrapolates that
+        run rate to the forecast horizon (e.g. 1 year). Token costs use reconciled connector/portal billing;
+        seat licenses use fixed_costs entries.
       </p>
 
       <div className="mb-6">

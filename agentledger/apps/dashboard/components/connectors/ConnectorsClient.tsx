@@ -559,7 +559,8 @@ export function ConnectorsClient() {
                 <p className="mt-1 text-xs text-muted">
                   Paste your Cursor <strong>Team Admin API key</strong> (cursor.com → Team settings → Admin API).
                   Auth is HTTP Basic (<code className="text-xs">curl -u YOUR_KEY:</code>); base URL must stay{' '}
-                  https://api.cursor.com.
+                  https://api.cursor.com. One connector syncs billed usage events and daily code activity (lines
+                  committed, tab accepts, composer/chat requests) per user.
                 </p>
               )}
             </div>

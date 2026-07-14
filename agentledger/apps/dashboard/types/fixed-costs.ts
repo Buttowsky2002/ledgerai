@@ -1,4 +1,16 @@
-export const FIXED_COST_VENDORS = ['openai', 'anthropic', 'other'] as const;
+export const FIXED_COST_VENDORS = [
+  'openai',
+  'anthropic',
+  'cursor',
+  'google',
+  'azure',
+  'github',
+  'aws',
+  'cohere',
+  'mistral',
+  'perplexity',
+  'other',
+] as const;
 export type FixedCostVendor = (typeof FIXED_COST_VENDORS)[number];
 
 export const FIXED_COST_TYPES = [
@@ -62,13 +74,4 @@ export type DeleteFixedCostInput = {
   vendor: FixedCostVendor;
   costType: FixedCostType;
   lineItem?: string;
-};
-
-export type PlanPreset = {
-  id: string;
-  label: string;
-  vendor: FixedCostVendor;
-  costType: FixedCostType;
-  lineItem: string;
-  defaultUnitUsd: number | null;
 };

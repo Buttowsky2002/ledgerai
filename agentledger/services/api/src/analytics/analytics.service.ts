@@ -23,8 +23,11 @@ export interface AgentEconomicsRow {
 import { FocusRow, SpendDailyRow, toFocusRow } from './focus.mapper';
 import { PilotReport } from './report.renderer';
 import { computeSpendTrend } from './spend-trend';
-import { EFFECTIVE_METERED_COST_USD, LLM_CALLS_METERED_SCOPE } from '../connectors/metered-cost';
-import { sumProratedMonthlyCosts } from '../fixed-costs/fixed-cost-prorate';
+import { EFFECTIVE_METERED_COST_USD, LLM_CALLS_METERED_SCOPE, RECONCILED_USER_DAILY_SPEND_SQL, RECONCILED_USER_DAY_SPEND_SQL, RECONCILED_USER_MODEL_BREAKDOWN_SQL } from '../connectors/metered-cost';
+import {
+  computeCursorSeatLicenseFromFixedCosts,
+  computeCursorSeatLicenseFromPlans,
+} from './cursor-seat-license';
 import { loadIdentityLookups, resolveUserDirectoryIdentity, isEmailLike } from '../reports/identity-resolver';
 import type { UserDirectoryIdentity } from '../reports/identity-resolver';
 
@@ -67,6 +70,10 @@ export interface UserDirectoryRow {
   resolved: boolean;
   total_spend_usd: number;
   calls: number;
+  /** Portal CSV billing portion of total_spend_usd (before identity merge). */
+  portal_import_usd?: number;
+  /** Connector API sync portion of total_spend_usd (before identity merge). */
+  connector_usd?: number;
   models: string[];
   model_breakdown: UserModelBreakdownRow[];
 }
@@ -314,16 +321,19 @@ export class AnalyticsService {
     };
     let activeMembers = 0;
     try {
-      const [seatResult, members] = await Promise.all([
-        this.cursorSeatLicenseForPeriod(tenantId, r),
-        this.cursorActiveMembers(tenantId, r),
-      ]);
-      seat = seatResult;
-      activeMembers = members;
+      activeMembers = await this.cursorActiveMembers(tenantId, r);
     } catch (err) {
       this.logger.warn(
-        { event: 'cursor_spend_enrichment_failed', err: String((err as Error)?.message ?? err) },
-        'cursor-spend seat/active-member enrichment failed; returning usage summary',
+        { event: 'cursor_active_members_failed', err: String((err as Error)?.message ?? err) },
+        'cursor-spend active-member lookup failed',
+      );
+    }
+    try {
+      seat = await this.cursorSeatLicenseForPeriod(tenantId, r, activeMembers);
+    } catch (err) {
+      this.logger.warn(
+        { event: 'cursor_seat_license_failed', err: String((err as Error)?.message ?? err) },
+        'cursor-spend seat license lookup failed; returning usage summary',
       );
     }
 
@@ -342,51 +352,50 @@ export class AnalyticsService {
   private async cursorSeatLicenseForPeriod(
     tenantId: string,
     r: Range,
+    activeMembers: number,
   ): Promise<{
     seatLicenseUsd: number;
     seatCount: number;
     seatUnitUsdPerMonth: number;
     seatSource: 'fixed_costs' | 'subscription_plan' | 'none';
   }> {
-    const n = (v: unknown) => (typeof v === 'number' ? v : Number(v) || 0);
-    const usd = (v: number) => Math.round((v + Number.EPSILON) * 100) / 100;
-
     const fixedRows = await this.ch.queryScoped<{
       cost_usd: unknown;
       seats: unknown;
       unit_cost_usd: unknown;
       period_month: string;
     }>(
-      `SELECT period_month, sum(cost_usd) AS cost_usd,
+      `SELECT period_month,
+              sum(cost_usd) AS cost_usd,
               sum(seats) AS seats,
-              if(sum(seats) > 0, sum(cost_usd) / sum(seats), max(unit_cost_usd)) AS unit_cost_usd
+              max(unit_cost_usd) AS unit_cost_usd
        FROM agentledger.fixed_costs FINAL
        WHERE tenant_id = {tenant:String}
-         AND lower(vendor) = 'cursor'
          AND cost_type IN ('seat_license', 'subscription')
          AND period_month >= toStartOfMonth(toDate({from:String}))
          AND period_month <= toStartOfMonth(toDate({to:String}))
          AND attributable = 0
+         AND (
+           lower(vendor) = 'cursor'
+           OR (lower(vendor) = 'other' AND positionCaseInsensitive(line_item, 'cursor') > 0)
+         )
        GROUP BY period_month`,
       { from: r.from, to: r.to },
     );
-    const fixedCost = sumProratedMonthlyCosts(
-      fixedRows.map((row) => ({
-        period_month: String(row.period_month),
-        cost_usd: n(row.cost_usd),
-      })),
+    const normalizedFixed = fixedRows.map((row) => ({
+      period_month: String(row.period_month),
+      cost_usd: n(row.cost_usd),
+      seats: n(row.seats),
+      unit_cost_usd: n(row.unit_cost_usd),
+    }));
+    const fromFixed = computeCursorSeatLicenseFromFixedCosts(
+      normalizedFixed,
+      activeMembers,
       r.from,
       r.to,
     );
-    if (fixedCost > 0) {
-      const seats = fixedRows.reduce((s, row) => s + n(row.seats), 0);
-      const monthlyTotal = fixedRows.reduce((s, row) => s + n(row.cost_usd), 0);
-      return {
-        seatLicenseUsd: usd(fixedCost),
-        seatCount: Math.round(seats),
-        seatUnitUsdPerMonth: usd(seats > 0 ? monthlyTotal / seats : n(fixedRows[0]?.unit_cost_usd)),
-        seatSource: 'fixed_costs',
-      };
+    if (normalizedFixed.length > 0) {
+      return { ...fromFixed, seatSource: 'fixed_costs' };
     }
 
     const plans = await this.prisma.withTenant(tenantId, (tx) =>
@@ -406,25 +415,17 @@ export class AnalyticsService {
       return { seatLicenseUsd: 0, seatCount: 0, seatUnitUsdPerMonth: 0, seatSource: 'none' };
     }
 
-    const seats = plans.reduce((s, p) => s + n(p.seats_purchased), 0);
-    const monthlyTotal = plans.reduce((s, p) => {
-      const contract = n(p.contract_monthly_cost);
-      if (contract > 0) return s + contract;
-      return s + n(p.monthly_price_per_user) * n(p.seats_purchased);
-    }, 0);
-    const periodDays = Math.max(
-      1,
-      (new Date(r.to).getTime() - new Date(r.from).getTime()) / 86_400_000 + 1,
+    const computed = computeCursorSeatLicenseFromPlans(
+      plans.map((p) => ({
+        seats_purchased: n(p.seats_purchased),
+        monthly_price_per_user: n(p.monthly_price_per_user),
+        contract_monthly_cost: n(p.contract_monthly_cost),
+      })),
+      activeMembers,
+      r.from,
+      r.to,
     );
-    const monthsInWindow = periodDays / 30.437;
-    const unit =
-      seats > 0 ? monthlyTotal / seats : n(plans[0]?.monthly_price_per_user);
-    return {
-      seatLicenseUsd: usd(monthlyTotal * monthsInWindow),
-      seatCount: seats,
-      seatUnitUsdPerMonth: usd(unit),
-      seatSource: 'subscription_plan',
-    };
+    return { ...computed, seatSource: 'subscription_plan' };
   }
 
   private async cursorActiveMembers(tenantId: string, r: Range): Promise<number> {
@@ -526,27 +527,15 @@ export class AnalyticsService {
     const tenantId = getTenantId();
     const params = r as Record<string, ChParam>;
     const [totals, daily, codingTotals, codingDaily, copilotPack] = await Promise.all([
-      this.ch.queryScoped<{ key: string; cost_usd: unknown; calls: unknown }>(
-        `SELECT if(user_id = '', 'Unassigned', user_id) AS key,
-                sum(${METERED_COST}) AS cost_usd,
-                countIf(${METERED_COST} > 0) AS calls
-         FROM llm_calls
-         WHERE tenant_id = {tenant:String}
-           AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
-           AND ${LLM_CALLS_METERED_SCOPE}
-         GROUP BY key ORDER BY cost_usd DESC`,
-        params,
-      ),
+      this.ch.queryScoped<{
+        key: string;
+        cost_usd: unknown;
+        calls: unknown;
+        portal_import_usd: unknown;
+        connector_usd: unknown;
+      }>(`${RECONCILED_USER_DAY_SPEND_SQL} ORDER BY cost_usd DESC`, params),
       this.ch.queryScoped<{ user_id: string; day: string; cost_usd: unknown }>(
-        `SELECT if(user_id = '', 'Unassigned', user_id) AS user_id,
-                toDate(ts) AS day,
-                sum(${METERED_COST}) AS cost_usd
-         FROM llm_calls
-         WHERE tenant_id = {tenant:String}
-           AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
-           AND ${LLM_CALLS_METERED_SCOPE}
-         GROUP BY user_id, day
-         ORDER BY user_id, day`,
+        RECONCILED_USER_DAILY_SPEND_SQL,
         params,
       ),
       this.ch.queryScoped<{ key: string; cost_usd: unknown; calls: unknown }>(
@@ -575,24 +564,65 @@ export class AnalyticsService {
       tenantId ? this.fetchCopilotUserSpend(tenantId, r) : Promise.resolve({ totals: [], breakdown: [], hints: new Map() }),
     ]);
 
-    const totalsMap = new Map<string, { cost_usd: number; calls: number }>();
+    const totalsMap = new Map<
+      string,
+      {
+        cost_usd: number;
+        calls: number;
+        portal_import_usd: number;
+        connector_usd: number;
+        metered_usd: number;
+        seat_usd: number;
+      }
+    >();
     for (const row of totals) {
-      totalsMap.set(String(row.key), { cost_usd: n(row.cost_usd), calls: n(row.calls) });
+      totalsMap.set(String(row.key), {
+        cost_usd: n(row.cost_usd),
+        calls: n(row.calls),
+        portal_import_usd: n(row.portal_import_usd),
+        connector_usd: n(row.connector_usd),
+        metered_usd: n(row.cost_usd),
+        seat_usd: 0,
+      });
     }
     for (const row of codingTotals) {
       const key = String(row.key);
-      const cur = totalsMap.get(key) ?? { cost_usd: 0, calls: 0 };
+      const cur = totalsMap.get(key) ?? {
+        cost_usd: 0,
+        calls: 0,
+        portal_import_usd: 0,
+        connector_usd: 0,
+        metered_usd: 0,
+        seat_usd: 0,
+      };
+      const codingCost = n(row.cost_usd);
       totalsMap.set(key, {
-        cost_usd: usd(cur.cost_usd + n(row.cost_usd)),
+        cost_usd: usd(cur.cost_usd + codingCost),
         calls: cur.calls + n(row.calls),
+        portal_import_usd: cur.portal_import_usd,
+        connector_usd: usd(cur.connector_usd + codingCost),
+        metered_usd: usd(cur.metered_usd + codingCost),
+        seat_usd: cur.seat_usd,
       });
     }
     for (const row of copilotPack.totals) {
       const key = String(row.user_id);
-      const cur = totalsMap.get(key) ?? { cost_usd: 0, calls: 0 };
+      const cur = totalsMap.get(key) ?? {
+        cost_usd: 0,
+        calls: 0,
+        portal_import_usd: 0,
+        connector_usd: 0,
+        metered_usd: 0,
+        seat_usd: 0,
+      };
+      const seatCost = n(row.total_spend_usd);
       totalsMap.set(key, {
-        cost_usd: usd(cur.cost_usd + n(row.total_spend_usd)),
+        cost_usd: usd(cur.cost_usd + seatCost),
         calls: cur.calls + n(row.calls),
+        portal_import_usd: cur.portal_import_usd,
+        connector_usd: cur.connector_usd,
+        metered_usd: cur.metered_usd,
+        seat_usd: usd(cur.seat_usd + seatCost),
       });
     }
 
@@ -623,6 +653,10 @@ export class AnalyticsService {
           key,
           cost_usd: agg.cost_usd,
           calls: agg.calls,
+          portal_import_usd: agg.portal_import_usd,
+          connector_usd: agg.connector_usd,
+          metered_usd: agg.metered_usd,
+          seat_usd: agg.seat_usd,
           spend_trend: trend.direction,
           ...(trend.change_pct != null ? { trend_change_pct: trend.change_pct } : {}),
           ...(trend.change_usd != null ? { trend_change_usd: trend.change_usd } : {}),
@@ -1129,35 +1163,8 @@ export class AnalyticsService {
       throw new BadRequestException('no tenant in context');
     }
     const params: Record<string, ChParam> = { ...r, userId };
-    const userFilter = `AND user_id = {userId:String}`;
     const [{ totals: chTotals, breakdown: chBreakdown }, copilotPack] = await Promise.all([
-      Promise.all([
-        this.ch.queryScoped<{ user_id: string; total_spend_usd: unknown; calls: unknown }>(
-          `SELECT user_id,
-                  sum(${METERED_COST}) AS total_spend_usd,
-                  countIf(${METERED_COST} > 0) AS calls
-         FROM llm_calls
-         WHERE tenant_id = {tenant:String} AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
-           ${this.userSpendExclude()} AND ${LLM_CALLS_METERED_SCOPE} ${userFilter}
-         GROUP BY user_id
-         HAVING total_spend_usd > 0`,
-          params,
-        ),
-        this.ch.queryScoped<{ user_id: string; platform: string; model: string; spend_usd: unknown; calls: unknown }>(
-          `SELECT user_id,
-                  provider AS platform,
-                  if(response_model != '', response_model, request_model) AS model,
-                  sum(${METERED_COST}) AS spend_usd,
-                  countIf(${METERED_COST} > 0) AS calls
-         FROM llm_calls
-         WHERE tenant_id = {tenant:String} AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
-           ${this.userSpendExclude()} AND ${LLM_CALLS_METERED_SCOPE} ${userFilter}
-         GROUP BY user_id, provider, model
-         HAVING calls > 0
-         ORDER BY spend_usd DESC`,
-          params,
-        ),
-      ]).then(([totals, breakdown]) => ({ totals, breakdown })),
+      this.fetchUserSpendFromCh(r, userId),
       this.fetchCopilotUserSpend(tenantId, r, userId),
     ]);
     const rows = await this.assembleUserDirectory(
@@ -1170,40 +1177,54 @@ export class AnalyticsService {
     return rows[0] ?? null;
   }
 
-  private userSpendExclude(): string {
-    return `AND user_id != '' AND user_id != 'Unassigned'`;
+  private userSpendExcludeKey(): string {
+    return `key != '' AND key != 'Unassigned'`;
   }
 
-  private async fetchUserSpendFromCh(r: Range) {
-    const params = r as Record<string, ChParam>;
-    const exclude = `${this.userSpendExclude()} AND ${LLM_CALLS_METERED_SCOPE}`;
+  private async fetchUserSpendFromCh(r: Range, userId?: string) {
+    const params: Record<string, ChParam> = { ...r, ...(userId ? { userId } : {}) };
+    const userFilter = userId ? `AND key = {userId:String}` : '';
+    const breakdownUserFilter = userId ? `AND user_id = {userId:String}` : '';
     const [totals, breakdown] = await Promise.all([
-      this.ch.queryScoped<{ user_id: string; total_spend_usd: unknown; calls: unknown }>(
-        `SELECT user_id,
-                sum(${METERED_COST}) AS total_spend_usd,
-                countIf(${METERED_COST} > 0) AS calls
-         FROM llm_calls
-         WHERE tenant_id = {tenant:String} AND toDate(ts) BETWEEN {from:Date} AND {to:Date} ${exclude}
-         GROUP BY user_id
-         HAVING calls > 0
-         ORDER BY total_spend_usd DESC`,
+      this.ch.queryScoped<{
+        key: string;
+        cost_usd: unknown;
+        calls: unknown;
+        portal_import_usd: unknown;
+        connector_usd: unknown;
+      }>(
+        `SELECT key, cost_usd, calls, portal_import_usd, connector_usd
+         FROM (${RECONCILED_USER_DAY_SPEND_SQL}) AS reconciled
+         WHERE ${this.userSpendExcludeKey()} AND cost_usd > 0 ${userFilter}
+         ORDER BY cost_usd DESC`,
         params,
       ),
-      this.ch.queryScoped<{ user_id: string; platform: string; model: string; spend_usd: unknown; calls: unknown }>(
-        `SELECT user_id,
-                provider AS platform,
-                if(response_model != '', response_model, request_model) AS model,
-                sum(${METERED_COST}) AS spend_usd,
-                countIf(${METERED_COST} > 0) AS calls
-         FROM llm_calls
-         WHERE tenant_id = {tenant:String} AND toDate(ts) BETWEEN {from:Date} AND {to:Date} ${exclude}
-         GROUP BY user_id, provider, model
-         HAVING calls > 0
+      this.ch.queryScoped<{
+        user_id: string;
+        platform: string;
+        model: string;
+        spend_usd: unknown;
+        calls: unknown;
+        portal_import_usd: unknown;
+        connector_usd: unknown;
+      }>(
+        `SELECT user_id, platform, model, spend_usd, calls, portal_import_usd, connector_usd
+         FROM (${RECONCILED_USER_MODEL_BREAKDOWN_SQL}) AS reconciled
+         WHERE user_id != '' AND user_id != 'Unassigned' ${breakdownUserFilter}
          ORDER BY user_id, spend_usd DESC`,
         params,
       ),
     ]);
-    return { totals, breakdown };
+    return {
+      totals: totals.map((row) => ({
+        user_id: String(row.key),
+        total_spend_usd: row.cost_usd,
+        calls: row.calls,
+        portal_import_usd: row.portal_import_usd,
+        connector_usd: row.connector_usd,
+      })),
+      breakdown,
+    };
   }
 
   /** GitHub Copilot allocated member spend (Postgres) — not in llm_calls metered rollups. */
@@ -1260,11 +1281,16 @@ export class AnalyticsService {
     q?: string,
     copilotHints: Map<string, CopilotIdentityHint> = new Map(),
   ): Promise<UserDirectoryRow[]> {
-    const totalsByUser = new Map<string, { total_spend_usd: number; calls: number }>();
+    const totalsByUser = new Map<
+      string,
+      { total_spend_usd: number; calls: number; portal_import_usd: number; connector_usd: number }
+    >();
     for (const row of totals) {
       totalsByUser.set(String(row.user_id), {
         total_spend_usd: usd(n(row.total_spend_usd)),
         calls: n(row.calls),
+        portal_import_usd: usd(n((row as { portal_import_usd?: unknown }).portal_import_usd)),
+        connector_usd: usd(n((row as { connector_usd?: unknown }).connector_usd)),
       });
     }
 
@@ -1290,7 +1316,12 @@ export class AnalyticsService {
 
     const merged = new Map<string, UserDirectoryRow>();
     for (const user_id of allUserIds) {
-      const totalsRow = totalsByUser.get(user_id) ?? { total_spend_usd: 0, calls: 0 };
+      const totalsRow = totalsByUser.get(user_id) ?? {
+        total_spend_usd: 0,
+        calls: 0,
+        portal_import_usd: 0,
+        connector_usd: 0,
+      };
       const total_spend_usd = totalsRow.total_spend_usd;
       const calls = totalsRow.calls;
       if (total_spend_usd <= 0 && calls <= 0) continue;
@@ -1315,6 +1346,8 @@ export class AnalyticsService {
         resolved: identity.resolved,
         total_spend_usd,
         calls,
+        portal_import_usd: totalsRow.portal_import_usd,
+        connector_usd: totalsRow.connector_usd,
         models,
         model_breakdown,
       };
@@ -1365,6 +1398,8 @@ export class AnalyticsService {
       resolved: a.resolved || b.resolved,
       total_spend_usd: usd(a.total_spend_usd + b.total_spend_usd),
       calls: a.calls + b.calls,
+      portal_import_usd: usd((a.portal_import_usd ?? 0) + (b.portal_import_usd ?? 0)),
+      connector_usd: usd((a.connector_usd ?? 0) + (b.connector_usd ?? 0)),
       models,
       model_breakdown,
     };

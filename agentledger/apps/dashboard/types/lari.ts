@@ -179,6 +179,11 @@ export interface UserValueTeamAggregate {
   inactiveSeats: number;
   lowUseSeats: number;
   reclaimableMonthlyUsd: number;
+  meteredUsers: number;
+  activeMeteredUsers: number;
+  lowUseMeteredUsers: number;
+  inactiveMeteredUsers: number;
+  meteredSpendUsd: number;
   byPlan: Array<{
     planId: string;
     planName: string;

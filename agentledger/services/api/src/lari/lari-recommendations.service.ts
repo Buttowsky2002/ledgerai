@@ -2,6 +2,14 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { ChParam } from '../clickhouse/clickhouse.service';
 import { AnalyticsStore } from '../analytics-store/analytics-store';
 import { UserValueService } from '../analytics/user-value.service';
+import {
+  EFFECTIVE_METERED_COST_USD,
+  LLM_CALLS_METERED_SCOPE,
+  RECONCILED_MODEL_USAGE_SQL,
+  RECONCILED_PROVIDER_SPEND_SQL,
+  RECONCILED_TENANT_DAILY_SPEND_SQL,
+  RECONCILED_UNMAPPED_SPEND_SQL,
+} from '../connectors/metered-cost';
 import { COPILOT_PROVIDER } from '../github-copilot/github-copilot.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { getPerUserAnalyticsMode } from '../tenant/per-user-analytics';
@@ -60,26 +68,14 @@ export class LariRecommendationsService {
       perUserMode,
     ] = await Promise.all([
       this.ch.queryScoped<{ provider: string; cost_usd: number; calls: number }>(
-        `SELECT provider, sum(cost_usd) AS cost_usd, sum(calls) AS calls
-         FROM spend_daily
-         WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date}
-         GROUP BY provider ORDER BY cost_usd DESC`,
+        RECONCILED_PROVIDER_SPEND_SQL,
         params,
       ),
       this.ch.queryScoped<{ day: string; cost_usd: number }>(
-        `SELECT day, sum(cost_usd) AS cost_usd
-         FROM spend_daily
-         WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date}
-         GROUP BY day ORDER BY day`,
+        RECONCILED_TENANT_DAILY_SPEND_SQL,
         params,
       ),
-      this.ch.queryScoped<{ unmapped_cost: number }>(
-        `SELECT sum(cost_usd) AS unmapped_cost
-         FROM spend_daily_by_user
-         WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date}
-           AND user_id = 'Unassigned'`,
-        params,
-      ),
+      this.ch.queryScoped<{ unmapped_cost: number }>(RECONCILED_UNMAPPED_SPEND_SQL, params),
       this.ch.queryScoped<{ agent_id: string }>(
         `SELECT agent_id, sum(value_usd) AS value_usd
          FROM agentledger.v_agent_daily_unit_economics
@@ -88,11 +84,12 @@ export class LariRecommendationsService {
         params,
       ),
       this.ch.queryScoped<{ agent_id: string; provider: string; cost_usd: number }>(
-        `SELECT agent_id, provider, sum(cost_usd) AS cost_usd
+        `SELECT agent_id, provider, sum(${EFFECTIVE_METERED_COST_USD}) AS cost_usd
          FROM llm_calls
          WHERE tenant_id = {tenant:String}
            AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
            AND agent_id != ''
+           AND ${LLM_CALLS_METERED_SCOPE}
          GROUP BY agent_id, provider`,
         params,
       ),
@@ -103,18 +100,7 @@ export class LariRecommendationsService {
         output_tokens: number;
         cost_usd: number;
         calls: number;
-      }>(
-        `SELECT provider, model,
-                sum(input_tokens) AS input_tokens,
-                sum(output_tokens) AS output_tokens,
-                sum(cost_usd) AS cost_usd,
-                sum(calls) AS calls
-         FROM spend_daily
-         WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date}
-         GROUP BY provider, model
-         ORDER BY cost_usd DESC`,
-        params,
-      ),
+      }>(RECONCILED_MODEL_USAGE_SQL, params),
       this.loadPriceBookAt(r.to),
       this.seatStats(tenantId),
       this.subscriptionPlans(tenantId),

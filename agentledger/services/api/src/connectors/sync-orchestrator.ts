@@ -108,6 +108,9 @@ export async function runSyncOrchestrator(input: SyncOrchestratorInput): Promise
 
   stepsCompleted.push('fetchUsage');
   const fetched = await fetchAllRecords(ctx);
+  if (fetched.companionStepsCompleted?.length) {
+    stepsCompleted.push(...fetched.companionStepsCompleted);
+  }
   fetched.requestCount += auxiliaryRequestCount;
 
   const { records, unmappedRecords } = finalizeConnectorRecords(

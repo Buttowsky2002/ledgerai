@@ -17,6 +17,15 @@ function harness(opts?: {
     estimatedValueUsd: number;
     totalCalls: number;
   } | null;
+  cursorProductivity?: {
+    estimatedValueUsd: number;
+    activeUserDays: number;
+    linesCommitted: number;
+    linesAccepted: number;
+    distinctUsers: number;
+    avgConfidence: number;
+    disclaimer: string;
+  } | null;
 }) {
   const costBasisTotals = opts?.costBasisTotals ?? {
     computed_cost_usd: 100,
@@ -44,11 +53,43 @@ function harness(opts?: {
   ];
 
   const queryScoped = jest.fn(async (sql: string) => {
+    if (/per_day_model/.test(sql) && /countIf\(reconciled_usd/.test(sql)) return [costBasisTotals];
+    if (/per_day_model/.test(sql) && /toStartOfMonth\(day\)/.test(sql)) return costBasisMonthly;
+    if (/platform AS provider/.test(sql) && /reconciled/.test(sql)) return [];
+    if (/reconciled_usd AS cost_usd/.test(sql) && /GROUP BY provider, model/.test(sql)) {
+      return [
+        {
+          provider: 'cursor',
+          model: 'claude-sonnet',
+          input_tokens: 1_000_000,
+          output_tokens: 500_000,
+          calls: 100,
+          cost_usd: 100,
+        },
+      ];
+    }
     if (/v_cost_basis_daily/.test(sql) && /countIf/.test(sql)) return [costBasisTotals];
     if (/v_cost_basis_daily/.test(sql) && /toStartOfMonth/.test(sql)) return costBasisMonthly;
     if (/FROM agentledger\.v_roi/.test(sql) && /outcome_type/.test(sql)) return roiRows;
     if (/FROM agentledger\.v_roi/.test(sql) && /count\(\)/.test(sql)) return [{ cnt: 10 }];
-    if (/spend_daily_by_user/.test(sql)) return [{ unmapped_cost: 0 }];
+    if (/spend_daily_by_user/.test(sql) || /key = 'Unassigned'/.test(sql)) return [{ unmapped_cost: 0 }];
+    if (/coding_agent_daily/.test(sql) && /lines_accepted/.test(sql)) {
+      return opts?.cursorProductivity
+        ? [
+            {
+              user_id: 'dev@acme.com',
+              day: '2026-06-15',
+              lines_accepted: 100,
+              lines_added: 200,
+              lines_deleted: 10,
+              lines_committed: 200,
+              tabs_accepted: 20,
+              composer_requests: 2,
+              chat_requests: 4,
+            },
+          ]
+        : [];
+    }
     if (/coding_agent_daily/.test(sql)) return [{ cost_usd: 0 }];
     if (/FROM spend_daily/.test(sql) && /GROUP BY provider, model/.test(sql)) {
       return [
@@ -89,9 +130,50 @@ function harness(opts?: {
   const copilotAnalytics = {
     getSpendSummary: jest.fn(async () => opts?.copilotSpend ?? null),
   } as unknown as CopilotAnalyticsService;
+  const cursorAnalytics = {
+    getSpendSummary: jest.fn(async () =>
+      opts?.cursorProductivity
+        ? {
+            billedUsd: 50,
+            meteredOverageUsd: 50,
+            usageValueUsd: 100,
+            seatLicenseUsd: 40,
+            seatCount: 5,
+            seatUnitUsdPerMonth: 40,
+            seatSource: 'fixed_costs' as const,
+            activeMembersInRange: 5,
+            totalCalls: 10,
+            includedCalls: 5,
+            onDemandCalls: 5,
+            legacyUntagged: false,
+            daily: [],
+            modelMix: [],
+            platform: { platform: 'cursor', cost_usd: 50, calls: 10 },
+            disclaimer: '',
+          }
+        : null,
+    ),
+  } as unknown as import('../connectors/cursor-analytics.service').CursorAnalyticsService;
+  const cursorProductivity = {
+    getProductivitySummary: jest.fn(async () => opts?.cursorProductivity ?? null),
+    toOutcomeBreakdownRow: jest.fn((summary: {
+      estimatedValueUsd: number;
+      activeUserDays: number;
+      avgConfidence: number;
+    }, spend: number) => ({
+      outcomeType: 'cursor_code_activity',
+      outcomes: summary.activeUserDays,
+      businessValue: summary.estimatedValueUsd,
+      fullyLoadedCost: spend,
+      nominalRoi: summary.estimatedValueUsd - spend,
+      riskAdjustedRoi: summary.estimatedValueUsd * summary.avgConfidence - spend,
+      avgConfidence: summary.avgConfidence,
+      costPerOutcome: summary.activeUserDays > 0 ? spend / summary.activeUserDays : 0,
+    })),
+  } as unknown as import('../connectors/cursor-productivity.service').CursorProductivityService;
 
   return {
-    svc: new LariCfoViewService(ch, prisma, copilotAnalytics),
+    svc: new LariCfoViewService(ch, prisma, copilotAnalytics, cursorAnalytics, cursorProductivity),
     queryScoped,
   };
 }
@@ -139,7 +221,7 @@ describe('LariCfoViewService.getCfoView', () => {
     expect(res.costProvenance.effectiveCostUsd).toBe(110);
   });
 
-  it('computes costPerOutcome from fully-loaded cost / outcome count', async () => {
+  it('computes costPerOutcome from observed fully-loaded cost / outcome count', async () => {
     const { svc } = harness();
     const res = await runWithTenant(principal, () =>
       svc.getCfoView('2026-06-01', '2026-06-30', 0.5, undefined, 'reconciled', 30),

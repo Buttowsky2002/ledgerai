@@ -64,7 +64,8 @@ export class ConnectorSchedulerService implements OnModuleInit, OnModuleDestroy 
 
               const cfg = (connector.config ?? {}) as Record<string, unknown>;
               const window = incrementalSyncWindow();
-              const range = resolveConnectorSyncRange(window, cfg);
+              const range = resolveConnectorSyncRange(window, cfg, { incremental: true });
+              if (!range) return;
 
               const result = await this.connectors.sync(row.connector_id, range);
               this.logger.log(

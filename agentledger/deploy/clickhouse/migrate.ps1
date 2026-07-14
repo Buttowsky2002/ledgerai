@@ -71,6 +71,7 @@ $bootstrapChecks = @(
     @{ Version = "016_cursor_billing_split"; Check = "SELECT hasColumnInTable('agentledger', 'llm_calls', 'usage_value_usd')" }
     @{ Version = "017_metered_cost"; Check = "SELECT hasColumnInTable('agentledger', 'llm_calls', 'metered_cost_usd')" }
     @{ Version = "018_cost_basis"; Check = "EXISTS VIEW agentledger.v_cost_basis_daily" }
+    @{ Version = "020_coding_agent_lines"; Check = "SELECT hasColumnInTable('agentledger', 'coding_agent_daily', 'lines_committed')" }
 )
 foreach ($item in $bootstrapChecks) {
     if (Migration-Applied $item.Version) { continue }
