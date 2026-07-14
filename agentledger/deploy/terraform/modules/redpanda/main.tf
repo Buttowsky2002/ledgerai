@@ -192,9 +192,9 @@ resource "aws_ecs_task_definition" "redpanda" {
       "--memory", "256M",
       "--reserve-memory", "0M",
       "--overprovisioned",
+      "--reactor-backend", "epoll",
       "--kafka-addr", "0.0.0.0:9092",
       "--advertise-kafka-addr", "redpanda.badgeriq.local:9092",
-      "--mode", "dev-container",
       "--default-log-level", "warn"
     ]
 
