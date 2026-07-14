@@ -18,10 +18,15 @@ variable "ecs_task_security_group_id" {
   type        = string
 }
 
+variable "ecs_cluster_id" {
+  description = "ECS cluster ARN. Supplied by the compute module (Phase 4) or a temporary cluster."
+  type        = string
+}
+
 variable "redpanda_image" {
   description = "Redpanda container image."
   type        = string
-  default     = "docker.redpanda.com/redpandadata/redpanda:v24.1.7"
+  default     = "docker.redpanda.com/redpandadata/redpanda:v24.2.7"
 }
 
 variable "cpu" {

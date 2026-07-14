@@ -282,17 +282,14 @@ data "aws_iam_policy_document" "github_deployer_permissions" {
     sid = "EFS"
     actions = [
       "elasticfilesystem:CreateFileSystem",
-      "elasticfilesystem:DeleteFileSystem",
       "elasticfilesystem:DescribeFileSystems",
       "elasticfilesystem:CreateMountTarget",
-      "elasticfilesystem:DeleteMountTarget",
       "elasticfilesystem:DescribeMountTargets",
       "elasticfilesystem:CreateAccessPoint",
-      "elasticfilesystem:DeleteAccessPoint",
       "elasticfilesystem:DescribeAccessPoints",
-      "elasticfilesystem:TagResource",
-      "elasticfilesystem:UntagResource",
-      "elasticfilesystem:ListTagsForResource",
+      "elasticfilesystem:DeleteFileSystem",
+      "elasticfilesystem:DeleteMountTarget",
+      "elasticfilesystem:DeleteAccessPoint",
     ]
     resources = ["*"]
   }

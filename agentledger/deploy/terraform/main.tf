@@ -69,7 +69,23 @@ module "postgres" {
 #   tags                       = local.tags
 # }
 
-# ── 4. Redpanda (Kafka-compatible event bus on ECS Fargate) ──────────────────
+# ── 4. ECS cluster (shared by all Fargate services) ──────────────────────────
+#
+# Single cluster for Redpanda + all application services (Phase 4).
+# When the compute module is built, this resource moves there and the cluster
+# ARN is passed back to root as a module output.
+
+resource "aws_ecs_cluster" "main" {
+  name = "${local.name}-cluster"
+  tags = local.tags
+
+  setting {
+    name  = "containerInsights"
+    value = "enabled"
+  }
+}
+
+# ── 5. Redpanda (Kafka-compatible event bus on ECS Fargate) ──────────────────
 #
 # Replaces the MSK Serverless module (modules/kafka/) which was deleted.
 # Rationale: MSK Serverless has a ~$547/month cluster-hour floor regardless of
@@ -84,10 +100,11 @@ module "redpanda" {
   vpc_id                     = module.network.vpc_id
   private_subnet_ids         = module.network.private_subnet_ids
   ecs_task_security_group_id = module.network.ecs_task_security_group_id
+  ecs_cluster_id             = aws_ecs_cluster.main.id
   tags                       = local.tags
 }
 
-# ── 5. ClickHouse Cloud connection secret ─────────────────────────────────────
+# ── 6. ClickHouse Cloud connection secret ─────────────────────────────────────
 
 module "clickhouse_secret" {
   source = "./modules/clickhouse-secret"

@@ -98,15 +98,9 @@ resource "aws_efs_access_point" "redpanda" {
 
 # ── ECS cluster + task + service ─────────────────────────────────────────────
 
-resource "aws_ecs_cluster" "redpanda" {
-  name = "${var.name}-redpanda"
-  tags = var.tags
-
-  setting {
-    name  = "containerInsights"
-    value = "enabled"
-  }
-}
+# NOTE: Redpanda runs in the shared ECS cluster created by the compute module
+# (Phase 4). The cluster ARN is passed in via var.ecs_cluster_id. Until that
+# module exists, pass the ARN of a manually-created cluster or a temporary one.
 
 resource "aws_cloudwatch_log_group" "redpanda" {
   name              = "/ecs/${var.name}/redpanda"
@@ -180,7 +174,7 @@ resource "aws_ecs_task_definition" "redpanda" {
     efs_volume_configuration {
       file_system_id     = aws_efs_file_system.redpanda.id
       transit_encryption = "ENABLED"
-      authorization_configuration {
+      authorization_config {
         access_point_id = aws_efs_access_point.redpanda.id
         iam             = "ENABLED"
       }
@@ -251,7 +245,7 @@ resource "aws_vpc_security_group_ingress_rule" "redpanda_from_ecs" {
 
 resource "aws_ecs_service" "redpanda" {
   name            = "${var.name}-redpanda"
-  cluster         = aws_ecs_cluster.redpanda.id
+  cluster         = var.ecs_cluster_id
   task_definition = aws_ecs_task_definition.redpanda.arn
   desired_count   = 1
   launch_type     = "FARGATE"

@@ -20,6 +20,13 @@ output "ecs_task_security_group_id" {
   value       = module.network.ecs_task_security_group_id
 }
 
+# ── ECS cluster ───────────────────────────────────────────────────────────────
+
+output "ecs_cluster_arn" {
+  description = "Shared ECS Fargate cluster ARN."
+  value       = aws_ecs_cluster.main.arn
+}
+
 # ── Postgres ──────────────────────────────────────────────────────────────────
 
 output "postgres_dsn_secret_arn" {
