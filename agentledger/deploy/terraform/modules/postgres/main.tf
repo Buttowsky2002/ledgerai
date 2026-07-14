@@ -142,45 +142,11 @@ resource "aws_iam_role_policy_attachment" "rds_monitoring" {
 }
 
 # ── App role provisioning (least-privilege, rule 7) ───────────────────────────
-# Creates app_rw role that the application uses instead of the superuser.
-
-resource "null_resource" "app_role" {
-  depends_on = [aws_db_instance.main]
-
-  provisioner "local-exec" {
-    environment = {
-      PGHOST     = aws_db_instance.main.address
-      PGPORT     = tostring(aws_db_instance.main.port)
-      PGDATABASE = "agentledger"
-      PGUSER     = aws_db_instance.main.username
-      PGPASSWORD = random_password.superuser.result
-      PGSSLMODE  = "require"
-      APP_PW     = random_password.app_role.result
-    }
-
-    command = <<-EOT
-      psql -v ON_ERROR_STOP=1 <<'SQL'
-        DO $$
-        BEGIN
-          IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'app_rw') THEN
-            CREATE ROLE app_rw WITH LOGIN PASSWORD current_setting('app.app_pw') NOINHERIT;
-          END IF;
-        END $$;
-        SET app.app_pw = :'APP_PW';
-        ALTER ROLE app_rw WITH PASSWORD :'APP_PW';
-        GRANT CONNECT ON DATABASE agentledger TO app_rw;
-        GRANT USAGE ON SCHEMA public TO app_rw;
-        ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_rw;
-        ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO app_rw;
-        ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO app_rw;
-      SQL
-    EOT
-  }
-
-  triggers = {
-    instance_id = aws_db_instance.main.id
-  }
-}
+# Run create-app-role.sql manually via an SSM tunnel to the private RDS
+# instance. See that file for instructions. The previous local-exec
+# provisioner was removed because it required a bash-compatible shell
+# (fails on Windows/PowerShell) and direct network access to the RDS
+# instance, which is private-subnet-only by design.
 
 # ── Store the app DSN in Secrets Manager ──────────────────────────────────────
 
