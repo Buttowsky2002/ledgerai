@@ -133,8 +133,9 @@ resource "aws_iam_role" "github_deployer" {
   assume_role_policy = data.aws_iam_policy_document.github_deployer_trust.json
 }
 
-data "aws_iam_policy_document" "github_deployer_permissions" {
-  # Remote state read/write for the main stack.
+# ── Policy 1/3: state + network ──────────────────────────────────────────────
+
+data "aws_iam_policy_document" "deployer_state_and_network" {
   statement {
     sid = "TerraformStateS3"
     actions = [
@@ -162,7 +163,6 @@ data "aws_iam_policy_document" "github_deployer_permissions" {
     ]
   }
 
-  # Network discovery and VPC wiring (main stack modules).
   statement {
     sid = "NetworkDescribe"
     actions = [
@@ -201,7 +201,22 @@ data "aws_iam_policy_document" "github_deployer_permissions" {
     ]
     resources = ["*"]
   }
+}
 
+resource "aws_iam_policy" "deployer_state_and_network" {
+  name        = "${var.project_name}-deployer-state-network"
+  description = "Deployer: Terraform state (S3/DynamoDB) + VPC/network/SG."
+  policy      = data.aws_iam_policy_document.deployer_state_and_network.json
+}
+
+resource "aws_iam_role_policy_attachment" "deployer_state_and_network" {
+  role       = aws_iam_role.github_deployer.name
+  policy_arn = aws_iam_policy.deployer_state_and_network.arn
+}
+
+# ── Policy 2/3: compute + data ──────────────────────────────────────────────
+
+data "aws_iam_policy_document" "deployer_compute_and_data" {
   statement {
     sid = "ECS"
     actions = [
@@ -323,7 +338,22 @@ data "aws_iam_policy_document" "github_deployer_permissions" {
     ]
     resources = ["*"]
   }
+}
 
+resource "aws_iam_policy" "deployer_compute_and_data" {
+  name        = "${var.project_name}-deployer-compute-data"
+  description = "Deployer: ECS, RDS, ElastiCache, EFS, ALB."
+  policy      = data.aws_iam_policy_document.deployer_compute_and_data.json
+}
+
+resource "aws_iam_role_policy_attachment" "deployer_compute_and_data" {
+  role       = aws_iam_role.github_deployer.name
+  policy_arn = aws_iam_policy.deployer_compute_and_data.arn
+}
+
+# ── Policy 3/3: platform services ───────────────────────────────────────────
+
+data "aws_iam_policy_document" "deployer_platform" {
   statement {
     sid = "Route53"
     actions = [
@@ -492,15 +522,15 @@ data "aws_iam_policy_document" "github_deployer_permissions" {
   }
 }
 
-resource "aws_iam_policy" "github_deployer" {
-  name        = "${var.project_name}-deployer-permissions"
-  description = "Least-privilege deploy permissions for BadgerIQ GitHub tag releases."
-  policy      = data.aws_iam_policy_document.github_deployer_permissions.json
+resource "aws_iam_policy" "deployer_platform" {
+  name        = "${var.project_name}-deployer-platform"
+  description = "Deployer: Route53, ACM, Secrets Manager, IAM, ECR, CloudWatch, SNS, Cloud Map, KMS."
+  policy      = data.aws_iam_policy_document.deployer_platform.json
 }
 
-resource "aws_iam_role_policy_attachment" "github_deployer" {
+resource "aws_iam_role_policy_attachment" "deployer_platform" {
   role       = aws_iam_role.github_deployer.name
-  policy_arn = aws_iam_policy.github_deployer.arn
+  policy_arn = aws_iam_policy.deployer_platform.arn
 }
 
 # ── 5. DNS hosted zone (delegate NS at registrar) ───────────────────────────
