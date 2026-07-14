@@ -75,14 +75,10 @@ module "postgres" {
 # When the compute module is built, this resource moves there and the cluster
 # ARN is passed back to root as a module output.
 
+# Re-enable containerInsights when per-task granular metrics justify ~$10–40/month.
 resource "aws_ecs_cluster" "main" {
   name = "${local.name}-cluster"
   tags = local.tags
-
-  setting {
-    name  = "containerInsights"
-    value = "enabled"
-  }
 }
 
 # ── 5. Redpanda (Kafka-compatible event bus on ECS Fargate) ──────────────────
