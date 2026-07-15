@@ -87,19 +87,17 @@ function Invoke-PostgresMigrations {
     Write-Host "`n==> Reading Postgres credentials from Secrets Manager ($SecretPrefix/postgres)..."
     $secret = Get-SecretJson "$SecretPrefix/postgres"
 
-    # The DSN in Secrets Manager points at the private RDS endpoint
-    # (e.g. badgeriq-pilot-postgres.xxx.us-east-1.rds.amazonaws.com), which is
-    # not resolvable from outside the VPC. We parse username, password, and
-    # database from it, then rebuild the connection string using PgHost:PgPort
-    # — the local end of an SSM port-forward tunnel.
-    $smDsn = $secret.dsn
-    $uri   = [System.Uri]::new($smDsn)
-    $pgUser = $uri.UserInfo.Split(':')[0]
-    $pgPass = $uri.UserInfo.Split(':')[1]
-    $pgDb   = $uri.AbsolutePath.TrimStart('/')
-    $pgQuery = $uri.Query
+    # Schema migrations require the admin (superuser) credentials, not app_rw.
+    # app_rw is deliberately limited to DML (SELECT/INSERT/UPDATE/DELETE) via
+    # the least-privilege grants in create-app-role.sql — it cannot CREATE TABLE,
+    # ALTER, or run DDL, so every migration would fail with a permission error.
+    # The admin_username/admin_password fields in the same secret are the RDS
+    # master credentials with full DDL rights. The app_rw DSN stays unused here;
+    # it's consumed only by application services at runtime.
+    $pgUser = $secret.admin_username
+    $pgPass = $secret.admin_password
 
-    $dsn = "postgres://${pgUser}:${pgPass}@${PgHost}:${PgPort}/${pgDb}${pgQuery}"
+    $dsn = "postgresql://${pgUser}:${pgPass}@${PgHost}:${PgPort}/agentledger?sslmode=require"
 
     Write-Host "==> Testing ${PgHost}:${PgPort} connectivity (SSM tunnel check)..."
     $tcp = Test-NetConnection -ComputerName $PgHost -Port $PgPort -WarningAction SilentlyContinue
