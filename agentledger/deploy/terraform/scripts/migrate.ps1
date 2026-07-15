@@ -16,9 +16,20 @@
 .PARAMETER Target
     Which database(s) to migrate: postgres, clickhouse, or both.
 
+.PARAMETER PgHost
+    Hostname psql connects to (default: localhost). The DSN in Secrets Manager
+    points at the private RDS endpoint, which is not resolvable from outside
+    the VPC. This parameter lets you override it with the local end of an SSM
+    port-forward tunnel.
+
+.PARAMETER PgPort
+    Port psql connects to (default: 5432). Must match the localPortNumber of
+    the active SSM port-forward tunnel.
+
 .EXAMPLE
     .\migrate.ps1 -Environment pilot -Target postgres
     .\migrate.ps1 -Environment pilot -Target both
+    .\migrate.ps1 -Environment pilot -Target postgres -PgHost 127.0.0.1 -PgPort 15432
 #>
 [CmdletBinding()]
 param(
@@ -28,7 +39,14 @@ param(
 
     [Parameter(Mandatory)]
     [ValidateSet('postgres', 'clickhouse', 'both')]
-    [string]$Target
+    [string]$Target,
+
+    # The RDS instance is in a private subnet and its hostname is not publicly
+    # resolvable. An SSM port-forward tunnel must already be open before running
+    # this script, forwarding the RDS endpoint to PgHost:PgPort on this machine.
+    [string]$PgHost = 'localhost',
+
+    [int]$PgPort = 5432
 )
 
 $ErrorActionPreference = 'Stop'
@@ -66,35 +84,44 @@ function Get-SqlFiles([string]$Dir) {
 # ── Postgres ─────────────────────────────────────────────────────────────────
 
 function Invoke-PostgresMigrations {
-    Write-Host "`n==> Reading Postgres DSN from Secrets Manager ($SecretPrefix/postgres)..."
+    Write-Host "`n==> Reading Postgres credentials from Secrets Manager ($SecretPrefix/postgres)..."
     $secret = Get-SecretJson "$SecretPrefix/postgres"
-    $dsn = $secret.dsn
 
-    # The DSN targets the private RDS instance. If the user is connecting
-    # through an SSM port-forward, psql connects to localhost:5432 (the
-    # forwarded port). Test that first so we fail with a clear message
-    # instead of a cryptic timeout.
-    Write-Host '==> Testing localhost:5432 connectivity (SSM tunnel check)...'
-    $tcp = Test-NetConnection -ComputerName localhost -Port 5432 -WarningAction SilentlyContinue
+    # The DSN in Secrets Manager points at the private RDS endpoint
+    # (e.g. badgeriq-pilot-postgres.xxx.us-east-1.rds.amazonaws.com), which is
+    # not resolvable from outside the VPC. We parse username, password, and
+    # database from it, then rebuild the connection string using PgHost:PgPort
+    # — the local end of an SSM port-forward tunnel.
+    $smDsn = $secret.dsn
+    $uri   = [System.Uri]::new($smDsn)
+    $pgUser = $uri.UserInfo.Split(':')[0]
+    $pgPass = $uri.UserInfo.Split(':')[1]
+    $pgDb   = $uri.AbsolutePath.TrimStart('/')
+    $pgQuery = $uri.Query
+
+    $dsn = "postgres://${pgUser}:${pgPass}@${PgHost}:${PgPort}/${pgDb}${pgQuery}"
+
+    Write-Host "==> Testing ${PgHost}:${PgPort} connectivity (SSM tunnel check)..."
+    $tcp = Test-NetConnection -ComputerName $PgHost -Port $PgPort -WarningAction SilentlyContinue
     if (-not $tcp.TcpTestSucceeded) {
         Write-Host @"
 
-  ERROR: localhost:5432 is not reachable.
+  ERROR: ${PgHost}:${PgPort} is not reachable.
 
   The RDS instance is in a private subnet. You must open an SSM
   port-forward tunnel before running migrations:
 
-    aws ssm start-session `
-      --target <bastion-instance-id> `
-      --document-name AWS-StartPortForwardingSessionToRemoteHost `
-      --parameters '{\"host\":[\"<rds-endpoint>\"],\"portNumber\":[\"5432\"],\"localPortNumber\":[\"5432\"]}'
+    aws ssm start-session ``
+      --target <bastion-instance-id> ``
+      --document-name AWS-StartPortForwardingSessionToRemoteHost ``
+      --parameters '{"host":["<rds-endpoint>"],"portNumber":["5432"],"localPortNumber":["${PgPort}"]}'
 
   Then re-run this script.
 
 "@ -ForegroundColor Red
         exit 1
     }
-    Write-Host '  OK - port 5432 is open.'
+    Write-Host "  OK - ${PgHost}:${PgPort} is open."
 
     Write-Host '==> Ensuring schema_migrations table exists...'
     $createTable = @"
@@ -229,6 +256,11 @@ ORDER BY version;
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 Write-Host "BadgerIQ migration runner - env=$Environment target=$Target"
+
+if ($Target -eq 'postgres' -or $Target -eq 'both') {
+    Write-Host "`n  NOTE: Postgres migrations require an active SSM port-forward tunnel" -ForegroundColor Yellow
+    Write-Host "        to the private RDS instance (connecting via ${PgHost}:${PgPort}).`n" -ForegroundColor Yellow
+}
 
 if ($Target -eq 'postgres' -or $Target -eq 'both') {
     Invoke-PostgresMigrations
