@@ -111,3 +111,44 @@ module "clickhouse_secret" {
   clickhouse_password = var.clickhouse_password
   tags                = local.tags
 }
+
+# ── 7. Shared ECS execution role (Phase 4) ───────────────────────────────────
+#
+# Single execution role for all 11 application task definitions. Grants:
+#   - AmazonECSTaskExecutionRolePolicy (image pull, log writes)
+#   - secretsmanager:GetSecretValue scoped to badgeriq/pilot/* secrets
+# None of these services call AWS SDKs from application code, so no per-service
+# task role is needed beyond this execution role.
+
+resource "aws_iam_role" "ecs_execution" {
+  name = "${local.name}-ecs-execution"
+  tags = local.tags
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = { Service = "ecs-tasks.amazonaws.com" }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_exec_managed" {
+  role       = aws_iam_role.ecs_execution.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+resource "aws_iam_role_policy" "ecs_exec_secrets" {
+  name = "secrets-access"
+  role = aws_iam_role.ecs_execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = "secretsmanager:GetSecretValue"
+      Resource = "arn:aws:secretsmanager:*:*:secret:badgeriq/${var.environment}/*"
+    }]
+  })
+}

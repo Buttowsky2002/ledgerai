@@ -73,9 +73,29 @@ output "clickhouse_secret_arn" {
   sensitive   = true
 }
 
-# ── Placeholder for Phase 4 ──────────────────────────────────────────────────
+# ── Phase 4: ALB + DNS ───────────────────────────────────────────────────────
 
 output "alb_dns_name" {
-  description = "ALB DNS name (populated in Phase 4 - ECS + ALB)."
-  value       = null
+  description = "ALB DNS name."
+  value       = aws_lb.main.dns_name
+}
+
+output "alb_arn" {
+  description = "ALB ARN."
+  value       = aws_lb.main.arn
+}
+
+output "pilot_url" {
+  description = "Public URL for the pilot deployment."
+  value       = "https://${var.environment}.${var.domain_name}"
+}
+
+output "acm_certificate_arn" {
+  description = "ACM certificate ARN for pilot.badgeriq.app."
+  value       = aws_acm_certificate.pilot.arn
+}
+
+output "ecs_execution_role_arn" {
+  description = "Shared ECS execution role ARN."
+  value       = aws_iam_role.ecs_execution.arn
 }

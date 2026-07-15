@@ -69,3 +69,35 @@ variable "clickhouse_password" {
   type        = string
   sensitive   = true
 }
+
+# ── Phase 4: ECS services + ALB + DNS ────────────────────────────────────────
+
+variable "hosted_zone_id" {
+  description = "Route 53 hosted zone ID for domain_name (created in bootstrap)."
+  type        = string
+}
+
+variable "ghcr_secret_arn" {
+  description = "Secrets Manager ARN for GHCR private registry credentials (username/password JSON)."
+  type        = string
+}
+
+variable "anthropic_secret_arn" {
+  description = "Secrets Manager ARN containing {api_key: ...} for the Anthropic API."
+  type        = string
+}
+
+variable "jwt_secret_arn" {
+  description = "Secrets Manager ARN containing {secret: ...} for JWT signing."
+  type        = string
+}
+
+variable "oidc_google_secret_arn" {
+  description = "Secrets Manager ARN containing {client_id, client_secret} for Google OIDC."
+  type        = string
+}
+
+variable "github_token_secret_arn" {
+  description = "Secrets Manager ARN containing {token: ...} for GitHub API access (outcome sync)."
+  type        = string
+}

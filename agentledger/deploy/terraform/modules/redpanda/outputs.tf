@@ -12,3 +12,8 @@ output "service_arn" {
   description = "ECS service ARN for the Redpanda broker."
   value       = aws_ecs_service.redpanda.id
 }
+
+output "namespace_id" {
+  description = "Cloud Map private DNS namespace ID (badgeriq.local)."
+  value       = aws_service_discovery_private_dns_namespace.main.id
+}
