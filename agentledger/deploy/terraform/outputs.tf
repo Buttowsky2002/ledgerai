@@ -85,14 +85,19 @@ output "alb_arn" {
   value       = aws_lb.main.arn
 }
 
+output "alb_url" {
+  description = "Base URL to reach the ALB: HTTPS custom domain when enabled, otherwise the plain-HTTP ALB DNS name."
+  value       = var.enable_custom_domain ? "https://${var.environment}.${var.domain_name}" : "http://${aws_lb.main.dns_name}"
+}
+
 output "pilot_url" {
-  description = "Public URL for the pilot deployment."
+  description = "Public custom-domain URL (only meaningful when enable_custom_domain = true)."
   value       = "https://${var.environment}.${var.domain_name}"
 }
 
 output "acm_certificate_arn" {
-  description = "ACM certificate ARN for pilot.badgeriq.app."
-  value       = aws_acm_certificate.pilot.arn
+  description = "ACM certificate ARN for the custom domain (null when enable_custom_domain = false)."
+  value       = var.enable_custom_domain ? aws_acm_certificate.pilot[0].arn : null
 }
 
 output "ecs_execution_role_arn" {

@@ -8,7 +8,8 @@
 #   - vpc_id               = module.network.vpc_id
 #   - cloudmap_namespace   = module.redpanda.namespace_id   (badgeriq.local)
 #   - registry_secret_arn  = var.ghcr_secret_arn
-#   - alb_listener_arn     = aws_lb_listener.https.arn      (from alb.tf)
+#   - alb_listener_arn     = local.alb_service_listener_arn (HTTPS when a custom
+#                            domain is enabled, otherwise HTTP:80 — see alb.tf)
 
 locals {
   svc_common = {
@@ -49,7 +50,7 @@ module "gateway" {
   }
 
   expose_via_alb    = true
-  alb_listener_arn  = aws_lb_listener.https.arn
+  alb_listener_arn  = local.alb_service_listener_arn
   alb_path_patterns = ["/proxy/*", "/ops/*"]
   alb_priority      = 10
 
@@ -88,7 +89,7 @@ module "api" {
   }
 
   expose_via_alb    = true
-  alb_listener_arn  = aws_lb_listener.https.arn
+  alb_listener_arn  = local.alb_service_listener_arn
   alb_path_patterns = ["/api/*"]
   alb_priority      = 20
 
@@ -123,7 +124,7 @@ module "dashboard" {
   secrets = {}
 
   expose_via_alb    = true
-  alb_listener_arn  = aws_lb_listener.https.arn
+  alb_listener_arn  = local.alb_service_listener_arn
   alb_path_patterns = ["/*"]
   alb_priority      = 100
 

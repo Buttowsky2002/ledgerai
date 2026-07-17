@@ -72,9 +72,16 @@ variable "clickhouse_password" {
 
 # ── Phase 4: ECS services + ALB + DNS ────────────────────────────────────────
 
+variable "enable_custom_domain" {
+  description = "Provision the ACM cert, HTTPS listener, and Route 53 records for a real domain. When false, the ALB serves traffic over plain HTTP:80 (no domain required)."
+  type        = bool
+  default     = false
+}
+
 variable "hosted_zone_id" {
-  description = "Route 53 hosted zone ID for domain_name (created in bootstrap)."
+  description = "Route 53 hosted zone ID for domain_name (created in bootstrap). Only used when enable_custom_domain = true."
   type        = string
+  default     = ""
 }
 
 variable "ghcr_secret_arn" {
