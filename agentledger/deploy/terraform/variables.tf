@@ -78,6 +78,12 @@ variable "enable_custom_domain" {
   default     = false
 }
 
+variable "enable_cloudfront" {
+  description = "Provision a CloudFront distribution in front of the ALB for HTTPS termination without a custom domain (temporary until domain registration completes)."
+  type        = bool
+  default     = false
+}
+
 variable "hosted_zone_id" {
   description = "Route 53 hosted zone ID for domain_name (created in bootstrap). Only used when enable_custom_domain = true."
   type        = string

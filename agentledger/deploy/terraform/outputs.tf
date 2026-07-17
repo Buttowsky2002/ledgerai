@@ -104,3 +104,8 @@ output "ecs_execution_role_arn" {
   description = "Shared ECS execution role ARN."
   value       = aws_iam_role.ecs_execution.arn
 }
+
+output "cloudfront_domain_name" {
+  description = "CloudFront distribution domain name (*.cloudfront.net), null when enable_cloudfront = false."
+  value       = var.enable_cloudfront ? aws_cloudfront_distribution.main[0].domain_name : null
+}
