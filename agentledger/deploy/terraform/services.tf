@@ -28,6 +28,16 @@ locals {
   ch_url_secret  = "${module.clickhouse_secret.secret_arn}:url::"
   ch_user_secret = "${module.clickhouse_secret.secret_arn}:user::"
   ch_pass_secret = "${module.clickhouse_secret.secret_arn}:password::"
+
+  # Public origin the dashboard uses for server-side BFF calls to the API.
+  # Prefer the custom domain when registered; otherwise the CloudFront
+  # *.cloudfront.net hostname (aws_cloudfront_distribution.main — not a module).
+  # Requires enable_cloudfront = true when enable_custom_domain = false.
+  public_api_url = (
+    var.enable_custom_domain
+    ? "https://${var.environment}.${var.domain_name}/api"
+    : "https://${aws_cloudfront_distribution.main[0].domain_name}/api"
+  )
 }
 
 # ── 1. Gateway (Go) ─────────────────────────────────────────────────────────
@@ -118,8 +128,8 @@ module "dashboard" {
   memory         = 1024
 
   environment = {
-    NODE_ENV          = "production"
-    BADGERIQ_API_URL  = "https://${var.environment}.${var.domain_name}/api"
+    NODE_ENV           = "production"
+    BADGERIQ_API_URL   = local.public_api_url
     BADGERIQ_DEMO_MODE = "false"
   }
 
