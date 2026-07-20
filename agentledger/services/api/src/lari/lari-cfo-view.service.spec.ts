@@ -56,7 +56,9 @@ function harness(opts?: {
     if (/per_day_model/.test(sql) && /countIf\(reconciled_usd/.test(sql)) return [costBasisTotals];
     if (/per_day_model/.test(sql) && /toStartOfMonth\(day\)/.test(sql)) return costBasisMonthly;
     if (/platform AS provider/.test(sql) && /reconciled/.test(sql)) return [];
-    if (/reconciled_usd AS cost_usd/.test(sql) && /GROUP BY provider, model/.test(sql)) {
+    // RECONCILED_MODEL_USAGE_SQL (metered-cost.ts) — unique outer alias; raw rows use cost_usd
+    // (service .map renames to computed_cost_usd). Do NOT match spend_daily / computed_cost_usd here.
+    if (/sum\(reconciled_input_tokens\) AS input_tokens/.test(sql)) {
       return [
         {
           provider: 'cursor',
@@ -72,7 +74,8 @@ function harness(opts?: {
     if (/v_cost_basis_daily/.test(sql) && /toStartOfMonth/.test(sql)) return costBasisMonthly;
     if (/FROM agentledger\.v_roi/.test(sql) && /outcome_type/.test(sql)) return roiRows;
     if (/FROM agentledger\.v_roi/.test(sql) && /count\(\)/.test(sql)) return [{ cnt: 10 }];
-    if (/spend_daily_by_user/.test(sql) || /key = 'Unassigned'/.test(sql)) return [{ unmapped_cost: 0 }];
+    // Unmapped spend only — do not match other reconciled SQL that embeds 'Unassigned'.
+    if (/unmapped_cost/.test(sql) || /spend_daily_by_user/.test(sql)) return [{ unmapped_cost: 0 }];
     if (/coding_agent_daily/.test(sql) && /lines_accepted/.test(sql)) {
       return opts?.cursorProductivity
         ? [
