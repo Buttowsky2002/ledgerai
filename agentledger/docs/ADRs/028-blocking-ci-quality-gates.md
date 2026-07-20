@@ -49,13 +49,13 @@ first two were resolved and why the third is deferred.
 
 ### govulncheck → blocking, via step-scoped GOTOOLCHAIN (not a go.mod toolchain directive)
 
-The obvious approach — add `toolchain go1.26.4` to each go.mod — **breaks
+The obvious approach — add `toolchain go1.26.5` to each go.mod — **breaks
 golangci-lint v2.1.6**, which refuses to run when the module's targeted Go
 version exceeds the version golangci-lint itself was built with
 (`the Go language version used to build golangci-lint is lower than the targeted
 Go version`).
 
-Instead, `GOTOOLCHAIN=go1.26.4` is set **on the govulncheck step only**:
+Instead, `GOTOOLCHAIN=go1.26.5` is set **on the govulncheck step only**:
 
 - go.mod stays `go 1.22`, so golangci-lint sees an unchanged target and the
   documented language baseline is preserved (CLAUDE.md: "Go 1.22").
@@ -83,7 +83,7 @@ dashboard build can be validated. It remains `continue-on-error` until then.
   are caught at PR time.
 - New exported Go symbols must carry doc comments (revive) and unchecked errors
   must be handled — enforced going forward.
-- The Go toolchain pin for govulncheck (`go1.26.4`) is a value to bump as new
+- The Go toolchain pin for govulncheck (`go1.26.5`) is a value to bump as new
   stdlib CVEs are disclosed; it is intentionally decoupled from the `go 1.22`
   language version and from golangci-lint's build version.
 - npm audit is the remaining advisory gate; closing it is tracked for a
