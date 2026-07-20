@@ -236,7 +236,9 @@ services:
       collector: { condition: service_started }
 
   gateway:
-    build: ./services/gateway
+    build:
+      context: .
+      dockerfile: services/gateway/Dockerfile
     environment:
       AGENTLEDGER_CONFIG: /etc/agentledger/config.json
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}

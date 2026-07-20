@@ -19,7 +19,7 @@ jobs:
       matrix:
         include:
           - name: gateway
-            context: agentledger/services/gateway
+            context: agentledger
             dockerfile: agentledger/services/gateway/Dockerfile
             build_args: ""
           - name: api
@@ -101,30 +101,68 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,scope=${{ matrix.name }},mode=max
 
+      # OCI/GHCR refs must be lowercase. github.repository_owner preserves the
+      # owner's original casing (Buttowsky2002), which Syft rejects as an
+      # unparseable reference. docker/metadata-action already lowercases the
+      # tags it pushes, so the image exists only under the lowercase path.
+      # Also scan by digest (not github.ref_name): semver tags strip the leading
+      # "v" (v0.1.1-pilot → 0.1.1-pilot), so :${{ github.ref_name }} never matches.
+      - name: Compute lowercase image ref
+        id: image
+        run: |
+          OWNER_LC=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
+          REF="ghcr.io/${OWNER_LC}/ledgerai-${{ matrix.name }}@${{ steps.build.outputs.digest }}"
+          echo "ref=${REF}" >> "$GITHUB_OUTPUT"
+          echo "Resolved image ref: ${REF}"
+
       - name: Install Syft (SBOM)
         uses: anchore/sbom-action/download-syft@v0
 
+      # Invoke Syft directly (not via sbom-action's opaque wrapper) so -v stderr
+      # is visible in the job log on failure. Pull via the already-authenticated
+      # Docker daemon first (with retries for brief GHCR propagation lag), then
+      # scan the local image.
       - name: Generate SBOM
-        uses: anchore/sbom-action@v0
-        with:
-          image: ghcr.io/${{ github.repository_owner }}/ledgerai-${{ matrix.name }}:${{ github.ref_name }}
-          artifact-name: sbom-${{ matrix.name }}-${{ github.ref_name }}.spdx.json
-          output-file: sbom-${{ matrix.name }}-${{ github.ref_name }}.spdx.json
+        env:
+          IMAGE_REF: ${{ steps.image.outputs.ref }}
+          SBOM_FILE: sbom-${{ matrix.name }}-${{ github.ref_name }}.spdx.json
+        run: |
+          set -euo pipefail
+          echo "Pulling ${IMAGE_REF}"
+          for attempt in 1 2 3 4 5; do
+            if docker pull "${IMAGE_REF}" 2>&1; then
+              echo "Pull succeeded on attempt ${attempt}"
+              break
+            fi
+            if [ "${attempt}" -eq 5 ]; then
+              echo "::error::docker pull failed after 5 attempts for ${IMAGE_REF}"
+              exit 1
+            fi
+            echo "::warning::docker pull attempt ${attempt}/5 failed; retrying in 5s..."
+            sleep 5
+          done
+
+          echo "Scanning ${IMAGE_REF}"
+          if ! syft scan "${IMAGE_REF}" -o "spdx-json=${SBOM_FILE}" -v 2>&1; then
+            echo "::error::Syft failed for ${IMAGE_REF}"
+            exit 1
+          fi
+          echo "SBOM written to ${SBOM_FILE}"
+          ls -la "${SBOM_FILE}"
 
       - name: Install Cosign
         uses: sigstore/cosign-installer@v3
 
       - name: Sign image (keyless OIDC)
         run: |
-          cosign sign --yes \
-            ghcr.io/${{ github.repository_owner }}/ledgerai-${{ matrix.name }}@${{ steps.build.outputs.digest }}
+          cosign sign --yes "${{ steps.image.outputs.ref }}"
 
       - name: Attach SBOM attestation
         run: |
           cosign attest --yes \
-            --predicate sbom-${{ matrix.name }}-${{ github.ref_name }}.spdx.json \
+            --predicate "sbom-${{ matrix.name }}-${{ github.ref_name }}.spdx.json" \
             --type spdxjson \
-            ghcr.io/${{ github.repository_owner }}/ledgerai-${{ matrix.name }}@${{ steps.build.outputs.digest }}
+            "${{ steps.image.outputs.ref }}"
 
       - name: Upload SBOM artifact
         uses: actions/upload-artifact@v4

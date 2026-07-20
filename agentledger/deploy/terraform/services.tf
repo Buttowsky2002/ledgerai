@@ -41,11 +41,13 @@ module "gateway" {
   cpu            = 512
   memory         = 1024
 
-  environment = {}
+  environment = {
+    AGENTLEDGER_CONFIG = "/etc/agentledger/config.json"
+  }
 
   secrets = {
-    ANTHROPIC_API_KEY       = "${var.anthropic_secret_arn}:api_key::"
-    BADGERIQ_CLICKHOUSE_URL = local.ch_url_secret
+    ANTHROPIC_API_KEY            = "${var.anthropic_secret_arn}:api_key::"
+    BADGERIQ_CLICKHOUSE_URL      = local.ch_url_secret
     BADGERIQ_CLICKHOUSE_PASSWORD = local.ch_pass_secret
   }
 
