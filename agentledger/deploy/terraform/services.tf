@@ -28,6 +28,14 @@ locals {
   ch_url_secret  = "${module.clickhouse_secret.secret_arn}:url::"
   ch_user_secret = "${module.clickhouse_secret.secret_arn}:user::"
   ch_pass_secret = "${module.clickhouse_secret.secret_arn}:password::"
+
+  # Browser-facing origin (OIDC login links). No path suffix — ALB matches Nest
+  # paths (/auth/*, /v1/*, …) directly. Prefer custom domain; else CloudFront.
+  public_url = (
+    var.enable_custom_domain
+    ? "https://${var.environment}.${var.domain_name}"
+    : "https://${aws_cloudfront_distribution.main[0].domain_name}"
+  )
 }
 
 # ── 1. Gateway (Go) ─────────────────────────────────────────────────────────
@@ -92,7 +100,10 @@ module "api" {
 
   expose_via_alb    = true
   alb_listener_arn  = local.alb_service_listener_arn
-  alb_path_patterns = ["/backend/*"]
+  # Nest has no setGlobalPrefix — controllers mount at /auth, /v1/*, /scim/v2,
+  # /healthz, /readyz (and /metrics, /docs internally). ALB max 5 path values
+  # per rule; omit /metrics and /docs from the public edge.
+  alb_path_patterns = ["/auth/*", "/v1/*", "/scim/*", "/healthz", "/readyz"]
   alb_priority      = 20
 
   name_prefix               = local.svc_common.name_prefix
@@ -118,12 +129,14 @@ module "dashboard" {
   memory         = 1024
 
   environment = {
-    NODE_ENV           = "production"
+    NODE_ENV             = "production"
     # Server-side BFF only (lib/api.ts). Use Cloud Map — never round-trip the ALB.
     # Service discovery: aws_service_discovery_service.svc.name = var.name ("api")
     # in namespace badgeriq.local → api.badgeriq.local:8094
-    BADGERIQ_API_URL   = "http://api.badgeriq.local:8094"
-    BADGERIQ_DEMO_MODE = "false"
+    BADGERIQ_API_URL     = "http://api.badgeriq.local:8094"
+    # Browser-facing OIDC login links (lib/auth.ts loginUrl) — public hostname.
+    BADGERIQ_PUBLIC_URL  = local.public_url
+    BADGERIQ_DEMO_MODE   = "false"
   }
 
   secrets = {}

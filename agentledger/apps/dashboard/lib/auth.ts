@@ -1,12 +1,13 @@
 import { env } from './env';
 
-const API_URL = env('BADGERIQ_API_URL') ?? 'http://localhost:8094';
+/** Public origin for browser-facing links (OIDC login). Not the Cloud Map API URL. */
+const PUBLIC_URL = env('BADGERIQ_PUBLIC_URL') ?? 'http://localhost:8094';
 
 export type OidcProvider = 'google' | 'microsoft';
 
 /** URL that starts the OIDC login flow at the API (wired; needs provider creds). */
 export function loginUrl(provider: OidcProvider): string {
-  return `${API_URL}/auth/login/${provider}`;
+  return `${PUBLIC_URL}/auth/login/${provider}`;
 }
 
 /** Dev mode = the API is trusted to accept x-tenant-id and a dev tenant is set. */
