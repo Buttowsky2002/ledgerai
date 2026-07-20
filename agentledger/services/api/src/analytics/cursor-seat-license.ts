@@ -26,8 +26,8 @@ export function resolveCursorSeatUnitCost(row: {
 /** Billing months (UTC) that overlap [from, to], inclusive. */
 export function billingMonthsInRange(from: string, to: string): string[] {
   const months: string[] = [];
-  let year = Number(from.slice(0, 4));
-  let month = Number(from.slice(5, 7)) - 1;
+  const year = Number(from.slice(0, 4));
+  const month = Number(from.slice(5, 7)) - 1;
   const end = new Date(`${to.slice(0, 10)}T00:00:00.000Z`);
   let cursor = new Date(Date.UTC(year, month, 1));
   while (cursor <= end) {
