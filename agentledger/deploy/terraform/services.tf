@@ -87,10 +87,14 @@ module "api" {
   memory         = 1024
 
   environment = {
-    NODE_ENV                     = "production"
+    NODE_ENV                         = "production"
     # Public origin for OIDC redirect_uri (must match IdP app registration).
     # Same host as dashboard BADGERIQ_PUBLIC_URL — not the Cloud Map address.
-    BADGERIQ_OIDC_REDIRECT_BASE  = local.public_url
+    BADGERIQ_OIDC_REDIRECT_BASE      = local.public_url
+    # Post-login browser redirect target (auth.controller dashboardUrl).
+    BADGERIQ_DASHBOARD_URL           = local.public_url
+    # Design-partner → attribution engine via Cloud Map (not localhost).
+    BADGERIQ_ATTRIBUTION_WORKER_URL  = "http://attribution.badgeriq.local:8096"
   }
 
   secrets = {
