@@ -11,9 +11,58 @@ permissions:
   id-token: write   # for OIDC / cosign keyless signing
 
 jobs:
-  release:
-    name: Build, SBOM, sign, push
+  build:
+    name: "Build ${{ matrix.name }}"
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: gateway
+            context: agentledger/services/gateway
+            dockerfile: agentledger/services/gateway/Dockerfile
+            build_args: ""
+          - name: api
+            context: agentledger
+            dockerfile: agentledger/services/api/Dockerfile
+            build_args: ""
+          - name: dashboard
+            context: agentledger
+            dockerfile: agentledger/apps/dashboard/Dockerfile
+            build_args: ""
+          - name: collector
+            context: agentledger/services/collector
+            dockerfile: agentledger/services/collector/Dockerfile
+            build_args: ""
+          - name: ch-insert
+            context: agentledger/services/workers
+            dockerfile: agentledger/services/workers/Dockerfile
+            build_args: "CMD=ch-insert"
+          - name: reconcile
+            context: agentledger/services/workers
+            dockerfile: agentledger/services/workers/Dockerfile
+            build_args: "CMD=reconcile"
+          - name: attribution
+            context: agentledger/services/workers
+            dockerfile: agentledger/services/workers/Dockerfile
+            build_args: "CMD=attribution"
+          - name: risk-engine
+            context: agentledger/services/workers
+            dockerfile: agentledger/services/workers/Dockerfile
+            build_args: "CMD=risk-engine"
+          - name: connector-sync
+            context: agentledger/services/connectors
+            dockerfile: agentledger/services/connectors/Dockerfile
+            build_args: "CMD=connector-sync"
+          - name: outcome-sync
+            context: agentledger/services/connectors
+            dockerfile: agentledger/services/connectors/Dockerfile
+            build_args: "CMD=outcome-sync"
+          - name: litellm-adapter
+            context: agentledger/services/ingest/adapters
+            dockerfile: agentledger/services/ingest/adapters/Dockerfile
+            build_args: "CMD=litellm"
+
     steps:
       - uses: actions/checkout@v4
         with:
@@ -33,7 +82,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}
+          images: ghcr.io/${{ github.repository_owner }}/ledgerai-${{ matrix.name }}
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -43,12 +92,14 @@ jobs:
         id: build
         uses: docker/build-push-action@v6
         with:
-          context: .
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          build-args: ${{ matrix.build_args }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,scope=${{ matrix.name }},mode=max
 
       - name: Install Syft (SBOM)
         uses: anchore/sbom-action/download-syft@v0
@@ -56,9 +107,9 @@ jobs:
       - name: Generate SBOM
         uses: anchore/sbom-action@v0
         with:
-          image: ghcr.io/${{ github.repository }}:${{ github.ref_name }}
-          artifact-name: sbom-${{ github.ref_name }}.spdx.json
-          output-file: sbom-${{ github.ref_name }}.spdx.json
+          image: ghcr.io/${{ github.repository_owner }}/ledgerai-${{ matrix.name }}:${{ github.ref_name }}
+          artifact-name: sbom-${{ matrix.name }}-${{ github.ref_name }}.spdx.json
+          output-file: sbom-${{ matrix.name }}-${{ github.ref_name }}.spdx.json
 
       - name: Install Cosign
         uses: sigstore/cosign-installer@v3
@@ -66,17 +117,36 @@ jobs:
       - name: Sign image (keyless OIDC)
         run: |
           cosign sign --yes \
-            ghcr.io/${{ github.repository }}@${{ steps.build.outputs.digest }}
+            ghcr.io/${{ github.repository_owner }}/ledgerai-${{ matrix.name }}@${{ steps.build.outputs.digest }}
 
       - name: Attach SBOM attestation
         run: |
           cosign attest --yes \
-            --predicate sbom-${{ github.ref_name }}.spdx.json \
+            --predicate sbom-${{ matrix.name }}-${{ github.ref_name }}.spdx.json \
             --type spdxjson \
-            ghcr.io/${{ github.repository }}@${{ steps.build.outputs.digest }}
+            ghcr.io/${{ github.repository_owner }}/ledgerai-${{ matrix.name }}@${{ steps.build.outputs.digest }}
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ matrix.name }}
+          path: sbom-${{ matrix.name }}-${{ github.ref_name }}.spdx.json
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all SBOM artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: sbom-*
+          merge-multiple: true
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: sbom-${{ github.ref_name }}.spdx.json
+          files: "*.spdx.json"
           generate_release_notes: true
