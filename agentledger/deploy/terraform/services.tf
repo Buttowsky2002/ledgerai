@@ -41,18 +41,9 @@ module "gateway" {
   cpu            = 512
   memory         = 1024
 
-  environment = {}
-
-  secrets = {
-    ANTHROPIC_API_KEY       = "${var.anthropic_secret_arn}:api_key::"
-    BADGERIQ_CLICKHOUSE_URL = local.ch_url_secret
-    BADGERIQ_CLICKHOUSE_PASSWORD = local.ch_pass_secret
+  environment = {
+    AGENTLEDGER_CONFIG = "/etc/agentledger/config.json"
   }
-
-  expose_via_alb    = true
-  alb_listener_arn  = local.alb_service_listener_arn
-  alb_path_patterns = ["/proxy/*", "/ops/*"]
-  alb_priority      = 10
 
   name_prefix               = local.svc_common.name_prefix
   execution_role_arn        = local.svc_common.execution_role_arn

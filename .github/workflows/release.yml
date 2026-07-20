@@ -19,7 +19,7 @@ jobs:
       matrix:
         include:
           - name: gateway
-            context: agentledger/services/gateway
+            context: agentledger
             dockerfile: agentledger/services/gateway/Dockerfile
             build_args: ""
           - name: api
