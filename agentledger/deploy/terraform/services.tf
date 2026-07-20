@@ -28,16 +28,6 @@ locals {
   ch_url_secret  = "${module.clickhouse_secret.secret_arn}:url::"
   ch_user_secret = "${module.clickhouse_secret.secret_arn}:user::"
   ch_pass_secret = "${module.clickhouse_secret.secret_arn}:password::"
-
-  # Public origin the dashboard uses for server-side BFF calls to the API.
-  # Prefer the custom domain when registered; otherwise the CloudFront
-  # *.cloudfront.net hostname (aws_cloudfront_distribution.main — not a module).
-  # Requires enable_cloudfront = true when enable_custom_domain = false.
-  public_api_url = (
-    var.enable_custom_domain
-    ? "https://${var.environment}.${var.domain_name}/api"
-    : "https://${aws_cloudfront_distribution.main[0].domain_name}/api"
-  )
 }
 
 # ── 1. Gateway (Go) ─────────────────────────────────────────────────────────
@@ -102,7 +92,7 @@ module "api" {
 
   expose_via_alb    = true
   alb_listener_arn  = local.alb_service_listener_arn
-  alb_path_patterns = ["/api/*"]
+  alb_path_patterns = ["/backend/*"]
   alb_priority      = 20
 
   name_prefix               = local.svc_common.name_prefix
@@ -129,7 +119,10 @@ module "dashboard" {
 
   environment = {
     NODE_ENV           = "production"
-    BADGERIQ_API_URL   = local.public_api_url
+    # Server-side BFF only (lib/api.ts). Use Cloud Map — never round-trip the ALB.
+    # Service discovery: aws_service_discovery_service.svc.name = var.name ("api")
+    # in namespace badgeriq.local → api.badgeriq.local:8094
+    BADGERIQ_API_URL   = "http://api.badgeriq.local:8094"
     BADGERIQ_DEMO_MODE = "false"
   }
 

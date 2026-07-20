@@ -60,7 +60,7 @@ variable "alb_listener_arn" {
 }
 
 variable "alb_path_patterns" {
-  description = "Path patterns for the ALB listener rule (e.g. [\"/api/*\"])."
+  description = "Path patterns for the ALB listener rule (e.g. [\"/backend/*\"])."
   type        = list(string)
   default     = []
 }
