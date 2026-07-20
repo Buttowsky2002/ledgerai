@@ -37,3 +37,7 @@ next-env.d.ts
 *.swp
 *.swo
 .DS_Store
+
+# Temporary secret files — never commit
+deploy/terraform/*.json
+!deploy/terraform/package*.json
