@@ -27,6 +27,8 @@ services:
     image: clickhouse/clickhouse-server:24.8
     ports: ["8123:8123", "9000:9000"]
     volumes:
+      # Numbered *.sql only — keep upgrade runners in deploy/clickhouse-migrate/
+      # (a migrate.sh here hangs first-boot init: init server is 127.0.0.1-only).
       - ./deploy/clickhouse:/docker-entrypoint-initdb.d:ro
       - ./deploy/clickhouse-config/storage.xml:/etc/clickhouse-server/config.d/storage.xml:ro
       - ./deploy/clickhouse-config/users.xml:/etc/clickhouse-server/users.d/zz-default.xml:ro

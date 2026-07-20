@@ -19,7 +19,7 @@
     "lint": "eslint \"{src,test}/**/*.ts\"",
     "format:check": "prettier --check \"{src,test}/**/*.ts\"",
     "test": "jest --config jest.config.js --testPathPattern=\"\\.spec\\.ts$\" --passWithNoTests",
-    "test:e2e": "jest --config jest.config.js --testPathPattern=\"\\.e2e-spec\\.ts$\" --runInBand"
+    "test:e2e": "jest --config jest.config.js --testPathPattern=\"\\.e2e-spec\\.ts$\" --runInBand --forceExit"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.15",

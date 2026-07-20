@@ -2,6 +2,10 @@
 # Fresh docker volumes run deploy/clickhouse/*.sql on first init — this script
 # is for upgrades when new numbered migrations are added.
 #
+# Keep upgrade runners out of the Linux entrypoint path: do not add migrate.sh
+# next to these *.sql files (initdb.d would hang on first boot). The shell
+# upgrade runner lives at deploy/clickhouse-migrate/migrate.sh.
+#
 # Usage (from agentledger/):
 #   powershell -ExecutionPolicy Bypass -File deploy/clickhouse/migrate.ps1
 #   make migrate
