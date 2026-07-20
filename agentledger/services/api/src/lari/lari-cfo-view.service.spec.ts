@@ -1,10 +1,22 @@
 import { AnalyticsStore } from '../analytics-store/analytics-store';
+import {
+  RECONCILED_COST_BASIS_MONTHLY_SQL,
+  RECONCILED_COST_BASIS_TOTALS_SQL,
+  RECONCILED_MODEL_USAGE_SQL,
+  RECONCILED_PROVIDER_SPEND_SQL,
+  RECONCILED_UNMAPPED_SPEND_SQL,
+} from '../connectors/metered-cost';
 import { CopilotAnalyticsService } from '../github-copilot/github-copilot-analytics.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { Principal, runWithTenant } from '../tenant/tenant-context';
 import { calculateAttributedIncrementalValue, calculateFullyLoadedCost } from './lari';
 import { LariCfoViewService } from './lari-cfo-view.service';
 import { CostBreakdown, OutcomeLink } from './lari.types';
+
+/** Identity match against exported SQL — regex order previously stole model-usage rows. */
+function isSql(sql: string, template: string): boolean {
+  return sql === template || sql.trim() === template.trim();
+}
 
 const principal: Principal = { tenantId: 'tenant-1', userId: 'u1', role: 'viewer' };
 
@@ -53,12 +65,9 @@ function harness(opts?: {
   ];
 
   const queryScoped = jest.fn(async (sql: string) => {
-    if (/per_day_model/.test(sql) && /countIf\(reconciled_usd/.test(sql)) return [costBasisTotals];
-    if (/per_day_model/.test(sql) && /toStartOfMonth\(day\)/.test(sql)) return costBasisMonthly;
-    if (/platform AS provider/.test(sql) && /reconciled/.test(sql)) return [];
-    // RECONCILED_MODEL_USAGE_SQL (metered-cost.ts) — unique outer alias; raw rows use cost_usd
-    // (service .map renames to computed_cost_usd). Do NOT match spend_daily / computed_cost_usd here.
-    if (/sum\(reconciled_input_tokens\) AS input_tokens/.test(sql)) {
+    // Match exported SQL constants first (stable). Regex fallthrough for spend_daily / views.
+    if (isSql(sql, RECONCILED_MODEL_USAGE_SQL)) {
+      // Raw CH rows use cost_usd; service maps to computed_cost_usd.
       return [
         {
           provider: 'cursor',
@@ -70,6 +79,13 @@ function harness(opts?: {
         },
       ];
     }
+    if (isSql(sql, RECONCILED_COST_BASIS_TOTALS_SQL)) return [costBasisTotals];
+    if (isSql(sql, RECONCILED_COST_BASIS_MONTHLY_SQL)) return costBasisMonthly;
+    if (isSql(sql, RECONCILED_PROVIDER_SPEND_SQL)) {
+      return [{ provider: 'cursor', cost_usd: 110, calls: 50 }];
+    }
+    if (isSql(sql, RECONCILED_UNMAPPED_SPEND_SQL)) return [{ unmapped_cost: 0 }];
+
     if (/v_cost_basis_daily/.test(sql) && /countIf/.test(sql)) return [costBasisTotals];
     if (/v_cost_basis_daily/.test(sql) && /toStartOfMonth/.test(sql)) return costBasisMonthly;
     if (/FROM agentledger\.v_roi/.test(sql) && /outcome_type/.test(sql)) return roiRows;
