@@ -74,8 +74,8 @@ describe('Pilot report', () => {
       .set(bearer(await tok(tenantA)));
     expect(res.status).toBe(200);
     const b = res.body;
-    // spend: 4.0 + 2.0 = 6.0, one blocked call
-    expect(b.spend.source).toBe('spend_daily');
+    // spend: 4.0 + 2.0 = 6.0, one blocked call (reconciled metered llm_calls)
+    expect(b.spend.source).toBe('llm_calls (metered)');
     expect(Number(b.spend.totalCostUsd)).toBeCloseTo(6.0, 5);
     expect(Number(b.spend.blockedCalls)).toBeGreaterThanOrEqual(1);
     // top agent attributed
