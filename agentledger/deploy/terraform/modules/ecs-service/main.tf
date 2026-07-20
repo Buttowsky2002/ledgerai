@@ -14,13 +14,10 @@ locals {
     protocol      = "tcp"
   }] : []
 
-  health_check = local.has_port ? {
-    command     = ["CMD-SHELL", "curl -sf http://localhost:${var.container_port}${var.health_check_path} || exit 1"]
-    interval    = 30
-    timeout     = 5
-    retries     = 3
-    startPeriod = 60
-  } : null
+  # No container-level healthCheck: our images (gateway/api and several workers)
+  # are distroless and have neither a shell nor curl, so CMD-SHELL checks can
+  # never succeed. ALB-facing services rely on the target-group HTTP health
+  # check below; workers rely on ECS process liveness alone.
 }
 
 # ── CloudWatch log group ─────────────────────────────────────────────────────
@@ -42,36 +39,33 @@ resource "aws_ecs_task_definition" "svc" {
   execution_role_arn       = var.execution_role_arn
   tags                     = var.tags
 
-  container_definitions = jsonencode([merge(
-    {
-      name      = var.name
-      image     = var.image
-      essential = true
+  container_definitions = jsonencode([{
+    name      = var.name
+    image     = var.image
+    essential = true
 
-      repositoryCredentials = {
-        credentialsParameter = var.registry_secret_arn
+    repositoryCredentials = {
+      credentialsParameter = var.registry_secret_arn
+    }
+
+    environment = local.env_pairs
+    secrets     = local.secret_pairs
+
+    portMappings = local.port_mappings
+
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        "awslogs-group"         = aws_cloudwatch_log_group.svc.name
+        "awslogs-region"        = data.aws_region.current.name
+        "awslogs-stream-prefix" = var.name
       }
+    }
 
-      environment = local.env_pairs
-      secrets     = local.secret_pairs
-
-      portMappings = local.port_mappings
-
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          "awslogs-group"         = aws_cloudwatch_log_group.svc.name
-          "awslogs-region"        = data.aws_region.current.name
-          "awslogs-stream-prefix" = var.name
-        }
-      }
-
-      linuxParameters = {
-        initProcessEnabled = true
-      }
-    },
-    local.health_check != null ? { healthCheck = local.health_check } : {}
-  )])
+    linuxParameters = {
+      initProcessEnabled = true
+    }
+  }])
 }
 
 # ── Cloud Map service discovery ──────────────────────────────────────────────
