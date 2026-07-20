@@ -1,34 +1,95 @@
-# AgentLedger Terraform — infrastructure stub
+# BadgerIQ Terraform — AWS managed infrastructure
 
-> **Status: intentional stub.** This directory defines the *shape* of the managed
-> infrastructure AgentLedger expects, but contains **no live provider resources**.
-> AgentLedger is cloud-agnostic; provisioning is deliberately deferred to the
-> operator's own platform (EKS/GKE/AKS + RDS/Cloud SQL, ClickHouse Cloud, MSK/
-> Redpanda Cloud, ElastiCache/Memorystore). See
-> [ADR-039](../../docs/ADRs/039-helm-terraform-deploy.md) for why.
+Provisions all stateful backing services for the BadgerIQ ECS Fargate deployment.
+Application compute (ECS cluster, services, ALB) is added in Phase 4.
 
-## What the Helm chart needs from infrastructure
+## Modules
 
-The chart (`deploy/helm/agentledger`) deploys **application workloads only** and
-expects these to already exist and be reachable from the cluster:
+| Module | What it creates |
+|--------|----------------|
+| `modules/network/` | VPC, 3 public + 3 private subnets, NAT gateway, VPC endpoints (S3, ECR, Secrets Manager, CloudWatch Logs), ECS task security group |
+| `modules/postgres/` | RDS PostgreSQL 16, KMS encryption, parameter group (force SSL, slow-query log), least-privilege `app_rw` role, DSN in Secrets Manager |
+| `modules/redis/` | ElastiCache Serverless Redis 7, TLS required, endpoint in Secrets Manager (**disabled** — gateway falls back to in-process MemBudgetStore at desired_count=1) |
+| `modules/redpanda/` | Self-hosted Redpanda broker on ECS Fargate, Cloud Map discovery at `redpanda.badgeriq.local:9092`, EFS-backed data volume |
+| `modules/clickhouse-secret/` | Stores externally provisioned ClickHouse Cloud creds in Secrets Manager |
 
-| Component | Purpose | Surfaced to the chart as |
-|-----------|---------|--------------------------|
-| Kubernetes cluster | Runs the workloads | `kubeconfig` / context |
-| PostgreSQL 16 | Control plane (RLS-enabled) | `AGENTLEDGER_PG_DSN` (Secret) |
-| ClickHouse | Analytics store | `externalServices.clickhouse.url` |
-| Redpanda / Kafka | Event bus (`events.raw`) | `externalServices.redpanda.brokers` |
-| Redis (optional) | Gateway budget store | `externalServices.redis.addr` |
+## Prerequisites
 
-## Intended usage (once implemented)
+1. Complete the [bootstrap stack](bootstrap/README.md) — S3 backend, DynamoDB lock, OIDC role, Route 53 zone
+2. Provision a ClickHouse Cloud instance (free/dev tier) and note the URL, user, and password
+3. Create `backend.hcl` with the S3 backend config from the bootstrap outputs
+4. Create `pilot.tfvars` (gitignored) with the required variables
+
+## Usage
 
 ```bash
-terraform init
-terraform plan  -var-file=env/prod.tfvars
-terraform apply -var-file=env/prod.tfvars
-# then feed the outputs into the Helm release (see ../helm/agentledger/README.md)
+cd agentledger/deploy/terraform
+
+terraform init -backend-config=backend.hcl
+
+terraform plan -var-file=pilot.tfvars
+terraform apply -var-file=pilot.tfvars
 ```
 
-The variables and outputs here are real and stable; the resource blocks in
-`main.tf` are commented module placeholders to be filled per target cloud. Wiring
-a concrete cloud is its own ADR + PR.
+### Minimum `pilot.tfvars`
+
+```hcl
+environment         = "pilot"
+clickhouse_url      = "https://xxx.clickhouse.cloud:8443"
+clickhouse_user     = "default"
+clickhouse_password = "..."
+```
+
+All other variables have sensible defaults. See `variables.tf` for the full list.
+
+## Post-apply manual steps
+
+1. **Create Kafka topics** on Redpanda (via `rpk` from inside the VPC):
+   ```bash
+   rpk topic create events.raw events.dlq \
+     --brokers redpanda.badgeriq.local:9092 \
+     --partitions 12 --config retention.ms=604800000
+   ```
+
+2. **Verify Postgres connectivity** from a bastion or Cloud9:
+   ```bash
+   psql "$(aws secretsmanager get-secret-value \
+     --secret-id badgeriq/pilot/postgres \
+     --query SecretString --output text | jq -r .dsn)"
+   ```
+
+3. **Verify Redpanda health**:
+   ```bash
+   rpk cluster health --brokers redpanda.badgeriq.local:9092
+   ```
+
+## Security notes
+
+- No connection strings appear in Terraform state outputs — all DSNs are written to Secrets Manager
+- Postgres `rds.force_ssl=1` — plaintext connections are rejected
+- Redis module kept but disabled at pilot scale (re-enable for multi-replica gateway)
+- Redpanda runs inside the ECS task security group — no static Kafka credentials needed
+- All data stores accept ingress only from the ECS task security group
+- RDS encryption at rest via a dedicated KMS key with automatic rotation
+- The superuser password is only in Secrets Manager; the app uses the `app_rw` role
+
+## Outputs
+
+| Output | Sensitive | Description |
+|--------|-----------|-------------|
+| `vpc_id` | no | VPC ID |
+| `private_subnet_ids` | no | For ECS task placement |
+| `public_subnet_ids` | no | For ALB placement |
+| `ecs_task_security_group_id` | no | Shared SG for Fargate tasks |
+| `postgres_dsn_secret_arn` | yes | Secrets Manager ARN for the app DSN |
+| `postgres_address` | no | RDS endpoint hostname |
+| `redis_endpoint` | no | ElastiCache endpoint (**disabled**) |
+| `redis_secret_arn` | yes | Secrets Manager ARN for Redis URL (**disabled**) |
+| `redpanda_broker_endpoint` | no | Cloud Map DNS: `redpanda.badgeriq.local:9092` |
+| `redpanda_efs_filesystem_id` | no | EFS filesystem for Redpanda data |
+| `clickhouse_secret_arn` | yes | Secrets Manager ARN for ClickHouse creds |
+| `alb_dns_name` | no | Placeholder (Phase 4) |
+
+## Next phase
+
+Once the gate passes (plan clean, apply succeeds, psql/redis connectivity verified), proceed to **Phase 3** — schema migrations + seed data.

@@ -1,0 +1,8 @@
+# Copy to backend.hcl after the first apply (gitignored). Fill in bucket from:
+#   terraform output -raw tfstate_bucket_name
+#
+# bucket         = "badgeriq-tfstate-123456789012-us-east-1"
+# key            = "bootstrap/terraform.tfstate"
+# region         = "us-east-1"
+# dynamodb_table = "badgeriq-tfstate-lock"
+# encrypt        = true
