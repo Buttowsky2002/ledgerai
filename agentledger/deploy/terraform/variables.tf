@@ -95,6 +95,12 @@ variable "ghcr_secret_arn" {
   type        = string
 }
 
+variable "image_tag" {
+  description = "Container image tag for all ECS services (semver or sha from the release workflow; :latest is never published)."
+  type        = string
+  default     = "latest"
+}
+
 variable "anthropic_secret_arn" {
   description = "Secrets Manager ARN containing {api_key: ...} for the Anthropic API."
   type        = string

@@ -36,7 +36,7 @@ module "gateway" {
   source = "./modules/ecs-service"
 
   name           = "gateway"
-  image          = "ghcr.io/buttowsky2002/ledgerai-gateway:latest"
+  image          = "ghcr.io/buttowsky2002/ledgerai-gateway:${var.image_tag}"
   container_port = 8080
   cpu            = 512
   memory         = 1024
@@ -71,7 +71,7 @@ module "api" {
   source = "./modules/ecs-service"
 
   name           = "api"
-  image          = "ghcr.io/buttowsky2002/ledgerai-api:latest"
+  image          = "ghcr.io/buttowsky2002/ledgerai-api:${var.image_tag}"
   container_port = 8094
   cpu            = 512
   memory         = 1024
@@ -112,7 +112,7 @@ module "dashboard" {
   source = "./modules/ecs-service"
 
   name           = "dashboard"
-  image          = "ghcr.io/buttowsky2002/ledgerai-dashboard:latest"
+  image          = "ghcr.io/buttowsky2002/ledgerai-dashboard:${var.image_tag}"
   container_port = 3000
   cpu            = 512
   memory         = 1024
@@ -147,7 +147,7 @@ module "collector" {
   source = "./modules/ecs-service"
 
   name           = "collector"
-  image          = "ghcr.io/buttowsky2002/ledgerai-collector:latest"
+  image          = "ghcr.io/buttowsky2002/ledgerai-collector:${var.image_tag}"
   container_port = 8090
   cpu            = 256
   memory         = 512
@@ -176,7 +176,7 @@ module "ch_insert" {
   source = "./modules/ecs-service"
 
   name           = "ch-insert"
-  image          = "ghcr.io/buttowsky2002/ledgerai-ch-insert:latest"
+  image          = "ghcr.io/buttowsky2002/ledgerai-ch-insert:${var.image_tag}"
   container_port = 8091
   cpu            = 256
   memory         = 512
@@ -210,7 +210,7 @@ module "reconcile" {
   source = "./modules/ecs-service"
 
   name           = "reconcile"
-  image          = "ghcr.io/buttowsky2002/ledgerai-reconcile:latest"
+  image          = "ghcr.io/buttowsky2002/ledgerai-reconcile:${var.image_tag}"
   container_port = 8093
   cpu            = 256
   memory         = 512
@@ -239,7 +239,7 @@ module "attribution" {
   source = "./modules/ecs-service"
 
   name           = "attribution"
-  image          = "ghcr.io/buttowsky2002/ledgerai-attribution:latest"
+  image          = "ghcr.io/buttowsky2002/ledgerai-attribution:${var.image_tag}"
   container_port = 8096
   cpu            = 256
   memory         = 512
@@ -268,7 +268,7 @@ module "risk_engine" {
   source = "./modules/ecs-service"
 
   name           = "risk-engine"
-  image          = "ghcr.io/buttowsky2002/ledgerai-risk-engine:latest"
+  image          = "ghcr.io/buttowsky2002/ledgerai-risk-engine:${var.image_tag}"
   container_port = 8099
   cpu            = 256
   memory         = 512
@@ -296,7 +296,7 @@ module "connector_sync" {
   source = "./modules/ecs-service"
 
   name           = "connector-sync"
-  image          = "ghcr.io/buttowsky2002/ledgerai-connector-sync:latest"
+  image          = "ghcr.io/buttowsky2002/ledgerai-connector-sync:${var.image_tag}"
   container_port = 8092
   cpu            = 256
   memory         = 512
@@ -325,7 +325,7 @@ module "outcome_sync" {
   source = "./modules/ecs-service"
 
   name           = "outcome-sync"
-  image          = "ghcr.io/buttowsky2002/ledgerai-outcome-sync:latest"
+  image          = "ghcr.io/buttowsky2002/ledgerai-outcome-sync:${var.image_tag}"
   container_port = 8095
   cpu            = 256
   memory         = 512
@@ -355,7 +355,7 @@ module "litellm_adapter" {
   source = "./modules/ecs-service"
 
   name           = "litellm-adapter"
-  image          = "ghcr.io/buttowsky2002/ledgerai-litellm-adapter:latest"
+  image          = "ghcr.io/buttowsky2002/ledgerai-litellm-adapter:${var.image_tag}"
   container_port = 8097
   cpu            = 256
   memory         = 512
