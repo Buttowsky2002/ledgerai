@@ -111,12 +111,6 @@ variable "jwt_secret_arn" {
   type        = string
 }
 
-variable "oidc_google_secret_arn" {
-  description = "Secrets Manager ARN containing {client_id, client_secret} for Google OIDC. Optional."
-  type        = string
-  default     = ""
-}
-
 variable "oidc_microsoft_secret_arn" {
   description = "Secrets Manager ARN containing {client_id, client_secret} for Microsoft OIDC. Optional."
   type        = string
