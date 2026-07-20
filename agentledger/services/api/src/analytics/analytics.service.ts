@@ -1162,7 +1162,6 @@ export class AnalyticsService {
     if (!tenantId) {
       throw new BadRequestException('no tenant in context');
     }
-    const params: Record<string, ChParam> = { ...r, userId };
     const [{ totals: chTotals, breakdown: chBreakdown }, copilotPack] = await Promise.all([
       this.fetchUserSpendFromCh(r, userId),
       this.fetchCopilotUserSpend(tenantId, r, userId),

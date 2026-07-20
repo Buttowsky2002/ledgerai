@@ -431,7 +431,6 @@ export class ConnectorsService {
     const creds = this.parseCredentials(secret, definition.authType);
 
     const maxDaysPerRequest = definition.syncRange?.maxDaysPerRequest ?? undefined;
-    const backfillDays = definition.syncRange?.defaultBackfillDays ?? DEFAULT_BACKFILL_DAYS;
     const { syncStart, syncEnd } = resolvePreviewWindow(range?.from, range?.to, 30, maxDaysPerRequest);
 
     try {
