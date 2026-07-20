@@ -118,6 +118,19 @@ resource "aws_vpc_security_group_egress_rule" "ecs_all_out" {
   description       = "Allow all egress"
 }
 
+# Dashboard (and any other ECS task) → API via Cloud Map (api.badgeriq.local:8094).
+# Without this, ALB→ECS is allowed but peer-to-peer app traffic on 8094 is not.
+# Future hardening: dedicated api SG with ingress only from dashboard (or callers
+# that need it), instead of opening 8094 across the whole shared ecs_tasks group.
+resource "aws_vpc_security_group_ingress_rule" "ecs_api_from_ecs" {
+  security_group_id            = aws_security_group.ecs_tasks.id
+  referenced_security_group_id = aws_security_group.ecs_tasks.id
+  from_port                    = 8094
+  to_port                      = 8094
+  ip_protocol                  = "tcp"
+  description                  = "API :8094 from ECS tasks (dashboard Cloud Map BFF)"
+}
+
 # ── VPC endpoints (reduce NAT costs + keep traffic off the internet) ──────────
 
 resource "aws_vpc_endpoint" "s3" {
