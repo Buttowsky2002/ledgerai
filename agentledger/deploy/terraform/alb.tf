@@ -2,7 +2,7 @@
 # HTTPS listener, Route 53 records) is optional behind var.enable_custom_domain:
 #
 #   enable_custom_domain = false (default): the ALB serves traffic directly over
-#     HTTP:80. Path-based rules (/proxy/*, /ops/*, /api/*, /*) attach to the
+#     HTTP:80. Path-based rules (/proxy/*, /ops/*, /backend/*, /*) attach to the
 #     HTTP listener. No domain, ACM cert, or Route 53 records are created. This
 #     unblocks apply when badgeriq.app is not yet registered/DNS-validatable.
 #
