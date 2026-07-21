@@ -63,6 +63,24 @@ export function cookieOpts(maxAgeMs?: number) {
   };
 }
 
+/**
+ * OIDC/SSO round-trip cookie (al_oidc_tx). Must be SameSite=Lax (or None) so the
+ * browser sends it on the top-level GET back from the IdP. SameSite=Strict is
+ * dropped on that cross-site navigation → "missing or expired login transaction".
+ * Session cookies (al_access / al_refresh) stay on cookieSameSite() / Strict.
+ */
+export function oidcTxCookieOpts(maxAgeMs?: number) {
+  const session = cookieSameSite();
+  const sameSite: SameSite = session === 'none' ? 'none' : 'lax';
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production' || sameSite === 'none',
+    sameSite,
+    path: '/',
+    ...(maxAgeMs ? { maxAge: maxAgeMs } : {}),
+  };
+}
+
 /** Dashboard base URL to redirect to after a successful interactive login. */
 export function dashboardUrl(): string {
   return env('BADGERIQ_DASHBOARD_URL') ?? 'http://localhost:3000';
@@ -112,7 +130,7 @@ export class AuthController {
   async login(@Param('provider') provider: string, @Res() res: Response): Promise<void> {
     const { url, state, nonce, codeVerifier } = await this.oidc.buildAuthRequest(provider);
     const tx = await this.jwt.mintState({ provider, state, nonce, codeVerifier });
-    res.cookie(OIDC_TX_COOKIE, tx, cookieOpts(10 * 60_000));
+    res.cookie(OIDC_TX_COOKIE, tx, oidcTxCookieOpts(10 * 60_000));
     res.redirect(url);
   }
 
@@ -138,7 +156,7 @@ export class AuthController {
       codeVerifier: tx.codeVerifier,
     });
     const { accessToken, refreshToken } = await this.auth.loginByEmail(email);
-    res.clearCookie(OIDC_TX_COOKIE, cookieOpts());
+    res.clearCookie(OIDC_TX_COOKIE, oidcTxCookieOpts());
     this.completeLogin(req, res, accessToken, refreshToken);
   }
 
@@ -172,7 +190,7 @@ export class AuthController {
       nonce,
       codeVerifier,
     });
-    res.cookie(OIDC_TX_COOKIE, tx, cookieOpts(10 * 60_000));
+    res.cookie(OIDC_TX_COOKIE, tx, oidcTxCookieOpts(10 * 60_000));
     res.redirect(url);
   }
 
@@ -205,7 +223,7 @@ export class AuthController {
       jitEnabled: idp.jit_enabled,
       defaultApiRole: idp.default_api_role,
     });
-    res.clearCookie(OIDC_TX_COOKIE, cookieOpts());
+    res.clearCookie(OIDC_TX_COOKIE, oidcTxCookieOpts());
     this.completeLogin(req, res, accessToken, refreshToken);
   }
 

@@ -1,5 +1,5 @@
 import type { Request } from 'express';
-import { cookieOpts, cookieSameSite, dashboardUrl, wantsJsonResponse } from './auth.controller';
+import { cookieOpts, cookieSameSite, dashboardUrl, oidcTxCookieOpts, wantsJsonResponse } from './auth.controller';
 
 /**
  * Unit coverage for the session-cookie security logic (no DB required). The
@@ -8,6 +8,7 @@ import { cookieOpts, cookieSameSite, dashboardUrl, wantsJsonResponse } from './a
  */
 const ENV_KEYS = [
   'NODE_ENV',
+  'BADGERIQ_COOKIE_SAMESITE',
   'LEDGERAI_COOKIE_SAMESITE',
   'AGENTLEDGER_COOKIE_SAMESITE',
   'LEDGERAI_DASHBOARD_URL',
@@ -55,6 +56,29 @@ describe('auth cookie helpers', () => {
     it('secure=true in production', () => {
       process.env.NODE_ENV = 'production';
       expect(cookieOpts().secure).toBe(true);
+    });
+  });
+
+  describe('oidcTxCookieOpts', () => {
+    it('uses SameSite=Lax by default so IdP return navigations keep the tx cookie', () => {
+      const o = oidcTxCookieOpts(600_000);
+      expect(o.sameSite).toBe('lax');
+      expect(o.httpOnly).toBe(true);
+      expect(o.maxAge).toBe(600_000);
+    });
+
+    it('stays Lax even when session cookies are Strict', () => {
+      process.env.BADGERIQ_COOKIE_SAMESITE = 'strict';
+      expect(oidcTxCookieOpts().sameSite).toBe('lax');
+      expect(cookieOpts().sameSite).toBe('strict');
+    });
+
+    it('follows session SameSite=None (cross-site deploy) for the tx cookie', () => {
+      process.env.NODE_ENV = 'test';
+      process.env.BADGERIQ_COOKIE_SAMESITE = 'none';
+      const o = oidcTxCookieOpts(600_000);
+      expect(o.sameSite).toBe('none');
+      expect(o.secure).toBe(true);
     });
   });
 
