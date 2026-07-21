@@ -88,6 +88,46 @@ The response includes stamped-outcome counts, `v_roi` row counts, per-agent LARI
 summaries, and the recommended dashboard date range. List presets with
 `GET /v1/design-partner/presets` (admin role).
 
+### Purge Acme artifacts from pilot (keep real SSO users)
+
+Use this when the well-known demo tenant
+(`00000000-0000-4000-8000-000000000001`, formerly **Acme Demo Co**) was seeded
+into AWS but you still need real Studio Designer / SSO identities and connectors
+on that same tenant. Do **not** drop the tenant row.
+
+1. **Postgres** — apply migration `028_purge_acme_demo_artifacts.sql` (deletes
+   `@acme.test` identities, the eight demo agents + their agent budgets, renames
+   the tenant to **Studio Designer**):
+
+   ```bash
+   ./deploy/terraform/scripts/migrate.sh --env pilot --target postgres
+   ```
+
+2. **ClickHouse** — purge synthetic analytics (`demo-user-*`, demo agent names,
+   `vk_demo_*` / `demo_call_*`, demo `app_id` rollups):
+
+   ```bash
+   bash deploy/ops/purge-acme-demo-clickhouse.sh --env pilot
+   # local compose: bash deploy/ops/purge-acme-demo-clickhouse.sh
+   ```
+
+3. **Confirm:**
+
+   ```sql
+   -- Postgres
+   SELECT email FROM identities WHERE email LIKE '%@acme.test';  -- 0 rows
+   SELECT name FROM tenants
+     WHERE tenant_id = '00000000-0000-4000-8000-000000000001';
+   -- expect: Studio Designer (not Acme Demo Co)
+
+   -- ClickHouse
+   SELECT count() FROM agentledger.llm_calls
+     WHERE startsWith(user_id, 'demo-user-');  -- 0
+   ```
+
+Local `make demo` / `deploy/demo/*` remain for evaluation stacks only.
+`BADGERIQ_DEMO_MODE` stays `false` in Terraform for pilot/prod.
+
 ---
 
 ## 2. Gateway dev mode
