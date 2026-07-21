@@ -1,23 +1,26 @@
 import Link from 'next/link';
 import { Suspense } from 'react';
+import { AccountSettings } from '../../components/settings/AccountSettings';
 import { DeleteButton } from '../../components/settings/DeleteButton';
 import { CreateBudget, CreateKey, CreatePolicy } from '../../components/settings/forms';
 import { AddIdpForm, IssueScimTokenForm, RevokeButton } from '../../components/settings/IntegrationsForms';
+import { PermissionsSettings, type IdentityRow } from '../../components/settings/PermissionsSettings';
 import { PrivacySettings } from '../../components/settings/PrivacySettings';
 import { Card, DataTable, PageHeader, usd } from '../../components/ui';
-import { apiClient, fetchData } from '../../lib/api';
+import { apiClient, fetchData, proxyApi } from '../../lib/api';
 
 export const dynamic = 'force-dynamic';
 
 const TABS = [
+  ['account', 'Account'],
+  ['permissions', 'Permissions'],
   ['keys', 'Virtual keys'],
   ['policies', 'Policies'],
   ['budgets', 'Budgets'],
   ['integrations', 'Integrations'],
   ['connectors', 'Data sources'],
 ] as const;
-type SettingsTab = 'keys' | 'policies' | 'budgets' | 'integrations';
-type TabKey = SettingsTab | 'connectors';
+type SettingsTab = 'account' | 'permissions' | 'keys' | 'policies' | 'budgets' | 'integrations';
 
 export default async function SettingsPage({ searchParams }: { searchParams: { tab?: string } }) {
   if (searchParams.tab === 'connectors') {
@@ -29,11 +32,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: { t
     );
   }
 
-  const tab: SettingsTab = (['keys', 'policies', 'budgets', 'integrations'] as const).includes(
-    searchParams.tab as SettingsTab,
-  )
+  const tab: SettingsTab = (
+    ['account', 'permissions', 'keys', 'policies', 'budgets', 'integrations'] as const
+  ).includes(searchParams.tab as SettingsTab)
     ? (searchParams.tab as SettingsTab)
-    : 'keys';
+    : 'account';
   const api = apiClient();
   const tenant = (await fetchData(api.GET('/v1/tenant'), null)) as {
     complianceFlags?: Record<string, unknown>;
@@ -46,7 +49,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: { t
       <PageHeader
         title="Settings"
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {TABS.map(([key, label]) => (
               <Link
                 key={key}
@@ -64,18 +67,60 @@ export default async function SettingsPage({ searchParams }: { searchParams: { t
         }
       />
 
-      <Card title="Privacy & analytics">
-        <PrivacySettings
-          initialIndividualAnalytics={individualAnalytics}
-          initialComplianceFlags={complianceFlags}
-        />
-      </Card>
+      {tab === 'account' && <AccountTab />}
+      {tab === 'permissions' && <PermissionsTab api={api} />}
+
+      {tab !== 'account' && tab !== 'permissions' && (
+        <Card title="Privacy & analytics">
+          <PrivacySettings
+            initialIndividualAnalytics={individualAnalytics}
+            initialComplianceFlags={complianceFlags}
+          />
+        </Card>
+      )}
 
       {tab === 'keys' && <KeysTab api={api} />}
       {tab === 'policies' && <PoliciesTab api={api} />}
       {tab === 'budgets' && <BudgetsTab api={api} />}
       {tab === 'integrations' && <IntegrationsTab api={api} />}
     </>
+  );
+}
+
+async function AccountTab() {
+  const { ok, data } = await proxyApi('/auth/me');
+  const session =
+    ok && data && typeof data === 'object' && 'userId' in data
+      ? (data as { userId: string; tenantId: string; role: string })
+      : null;
+  return (
+    <Card title="Login & session">
+      <AccountSettings session={session} />
+    </Card>
+  );
+}
+
+async function PermissionsTab({ api }: { api: Api }) {
+  const [{ ok, data: me }, identities] = await Promise.all([
+    proxyApi('/auth/me'),
+    fetchData(
+      api.GET('/v1/identities', { params: { query: { limit: '200', offset: '0' } } }),
+      [],
+    ) as Promise<IdentityRow[]>,
+  ]);
+  const session =
+    ok && me && typeof me === 'object' && 'role' in me
+      ? (me as { userId: string | null; role: string })
+      : null;
+  const canManage = session?.role === 'admin';
+  return (
+    <Card title="API roles">
+      <PermissionsSettings
+        identities={Array.isArray(identities) ? identities : []}
+        canManage={canManage}
+        currentUserId={session?.userId ?? null}
+      />
+    </Card>
   );
 }
 

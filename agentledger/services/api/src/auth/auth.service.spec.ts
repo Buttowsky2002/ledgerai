@@ -13,20 +13,26 @@ describe('AuthService SSO', () => {
   let svc: AuthService;
   let queryRaw: jest.Mock;
   let auditCreate: jest.Mock;
+  let findUnique: jest.Mock;
 
   const TENANT = '11111111-1111-1111-1111-111111111111';
 
   beforeAll(() => {
     process.env.AGENTLEDGER_JWT_SECRET = process.env.AGENTLEDGER_JWT_SECRET ?? 'test-secret';
+    process.env.BADGERIQ_JWT_SECRET = process.env.BADGERIQ_JWT_SECRET ?? 'test-secret';
   });
 
   beforeEach(() => {
     queryRaw = jest.fn();
     auditCreate = jest.fn().mockResolvedValue(undefined);
+    findUnique = jest.fn();
     const prisma = {
       $queryRaw: queryRaw,
       withTenant: jest.fn(async (_tenantId: string, cb: (tx: unknown) => unknown) =>
-        cb({ auditLog: { create: auditCreate } }),
+        cb({
+          auditLog: { create: auditCreate },
+          identity: { findUnique },
+        }),
       ),
     } as unknown as PrismaService;
     svc = new AuthService(prisma, new JwtService());
@@ -94,5 +100,30 @@ describe('AuthService SSO', () => {
     const out = await svc.provisionAndLogin(opts());
     expect(out.claims).toMatchObject({ userId: 'u3', role: 'analyst' });
     expect(auditCreate).not.toHaveBeenCalled(); // the winner already audited it
+  });
+
+  it('refresh re-reads api_role so Settings promotions take effect', async () => {
+    const jwt = new JwtService();
+    const refreshToken = await jwt.mintRefresh({
+      userId: 'u1',
+      tenantId: TENANT,
+      role: 'viewer',
+    });
+    findUnique.mockResolvedValueOnce({ apiRole: 'admin', active: true });
+    const out = await svc.refresh(refreshToken);
+    expect(out.claims).toMatchObject({ userId: 'u1', tenantId: TENANT, role: 'admin' });
+    const principal = await jwt.verifyAccess(out.accessToken);
+    expect(principal.role).toBe('admin');
+  });
+
+  it('refresh refuses an inactive identity', async () => {
+    const jwt = new JwtService();
+    const refreshToken = await jwt.mintRefresh({
+      userId: 'u1',
+      tenantId: TENANT,
+      role: 'admin',
+    });
+    findUnique.mockResolvedValueOnce({ apiRole: 'admin', active: false });
+    await expect(svc.refresh(refreshToken)).rejects.toBeInstanceOf(UnauthorizedException);
   });
 });

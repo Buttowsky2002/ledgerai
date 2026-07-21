@@ -10,6 +10,11 @@ export function loginUrl(provider: OidcProvider): string {
   return `${PUBLIC_URL}/auth/login/${provider}`;
 }
 
+/** Same-origin (or public-host) logout — clears al_access / al_refresh via the API. */
+export function logoutUrl(): string {
+  return `${PUBLIC_URL}/auth/logout`;
+}
+
 /** Dev mode = the API is trusted to accept x-tenant-id and a dev tenant is set. */
 export function isDevMode(): boolean {
   return Boolean(env('BADGERIQ_DEV_TENANT_ID'));
