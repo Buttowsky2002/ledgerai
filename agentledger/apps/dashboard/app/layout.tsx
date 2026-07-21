@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { IBM_Plex_Mono, IBM_Plex_Sans } from 'next/font/google';
 import { ReactNode } from 'react';
-import { Sidebar } from '../components/Sidebar';
+import { AppShell } from '../components/AppShell';
 import { env } from '../lib/env';
 import './globals.css';
 
@@ -32,22 +32,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${sans.variable} ${mono.variable}`}>
       <body>
-        <div className="flex min-h-screen">
-          <Sidebar />
-          <main className="flex-1 p-8">
-            <div className="mx-auto max-w-[1400px]">
-              {demoMode && (
-                <div
-                  role="status"
-                  className="mb-4 rounded border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm text-amber-300"
-                >
-                  <strong>Demo mode</strong> — seeded sample data for evaluation, not a live deployment.
-                </div>
-              )}
-              {children}
-            </div>
-          </main>
-        </div>
+        <AppShell demoMode={demoMode}>{children}</AppShell>
       </body>
     </html>
   );
