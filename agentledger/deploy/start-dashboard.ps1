@@ -1,7 +1,8 @@
 # Start the LedgerAI dashboard locally (Windows — no make required).
 # Stops any stale dashboard container on :3000, then runs Next dev with demo tenant.
 $ErrorActionPreference = "Stop"
-$Root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+# Script lives at agentledger/deploy/ — repo root for this package is one level up.
+$Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
 
 Write-Host "Stopping old dashboard containers on port 3000..."
