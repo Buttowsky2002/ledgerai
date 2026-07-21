@@ -45,6 +45,7 @@ describe('Auth + RBAC', () => {
 
   afterAll(async () => {
     await prisma.withTenant(tenantA, async (tx) => {
+      await tx.identity.deleteMany({});
       await tx.team.deleteMany({});
       await tx.tenant.deleteMany({});
     });
@@ -111,7 +112,21 @@ describe('Auth + RBAC', () => {
   });
 
   it('POST /auth/refresh renews the al_access cookie and returns {ok, expires_in}', async () => {
-    const refresh = await jwt.mintRefresh({ userId: randomUUID(), tenantId: tenantA, role: 'analyst' });
+    // Refresh re-reads api_role from identities — seed a real row (JWT alone is not enough).
+    const userId = randomUUID();
+    await prisma.withTenant(tenantA, (tx) =>
+      tx.identity.create({
+        data: {
+          userId,
+          tenantId: tenantA,
+          email: `refresh-${userId.slice(0, 8)}@example.com`,
+          apiRole: 'admin',
+          source: 'manual',
+        },
+      }),
+    );
+    // Stale role in the refresh JWT must be overwritten by the DB value (admin).
+    const refresh = await jwt.mintRefresh({ userId, tenantId: tenantA, role: 'analyst' });
     const res = await request(app.getHttpServer())
       .post('/auth/refresh')
       .set('Cookie', `al_refresh=${refresh}`);
@@ -125,9 +140,22 @@ describe('Auth + RBAC', () => {
     expect(accessEntry).toMatch(/SameSite=Strict/i);
     expect(accessEntry).toMatch(/Path=\//i);
 
-    // The renewed access token (from the cookie) authorizes a protected route.
+    // The renewed access token (from the cookie) authorizes a protected route with DB role.
     const probe = await request(app.getHttpServer()).get('/auth/me').set(bearer(cookieValue(accessEntry!)));
     expect(probe.status).toBe(200);
+    expect(probe.body).toMatchObject({ userId, role: 'admin' });
+  });
+
+  it('POST /auth/refresh refuses a token whose identity was deleted (401)', async () => {
+    const refresh = await jwt.mintRefresh({
+      userId: randomUUID(),
+      tenantId: tenantA,
+      role: 'analyst',
+    });
+    const res = await request(app.getHttpServer())
+      .post('/auth/refresh')
+      .set('Cookie', `al_refresh=${refresh}`);
+    expect(res.status).toBe(401);
   });
 
   it('POST /auth/refresh without a refresh cookie is 401', async () => {
