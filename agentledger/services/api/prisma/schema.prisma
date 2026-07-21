@@ -495,11 +495,39 @@ model GithubCopilotMemberSpendDaily {
   utilizationStatus     String   @default("active") @map("utilization_status")
   confidenceScore       Decimal  @default(0.85) @map("confidence_score") @db.Decimal(5, 4)
   calculationVersion    String   @default("v1") @map("calculation_version")
+  billedNetUsd          Decimal  @default(0) @map("billed_net_usd") @db.Decimal(14, 6)
+  billedGrossUsd        Decimal  @default(0) @map("billed_gross_usd") @db.Decimal(14, 6)
+  billingCredits        Decimal  @default(0) @map("billing_credits") @db.Decimal(14, 6)
+  costSource            String   @default("estimate") @map("cost_source")
   createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt             DateTime @default(now()) @map("updated_at") @db.Timestamptz
 
   @@unique([tenantId, connectionId, usageDate, githubLogin, teamSlug])
   @@map("github_copilot_member_spend_daily")
+}
+
+model GithubCopilotBillingLine {
+  billingLineId   String   @id @default(dbgenerated("gen_random_uuid()")) @map("billing_line_id") @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  connectionId    String   @map("connection_id") @db.Uuid
+  orgSlug         String   @map("org_slug")
+  usageDate       DateTime @map("usage_date") @db.Date
+  githubLogin     String   @map("github_login")
+  product         String   @default("")
+  sku             String   @default("")
+  model           String   @default("")
+  unitType        String   @default("") @map("unit_type")
+  grossQuantity   Decimal  @default(0) @map("gross_quantity") @db.Decimal(14, 6)
+  grossAmount     Decimal  @default(0) @map("gross_amount") @db.Decimal(14, 6)
+  discountAmount  Decimal  @default(0) @map("discount_amount") @db.Decimal(14, 6)
+  netAmount       Decimal  @default(0) @map("net_amount") @db.Decimal(14, 6)
+  rawPayload      Json     @default("{}") @map("raw_payload")
+  syncedAt        DateTime @default(now()) @map("synced_at") @db.Timestamptz
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  @@unique([tenantId, connectionId, usageDate, githubLogin, sku, model])
+  @@map("github_copilot_billing_lines")
 }
 
 model GithubCopilotUsageDaily {
@@ -571,4 +599,27 @@ model ImportIdempotency {
 
   @@id([tenantId, idempotencyKey])
   @@map("import_idempotency")
+}
+
+/// One portal/billing CSV import batch — used for run history and surgical delete.
+model PortalImportRun {
+  importRunId    String    @id @default(dbgenerated("gen_random_uuid()")) @map("import_run_id") @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  source         String    @default("portal_import")
+  provider       String    @default("mixed")
+  providers      String[]  @default([])
+  fileNames      String[]  @default([]) @map("file_names")
+  dateFrom       DateTime? @map("date_from") @db.Date
+  dateTo         DateTime? @map("date_to") @db.Date
+  rowsParsed     Int       @default(0) @map("rows_parsed")
+  rowsImported   Int       @default(0) @map("rows_imported")
+  rowsSkipped    Int       @default(0) @map("rows_skipped")
+  totalCostUsd   Float     @default(0) @map("total_cost_usd")
+  actor          String    @default("system")
+  status         String    @default("active")
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@map("portal_import_runs")
 }

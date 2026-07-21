@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { Badge, Card, DataTable, PageHeader, Stat, num, usd } from '../../../components/ui';
 import { proxyApi } from '../../../lib/api';
-import { parseRange } from '../../../lib/date-range';
+import { resolveRange } from '../../../lib/resolve-range';
 import { discoverModelFamilies } from '../../../lib/model-family';
 
 export const dynamic = 'force-dynamic';
@@ -27,7 +27,7 @@ export default async function UserDetailPage({
   params: { userId: string };
   searchParams: { from?: string; to?: string };
 }) {
-  const { from, to } = parseRange(searchParams);
+  const { from, to } = resolveRange(searchParams);
   const userId = decodeURIComponent(params.userId);
   const qs = new URLSearchParams({ from, to });
   const { data } = await proxyApi(`/v1/analytics/users/${encodeURIComponent(userId)}?${qs.toString()}`);

@@ -1,6 +1,6 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Prisma, PrismaClient } from '@prisma/client';
-import { env } from '../env';
+import { resolvePgDsn, redactPgDsn } from '../env';
 
 /**
  * Prisma client wired for Postgres row-level security.
@@ -20,9 +20,15 @@ import { env } from '../env';
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   constructor() {
     // Resolve the connection string at runtime via BADGERIQ_PG_DSN with
-    // LEDGERAI_* / AGENTLEDGER_* fallbacks (deprecated). Prisma schema.prisma
+    // LEDGERAI_* / AGENTLEDGER_* fallbacks (deprecated), or assembled from
+    // DB_HOST/DB_NAME/DB_USER/DB_PASSWORD (Cloud Run MVP). Prisma schema.prisma
     // reads BADGERIQ_PG_DSN directly; this override is the alias-aware source of truth.
-    const url = env('BADGERIQ_PG_DSN');
+    const url = resolvePgDsn();
+    if (url) {
+      console.log('[api] prisma dsn', redactPgDsn(url));
+    } else {
+      console.warn('[api] prisma dsn unresolved — falling back to schema.prisma BADGERIQ_PG_DSN');
+    }
     super(url ? { datasources: { db: { url } } } : {});
   }
 

@@ -7,7 +7,7 @@ export function PageHeader({
   actions,
 }: {
   title: string;
-  subtitle?: string;
+  subtitle?: ReactNode;
   eyebrow?: string;
   actions?: ReactNode;
 }) {
@@ -18,7 +18,7 @@ export function PageHeader({
           <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-accent/80">{eyebrow}</div>
         )}
         <h1 className="text-[26px] font-semibold leading-none tracking-tight">{title}</h1>
-        {subtitle && <p className="mt-2 text-sm text-muted">{subtitle}</p>}
+        {subtitle && <div className="mt-2 text-sm text-muted">{subtitle}</div>}
       </div>
       {actions}
     </div>

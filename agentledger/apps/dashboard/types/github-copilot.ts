@@ -80,7 +80,7 @@ export interface CopilotMemberSpendSummary {
   highestSpendMember: { login: string; cost: number } | null;
   highestRoiMember: { login: string; roiPct: number } | null;
   lowestRoiMember: { login: string; roiPct: number } | null;
-  isEstimated: true;
+  isEstimated: boolean;
 }
 
 export interface CopilotMemberSpendRow {
@@ -103,7 +103,10 @@ export interface CopilotMemberSpendRow {
   estimatedValueCreated: number;
   roiPercentage: number | null;
   utilizationStatus: string;
-  isEstimated: true;
+  isEstimated: boolean;
+  costSource?: 'billing_api' | 'estimate';
+  billedNetUsd?: number;
+  billedGrossUsd?: number;
 }
 
 export interface CopilotMemberSpendResponse {

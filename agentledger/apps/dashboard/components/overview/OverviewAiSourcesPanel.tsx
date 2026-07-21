@@ -3,7 +3,9 @@
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { GitHubCopilotDetail } from '@/components/copilot/GitHubCopilotDetail';
+import { CursorPlatformDetail, type CursorSpendSummary } from '@/components/overview/CursorPlatformDetail';
 import { Card, DataTable, Stat, num, usd } from '@/components/ui';
+import { BillingTypeBadge } from '@/components/SpendBillingCell';
 
 export type PlatformSpendRow = {
   platform: string;
@@ -21,6 +23,27 @@ export type ModelMixRow = {
 function isCopilotPlatform(platform: string): boolean {
   const p = platform.toLowerCase();
   return p === 'github copilot' || p === 'github_copilot' || p.includes('copilot');
+}
+
+function isCursorPlatform(platform: string): boolean {
+  return platform.toLowerCase() === 'cursor';
+}
+
+function platformBillingKind(platform: string): 'metered' | 'per_seat' | 'mixed' {
+  if (isCopilotPlatform(platform)) return 'per_seat';
+  if (isCursorPlatform(platform)) return 'mixed';
+  return 'metered';
+}
+
+function PlatformBillingBadge({ platform }: { platform: string }) {
+  const kind = platformBillingKind(platform);
+  if (kind === 'mixed') {
+    return <BillingTypeBadge meteredUsd={1} seatUsd={1} />;
+  }
+  if (kind === 'per_seat') {
+    return <BillingTypeBadge meteredUsd={0} seatUsd={1} />;
+  }
+  return <BillingTypeBadge meteredUsd={1} seatUsd={0} />;
 }
 
 function modelsForPlatform(platform: string, modelMix: ModelMixRow[]): ModelMixRow[] {
@@ -121,7 +144,10 @@ function SourcePicker({
             }`}
           >
             <div className="flex items-center justify-between gap-3">
-              <span className="text-sm font-medium text-gray-100">{row.platform}</span>
+              <span className="inline-flex items-center gap-2 text-sm font-medium text-gray-100">
+                {row.platform}
+                <PlatformBillingBadge platform={row.platform} />
+              </span>
               <span className="num text-sm text-gray-200">{usd(row.cost_usd)}</span>
             </div>
             <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-edge">
@@ -147,12 +173,16 @@ export function OverviewAiSourcesPanel({
   from,
   to,
   initialSource,
+  cursorSpend,
+  cursorSpendError = false,
 }: {
   platforms: PlatformSpendRow[];
   modelMix: ModelMixRow[];
   from: string;
   to: string;
   initialSource?: string;
+  cursorSpend?: CursorSpendSummary | null;
+  cursorSpendError?: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -204,11 +234,20 @@ export function OverviewAiSourcesPanel({
           subtitle={
             isCopilotPlatform(selected)
               ? `${from} → ${to} · ${usd(selectedRow.cost_usd)} allocated (est.) · not a GitHub invoice`
-              : `${from} → ${to} · ${usd(selectedRow.cost_usd)} · ${num(selectedRow.calls)} calls`
+              : isCursorPlatform(selected)
+                ? `${from} → ${to} · platform list shows metered overage only · drill down for seats`
+                : `${from} → ${to} · ${usd(selectedRow.cost_usd)} · ${num(selectedRow.calls)} calls`
           }
         >
           {isCopilotPlatform(selected) ? (
             <GitHubCopilotDetail from={from} to={to} embedded />
+          ) : isCursorPlatform(selected) ? (
+            <CursorPlatformDetail
+              from={from}
+              to={to}
+              initialData={cursorSpend}
+              initialLoadError={cursorSpendError}
+            />
           ) : (
             <GenericPlatformDetail
               platform={selected}

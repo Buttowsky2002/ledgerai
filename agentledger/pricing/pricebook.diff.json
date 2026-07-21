@@ -1,0 +1,39 @@
+{
+  "changes": [
+    {
+      "provider": "anthropic",
+      "model": "claude-haiku",
+      "token_type": "output",
+      "old_usd_per_million": 4,
+      "new_usd_per_million": 5,
+      "pct_change": 25,
+      "kind": "changed"
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-haiku",
+      "token_type": "input",
+      "old_usd_per_million": 0.8,
+      "new_usd_per_million": 1,
+      "pct_change": 25,
+      "kind": "changed"
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-haiku",
+      "token_type": "cache_read",
+      "new_usd_per_million": 0.1,
+      "kind": "new"
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-haiku",
+      "token_type": "cache_write",
+      "new_usd_per_million": 1.25,
+      "kind": "new"
+    }
+  ],
+  "unchanged": 10,
+  "generated_at": "2026-07-11T19:29:19.471301004Z",
+  "feed_url": "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"
+}

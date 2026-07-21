@@ -1,7 +1,7 @@
 import { BarChartClient, PieChartClient } from '../../components/charts';
 import { Card, DataTable, PageHeader, num, usd } from '../../components/ui';
 import { apiClient, fetchData } from '../../lib/api';
-import { parseRange } from '../../lib/date-range';
+import { resolveRange } from '../../lib/resolve-range';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +13,7 @@ export default async function ModelMixPage({
 }: {
   searchParams: { from?: string; to?: string };
 }) {
-  const { from, to } = parseRange(searchParams);
+  const { from, to } = resolveRange(searchParams);
   const api = apiClient();
   const [rows, platformRows] = await Promise.all([
     fetchData(

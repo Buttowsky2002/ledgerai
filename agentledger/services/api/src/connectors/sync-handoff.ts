@@ -4,6 +4,13 @@ function dayAfter(isoDay: string): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** UTC day before an ISO date (for handoff messaging). */
+export function dayBeforeIso(isoDay: string): string {
+  const d = new Date(`${isoDay.slice(0, 10)}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
 /** Day after portal coverage ends — API sync should start here. */
 export function resolveFirstSyncBaseline(
   portalImportThrough: string | null,
@@ -13,23 +20,47 @@ export function resolveFirstSyncBaseline(
   return dayAfter(syncEndDay);
 }
 
+export type SyncRangeResolution = { from?: string; to?: string };
+
+export interface ResolveConnectorSyncRangeOptions {
+  /** Background scheduler — skip when the window is already covered by handoff baseline. */
+  incremental?: boolean;
+}
+
 /** Resolve API sync window respecting portal handoff baseline (T₀). */
 export function resolveConnectorSyncRange(
   range: { from?: string; to?: string } | undefined,
   config: Record<string, unknown>,
-): { from?: string; to?: string } {
+  opts?: ResolveConnectorSyncRangeOptions,
+): SyncRangeResolution | null {
   const today = new Date().toISOString().slice(0, 10);
   const baseline =
     typeof config.apiSyncBaselineFrom === 'string' ? config.apiSyncBaselineFrom.slice(0, 10) : undefined;
 
   if (range?.from && range?.to) {
-    let from = range.from.slice(0, 10);
+    const origFrom = range.from.slice(0, 10);
+    let from = origFrom;
     const to = range.to.slice(0, 10);
+
+    // Entire requested window ends before API handoff — allow manual re-backfill, skip incremental.
+    if (baseline && to < baseline) {
+      if (opts?.incremental) return null;
+      return { from: origFrom, to };
+    }
+
     if (baseline && from < baseline) from = baseline;
+    if (from > to) {
+      if (opts?.incremental) return null;
+      return { from: origFrom, to };
+    }
     return { from, to };
   }
 
   if (baseline) {
+    if (baseline > today) {
+      if (opts?.incremental) return null;
+      return { from: baseline, to: baseline };
+    }
     return { from: baseline, to: today };
   }
 

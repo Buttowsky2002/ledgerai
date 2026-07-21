@@ -24,8 +24,16 @@ describe('CreateFixedCostDto', () => {
     expect(errors.some((e) => e.property === 'periodMonth')).toBe(true);
   });
 
+  it('accepts expanded vendor list (e.g. azure, cursor)', async () => {
+    for (const vendor of ['azure', 'cursor', 'github'] as const) {
+      const dto = plainToInstance(CreateFixedCostDto, { ...valid, vendor });
+      const errors = await validate(dto);
+      expect(errors).toHaveLength(0);
+    }
+  });
+
   it('rejects invalid vendor enum', async () => {
-    const dto = plainToInstance(CreateFixedCostDto, { ...valid, vendor: 'azure' });
+    const dto = plainToInstance(CreateFixedCostDto, { ...valid, vendor: 'not-a-vendor' });
     const errors = await validate(dto);
     expect(errors.some((e) => e.property === 'vendor')).toBe(true);
   });

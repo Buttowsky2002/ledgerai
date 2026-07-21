@@ -1,6 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../app.module';
-import { ClickHouseService } from '../clickhouse/clickhouse.service';
+import { AnalyticsStore, analyticsBackend } from '../analytics-store/analytics-store';
 import { PrismaService } from '../prisma/prisma.service';
 import { env } from '../env';
 
@@ -27,6 +27,10 @@ const CH_TABLES = [
   'risk_daily',
 ];
 
+// Postgres MVP backend: spend_daily / spend_hourly_by_key / risk_daily are
+// views over llm_calls there, so only the base tables are deleted.
+const PG_TABLES = ['llm_calls', 'agent_runs', 'outcomes', 'provider_costs', 'cost_adjustments'];
+
 async function main(): Promise<void> {
   const tenantId = process.argv[2] ?? env('BADGERIQ_DELETE_TENANT_ID');
   if (!tenantId) {
@@ -36,7 +40,8 @@ async function main(): Promise<void> {
 
   const app = await NestFactory.createApplicationContext(AppModule, { logger: ['error'] });
   const prisma = app.get(PrismaService);
-  const clickhouse = app.get(ClickHouseService);
+  const store = app.get(AnalyticsStore);
+  const tables = analyticsBackend() === 'postgres' ? PG_TABLES : CH_TABLES;
 
   // Postgres: audit_log has no FK to tenants, so clear it explicitly; deleting the
   // tenant row cascades to all child tables. Done in the tenant's RLS context.
@@ -45,9 +50,10 @@ async function main(): Promise<void> {
     return tx.tenant.deleteMany({ where: { tenantId } });
   });
 
-  // ClickHouse: synchronous ALTER DELETE per data table (parameterized).
-  for (const table of CH_TABLES) {
-    await clickhouse.command(
+  // Analytics store: synchronous ALTER DELETE per data table (parameterized).
+  // The Postgres backend translates this to DELETE FROM ... WHERE ...
+  for (const table of tables) {
+    await store.command(
       `ALTER TABLE agentledger.${table} DELETE WHERE tenant_id = {tenant:String} SETTINGS mutations_sync = 1`,
       { tenant: tenantId },
     );
@@ -61,7 +67,8 @@ async function main(): Promise<void> {
       event: 'tenant.deleted',
       tenant_id: tenantId,
       postgres_tenant_rows_deleted: pg.count,
-      clickhouse_tables: CH_TABLES,
+      analytics_backend: analyticsBackend(),
+      analytics_tables: tables,
       at: new Date().toISOString(),
     })}\n`,
   );

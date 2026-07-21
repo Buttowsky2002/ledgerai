@@ -2,6 +2,27 @@ import { toImportRow } from './normalized-record';
 import { mapRow } from '../../import/import.mapper';
 
 describe('normalized-record pipeline', () => {
+  it('prefers user email over provider user id for connector imports', () => {
+    const row = toImportRow({
+      tenant_id: 't1',
+      source: 'api',
+      source_type: 'ai_usage',
+      connector_id: 'c1',
+      connector_sync_run_id: 's1',
+      provider: 'anthropic',
+      record_type: 'spend_usage_record',
+      ts: '2026-01-15T00:00:00.000Z',
+      lineage: { dedupe_hash: 'abc123', external_record_id: 'ext-1' },
+      metrics: {
+        user_id: 'user_0138PnqLyRqLRtQEqXCqEpQM',
+        user_email: 'brandon@studiodesigner.com',
+        model: 'claude-opus-4-7',
+        cost_usd: 19.18,
+      },
+    });
+    expect(row.user_id).toBe('brandon@studiodesigner.com');
+  });
+
   it('converts normalized records to import rows that map to llm_calls', () => {
     const row = toImportRow({
       tenant_id: 't1',

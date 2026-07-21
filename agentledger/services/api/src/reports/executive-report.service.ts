@@ -1,5 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
-import { ChParam, ClickHouseService } from '../clickhouse/clickhouse.service';
+import { ChParam } from '../clickhouse/clickhouse.service';
+import { AnalyticsStore } from '../analytics-store/analytics-store';
+import { EFFECTIVE_METERED_COST_USD, LLM_CALLS_METERED_SCOPE } from '../connectors/metered-cost';
 import { CopilotAnalyticsService } from '../github-copilot/github-copilot-analytics.service';
 import { getPrincipal, getTenantId } from '../tenant/tenant-context';
 import { PrismaService } from '../prisma/prisma.service';
@@ -24,13 +26,17 @@ import { buildModelSpendTable, buildUserSpendTable, buildTopModelMap } from './r
 
 const n = (v: unknown): number => (typeof v === 'number' ? v : Number(v) || 0);
 const HEADLINE_CONF = 0.5;
+// Same metered-spend definition the dashboard uses: provider-reported/invoice-grade
+// cost only (no price-book estimates, no subscription-included usage value).
+// Copilot is excluded here and merged from Postgres via mergeCopilotSupplement.
+const METERED_COST = EFFECTIVE_METERED_COST_USD;
 
 type Range = { from: string; to: string };
 
 @Injectable()
 export class ExecutiveReportService {
   constructor(
-    private readonly ch: ClickHouseService,
+    private readonly ch: AnalyticsStore,
     private readonly prisma: PrismaService,
     private readonly copilotAnalytics: CopilotAnalyticsService,
   ) {}
@@ -49,36 +55,22 @@ export class ExecutiveReportService {
     const p = r as Record<string, ChParam>;
     const priorP = { ...prior } as Record<string, ChParam>;
 
-    const [
-      tenantRow,
-      currentTotals,
-      priorTotals,
-      spendTrend,
-      priorTrend,
-      userRows,
-      userModelRows,
-      providers,
-      models,
-      providerCosts,
-      riskRows,
-      blockedRow,
-      valueRow,
-      copilotSummary,
-      copilotUserRows,
-    ] = await Promise.all([
-      this.prisma.withTenant(tenantId, (tx) => tx.tenant.findUnique({ where: { tenantId } })),
-      this.fetchSpendTotals(p),
-      this.fetchSpendTotals(priorP),
-      this.fetchDailySpend(p),
-      this.fetchDailySpend(priorP),
-      this.fetchUserSpend(p),
-      this.fetchUserModelSpend(p),
-      this.fetchProviders(p),
-      this.fetchModels(p),
-      this.fetchProviderCosts(p),
-      this.fetchRisk(p),
-      this.fetchBlockedEvents(p),
-      this.fetchValueMetrics(p),
+    const tenantRow = await this.prisma.withTenant(tenantId, (tx) =>
+      tx.tenant.findUnique({ where: { tenantId } }),
+    );
+    const currentTotals = await this.fetchSpendTotals(p);
+    const priorTotals = await this.fetchSpendTotals(priorP);
+    const spendTrend = await this.fetchDailySpend(p);
+    const priorTrend = await this.fetchDailySpend(priorP);
+    const userRows = await this.fetchUserSpend(p);
+    const userModelRows = await this.fetchUserModelSpend(p);
+    const providers = await this.fetchProviders(p);
+    const models = await this.fetchModels(p);
+    const providerCosts = await this.fetchProviderCosts(p);
+    const riskRows = await this.fetchRisk(p);
+    const blockedRow = await this.fetchBlockedEvents(p);
+    const valueRow = await this.fetchValueMetrics(p);
+    const [copilotSummary, copilotUserRows] = await Promise.all([
       this.copilotAnalytics.getSpendSummary(tenantId, r.from, r.to),
       this.copilotAnalytics.getUserSpendAllocation(tenantId, r.from, r.to),
     ]);
@@ -186,11 +178,13 @@ export class ExecutiveReportService {
 
   private async fetchSpendTotals(params: Record<string, ChParam>): Promise<SpendTotals> {
     const rows = await this.ch.queryScoped<Record<string, unknown>>(
-      `SELECT sum(cost_usd) AS cost_usd, sum(calls) AS calls,
+      `SELECT sum(${METERED_COST}) AS cost_usd,
+              countIf(${METERED_COST} > 0) AS calls,
               sum(input_tokens) AS input_tokens, sum(output_tokens) AS output_tokens,
-              sum(cached_tokens) AS cached_tokens
-       FROM spend_daily
-       WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date}`,
+              sum(cache_read_tokens) AS cached_tokens
+       FROM llm_calls
+       WHERE tenant_id = {tenant:String} AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
+         AND ${LLM_CALLS_METERED_SCOPE}`,
       params,
     );
     const row = rows[0] ?? {};
@@ -205,9 +199,10 @@ export class ExecutiveReportService {
 
   private async fetchDailySpend(params: Record<string, ChParam>): Promise<DailySpendRow[]> {
     const rows = await this.ch.queryScoped<{ day: string; cost_usd: unknown }>(
-      `SELECT day, sum(cost_usd) AS cost_usd
-       FROM spend_daily
-       WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date}
+      `SELECT toDate(ts) AS day, sum(${METERED_COST}) AS cost_usd
+       FROM llm_calls
+       WHERE tenant_id = {tenant:String} AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
+         AND ${LLM_CALLS_METERED_SCOPE}
        GROUP BY day ORDER BY day`,
       params,
     );
@@ -221,10 +216,13 @@ export class ExecutiveReportService {
     params: Record<string, ChParam>,
   ): Promise<{ userId: string; costUsd: number; calls: number }[]> {
     const rows = await this.ch.queryScoped<{ user_id: string; cost_usd: unknown; calls: unknown }>(
-      `SELECT user_id, sum(cost_usd) AS cost_usd, sum(calls) AS calls
-       FROM spend_daily_by_user
-       WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date}
-       GROUP BY user_id ORDER BY cost_usd DESC`,
+      `SELECT user_id, sum(${METERED_COST}) AS cost_usd, countIf(${METERED_COST} > 0) AS calls
+       FROM llm_calls
+       WHERE tenant_id = {tenant:String} AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
+         AND ${LLM_CALLS_METERED_SCOPE}
+       GROUP BY user_id
+       HAVING cost_usd > 0
+       ORDER BY cost_usd DESC`,
       params,
     );
     return rows.map((row) => ({
@@ -238,10 +236,15 @@ export class ExecutiveReportService {
     params: Record<string, ChParam>,
   ): Promise<{ userId: string; model: string; costUsd: number }[]> {
     const rows = await this.ch.queryScoped<{ user_id: string; model: string; cost_usd: unknown }>(
-      `SELECT user_id, model, sum(cost_usd) AS cost_usd
-       FROM spend_daily_by_user
-       WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date}
-       GROUP BY user_id, model ORDER BY user_id, cost_usd DESC`,
+      `SELECT user_id,
+              if(response_model != '', response_model, request_model) AS model,
+              sum(${METERED_COST}) AS cost_usd
+       FROM llm_calls
+       WHERE tenant_id = {tenant:String} AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
+         AND ${LLM_CALLS_METERED_SCOPE}
+       GROUP BY user_id, model
+       HAVING cost_usd > 0
+       ORDER BY user_id, cost_usd DESC`,
       params,
     );
     return rows.map((row) => ({
@@ -266,11 +269,15 @@ export class ExecutiveReportService {
     }));
   }
 
-  private async fetchProviders(params: Record<string, ChParam>): Promise<ProviderSpendRow[]> {    const rows = await this.ch.queryScoped<{ provider: string; cost_usd: unknown; calls: unknown }>(
-      `SELECT provider, sum(cost_usd) AS cost_usd, sum(calls) AS calls
-       FROM spend_daily
-       WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date}
-       GROUP BY provider ORDER BY cost_usd DESC`,
+  private async fetchProviders(params: Record<string, ChParam>): Promise<ProviderSpendRow[]> {
+    const rows = await this.ch.queryScoped<{ provider: string; cost_usd: unknown; calls: unknown }>(
+      `SELECT provider, sum(${METERED_COST}) AS cost_usd, countIf(${METERED_COST} > 0) AS calls
+       FROM llm_calls
+       WHERE tenant_id = {tenant:String} AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
+         AND ${LLM_CALLS_METERED_SCOPE}
+       GROUP BY provider
+       HAVING cost_usd > 0
+       ORDER BY cost_usd DESC`,
       params,
     );
     return rows.map((row) => ({
@@ -282,10 +289,16 @@ export class ExecutiveReportService {
 
   private async fetchModels(params: Record<string, ChParam>): Promise<ModelSpendRow[]> {
     const rows = await this.ch.queryScoped<{ provider: string; model: string; cost_usd: unknown; calls: unknown }>(
-      `SELECT provider, model, sum(cost_usd) AS cost_usd, sum(calls) AS calls
-       FROM spend_daily
-       WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date}
-       GROUP BY provider, model ORDER BY provider, cost_usd DESC`,
+      `SELECT provider,
+              if(response_model != '', response_model, request_model) AS model,
+              sum(${METERED_COST}) AS cost_usd,
+              countIf(${METERED_COST} > 0) AS calls
+       FROM llm_calls
+       WHERE tenant_id = {tenant:String} AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
+         AND ${LLM_CALLS_METERED_SCOPE}
+       GROUP BY provider, model
+       HAVING cost_usd > 0
+       ORDER BY provider, cost_usd DESC`,
       params,
     );
     return rows.map((row) => ({

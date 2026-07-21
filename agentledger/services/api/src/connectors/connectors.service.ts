@@ -10,14 +10,15 @@ import { getTenantId } from '../tenant/tenant-context';
 import { recordAudit } from '../common/audit';
 import { Page } from '../common/pagination';
 import { ImportService } from '../import/import.service';
-import { ClickHouseService } from '../clickhouse/clickhouse.service';
+import { AnalyticsStore } from '../analytics-store/analytics-store';
 import { ConnectorDefinitionsService } from './connector-definitions.service';
 import { ConnectorSecretsService } from './connector-secrets.service';
 import { fetchPreviewPage } from './engine/connector-engine';
 import type { ApiCredentials } from './engine/api-client';
 import { sanitizeForPreview, safeErrorMessage } from './engine/sanitizer';
-import { resolvePreviewWindow, resolveSyncChunks } from './sync-range';
+import { DEFAULT_BACKFILL_DAYS, resolvePreviewWindow, resolveSyncChunks } from './sync-range';
 import {
+  dayBeforeIso,
   readConnectorHandoff,
   resolveConnectorSyncRange,
   resolveFirstSyncBaseline,
@@ -32,6 +33,9 @@ import {
   resolveCapabilities,
 } from './types/connector-capabilities';
 import { applyAnthropicKeyRouting } from './anthropic-key-routing';
+import { DEFAULT_SYNC_INTERVAL_MINUTES } from './sync-range';
+
+const DEFAULT_CONNECTOR_SCHEDULE = { intervalMinutes: DEFAULT_SYNC_INTERVAL_MINUTES, enabled: true };
 
 const NO_COST_ROWS_WARNING =
   'API connected, but no billable cost rows were returned for the selected window. ' +
@@ -97,7 +101,7 @@ export class ConnectorsService {
     private readonly secrets: ConnectorSecretsService,
     private readonly importService: ImportService,
     private readonly attributionMappings: AttributionMappingsService,
-    private readonly ch: ClickHouseService,
+    private readonly ch: AnalyticsStore,
   ) {}
 
   private applyCreateOverrides(
@@ -226,23 +230,31 @@ export class ConnectorsService {
   }
 
   async list(page: Page) {
-    const rows = await this.prisma.withTenant(getTenantId(), (tx) =>
-      tx.connector.findMany({
+    const tenantId = getTenantId();
+    return this.prisma.withTenant(tenantId, async (tx) => {
+      const rows = await tx.connector.findMany({
         take: page.limit,
         skip: page.offset,
         orderBy: { connectorId: 'asc' },
-      }),
-    );
+      });
+      const connectorIds = rows.map((r) => r.connectorId);
+      const runs =
+        connectorIds.length > 0
+          ? await tx.connectorSyncRun.findMany({
+              where: { connectorId: { in: connectorIds }, status: 'completed' },
+              orderBy: { completedAt: 'desc' },
+            })
+          : [];
+      const latestByConnector = new Map<string, (typeof runs)[number]>();
+      for (const run of runs) {
+        if (!latestByConnector.has(run.connectorId)) {
+          latestByConnector.set(run.connectorId, run);
+        }
+      }
 
-    const enriched = await Promise.all(
-      rows.map(async (row) => {
+      return rows.map((row) => {
         const safe = omitSecretRef(row);
-        const latestRun = await this.prisma.withTenant(getTenantId(), (tx) =>
-          tx.connectorSyncRun.findFirst({
-            where: { connectorId: row.connectorId, status: 'completed' },
-            orderBy: { completedAt: 'desc' },
-          }),
-        );
+        const latestRun = latestByConnector.get(row.connectorId);
         const presetId = row.kind ?? undefined;
         const capabilities = resolveCapabilities(presetId);
         return {
@@ -259,9 +271,8 @@ export class ConnectorsService {
           capabilities,
           attributionWarning: attributionWarning(capabilities),
         };
-      }),
-    );
-    return enriched;
+      });
+    });
   }
 
   async get(id: string) {
@@ -290,7 +301,7 @@ export class ConnectorsService {
       ? await this.secrets.storeSecret(dto.authSecret.trim())
       : undefined;
 
-    return this.prisma.withTenant(tenantId, async (tx) => {
+    const created = await this.prisma.withTenant(tenantId, async (tx) => {
       if (!definitionId && dto.presetId) {
         const preset = await tx.connectorDefinition.findFirst({
           where: { builtIn: true, name: definition?.name },
@@ -298,7 +309,7 @@ export class ConnectorsService {
         definitionId = preset?.definitionId;
       }
 
-      const created = await tx.connector.create({
+      const row = await tx.connector.create({
         data: {
           tenantId,
           connectorDefinitionId: definitionId,
@@ -313,7 +324,7 @@ export class ConnectorsService {
           })) as Prisma.InputJsonValue,
           secretRef,
           mappingOverridesJson: (dto.mappingOverridesJson ?? {}) as Prisma.InputJsonValue,
-          scheduleJson: (dto.scheduleJson ?? definition?.schedule ?? {}) as Prisma.InputJsonValue,
+          scheduleJson: (dto.scheduleJson ?? definition?.schedule ?? DEFAULT_CONNECTOR_SCHEDULE) as Prisma.InputJsonValue,
           status: secretRef ? 'connected' : 'draft',
           enabled: dto.enabled !== false,
         },
@@ -321,26 +332,26 @@ export class ConnectorsService {
 
       await recordAudit(tx, {
         action: 'create',
-        object: `connector:${created.connectorId}`,
+        object: `connector:${row.connectorId}`,
         before: null,
-        after: { ...created, secretRef: secretRef ? '[stored]' : null },
+        after: { ...row, secretRef: secretRef ? '[stored]' : null },
       });
 
-      const safe = omitSecretRef(created);
-
-      if (secretRef && dto.enabled !== false) {
-        try {
-          await this.sync(created.connectorId, { from: undefined, to: undefined });
-        } catch (e) {
-          this.logger.warn(
-            { connectorId: created.connectorId, err: safeErrorMessage((e as Error).message) },
-            'initial sync after create failed',
-          );
-        }
-      }
-
-      return safe;
+      return row;
     });
+
+    const safe = omitSecretRef(created);
+
+    if (secretRef && dto.enabled !== false) {
+      void this.sync(created.connectorId, { from: undefined, to: undefined }).catch((e) => {
+        this.logger.warn(
+          { connectorId: created.connectorId, err: safeErrorMessage((e as Error).message) },
+          'initial sync after create failed',
+        );
+      });
+    }
+
+    return safe;
   }
 
   async update(id: string, dto: Partial<CreateConnectorDto>) {
@@ -419,7 +430,8 @@ export class ConnectorsService {
     const definition = applyAnthropicKeyRouting(definitionBase, secret);
     const creds = this.parseCredentials(secret, definition.authType);
 
-    const { syncStart, syncEnd } = resolvePreviewWindow(range?.from, range?.to);
+    const maxDaysPerRequest = definition.syncRange?.maxDaysPerRequest ?? undefined;
+    const { syncStart, syncEnd } = resolvePreviewWindow(range?.from, range?.to, 30, maxDaysPerRequest);
 
     try {
       const result = await fetchPreviewPage({
@@ -540,7 +552,16 @@ export class ConnectorsService {
     const cfg = (row.config ?? {}) as Record<string, unknown>;
     const handoff = readConnectorHandoff(cfg);
     const effectiveRange = resolveConnectorSyncRange(range, cfg);
-    const chunks = resolveSyncChunks(effectiveRange?.from, effectiveRange?.to);
+    if (effectiveRange === null) {
+      throw new BadRequestException(
+        handoff.apiSyncBaselineFrom
+          ? `Already synced through ${dayBeforeIso(handoff.apiSyncBaselineFrom)}. Choose a To date on or after ${handoff.apiSyncBaselineFrom}, or widen the range for a re-backfill.`
+          : 'no sync window to process',
+      );
+    }
+    const maxDaysPerRequest = definition.syncRange?.maxDaysPerRequest ?? undefined;
+    const backfillDays = definition.syncRange?.defaultBackfillDays ?? DEFAULT_BACKFILL_DAYS;
+    const chunks = resolveSyncChunks(effectiveRange.from, effectiveRange.to, backfillDays, maxDaysPerRequest);
     if (chunks.length === 0) {
       throw new BadRequestException(
         handoff.apiSyncBaselineFrom
@@ -590,6 +611,12 @@ export class ConnectorsService {
         dryRun: false,
       };
       let keysReleased = false;
+
+      if (definition.provider === 'cursor') {
+        await this.purgeProviderApiImports(tenantId!, 'cursor', overallStart, overallEnd);
+        await this.importService.releaseConnectorImportKeys(id);
+        keysReleased = true;
+      }
 
       for (let chunkIdx = 0; chunkIdx < chunks.length; chunkIdx++) {
         const chunk = chunks[chunkIdx];
@@ -881,8 +908,23 @@ export class ConnectorsService {
     const from = syncStart.toISOString().slice(0, 10);
     const to = syncEnd.toISOString().slice(0, 10);
     await this.ch.command(
-      `ALTER TABLE llm_calls DELETE WHERE tenant_id = {tenant:String} AND source = 'api' AND cost_usd = 0 AND toDate(ts) >= {from:Date} AND toDate(ts) <= {to:Date}`,
+      `ALTER TABLE llm_calls DELETE WHERE tenant_id = {tenant:String} AND source = 'api' AND cost_usd = 0 AND usage_value_usd = 0 AND toDate(ts) >= {from:Date} AND toDate(ts) <= {to:Date}`,
       { tenant: tenantId, from, to },
+    );
+  }
+
+  /** Drop provider API rows in the sync window before a billing re-sync (avoids duplicate llm_calls). */
+  private async purgeProviderApiImports(
+    tenantId: string,
+    provider: string,
+    syncStart: Date,
+    syncEnd: Date,
+  ): Promise<void> {
+    const from = syncStart.toISOString().slice(0, 10);
+    const to = syncEnd.toISOString().slice(0, 10);
+    await this.ch.command(
+      `ALTER TABLE llm_calls DELETE WHERE tenant_id = {tenant:String} AND source = 'api' AND provider = {provider:String} AND toDate(ts) >= {from:Date} AND toDate(ts) <= {to:Date}`,
+      { tenant: tenantId, provider, from, to },
     );
   }
 

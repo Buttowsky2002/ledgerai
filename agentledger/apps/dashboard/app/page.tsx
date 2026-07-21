@@ -2,15 +2,28 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { AreaChartClient, Sparkline } from '../components/charts';
 import { OverviewAiSourcesPanel } from '../components/overview/OverviewAiSourcesPanel';
+import type { CursorSpendSummary } from '../components/overview/CursorPlatformDetail';
+import { CostByUserPanel } from '../components/overview/CostByUserPanel';
 import { FixedOverheadPanel } from '../components/overview/FixedOverheadPanel';
 import { ExecutiveReportExport } from '../components/overview/ExecutiveReportExport';
+import { OverviewLiveRefresh } from '../components/overview/OverviewLiveRefresh';
 import { LariRecommendationsPanel } from '../components/lari/LariRecommendationsPanel';
 import { Badge, BadgeTone, Card, DataTable, PageHeader, Stat, num, usd } from '../components/ui';
+import { DateRangePicker } from '../components/DateRangePicker';
 import { apiClient, fetchData, proxyApi } from '../lib/api';
 import { combinedAiCost } from '../lib/combined-ai-cost';
-import { parseRange } from '../lib/date-range';
+import { fetchDataBounds } from '../lib/data-bounds';
+import { env } from '../lib/env';
+import { resolvePageRange } from '../lib/resolve-range';
 
 export const dynamic = 'force-dynamic';
+
+function liveRefreshIntervalMs(): number {
+  const raw = env('BADGERIQ_DASHBOARD_LIVE_REFRESH_MS');
+  if (!raw) return 30_000;
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) && n >= 0 ? n : 30_000;
+}
 
 type SpendRow = {
   day: string;
@@ -41,7 +54,18 @@ type AgentEconomicsRow = {
   recommendation: Recommendation;
 };
 
-type AllocationRow = { key: string; cost_usd: number | string; calls: string };
+type AllocationRow = {
+  key: string;
+  cost_usd: number | string;
+  calls: string;
+  portal_import_usd?: number | string;
+  connector_usd?: number | string;
+  metered_usd?: number | string;
+  seat_usd?: number | string;
+  spend_trend?: 'up' | 'down' | 'flat' | 'insufficient';
+  trend_change_pct?: number;
+  trend_change_usd?: number;
+};
 type PlatformRow = { platform: string; cost_usd: number | string; calls: string };
 type ModelRow = { provider: string; model: string; cost_usd: number | string; calls: string };
 
@@ -91,11 +115,13 @@ function ConfMeter({ score }: { score: number }) {
 export default async function OverviewPage({
   searchParams,
 }: {
-  searchParams: { from?: string; to?: string; source?: string };
+  searchParams: { from?: string; to?: string; source?: string; range?: string };
 }) {
-  const { from, to } = parseRange(searchParams);
   const source = searchParams.source || undefined;
   const api = apiClient();
+
+  const dataBounds = await fetchDataBounds(searchParams);
+  const { from, to, isAllTime } = resolvePageRange(searchParams, dataBounds);
 
   type TotalCostRow = {
     month: string;
@@ -147,6 +173,20 @@ export default async function OverviewPage({
     calls: Number(r.calls),
   }));
 
+  const hasCursorPlatform = platforms.some((p) => p.platform.toLowerCase() === 'cursor');
+  let cursorSpend: CursorSpendSummary | null = null;
+  let cursorSpendError = false;
+  if (hasCursorPlatform) {
+    const cursorRes = await proxyApi(
+      `/v1/analytics/cursor-spend?${new URLSearchParams({ from, to })}`,
+    );
+    cursorSpendError = !cursorRes.ok;
+    cursorSpend =
+      cursorRes.ok && cursorRes.data && typeof cursorRes.data === 'object'
+        ? (cursorRes.data as CursorSpendSummary)
+        : null;
+  }
+
   const meteredCost = spend.reduce((s, r) => s + Number(r.cost_usd), 0);
   const totalCalls = spend.reduce((s, r) => s + Number(r.calls), 0);
   const costOfAi = combinedAiCost(meteredCost, totalCostRows);
@@ -173,8 +213,29 @@ export default async function OverviewPage({
       <PageHeader
         eyebrow="FinOps control plane"
         title="Overview"
-        subtitle={`${from} → ${to}`}
-        actions={<ExecutiveReportExport from={from} to={to} />}
+        subtitle={
+          <DateRangePicker
+            basePath="/"
+            from={from}
+            to={to}
+            earliestDay={dataBounds.earliest_day}
+            latestDay={dataBounds.latest_day}
+            isAllTime={isAllTime}
+            extraParams={source ? { source } : undefined}
+          />
+        }
+        actions={
+          <div className="flex flex-wrap items-center gap-4">
+            <OverviewLiveRefresh intervalMs={liveRefreshIntervalMs()} />
+            <Suspense
+              fallback={
+                <div className="text-sm text-muted">Export report…</div>
+              }
+            >
+              <ExecutiveReportExport from={from} to={to} bounds={dataBounds} />
+            </Suspense>
+          </div>
+        }
       />
 
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -229,27 +290,20 @@ export default async function OverviewPage({
           from={from}
           to={to}
           initialSource={source}
+          cursorSpend={hasCursorPlatform ? cursorSpend : undefined}
+          cursorSpendError={cursorSpendError}
         />
       </Suspense>
 
-      <Card title="Cost by user" subtitle="Includes API-synced and gateway spend">
-        <DataTable
-          columns={[
-            { key: 'user', label: 'User' },
-            { key: 'cost', label: 'Spend', align: 'right' },
-            { key: 'calls', label: 'Calls', align: 'right' },
-          ]}
-          rows={costByUser.map((r) => ({
-            user: r.key === 'Unassigned' ? (
-              <span className="text-warn">{r.key}</span>
-            ) : (
-              r.key
-            ),
-            cost: usd(Number(r.cost_usd)),
-            calls: num(r.calls),
-          }))}
-        />
-      </Card>
+      <Suspense
+        fallback={
+          <Card title="Cost by user">
+            <p className="py-8 text-center text-sm text-muted">Loading user spend…</p>
+          </Card>
+        }
+      >
+        <CostByUserPanel initialRows={costByUser} initialFrom={from} initialTo={to} />
+      </Suspense>
 
       <Card
         title="Recommended actions"

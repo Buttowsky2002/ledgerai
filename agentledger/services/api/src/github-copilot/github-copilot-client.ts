@@ -1,4 +1,5 @@
-import { CopilotMemberRow, CopilotSeatRow, CopilotUsageRow } from './github-copilot.types';
+import { CopilotMemberRow, CopilotSeatRow, CopilotUsageRow, CopilotBillingLineRow } from './github-copilot.types';
+import { monthsInLookback } from './github-copilot-billing';
 
 const GITHUB_API = 'https://api.github.com';
 const API_VERSION = '2022-11-28';
@@ -47,6 +48,12 @@ function permissionHint(status: number, path: string): string | undefined {
       return (
         'Token needs Organization permissions: Copilot metrics (read). ' +
         'Also confirm Copilot usage metrics is enabled for the org in GitHub settings.'
+      );
+    }
+    if (path.includes('/settings/billing/')) {
+      return (
+        'Token needs Organization permissions: Billing (read) for usage reports. ' +
+        'Fine-grained PAT: enable Organization billing; classic PAT: manage_billing:org + read:org.'
       );
     }
     if (path.includes('/members') || path.includes('/teams')) {
@@ -261,6 +268,99 @@ export class GitHubCopilotClient {
   async fetchUsers1DayUsage(day: string): Promise<CopilotUsageRow[]> {
     const path = `${this.metricsPath('users-1-day')}?day=${encodeURIComponent(day)}`;
     return this.fetchMetricsReport(path);
+  }
+
+  /**
+   * GitHub billing AI credit usage — same net/gross fields as the downloadable CSV.
+   * Requires org admin + enhanced billing platform (see GitHub billing usage REST API).
+   */
+  async fetchAiCreditUsage(params: {
+    year: number;
+    month: number;
+    day?: number;
+    user?: string;
+  }): Promise<CopilotBillingLineRow[]> {
+    const q = new URLSearchParams({
+      year: String(params.year),
+      month: String(params.month),
+    });
+    if (params.day != null) q.set('day', String(params.day));
+    if (params.user) q.set('user', params.user);
+    const path = `/organizations/${encodeURIComponent(this.orgSlug)}/settings/billing/ai_credit/usage?${q}`;
+    const body = await this.request<Record<string, unknown>>('GET', path);
+    return this.normalizeAiCreditUsage(body, params.user);
+  }
+
+  /** Fetch AI credit billing for lookback window (org-wide per month, then per-user fallback). */
+  async fetchAiCreditUsageForLookback(
+    logins: string[],
+    lookbackDays = 35,
+  ): Promise<CopilotBillingLineRow[]> {
+    const months = monthsInLookback(lookbackDays);
+    const uniqueLogins = [...new Set(logins.map((l) => l.trim()).filter(Boolean))];
+    const rows: CopilotBillingLineRow[] = [];
+    for (const { year, month } of months) {
+      let monthRows: CopilotBillingLineRow[] = [];
+      try {
+        monthRows = await this.fetchAiCreditUsage({ year, month });
+      } catch (err) {
+        if (err instanceof GitHubCopilotApiError && (err.status === 404 || err.status === 403)) {
+          throw err;
+        }
+      }
+      if (monthRows.length === 0 && uniqueLogins.length > 0) {
+        for (const login of uniqueLogins) {
+          try {
+            monthRows.push(...(await this.fetchAiCreditUsage({ year, month, user: login })));
+          } catch {
+            // User may have no billable usage in period.
+          }
+        }
+      }
+      rows.push(...monthRows);
+    }
+    return rows;
+  }
+
+  private normalizeAiCreditUsage(
+    body: Record<string, unknown>,
+    fallbackUser?: string,
+  ): CopilotBillingLineRow[] {
+    const timePeriod = (body.timePeriod ?? {}) as Record<string, unknown>;
+    const year = num(timePeriod.year);
+    const month = num(timePeriod.month);
+    const day = num(timePeriod.day, 0);
+    const responseUser = str(body.user ?? fallbackUser ?? '');
+    const defaultDate =
+      year && month
+        ? `${year}-${String(month).padStart(2, '0')}-${String(day || 1).padStart(2, '0')}`
+        : '';
+
+    const items = Array.isArray(body.usageItems) ? body.usageItems : [];
+    const rows: CopilotBillingLineRow[] = [];
+    for (const raw of items) {
+      if (!raw || typeof raw !== 'object') continue;
+      const item = raw as Record<string, unknown>;
+      const itemUser = str(
+        item.username ?? item.user ?? item.user_login ?? item.userLogin ?? responseUser,
+      );
+      const itemDate = str(item.date ?? item.usage_date ?? defaultDate).slice(0, 10);
+      if (!itemUser || !itemDate) continue;
+      rows.push({
+        usageDate: itemDate,
+        githubLogin: itemUser,
+        product: str(item.product, 'copilot'),
+        sku: str(item.sku, 'copilot_ai_credit'),
+        model: str(item.model),
+        unitType: str(item.unitType ?? item.unit_type, 'ai-credits'),
+        grossQuantity: num(item.grossQuantity ?? item.quantity ?? item.gross_quantity),
+        grossAmount: num(item.grossAmount ?? item.gross_amount),
+        discountAmount: num(item.discountAmount ?? item.discount_amount),
+        netAmount: num(item.netAmount ?? item.net_amount),
+        rawPayload: item,
+      });
+    }
+    return rows;
   }
 
   private metricsPath(report: string): string {

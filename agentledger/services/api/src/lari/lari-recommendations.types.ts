@@ -1,4 +1,7 @@
+import type { UserUtilizationRow } from '../analytics/user-value.types';
+import type { PerUserAnalyticsMode } from '../tenant/per-user-analytics';
 import { Recommendation } from './lari.types';
+import type { ModelRate } from './model-equivalence';
 
 /** Priority band for actionable savings / configuration recommendations. */
 export type RecommendationPriority = 'low' | 'medium' | 'high' | 'critical';
@@ -9,7 +12,9 @@ export type RecommendationCategory =
   | 'provider_value'
   | 'agent_economics'
   | 'attribution'
-  | 'configuration';
+  | 'configuration'
+  | 'model_substitution'
+  | 'user_value';
 
 export interface LariActionableRecommendation {
   id: string;
@@ -26,7 +31,7 @@ export interface LariActionableRecommendation {
   /** Composite ML score in [0,100] — higher = more urgent / higher expected impact. */
   mlScore: number;
   evidence: string[];
-  relatedEntity?: { type: 'agent' | 'provider' | 'plan' | 'user'; id: string };
+  relatedEntity?: { type: 'agent' | 'provider' | 'plan' | 'user' | 'model'; id: string };
 }
 
 export interface ProviderValueRanking {
@@ -85,4 +90,15 @@ export interface LariRecommendationsInput {
   agentProviderSpend: Array<{ agentId: string; provider: string; costUsd: number }>;
   copilotInactiveSeats?: number;
   copilotSeatMonthlyCost?: number;
+  modelUsage: Array<{
+    provider: string;
+    model: string;
+    inputTokens: number;
+    outputTokens: number;
+    costUsd: number;
+    calls: number;
+  }>;
+  priceBook: ModelRate[];
+  userUtilization?: UserUtilizationRow[];
+  perUserMode?: PerUserAnalyticsMode;
 }

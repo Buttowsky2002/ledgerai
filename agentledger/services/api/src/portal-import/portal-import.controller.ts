@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
 
 import { Type } from 'class-transformer';
 
@@ -60,6 +60,8 @@ class PortalFileDto {
 
   @IsOptional() @ValidateNested() @Type(() => ColumnMappingDto) mapping?: ColumnMappingDto;
 
+  @IsOptional() @IsString() provider?: string;
+
 }
 
 
@@ -71,6 +73,8 @@ class AnthropicPortalPreviewDto {
   @IsOptional() @IsString() fileName?: string;
 
   @IsOptional() @ValidateNested() @Type(() => ColumnMappingDto) mapping?: ColumnMappingDto;
+
+  @IsOptional() @IsString() provider?: string;
 
 }
 
@@ -85,6 +89,8 @@ class AnthropicPortalUploadDto {
   @IsOptional() @ValidateNested() @Type(() => ColumnMappingDto) mapping?: ColumnMappingDto;
 
   @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => PortalFileDto) files?: PortalFileDto[];
+
+  @IsOptional() @IsString() provider?: string;
 
   @IsOptional() @IsString() connectorId?: string;
 
@@ -115,6 +121,8 @@ export class PortalImportController {
       fileName: dto.fileName,
 
       mapping: dto.mapping,
+
+      provider: dto.provider,
 
     });
 
@@ -158,8 +166,25 @@ export class PortalImportController {
 
       fileName: dto.fileName,
 
+      provider: dto.provider,
+
     });
 
+  }
+
+  /** List portal billing import runs (new runs + legacy audit entries). */
+  @Roles('admin')
+  @Get('runs')
+  listRuns(@Query('limit') limit?: string) {
+    const n = limit ? Number(limit) : 50;
+    return this.portalImport.listImportRuns(Number.isFinite(n) ? n : 50);
+  }
+
+  /** Delete imported spend from one run — updates platform totals immediately. */
+  @Roles('admin')
+  @Delete('runs/:runId')
+  deleteRun(@Param('runId') runId: string) {
+    return this.portalImport.deleteImportRun(runId);
   }
 
 }

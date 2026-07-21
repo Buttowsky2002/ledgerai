@@ -27,6 +27,8 @@ const CATEGORY_LABEL: Record<string, string> = {
   agent_economics: 'Agent economics',
   attribution: 'Attribution',
   configuration: 'Configuration',
+  model_substitution: 'Model right-sizing',
+  user_value: 'Platform usage',
 };
 
 function RecommendationRow({ rec }: { rec: LariActionableRecommendation }) {

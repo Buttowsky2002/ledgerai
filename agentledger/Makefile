@@ -36,7 +36,10 @@ test-sdk-typescript:
 # (migrations + dev role) and ClickHouse (MVs for analytics).
 e2e:
 	docker compose up -d postgres pg-dev-init clickhouse
-	cd $(API_DIR) && npm run test:e2e
+	cd $(API_DIR) && \
+		BADGERIQ_CONNECTOR_SCHEDULER_ENABLED=false \
+		BADGERIQ_COPILOT_SCHEDULER_ENABLED=false \
+		npm run test:e2e
 
 # Advisory gateway load test (P6-F1): policy-overhead p95 < 75ms at ~1k RPS.
 # Needs a running gateway pointed at a near-zero-latency mock upstream + k6 on

@@ -5,6 +5,18 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card, DataTable, PageHeader, Stat, usd } from '@/components/ui';
 import { combinedAiCost } from '@/lib/combined-ai-cost';
 import {
+  AI_VENDORS,
+  PLAN_TIERS,
+  PLAN_TIER_LABELS,
+  aggregateByVendor,
+  costTypeForTier,
+  defaultUnitUsd,
+  lineItemFor,
+  parseStoredPlan,
+  vendorLabel,
+  type PlanTier,
+} from '@/lib/fixed-cost-catalog';
+import {
   createFixedCost,
   deleteFixedCost,
   fetchFixedCostRows,
@@ -12,50 +24,7 @@ import {
   fetchTotalCostOfAi,
   updateFixedCost,
 } from '@/lib/api/fixed-costs';
-import type { FixedCostRow, FixedCostType, FixedCostVendor, PlanPreset } from '@/types/fixed-costs';
-
-const PLAN_PRESETS: PlanPreset[] = [
-  {
-    id: 'chatgpt-team',
-    label: 'ChatGPT Team',
-    vendor: 'openai',
-    costType: 'seat_license',
-    lineItem: 'ChatGPT Team',
-    defaultUnitUsd: 30,
-  },
-  {
-    id: 'chatgpt-enterprise',
-    label: 'ChatGPT Enterprise',
-    vendor: 'openai',
-    costType: 'subscription',
-    lineItem: 'ChatGPT Enterprise',
-    defaultUnitUsd: null,
-  },
-  {
-    id: 'claude-team',
-    label: 'Claude Team',
-    vendor: 'anthropic',
-    costType: 'seat_license',
-    lineItem: 'Claude Team',
-    defaultUnitUsd: 30,
-  },
-  {
-    id: 'claude-enterprise',
-    label: 'Claude Enterprise',
-    vendor: 'anthropic',
-    costType: 'subscription',
-    lineItem: 'Claude Enterprise',
-    defaultUnitUsd: null,
-  },
-  {
-    id: 'custom',
-    label: 'Custom',
-    vendor: 'other',
-    costType: 'seat_license',
-    lineItem: '',
-    defaultUnitUsd: null,
-  },
-];
+import type { FixedCostRow, FixedCostType, FixedCostVendor } from '@/types/fixed-costs';
 
 function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -77,16 +46,6 @@ function periodMonthFromInput(monthValue: string): string {
   return `${monthValue}-01`;
 }
 
-function vendorLabel(v: string): string {
-  if (v === 'openai') return 'OpenAI';
-  if (v === 'anthropic') return 'Anthropic';
-  return v;
-}
-
-function costTypeLabel(t: string): string {
-  return t.replace(/_/g, ' ');
-}
-
 type EditKey = {
   periodMonth: string;
   vendor: FixedCostVendor;
@@ -105,19 +64,22 @@ export function FixedOverheadClient() {
   const [impact, setImpact] = useState({ attributable: 0, fixed: 0, total: 0 });
 
   const [editKey, setEditKey] = useState<EditKey | null>(null);
-  const [presetId, setPresetId] = useState('chatgpt-team');
+  const [vendor, setVendor] = useState<FixedCostVendor>('openai');
+  const [planTier, setPlanTier] = useState<PlanTier>('team');
   const [billingMonth, setBillingMonth] = useState(() => monthInputValue(isoDate(new Date())));
   const [seats, setSeats] = useState('');
   const [unitCostUsd, setUnitCostUsd] = useState('');
   const [costUsd, setCostUsd] = useState('');
   const [costManual, setCostManual] = useState(false);
-  const [lineItem, setLineItem] = useState('');
+  const [customLineItem, setCustomLineItem] = useState('');
   const [note, setNote] = useState('');
 
-  const preset = useMemo(
-    () => PLAN_PRESETS.find((p) => p.id === presetId) ?? PLAN_PRESETS[0],
-    [presetId],
+  const lineItem = useMemo(
+    () => lineItemFor(vendor, planTier, vendor === 'other' ? customLineItem : undefined),
+    [vendor, planTier, customLineItem],
   );
+
+  const vendorTotals = useMemo(() => aggregateByVendor(rows), [rows]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -152,38 +114,31 @@ export function FixedOverheadClient() {
 
   useEffect(() => {
     if (editKey) return;
-    if (preset.defaultUnitUsd != null) {
-      setUnitCostUsd(String(preset.defaultUnitUsd));
+    const def = defaultUnitUsd(vendor, planTier);
+    if (def !== null) {
+      setUnitCostUsd(String(def));
+      if (planTier === 'free') setCostUsd('0');
     } else {
       setUnitCostUsd('');
     }
-    if (preset.id !== 'custom') {
-      setLineItem(preset.lineItem);
-    }
-  }, [preset, editKey]);
+  }, [vendor, planTier, editKey]);
 
   function resetForm() {
     setEditKey(null);
-    setPresetId('chatgpt-team');
+    setVendor('openai');
+    setPlanTier('team');
     setBillingMonth(monthInputValue(isoDate(new Date())));
     setSeats('');
     setUnitCostUsd('30');
     setCostUsd('');
     setCostManual(false);
-    setLineItem('ChatGPT Team');
+    setCustomLineItem('');
     setNote('');
     setError(null);
   }
 
   function startEdit(row: FixedCostRow) {
-    const match =
-      PLAN_PRESETS.find(
-        (p) =>
-          p.vendor === row.vendor &&
-          p.costType === row.cost_type &&
-          (p.lineItem === row.line_item || (p.id === 'custom' && row.vendor === 'other')),
-      ) ??
-      PLAN_PRESETS.find((p) => p.id === 'custom');
+    const parsed = parseStoredPlan(row.vendor, row.line_item || '', row.cost_type);
 
     setEditKey({
       periodMonth: String(row.period_month).slice(0, 10),
@@ -191,13 +146,14 @@ export function FixedOverheadClient() {
       costType: row.cost_type,
       lineItem: row.line_item || undefined,
     });
-    setPresetId(match?.id ?? 'custom');
+    setVendor(parsed.vendor);
+    setPlanTier(parsed.tier);
     setBillingMonth(monthInputValue(String(row.period_month)));
     setSeats(row.seats > 0 ? String(row.seats) : '');
     setUnitCostUsd(row.unit_cost_usd > 0 ? String(row.unit_cost_usd) : '');
     setCostUsd(String(row.cost_usd));
     setCostManual(true);
-    setLineItem(row.line_item || '');
+    if (parsed.vendor === 'other') setCustomLineItem(row.line_item || '');
     setNote(row.note || '');
     setError(null);
     setSuccess(null);
@@ -220,8 +176,8 @@ export function FixedOverheadClient() {
       return;
     }
 
-    if (preset.id === 'custom' && !lineItem.trim()) {
-      setError('Enter a line item name for custom plans.');
+    if (vendor === 'other' && !customLineItem.trim()) {
+      setError('Enter a name for the custom vendor/plan.');
       return;
     }
 
@@ -236,12 +192,13 @@ export function FixedOverheadClient() {
       return;
     }
 
+    const costType = costTypeForTier(planTier);
     const payload = {
       periodMonth,
-      vendor: preset.vendor,
-      costType: preset.costType,
+      vendor,
+      costType,
       costUsd: total,
-      lineItem: lineItem.trim() || preset.lineItem || undefined,
+      lineItem,
       seats: seatsNum,
       unitCostUsd: unitNum,
       note: note.trim() || undefined,
@@ -277,7 +234,7 @@ export function FixedOverheadClient() {
   }
 
   async function onDelete(row: FixedCostRow) {
-    const label = `${String(row.period_month).slice(0, 7)} · ${vendorLabel(row.vendor)} · ${row.line_item || row.cost_type}`;
+    const label = `${String(row.period_month).slice(0, 7)} · ${row.line_item || vendorLabel(row.vendor)}`;
     if (!window.confirm(`Delete fixed overhead entry?\n\n${label}`)) return;
 
     setError(null);
@@ -308,25 +265,17 @@ export function FixedOverheadClient() {
 
   const tableRows = rows.map((r) => ({
     month: String(r.period_month).slice(0, 7),
-    plan: r.line_item || costTypeLabel(r.cost_type),
+    plan: r.line_item || '—',
     vendor: vendorLabel(r.vendor),
     seats: r.seats > 0 ? String(r.seats) : '—',
     unit: r.unit_cost_usd > 0 ? usd(r.unit_cost_usd) : '—',
     total: usd(r.cost_usd),
     actions: (
       <div className="flex justify-end gap-2">
-        <button
-          type="button"
-          className="text-xs text-accent hover:underline"
-          onClick={() => startEdit(r)}
-        >
+        <button type="button" className="text-xs text-accent hover:underline" onClick={() => startEdit(r)}>
           Edit
         </button>
-        <button
-          type="button"
-          className="text-xs text-neg hover:underline"
-          onClick={() => void onDelete(r)}
-        >
+        <button type="button" className="text-xs text-neg hover:underline" onClick={() => void onDelete(r)}>
           Delete
         </button>
       </div>
@@ -338,7 +287,7 @@ export function FixedOverheadClient() {
       <PageHeader
         eyebrow="Admin"
         title="Fixed overhead"
-        subtitle="Seat licenses and subscriptions (ChatGPT, Claude) — un-attributable AI spend"
+        subtitle="Seat licenses and subscriptions by vendor — rolls into Total cost of AI on Overview"
         actions={
           <Link href="/" className="text-sm text-muted hover:text-gray-200">
             Back to overview
@@ -357,8 +306,72 @@ export function FixedOverheadClient() {
         />
       </div>
 
-      <Card title={editKey ? 'Edit entry' : 'Add seats & plan'} subtitle="Costs roll into Total cost of AI on Overview">
-        <form onSubmit={(e) => void onSubmit(e)} className="space-y-4">
+      {vendorTotals.length > 0 && (
+        <Card title="Overhead by vendor" subtitle="Fixed spend in selected range — matches Overview breakdown">
+          <div className="flex flex-wrap gap-3">
+            {vendorTotals.map((v) => (
+              <div
+                key={v.vendor}
+                className="rounded-lg border border-edge bg-panel px-4 py-3 min-w-[8rem]"
+              >
+                <p className="text-xs text-muted">{v.label}</p>
+                <p className="num text-lg font-semibold text-gray-100">{usd(v.total)}</p>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      <Card title={editKey ? 'Edit entry' : 'Add seats & plan'} subtitle={`Saving as: ${lineItem}`}>
+        <form onSubmit={(e) => void onSubmit(e)} className="space-y-5">
+          <div>
+            <span className="mb-2 block text-sm text-muted">Vendor</span>
+            <div className="flex flex-wrap gap-2">
+              {AI_VENDORS.map((v) => (
+                <button
+                  key={v.id}
+                  type="button"
+                  disabled={!!editKey}
+                  onClick={() => setVendor(v.id)}
+                  className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
+                    vendor === v.id
+                      ? 'border-accent bg-accent/20 text-white'
+                      : 'border-edge text-muted hover:border-accent/40 hover:text-gray-200'
+                  } disabled:opacity-50`}
+                >
+                  {v.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <span className="mb-2 block text-sm text-muted">Plan tier</span>
+            <div className="inline-flex rounded-lg border border-edge p-1">
+              {PLAN_TIERS.map((tier) => (
+                <button
+                  key={tier}
+                  type="button"
+                  disabled={!!editKey}
+                  onClick={() => setPlanTier(tier)}
+                  className={`rounded-md px-4 py-2 text-sm capitalize ${
+                    planTier === tier ? 'bg-accent/25 text-white' : 'text-muted hover:text-gray-200'
+                  } disabled:opacity-50`}
+                >
+                  {PLAN_TIER_LABELS[tier]}
+                </button>
+              ))}
+            </div>
+            {planTier === 'enterprise' && (
+              <p className="mt-2 text-xs text-muted">
+                Enterprise is usually a custom contract — enter total cost manually.
+              </p>
+            )}
+            {planTier === 'free' && (
+              <p className="mt-2 text-xs text-muted">Free tier — cost defaults to $0 unless you track paid add-ons.</p>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <label className="block text-sm">
               <span className="mb-1 block text-muted">Billing month</span>
@@ -372,31 +385,15 @@ export function FixedOverheadClient() {
               />
             </label>
 
-            <label className="block text-sm">
-              <span className="mb-1 block text-muted">Plan</span>
-              <select
-                className="w-full rounded border border-edge bg-canvas px-3 py-2 text-sm"
-                value={presetId}
-                onChange={(e) => setPresetId(e.target.value)}
-                disabled={!!editKey}
-              >
-                {PLAN_PRESETS.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            {preset.id === 'custom' && (
-              <label className="block text-sm">
-                <span className="mb-1 block text-muted">Line item</span>
+            {vendor === 'other' && (
+              <label className="block text-sm sm:col-span-2">
+                <span className="mb-1 block text-muted">Custom plan name</span>
                 <input
                   type="text"
                   className="w-full rounded border border-edge bg-canvas px-3 py-2 text-sm"
-                  value={lineItem}
-                  onChange={(e) => setLineItem(e.target.value)}
-                  placeholder="e.g. Platform fee"
+                  value={customLineItem}
+                  onChange={(e) => setCustomLineItem(e.target.value)}
+                  placeholder="e.g. Acme AI Platform Team"
                   disabled={!!editKey}
                 />
               </label>
@@ -414,7 +411,7 @@ export function FixedOverheadClient() {
                   setSeats(e.target.value);
                   setCostManual(false);
                 }}
-                placeholder={preset.costType === 'subscription' ? 'Optional' : 'e.g. 10'}
+                placeholder={planTier === 'enterprise' ? 'Optional' : 'e.g. 10'}
               />
             </label>
 
@@ -430,7 +427,11 @@ export function FixedOverheadClient() {
                   setUnitCostUsd(e.target.value);
                   setCostManual(false);
                 }}
-                placeholder={preset.defaultUnitUsd != null ? String(preset.defaultUnitUsd) : 'Manual total below'}
+                placeholder={
+                  defaultUnitUsd(vendor, planTier) != null
+                    ? String(defaultUnitUsd(vendor, planTier))
+                    : 'Enter unit price'
+                }
               />
             </label>
 
@@ -462,17 +463,7 @@ export function FixedOverheadClient() {
             />
           </label>
 
-          {error && (
-            <div className="text-sm text-neg">
-              <p>{error}</p>
-              {!error.includes('Admin role') && (
-                <p className="mt-1 text-xs text-muted">
-                  On an upgraded local stack, run <code className="rounded bg-canvas px-1">make migrate</code> to
-                  apply ClickHouse migration 012 (fixed_costs).
-                </p>
-              )}
-            </div>
-          )}
+          {error && <p className="text-sm text-neg">{error}</p>}
           {success && <p className="text-sm text-pos">{success}</p>}
 
           <div className="flex flex-wrap gap-3">
@@ -525,8 +516,8 @@ export function FixedOverheadClient() {
           <DataTable
             columns={[
               { key: 'month', label: 'Month' },
-              { key: 'plan', label: 'Plan' },
               { key: 'vendor', label: 'Vendor' },
+              { key: 'plan', label: 'Plan' },
               { key: 'seats', label: 'Seats' },
               { key: 'unit', label: 'Unit $' },
               { key: 'total', label: 'Total', align: 'right' },

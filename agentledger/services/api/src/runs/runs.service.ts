@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { ChParam, ClickHouseService } from '../clickhouse/clickhouse.service';
+import { ChParam } from '../clickhouse/clickhouse.service';
+import { AnalyticsStore } from '../analytics-store/analytics-store';
 
 export interface RunDetail {
   run: Record<string, unknown>;
@@ -18,7 +19,7 @@ export interface RunDetail {
  */
 @Injectable()
 export class RunsService {
-  constructor(private readonly ch: ClickHouseService) {}
+  constructor(private readonly ch: AnalyticsStore) {}
 
   async get(runId: string): Promise<RunDetail> {
     if (!runId) {

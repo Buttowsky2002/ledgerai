@@ -11,8 +11,9 @@ import {
   Matches,
   Min,
 } from 'class-validator';
+import { FIXED_COST_VENDORS } from './fixed-cost-catalog';
 
-export const FIXED_COST_VENDORS = ['openai', 'anthropic', 'other'] as const;
+export { FIXED_COST_VENDORS };
 export const FIXED_COST_TYPES = [
   'seat_license',
   'subscription',

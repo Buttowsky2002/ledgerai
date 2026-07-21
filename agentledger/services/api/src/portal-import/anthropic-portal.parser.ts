@@ -8,6 +8,7 @@ import {
   type ResolvedColumnMapping,
 } from './column-mapping';
 import { detectPortalCsvFormat, type FormatDetection } from './csv-format';
+import { platformDisplayName, resolvePortalProvider } from './portal-providers';
 import { detectDelimiter, parseCsv, stripBom } from './csv-parse';
 
 export const PORTAL_IMPORT_SOURCE = 'portal_import';
@@ -19,6 +20,9 @@ export interface PortalParseResult {
   format: FormatDetection;
   suggestion: MappingSuggestion;
   mappingUsed: ColumnMappingByName | null;
+  /** Resolved billing provider for imported rows (null when user must pick). */
+  provider: string | null;
+  requiresProvider: boolean;
   rows: Record<string, unknown>[];
   errors: { line: number; message: string }[];
   preview: Record<string, unknown>[];
@@ -62,8 +66,17 @@ function parseDay(raw: string): string | undefined {
   return d.toISOString().slice(0, 10);
 }
 
-function idempotencyKey(day: string, user: string, model: string, cost: number, line: number): string {
-  const raw = `portal:anthropic:${day}:${user}:${model}:${cost.toFixed(6)}:${line}`;
+export function portalRowIdempotencyKey(
+  provider: string,
+  day: string,
+  user: string,
+  model: string,
+  cost: number,
+  inputTokens = 0,
+  outputTokens = 0,
+  product = '',
+): string {
+  const raw = `portal:${provider}:${day}:${user}:${product}:${model}:${cost.toFixed(6)}:${inputTokens}:${outputTokens}`;
   return createHash('sha256').update(raw).digest('hex').slice(0, 32);
 }
 
@@ -125,9 +138,10 @@ function parseGrid(
   grid: string[][],
   headerRow: number,
   mapping: ResolvedColumnMapping,
+  provider: string,
 ): Omit<
   PortalParseResult,
-  'headers' | 'headerRow' | 'delimiter' | 'format' | 'suggestion' | 'mappingUsed'
+  'headers' | 'headerRow' | 'delimiter' | 'format' | 'suggestion' | 'mappingUsed' | 'provider' | 'requiresProvider'
 > {
   const errors: { line: number; message: string }[] = [];
   const rows: Record<string, unknown>[] = [];
@@ -180,27 +194,43 @@ function parseGrid(
     if (!minDay || day < minDay) minDay = day;
     if (!maxDay || day > maxDay) maxDay = day;
 
+    const inputTokens =
+      mapping.input_tokens >= 0 && cells[mapping.input_tokens]
+        ? Number(cells[mapping.input_tokens]) || 0
+        : 0;
+    const outputTokens =
+      mapping.output_tokens >= 0 && cells[mapping.output_tokens]
+        ? Number(cells[mapping.output_tokens]) || 0
+        : 0;
+
     const row: Record<string, unknown> = {
-      idempotency_key: idempotencyKey(day, userLabel, model, cost, line),
+      idempotency_key: portalRowIdempotencyKey(
+        provider,
+        day,
+        userLabel,
+        model,
+        cost,
+        inputTokens,
+        outputTokens,
+        product,
+      ),
       timestamp: `${day}T12:00:00.000Z`,
-      provider: 'anthropic',
-      platform_display_name: 'Anthropic',
+      provider,
+      platform_display_name: platformDisplayName(provider),
       model,
+      product: product || undefined,
       cost_usd: cost,
+      cost_source: 'portal_billing',
       user_id: userLabel,
       source: PORTAL_IMPORT_SOURCE,
       status: 'ok',
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
     };
     if (userFields.email) row.user_email = userFields.email;
     if (userFields.name) row.user_name = userFields.name;
     if (userFields.providerUserId) row.provider_user_id = userFields.providerUserId;
     if (userFields.uuid) row.account_uuid = userFields.uuid;
-    if (mapping.input_tokens >= 0 && cells[mapping.input_tokens]) {
-      row.input_tokens = Number(cells[mapping.input_tokens]) || 0;
-    }
-    if (mapping.output_tokens >= 0 && cells[mapping.output_tokens]) {
-      row.output_tokens = Number(cells[mapping.output_tokens]) || 0;
-    }
 
     rows.push(row);
   }
@@ -227,6 +257,7 @@ export function parseAnthropicPortalCsv(
   csvText: string,
   userMapping?: ColumnMappingByName,
   fileName?: string,
+  providerOverride?: string,
 ): PortalParseResult {
   const cleaned = stripBom(csvText.trim());
   const delimiter = detectDelimiter(cleaned);
@@ -251,6 +282,8 @@ export function parseAnthropicPortalCsv(
       format: emptyFormat,
       suggestion: suggestColumnMapping([]),
       mappingUsed: null,
+      provider: null,
+      requiresProvider: false,
       rows: [],
       errors: [{ line: 1, message: 'CSV is empty' }],
       preview: [],
@@ -267,6 +300,8 @@ export function parseAnthropicPortalCsv(
     reportThroughDay: format.reportTo,
   });
   const mappingByName = userMapping ?? mappingFromSuggestion(suggestion, format);
+  const provider = resolvePortalProvider(format.format, providerOverride);
+  const requiresProvider = format.billable && !provider;
 
   if (!format.billable) {
     return {
@@ -276,6 +311,8 @@ export function parseAnthropicPortalCsv(
       format,
       suggestion,
       mappingUsed: null,
+      provider,
+      requiresProvider: false,
       rows: [],
       errors: [{ line: headerRow + 1, message: format.hint }],
       preview: [],
@@ -295,6 +332,8 @@ export function parseAnthropicPortalCsv(
       format,
       suggestion,
       mappingUsed: null,
+      provider,
+      requiresProvider,
       rows: [],
       errors,
       preview: [],
@@ -311,6 +350,8 @@ export function parseAnthropicPortalCsv(
       format,
       suggestion,
       mappingUsed: mappingByName,
+      provider,
+      requiresProvider,
       rows: [],
       errors: [{ line: headerRow + 1, message: error ?? 'invalid column mapping' }],
       preview: [],
@@ -318,7 +359,24 @@ export function parseAnthropicPortalCsv(
     };
   }
 
-  const parsed = parseGrid(grid, headerRow, resolved);
+  if (requiresProvider) {
+    return {
+      headers,
+      headerRow,
+      delimiter,
+      format,
+      suggestion,
+      mappingUsed: mappingByName,
+      provider: null,
+      requiresProvider: true,
+      rows: [],
+      errors: [{ line: headerRow + 1, message: 'select a billing provider for this file' }],
+      preview: [],
+      stats: emptyStats,
+    };
+  }
+
+  const parsed = parseGrid(grid, headerRow, resolved, provider!);
   return {
     headers,
     headerRow,
@@ -326,6 +384,8 @@ export function parseAnthropicPortalCsv(
     format,
     suggestion,
     mappingUsed: mappingByName,
+    provider,
+    requiresProvider: false,
     ...parsed,
   };
 }

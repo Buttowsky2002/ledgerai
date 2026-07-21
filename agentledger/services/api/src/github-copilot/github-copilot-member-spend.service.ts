@@ -23,8 +23,14 @@ export interface MemberSpendQuery {
   language?: string;
 }
 
-const DISCLAIMER =
+const ESTIMATE_DISCLAIMER =
   'GitHub Copilot Business does not provide a per-user invoice. BadgerIQ estimates member spend using seat allocation, usage metrics, AI credit usage, and proportional overage allocation. All spend and ROI values are estimated or allocated — not exact invoice amounts.';
+
+const BILLING_DISCLAIMER =
+  'Credit overage amounts use GitHub billing API net amounts (same fields as the usage CSV export). Seat costs are prorated from your Copilot Business seat price. ROI and productivity metrics remain modeled estimates.';
+
+const MIXED_DISCLAIMER =
+  'Some members use invoice-grade billing data from GitHub; others fall back to estimated allocation where billing API rows are unavailable. Seat costs are prorated; ROI metrics remain modeled estimates.';
 
 @Injectable()
 export class CopilotMemberSpendService {
@@ -44,7 +50,7 @@ export class CopilotMemberSpendService {
         findings: [],
         filters: emptyFilters(),
         connections: [],
-        disclaimer: DISCLAIMER,
+        disclaimer: ESTIMATE_DISCLAIMER,
         recordsImported: 0,
       };
     }
@@ -57,57 +63,62 @@ export class CopilotMemberSpendService {
       connections[0]?.roiAssumptions as Partial<CopilotRoiAssumptions>,
     );
 
-    const [spendRows, seats, members, memberTeams, usageDetail] = await Promise.all([
-      this.prisma.withTenant(tenantId, (tx) =>
-        tx.githubCopilotMemberSpendDaily.findMany({
-          where: {
-            tenantId,
-            connectionId: { in: connectionIds },
-            usageDate: { gte: start, lte: end },
-            ...(query.team ? { teamSlug: query.team } : {}),
-            ...(query.user ? { githubLogin: query.user } : {}),
-            ...(query.utilizationStatus ? { utilizationStatus: query.utilizationStatus } : {}),
-          },
-        }),
-      ),
-      this.prisma.withTenant(tenantId, (tx) =>
-        tx.githubCopilotSeat.findMany({ where: { tenantId, connectionId: { in: connectionIds } } }),
-      ),
-      this.prisma.withTenant(tenantId, (tx) =>
-        tx.githubCopilotMember.findMany({ where: { tenantId, connectionId: { in: connectionIds } } }),
-      ),
-      this.prisma.withTenant(tenantId, (tx) =>
-        tx.githubCopilotMemberTeam.findMany({ where: { tenantId, connectionId: { in: connectionIds } } }),
-      ),
-      this.prisma.withTenant(tenantId, (tx) =>
-        tx.githubCopilotUsageDaily.findMany({
-          where: {
-            tenantId,
-            connectionId: { in: connectionIds },
-            usageDate: { gte: start, lte: end },
-            ...(query.model ? { model: query.model } : {}),
-            ...(query.editor ? { editor: query.editor } : {}),
-            ...(query.language ? { language: query.language } : {}),
-          },
-          select: {
-            githubLogin: true,
-            teamSlug: true,
-            model: true,
-            editor: true,
-            language: true,
-            usageDate: true,
-            linesAccepted: true,
-            chatTurns: true,
-          },
-        }),
-      ),
-    ]);
+    const [spendRows, seats, members, memberTeams, usageDetail] = await this.prisma.withTenant(
+      tenantId,
+      async (tx) => {
+        const [spendRows, seats, members, memberTeams, usageDetail] = await Promise.all([
+          tx.githubCopilotMemberSpendDaily.findMany({
+            where: {
+              tenantId,
+              connectionId: { in: connectionIds },
+              usageDate: { gte: start, lte: end },
+              ...(query.team ? { teamSlug: query.team } : {}),
+              ...(query.user ? { githubLogin: query.user } : {}),
+              ...(query.utilizationStatus ? { utilizationStatus: query.utilizationStatus } : {}),
+            },
+          }),
+          tx.githubCopilotSeat.findMany({ where: { tenantId, connectionId: { in: connectionIds } } }),
+          tx.githubCopilotMember.findMany({ where: { tenantId, connectionId: { in: connectionIds } } }),
+          tx.githubCopilotMemberTeam.findMany({ where: { tenantId, connectionId: { in: connectionIds } } }),
+          tx.githubCopilotUsageDaily.findMany({
+            where: {
+              tenantId,
+              connectionId: { in: connectionIds },
+              usageDate: { gte: start, lte: end },
+              ...(query.model ? { model: query.model } : {}),
+              ...(query.editor ? { editor: query.editor } : {}),
+              ...(query.language ? { language: query.language } : {}),
+            },
+            select: {
+              githubLogin: true,
+              teamSlug: true,
+              model: true,
+              editor: true,
+              language: true,
+              usageDate: true,
+              linesAccepted: true,
+              chatTurns: true,
+            },
+          }),
+        ]);
+        return [spendRows, seats, members, memberTeams, usageDetail] as const;
+      },
+    );
 
     const memberByLogin = new Map(members.map((m) => [m.githubLogin, m]));
     const teamNameBySlug = new Map(memberTeams.map((t) => [t.teamSlug, t.teamName]));
     const seatByLogin = new Map(seats.map((s) => [s.githubLogin, s]));
 
     const aggregated = aggregateSpendByMember(spendRows);
+    const hasBilling = spendRows.some((r) => r.costSource === 'billing_api');
+    const hasEstimate = spendRows.some((r) => r.costSource !== 'billing_api');
+    const disclaimer =
+      hasBilling && !hasEstimate
+        ? BILLING_DISCLAIMER
+        : hasBilling && hasEstimate
+          ? MIXED_DISCLAIMER
+          : ESTIMATE_DISCLAIMER;
+
     const memberRows: CopilotMemberSpendRow[] = [...aggregated.entries()].map(([login, agg]) => {
       const member = memberByLogin.get(login);
       const seat = seatByLogin.get(login);
@@ -135,13 +146,16 @@ export class CopilotMemberSpendService {
             ? round2(((agg.estimatedValueCreated - agg.totalAllocatedCost) / agg.totalAllocatedCost) * 100)
             : null,
         utilizationStatus: agg.utilizationStatus,
-        isEstimated: true as const,
+        isEstimated: agg.costSource !== 'billing_api',
+        costSource: agg.costSource,
+        billedNetUsd: agg.billedNetUsd > 0 ? round2(agg.billedNetUsd) : undefined,
+        billedGrossUsd: agg.billedGrossUsd > 0 ? round2(agg.billedGrossUsd) : undefined,
       };
     });
 
     memberRows.sort((a, b) => b.totalAllocatedCost - a.totalAllocatedCost);
 
-    const summary = buildSummary(memberRows, seats);
+    const summary = buildSummary(memberRows, seats, hasBilling && !hasEstimate);
     const charts = buildCharts(memberRows, spendRows, usageDetail);
     const findings = generateMemberSpendFindings({
       members: memberRows,
@@ -188,7 +202,7 @@ export class CopilotMemberSpendService {
         recordsImported: c.recordsImported,
         roiAssumptions: assumptions,
       })),
-      disclaimer: DISCLAIMER,
+      disclaimer,
       recordsImported,
     };
   }
@@ -207,6 +221,9 @@ type Agg = {
   estimatedHoursSaved: number;
   estimatedValueCreated: number;
   utilizationStatus: string;
+  costSource: 'billing_api' | 'estimate';
+  billedNetUsd: number;
+  billedGrossUsd: number;
 };
 
 function aggregateSpendByMember(
@@ -224,6 +241,9 @@ function aggregateSpendByMember(
     estimatedHoursSaved: unknown;
     estimatedValueCreated: unknown;
     utilizationStatus: string;
+    costSource?: string;
+    billedNetUsd?: unknown;
+    billedGrossUsd?: unknown;
   }[],
 ): Map<string, Agg> {
   const map = new Map<string, Agg>();
@@ -241,6 +261,9 @@ function aggregateSpendByMember(
       estimatedHoursSaved: 0,
       estimatedValueCreated: 0,
       utilizationStatus: r.utilizationStatus,
+      costSource: (r.costSource === 'billing_api' ? 'billing_api' : 'estimate') as Agg['costSource'],
+      billedNetUsd: 0,
+      billedGrossUsd: 0,
     };
     cur.seatCost += Number(r.seatCost);
     cur.estimatedCreditCost += Number(r.estimatedCreditCost);
@@ -252,6 +275,11 @@ function aggregateSpendByMember(
     cur.prSummaryCount += r.prSummaryCount;
     cur.estimatedHoursSaved += Number(r.estimatedHoursSaved);
     cur.estimatedValueCreated += Number(r.estimatedValueCreated);
+    cur.billedNetUsd += Number(r.billedNetUsd ?? 0);
+    cur.billedGrossUsd += Number(r.billedGrossUsd ?? 0);
+    if (r.costSource === 'billing_api') {
+      cur.costSource = 'billing_api';
+    }
     if (r.utilizationStatus === 'inactive' || r.utilizationStatus === 'negative_roi') {
       cur.utilizationStatus = r.utilizationStatus;
     }
@@ -263,6 +291,7 @@ function aggregateSpendByMember(
 function buildSummary(
   members: CopilotMemberSpendRow[],
   seats: { isActive: boolean; lastActivityAt: Date | null }[],
+  invoiceGradeCredits = false,
 ): CopilotMemberSpendSummary {
   const now = Date.now();
   const activeSeats = seats.filter((s) => {
@@ -307,7 +336,7 @@ function buildSummary(
     highestSpendMember: highestSpend,
     highestRoiMember: highestRoi,
     lowestRoiMember: lowestRoi,
-    isEstimated: true,
+    isEstimated: !invoiceGradeCredits,
   };
 }
 

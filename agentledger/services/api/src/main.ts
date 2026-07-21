@@ -11,17 +11,23 @@ import { env } from './env';
 import { assertDevTrustHeaderNotInProduction, shouldTrustDevTenantHeader } from './auth/dev-trust';
 import { docsBearerGuard, docsToken, resolveDocsMode } from './docs';
 
-/** Parse a Go-style listen address (":8094") or a bare port; default 8094. */
+/**
+ * Listen port: BADGERIQ_API_ADDR (Go-style ":8094" or bare port) wins, then
+ * PORT (set by Cloud Run / most PaaS runtimes), then 8094.
+ */
 function resolvePort(): number {
   const addr = env('BADGERIQ_API_ADDR');
   if (addr) {
     const port = Number(addr.replace(/^.*:/, ''));
     if (Number.isFinite(port) && port > 0) return port;
   }
+  const platformPort = Number(env('PORT'));
+  if (Number.isFinite(platformPort) && platformPort > 0) return platformPort;
   return 8094;
 }
 
 async function bootstrap(): Promise<void> {
+  console.log('[api] bootstrap starting');
   // Fail fast: dev tenant-header auth must never be enabled in production. This
   // runs before anything binds a port or a DB connection.
   assertDevTrustHeaderNotInProduction();
@@ -107,12 +113,29 @@ async function bootstrap(): Promise<void> {
   app.enableShutdownHooks();
 
   const port = resolvePort();
-  await app.listen(port, '0.0.0.0');
+  const host = '0.0.0.0';
+  console.log('[api] about to listen', {
+    host,
+    port,
+    BADGERIQ_API_ADDR: env('BADGERIQ_API_ADDR'),
+    PORT: env('PORT'),
+  });
+  await app.listen(port, host);
+  console.log('[api] listening', { host, port });
 }
 
+console.log('[api] main.ts loaded');
 void bootstrap().catch((err: unknown) => {
   // Startup failed (e.g. dev trust enabled in production) — report and exit
   // non-zero so an unsafe configuration never serves traffic.
+  const e = err as NodeJS.ErrnoException & { cause?: unknown };
+  console.error('[api] bootstrap failed', {
+    message: e?.message ?? String(err),
+    code: e?.code,
+    cause: e?.cause,
+    name: e?.name,
+    stack: e?.stack,
+  });
   process.stderr.write(`${err instanceof Error ? (err.stack ?? err.message) : String(err)}\n`);
   process.exit(1);
 });

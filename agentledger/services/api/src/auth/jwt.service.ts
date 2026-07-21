@@ -14,7 +14,7 @@ export interface AccessClaims {
 
 /**
  * Mints and verifies the API's own session JWTs (HS256, secret from
- * LEDGERAI_JWT_SECRET). Two token types, distinguished by `typ`: a short-lived
+ * BADGERIQ_JWT_SECRET). Two token types, distinguished by `typ`: a short-lived
  * access token (sent as `Authorization: Bearer`) and a longer-lived refresh token
  * (httpOnly cookie). Verification pins issuer + audience + the expected `typ`, so
  * a refresh token can never be replayed as an access token.
@@ -26,9 +26,11 @@ export class JwtService {
   private readonly refreshTtl: string;
 
   constructor() {
-    const raw = env('BADGERIQ_JWT_SECRET');
+    // BADGERIQ_JWT_SECRET (with legacy prefix aliases) wins; the unprefixed
+    // JWT_SECRET is accepted for Cloud Run MVP deployments.
+    const raw = env('BADGERIQ_JWT_SECRET') ?? process.env.JWT_SECRET;
     if (!raw) {
-      throw new Error('LEDGERAI_JWT_SECRET (or legacy AGENTLEDGER_JWT_SECRET) is required');
+      throw new Error('BADGERIQ_JWT_SECRET (or JWT_SECRET) is required');
     }
     this.secret = new TextEncoder().encode(raw);
     this.accessTtl = env('BADGERIQ_JWT_ACCESS_TTL') ?? '15m';

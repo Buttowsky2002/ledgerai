@@ -2,6 +2,10 @@
 # Fresh docker volumes run deploy/clickhouse/*.sql on first init — this script
 # is for upgrades when new numbered migrations are added.
 #
+# Keep upgrade runners out of the Linux entrypoint path: do not add migrate.sh
+# next to these *.sql files (initdb.d would hang on first boot). The shell
+# upgrade runner lives at deploy/clickhouse-migrate/migrate.sh.
+#
 # Usage (from agentledger/):
 #   powershell -ExecutionPolicy Bypass -File deploy/clickhouse/migrate.ps1
 #   make migrate
@@ -68,6 +72,10 @@ $bootstrapChecks = @(
     @{ Version = "013_spend_daily_by_user"; Check = "EXISTS TABLE agentledger.spend_daily_by_user" }
     @{ Version = "014_spend_daily_by_user_unassigned"; Check = "EXISTS VIEW agentledger.mv_spend_daily_by_user" }
     @{ Version = "015_lari_cfo_costs"; Check = "EXISTS TABLE agentledger.coding_agent_daily" }
+    @{ Version = "016_cursor_billing_split"; Check = "SELECT hasColumnInTable('agentledger', 'llm_calls', 'usage_value_usd')" }
+    @{ Version = "017_metered_cost"; Check = "SELECT hasColumnInTable('agentledger', 'llm_calls', 'metered_cost_usd')" }
+    @{ Version = "018_cost_basis"; Check = "EXISTS VIEW agentledger.v_cost_basis_daily" }
+    @{ Version = "020_coding_agent_lines"; Check = "SELECT hasColumnInTable('agentledger', 'coding_agent_daily', 'lines_committed')" }
 )
 foreach ($item in $bootstrapChecks) {
     if (Migration-Applied $item.Version) { continue }

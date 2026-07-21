@@ -13,6 +13,13 @@ import {
   RecommendationPriority,
 } from './lari-recommendations.types';
 import { Recommendation } from './lari.types';
+import { UTILIZATION_CAVEAT } from '../analytics/user-value.util';
+import {
+  blendedRate,
+  projectedCostUsd,
+  resolveModelRate,
+  substitutionCandidates,
+} from './model-equivalence';
 
 const PRIORITY_RANK: Record<RecommendationPriority, number> = {
   critical: 0,
@@ -414,6 +421,251 @@ function configurationRecommendations(input: LariRecommendationsInput): LariActi
   return recs;
 }
 
+const MIN_MODEL_SPEND_USD = 25;
+const MIN_MONTHLY_SAVINGS_USD = 20;
+const MIN_SAVINGS_SHARE = 0.1;
+const MAX_MODEL_SUBSTITUTION_RECS = 3;
+
+const EVAL_CAVEAT =
+  'Run an offline eval of {candidate} on this workload before switching — quality regressions can erase cost savings.';
+
+/** Model substitution — same-family cheaper alternatives via price book + actual token mix. */
+export function modelSubstitutionRecs(
+  input: Pick<LariRecommendationsInput, 'modelUsage' | 'priceBook' | 'periodDays'>,
+): LariActionableRecommendation[] {
+  const { modelUsage, priceBook, periodDays } = input;
+  const factor = monthlyFactor(periodDays);
+  const candidates: Array<{
+    rec: LariActionableRecommendation;
+    monthlySavings: number;
+  }> = [];
+
+  for (const row of modelUsage) {
+    if (row.costUsd < MIN_MODEL_SPEND_USD) continue;
+
+    const totalTokens = row.inputTokens + row.outputTokens;
+    if (totalTokens <= 0) continue;
+
+    const inputShare = row.inputTokens / totalTokens;
+    const actualBlendedPerM = (row.costUsd / totalTokens) * 1_000_000;
+    const monthlyRunRate = row.costUsd * factor;
+
+    const alts = substitutionCandidates(
+      { provider: row.provider, model: row.model },
+      inputShare,
+      priceBook,
+    );
+    if (alts.length === 0) continue;
+
+    const best = alts[0]!;
+    const projected = projectedCostUsd(best, row.inputTokens, row.outputTokens);
+    const periodSavings = row.costUsd - projected;
+    if (periodSavings <= 0) continue;
+
+    const monthlySavings = periodSavings * factor;
+    const savingsFloor = Math.max(MIN_MONTHLY_SAVINGS_USD, monthlyRunRate * MIN_SAVINGS_SHARE);
+    if (monthlySavings < savingsFloor) continue;
+
+    const incumbentRate = resolveModelRate(row.provider, row.model, priceBook);
+    const incumbentListBlended = incumbentRate ? blendedRate(incumbentRate, inputShare) : 0;
+    const candidateBlended = blendedRate(best, inputShare);
+    const savingsPct = Math.round((periodSavings / row.costUsd) * 100);
+
+    const mlScore = compositeMlScore([
+      { weight: 0.5, value: Math.min(1, monthlySavings / 500) },
+      { weight: 0.3, value: Math.min(1, savingsPct / 50) },
+      { weight: 0.2, value: Math.min(1, row.costUsd / 1000) },
+    ]);
+
+    candidates.push({
+      monthlySavings,
+      rec: {
+        id: `model-substitution-${row.provider}-${row.model}`,
+        priority: priorityFromScore(mlScore),
+        category: 'model_substitution',
+        title: `Switch ${row.model} to ${best.model}`,
+        message: `${row.provider}/${row.model} ran $${usd(row.costUsd)} in-range at $${usd(actualBlendedPerM)}/1M tokens (blended). ${best.model} lists $${usd(candidateBlended)}/1M vs $${usd(incumbentListBlended)}/1M at your ${Math.round(inputShare * 100)}% input share — est. ${savingsPct}% savings.`,
+        action: EVAL_CAVEAT.replace('{candidate}', `${best.provider}/${best.model}`),
+        estimatedSavingsUsd: usd(monthlySavings),
+        estimatedImpactUsd: usd(periodSavings),
+        mlScore,
+        evidence: [
+          `provider=${row.provider}, model=${row.model}`,
+          `input_share=${Math.round(inputShare * 100)}%`,
+          `actual_blended_per_m=$${usd(actualBlendedPerM)}`,
+          `candidate=${best.provider}/${best.model}`,
+          `candidate_blended_per_m=$${usd(candidateBlended)}`,
+          `period_savings=$${usd(periodSavings)}`,
+        ],
+        relatedEntity: { type: 'model', id: `${row.provider}/${row.model}` },
+      },
+    });
+  }
+
+  return candidates
+    .sort((a, b) => b.monthlySavings - a.monthlySavings)
+    .slice(0, MAX_MODEL_SUBSTITUTION_RECS)
+    .map((c) => c.rec);
+}
+
+const MAX_INDIVIDUAL_UNUSED_RECS = 5;
+
+/** Platform usage — license optimization from seat assignments vs metered activity. */
+export function userValueRecs(
+  input: Pick<LariRecommendationsInput, 'userUtilization' | 'perUserMode' | 'periodDays'>,
+): LariActionableRecommendation[] {
+  const users = input.userUtilization ?? [];
+  const mode = input.perUserMode ?? 'team';
+  if (users.length === 0) return [];
+
+  const recs: LariActionableRecommendation[] = [];
+  const inactiveWithSeat = users.filter((u) => u.hasSeat && u.status === 'inactive');
+  const lowUseWithSeat = users.filter((u) => u.hasSeat && u.status === 'low_use');
+
+  if (mode === 'team') {
+    const byPlan = new Map<
+      string,
+      { planId: string; planName: string; provider: string; count: number; savings: number }
+    >();
+    for (const u of inactiveWithSeat) {
+      const key = u.planId ?? u.seatProvider ?? 'unknown';
+      const entry = byPlan.get(key) ?? {
+        planId: u.planId ?? key,
+        planName: u.planName ?? 'Unassigned plan',
+        provider: u.seatProvider ?? 'unknown',
+        count: 0,
+        savings: 0,
+      };
+      entry.count += 1;
+      entry.savings += u.seatMonthlyCostUsd;
+      byPlan.set(key, entry);
+    }
+    for (const group of byPlan.values()) {
+      const mlScore = compositeMlScore([
+        { weight: 0.5, value: Math.min(1, group.count / 10) },
+        { weight: 0.5, value: Math.min(1, group.savings / 500) },
+      ]);
+      recs.push({
+        id: `unused-platform-${group.planId}`,
+        priority: priorityFromScore(mlScore),
+        category: 'user_value',
+        title: `Reclaim ${group.count} unused ${group.provider} seat${group.count === 1 ? '' : 's'}`,
+        message: `${group.count} provisioned seat${group.count === 1 ? '' : 's'} on "${group.planName}" show no metered activity in-range — est. $${usd(group.savings)}/month in reclaimable license spend.`,
+        action: 'Review seat assignments and deprovision unused licenses before renewal.',
+        estimatedSavingsUsd: usd(group.savings),
+        mlScore,
+        evidence: [
+          `plan=${group.planName}`,
+          `provider=${group.provider}`,
+          `inactive_seats=${group.count}`,
+          UTILIZATION_CAVEAT,
+        ],
+        relatedEntity: { type: 'plan', id: group.planId },
+      });
+    }
+    const lowByPlan = new Map<
+      string,
+      { planId: string; planName: string; provider: string; count: number; savings: number }
+    >();
+    for (const u of lowUseWithSeat) {
+      const key = u.planId ?? u.seatProvider ?? 'unknown';
+      const entry = lowByPlan.get(key) ?? {
+        planId: u.planId ?? key,
+        planName: u.planName ?? 'Unassigned plan',
+        provider: u.seatProvider ?? 'unknown',
+        count: 0,
+        savings: 0,
+      };
+      entry.count += 1;
+      entry.savings += u.seatMonthlyCostUsd * 0.5;
+      lowByPlan.set(key, entry);
+    }
+    for (const group of lowByPlan.values()) {
+      const mlScore = compositeMlScore([
+        { weight: 0.4, value: Math.min(1, group.count / 10) },
+        { weight: 0.6, value: Math.min(1, group.savings / 300) },
+      ]);
+      recs.push({
+        id: `low-use-platform-${group.planId}`,
+        priority: priorityFromScore(mlScore * 0.85),
+        category: 'user_value',
+        title: `Review ${group.count} low-use ${group.provider} seat${group.count === 1 ? '' : 's'}`,
+        message: `${group.count} seat${group.count === 1 ? '' : 's'} on "${group.planName}" show minimal metered activity — est. $${usd(group.savings)}/month recoverable via downgrade or reassignment.`,
+        action: 'Confirm with team owners whether licenses can be downgraded or reassigned.',
+        estimatedSavingsUsd: usd(group.savings),
+        mlScore,
+        evidence: [
+          `plan=${group.planName}`,
+          `provider=${group.provider}`,
+          `low_use_seats=${group.count}`,
+          `savings_assumption=50% of seat cost`,
+          UTILIZATION_CAVEAT,
+        ],
+        relatedEntity: { type: 'plan', id: group.planId },
+      });
+    }
+    return recs;
+  }
+
+  const sortedInactive = [...inactiveWithSeat].sort(
+    (a, b) => b.seatMonthlyCostUsd - a.seatMonthlyCostUsd,
+  );
+  for (const u of sortedInactive.slice(0, MAX_INDIVIDUAL_UNUSED_RECS)) {
+    const mlScore = compositeMlScore([
+      { weight: 0.6, value: Math.min(1, u.seatMonthlyCostUsd / 100) },
+      { weight: 0.4, value: 1 },
+    ]);
+    recs.push({
+      id: `unused-platform-user-${u.userId}`,
+      priority: priorityFromScore(mlScore),
+      category: 'user_value',
+      title: `Unused platform access — ${u.displayName}`,
+      message: `Provisioned ${u.seatProvider ?? 'platform'} seat ($${usd(u.seatMonthlyCostUsd)}/mo) with no metered activity in-range.`,
+      action: 'Reassign or deprovision the license if platform access is no longer needed.',
+      estimatedSavingsUsd: usd(u.seatMonthlyCostUsd),
+      mlScore,
+      evidence: [
+        `user=${u.displayName}`,
+        `seat_provider=${u.seatProvider ?? 'unknown'}`,
+        `seat_monthly=$${usd(u.seatMonthlyCostUsd)}`,
+        UTILIZATION_CAVEAT,
+      ],
+      relatedEntity: { type: 'user', id: u.userId },
+    });
+  }
+
+  for (const u of users) {
+    if (!u.dailyCost || u.dailyCost.length < 7) continue;
+    const z = zScoreLast(u.dailyCost);
+    const callSlope = u.dailyCalls ? linearTrendSlope(u.dailyCalls) : 0;
+    if (z <= 3 || callSlope > 0) continue;
+
+    const mlScore = compositeMlScore([
+      { weight: 0.6, value: Math.min(1, z / 5) },
+      { weight: 0.4, value: callSlope <= 0 ? 1 : 0 },
+    ]);
+    recs.push({
+      id: `cost-without-activity-${u.userId}`,
+      priority: priorityFromScore(mlScore),
+      category: 'user_value',
+      title: `Cost spike without usage growth — ${u.displayName}`,
+      message: `Daily spend z-score ${z.toFixed(1)} while call volume is flat or declining — review license allocation vs metered usage.`,
+      action: 'Audit recent imports and seat assignments; confirm spend is attributed to active platform use.',
+      estimatedImpactUsd: usd(u.costUsd),
+      mlScore,
+      evidence: [
+        `user=${u.displayName}`,
+        `z_score=${z.toFixed(2)}`,
+        `call_trend_slope=${callSlope.toFixed(2)}`,
+        UTILIZATION_CAVEAT,
+      ],
+      relatedEntity: { type: 'user', id: u.userId },
+    });
+  }
+
+  return recs;
+}
+
 /** Orchestrator — pure, deterministic, auditable. */
 export function generateLariRecommendations(input: LariRecommendationsInput): {
   recommendations: LariActionableRecommendation[];
@@ -430,6 +682,8 @@ export function generateLariRecommendations(input: LariRecommendationsInput): {
     ...planRecommendations(input, providerRankings),
     ...agentEconomicsRecommendations(input.agentEconomics, input.periodDays),
     ...configurationRecommendations(input),
+    ...modelSubstitutionRecs(input),
+    ...userValueRecs(input),
   ];
 
   const recommendations = all.sort((a, b) => {

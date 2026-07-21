@@ -84,7 +84,7 @@ export class GitHubCopilotService {
 
     const secretRef = await this.secrets.storeSecret(dto.githubToken.trim());
     const roiAssumptions = mergeRoiAssumptions(dto.roiAssumptions);
-    const scheduleJson = dto.scheduleJson ?? { intervalMinutes: 60, enabled: true };
+    const scheduleJson = dto.scheduleJson ?? { intervalMinutes: 5, enabled: true };
 
     return this.prisma.withTenant(tenantId, async (tx) => {
       const connector = await tx.connector.create({
@@ -200,11 +200,9 @@ export class GitHubCopilotService {
     }
 
     const connectionIds = connections.map((c) => c.connectionId);
-    const [seats, usage, roiRows] = await Promise.all([
-      this.prisma.withTenant(tenantId, (tx) =>
+    const [seats, usage, roiRows] = await this.prisma.withTenant(tenantId, async (tx) => {
+      const [seats, usage, roiRows] = await Promise.all([
         tx.githubCopilotSeat.findMany({ where: { tenantId, connectionId: { in: connectionIds } } }),
-      ),
-      this.prisma.withTenant(tenantId, (tx) =>
         tx.githubCopilotUsageDaily.findMany({
           where: {
             tenantId,
@@ -212,8 +210,6 @@ export class GitHubCopilotService {
             usageDate: { gte: start, lte: end },
           },
         }),
-      ),
-      this.prisma.withTenant(tenantId, (tx) =>
         tx.githubCopilotRoiDaily.findMany({
           where: {
             tenantId,
@@ -221,8 +217,9 @@ export class GitHubCopilotService {
             usageDate: { gte: start, lte: end },
           },
         }),
-      ),
-    ]);
+      ]);
+      return [seats, usage, roiRows] as const;
+    });
 
     const assumptions = mergeRoiAssumptions(
       connections[0]?.roiAssumptions as Partial<CopilotRoiAssumptions>,

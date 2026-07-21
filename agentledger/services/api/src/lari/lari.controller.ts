@@ -1,6 +1,6 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { Type } from 'class-transformer';
-import { IsDateString, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsDateString, IsIn, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
 import { Roles } from '../auth/decorators';
 import { LariCfoViewService } from './lari-cfo-view.service';
 import { LariRecommendationsService } from './lari-recommendations.service';
@@ -10,6 +10,8 @@ class CfoViewQueryDto {
   @IsOptional() @IsDateString() endDate?: string;
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0) @Max(1) confidenceThreshold?: number;
   @IsOptional() @IsString() team?: string;
+  @IsOptional() @IsIn(['computed', 'metered', 'reconciled']) costBasis?: 'computed' | 'metered' | 'reconciled';
+  @IsOptional() @Type(() => Number) @IsNumber() @IsIn([7, 30, 90, 180, 365]) forecastDays?: number;
 }
 
 class RecommendationsQueryDto {
@@ -28,7 +30,14 @@ export class LariController {
   @Roles('viewer')
   @Get('cfo-view')
   getCfoView(@Query() q: CfoViewQueryDto) {
-    return this.cfoView.getCfoView(q.startDate, q.endDate, q.confidenceThreshold, q.team);
+    return this.cfoView.getCfoView(
+      q.startDate,
+      q.endDate,
+      q.confidenceThreshold,
+      q.team,
+      q.costBasis,
+      q.forecastDays,
+    );
   }
 
   /** Actionable savings + configuration recommendations from connected data sources. */

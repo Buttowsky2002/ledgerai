@@ -1,0 +1,105 @@
+# =============================================================================
+# BadgerIQ MVP — single deployable container for Google Cloud Run
+# =============================================================================
+#
+# One image, one Cloud Run service, one database:
+#   - dashboard (Next.js)      → 0.0.0.0:$PORT   UI at /, BFF proxy at /api/*,
+#                                                 /health /ready /version
+#   - control-plane API (Nest) → 127.0.0.1:8094  internal only
+#   - analytics backend        → Postgres (BADGERIQ_ANALYTICS_BACKEND=postgres);
+#                                 no ClickHouse / Redpanda in this deployment.
+#     Requires deploy/postgres migrations through 023_analytics_mvp.sql.
+#
+# Both processes are started by deploy/mvp/start.js (plain node, no shell); if
+# either dies the container exits and Cloud Run replaces it.
+#
+# Build from the repo root:
+#   docker build -f Dockerfile.mvp -t badgeriq-mvp \
+#     --build-arg BUILD_VERSION=$(git describe --tags --always) \
+#     --build-arg BUILD_SHA=$(git rev-parse HEAD) .
+#
+# Runtime configuration (Cloud Run --set-env-vars / --set-secrets):
+#   PORT                        injected by Cloud Run (dashboard listens here)
+#   BADGERIQ_PG_DSN             — or DB_HOST / DB_NAME / DB_USER / DB_PASSWORD
+#                                 (+ optional DB_PORT / DB_SSLMODE; DB_HOST may
+#                                 be a /cloudsql/... unix socket path)
+#   JWT_SECRET                  (or BADGERIQ_JWT_SECRET)
+#   BADGERIQ_ANALYTICS_BACKEND  defaults to postgres in this image
+# No secrets are baked into this image.
+
+# -----------------------------------------------------------------------------
+# Stage 1 — API build (mirrors the root Dockerfile)
+# -----------------------------------------------------------------------------
+FROM node:20-slim AS api-build
+WORKDIR /src
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+COPY services/api/package.json services/api/package-lock.json ./
+RUN npm ci
+COPY services/api/ ./
+COPY pricing/pricebook.json ./pricing/pricebook.json
+RUN npm run prisma:generate && npm run build && npm prune --omit=dev
+
+# -----------------------------------------------------------------------------
+# Stage 2 — dashboard build (mirrors Dockerfile.dashboard)
+# -----------------------------------------------------------------------------
+FROM node:20-slim AS dash-build
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /repo
+COPY packages/shared-types/package.json packages/shared-types/package-lock.json packages/shared-types/
+COPY packages/shared-types/tsconfig.json packages/shared-types/
+COPY packages/shared-types/src packages/shared-types/src
+WORKDIR /repo/packages/shared-types
+RUN npm ci && npm run build
+COPY apps/dashboard/package.json apps/dashboard/package-lock.json /repo/apps/dashboard/
+WORKDIR /repo/apps/dashboard
+RUN npm ci
+COPY apps/dashboard /repo/apps/dashboard
+RUN mkdir -p public
+ENV NEXT_TELEMETRY_DISABLED=1
+# In this image the API is always local to the container.
+ENV BADGERIQ_API_URL=http://127.0.0.1:8094
+RUN npm run build
+
+# -----------------------------------------------------------------------------
+# Stage 3 — runtime: distroless Node, both apps side by side, non-root.
+# -----------------------------------------------------------------------------
+FROM gcr.io/distroless/nodejs20-debian12:nonroot
+WORKDIR /app
+
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    # Local default; Cloud Run injects its own PORT (dashboard reads it).
+    PORT=8080 \
+    # Postgres-only analytics — the point of the MVP image. Override to
+    # 'clickhouse' to re-enable the ClickHouse backend later.
+    BADGERIQ_ANALYTICS_BACKEND=postgres \
+    BADGERIQ_API_URL=http://127.0.0.1:8094
+
+ARG BUILD_VERSION=dev
+ARG BUILD_SHA=unknown
+ARG BUILD_TIME=unknown
+ENV BADGERIQ_BUILD_VERSION=$BUILD_VERSION \
+    BADGERIQ_BUILD_SHA=$BUILD_SHA \
+    BADGERIQ_BUILD_TIME=$BUILD_TIME
+
+# API (compiled app + production node_modules + runtime assets)
+COPY --from=api-build /src/node_modules /app/api/node_modules
+COPY --from=api-build /src/dist         /app/api/dist
+COPY --from=api-build /src/assets       /app/api/assets
+COPY --from=api-build /src/prisma       /app/api/prisma
+COPY --from=api-build /src/pricing      /app/api/pricing
+
+# Dashboard (Next standalone server + static assets)
+COPY --from=dash-build /repo/apps/dashboard/public          /app/dashboard/public
+COPY --from=dash-build /repo/apps/dashboard/.next/standalone /app/dashboard
+COPY --from=dash-build /repo/apps/dashboard/.next/static     /app/dashboard/.next/static
+
+# Supervisor
+COPY deploy/mvp/start.js /app/start.js
+
+EXPOSE 8080
+# distroless/nodejs entrypoint is `node`; start.js spawns both children via
+# process.execPath, keeping SIGTERM handling intact.
+CMD ["start.js"]

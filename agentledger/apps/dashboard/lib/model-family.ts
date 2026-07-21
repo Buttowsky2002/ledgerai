@@ -3,7 +3,10 @@ export type ModelUsageRow = { platform: string; model: string; spend_usd?: numbe
 
 type FamilyRule = { label: string; test: (platform: string, model: string) => boolean };
 
-/** Ordered rules — first match wins. */
+/**
+ * Ordered rules — first match wins.
+ * Cross-reference: services/api/src/lari/model-equivalence.ts (modelFamily) — keep in sync.
+ */
 const FAMILY_RULES: FamilyRule[] = [
   {
     label: 'Copilot',

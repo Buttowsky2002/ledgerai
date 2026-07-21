@@ -23,9 +23,9 @@
     {
       "id": "cursor-usage",
       "provider": "cursor",
-      "displayName": "Cursor Admin API",
+      "displayName": "Cursor Admin API (usage + code activity)",
       "category": "coding_tool",
-      "authHint": "Team Admin API key (paste key as credential — Basic auth)",
+      "authHint": "Team Admin API key — syncs billed usage events and daily code activity (lines committed, tabs, composer/chat)",
       "docsUrl": "https://cursor.com/docs/account/teams/admin-api",
       "billingGranularity": "usage_event"
     },

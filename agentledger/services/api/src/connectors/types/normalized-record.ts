@@ -34,6 +34,11 @@ export interface ImportFlatRow {
   total_tokens?: number;
   cost_usd?: number;
   cost_source?: string;
+  metered_cost_usd?: number;
+  usage_value_usd?: number;
+  billed_cost_usd?: number;
+  operation_name?: string;
+  billing_kind?: string;
   status?: string;
   team_id?: string;
   user_id?: string;
@@ -50,12 +55,31 @@ export interface ImportFlatRow {
   product?: string;
   api_key_id?: string;
   workspace_id?: string;
+  lines_accepted?: number;
+  lines_added?: number;
+  lines_deleted?: number;
+  lines_committed?: number;
+  tabs_accepted?: number;
+  composer_requests?: number;
+  chat_requests?: number;
 }
 
 const RECORD_TYPE_TARGETS: Record<DestinationRecordType, string[]> = {
   spend_usage_record: ['cost_usd', 'provider', 'model', 'input_tokens', 'output_tokens', 'user_id', 'user_email'],
   llm_call_record: ['cost_usd', 'provider', 'model', 'input_tokens', 'output_tokens', 'user_id', 'agent_id'],
-  coding_activity_record: ['tool_name', 'user_id', 'agent_id', 'cost_usd'],
+  coding_activity_record: [
+    'tool_name',
+    'user_id',
+    'agent_id',
+    'cost_usd',
+    'lines_accepted',
+    'lines_added',
+    'lines_deleted',
+    'lines_committed',
+    'tabs_accepted',
+    'composer_requests',
+    'chat_requests',
+  ],
   outcome_record: ['outcome_type', 'outcome_value_usd', 'attribution_confidence'],
   risk_event_record: ['risk_severity', 'agent_id'],
   tool_usage_record: ['tool_name', 'agent_id', 'run_id'],
@@ -158,9 +182,15 @@ export function toImportRow(record: NormalizedRecord): ImportFlatRow {
   }
 
   assign('cost_source', 'cost_source');
+  assign('usage_value_usd', 'usage_value_usd');
+  assign('metered_cost_usd', 'metered_cost_usd');
+  assign('billed_cost_usd', 'billed_cost_usd');
+  assign('operation_name', 'operation_name');
+  assign('billing_kind', 'billing_kind');
   assign('status', 'status');
   assign('team_id', 'team_id');
-  assign('user_id', 'user_id', 'provider_user_id', 'user_email', 'email');
+  // Prefer email as canonical user_id so portal CSV and API sync reconcile on the same key.
+  assign('user_id', 'user_email', 'email', 'user_id', 'provider_user_id');
   assign('agent_id', 'agent_id');
   assign('run_id', 'run_id');
   assign('tool_name', 'tool_name', 'tool');
@@ -172,7 +202,13 @@ export function toImportRow(record: NormalizedRecord): ImportFlatRow {
   assign('project_id', 'project_id');
   assign('product', 'product', 'cost_type', 'line_item');
   assign('api_key_id', 'api_key_id');
-  assign('workspace_id', 'workspace_id');
+  assign('chat_requests', 'chat_requests');
+  assign('lines_accepted', 'lines_accepted');
+  assign('lines_added', 'lines_added');
+  assign('lines_deleted', 'lines_deleted');
+  assign('lines_committed', 'lines_committed');
+  assign('tabs_accepted', 'tabs_accepted');
+  assign('composer_requests', 'composer_requests');
 
   if (!row.provider && record.provider) row.provider = record.provider;
   if (!row.platform_display_name && row.provider) {
