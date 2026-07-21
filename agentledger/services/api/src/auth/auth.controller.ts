@@ -64,18 +64,20 @@ export function cookieOpts(maxAgeMs?: number) {
 }
 
 /**
- * OIDC/SSO round-trip cookie (al_oidc_tx). Must be SameSite=Lax (or None) so the
- * browser sends it on the top-level GET back from the IdP. SameSite=Strict is
- * dropped on that cross-site navigation → "missing or expired login transaction".
- * Session cookies (al_access / al_refresh) stay on cookieSameSite() / Strict.
+ * OIDC/SSO round-trip cookie (al_oidc_tx) options.
+ *
+ * Intentionally SameSite=Lax — NOT the shared cookieSameSite()/cookieOpts() default
+ * (Strict). Strict cookies are omitted on cross-site top-level navigations, which is
+ * exactly the browser return from login.microsoftonline.com / accounts.google.com to
+ * /auth/callback/* (or /auth/sso/callback). Lax still blocks cross-site AJAX/iframes
+ * but allows that top-level GET so the transaction is present. Session cookies
+ * (al_access / al_refresh) keep using cookieOpts() / Strict.
  */
 export function oidcTxCookieOpts(maxAgeMs?: number) {
-  const session = cookieSameSite();
-  const sameSite: SameSite = session === 'none' ? 'none' : 'lax';
   return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production' || sameSite === 'none',
-    sameSite,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax' as const,
     path: '/',
     ...(maxAgeMs ? { maxAge: maxAgeMs } : {}),
   };
