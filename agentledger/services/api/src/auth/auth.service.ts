@@ -57,8 +57,27 @@ export class AuthService {
     };
   }
 
+  /**
+   * Remint access from a refresh token. Re-reads `api_role` (and active) from the
+   * identity row so Settings role changes take effect on the next access-token
+   * refresh (~15m) without requiring a full SSO round-trip.
+   */
   async refresh(refreshToken: string): Promise<{ accessToken: string; claims: AccessClaims }> {
-    const claims = await this.jwt.verifyRefresh(refreshToken);
+    const prior = await this.jwt.verifyRefresh(refreshToken);
+    const row = await this.prisma.withTenant(prior.tenantId, (tx) =>
+      tx.identity.findUnique({
+        where: { userId: prior.userId },
+        select: { apiRole: true, active: true },
+      }),
+    );
+    if (!row || !row.active) {
+      throw new UnauthorizedException('identity inactive or missing');
+    }
+    const claims: AccessClaims = {
+      userId: prior.userId,
+      tenantId: prior.tenantId,
+      role: row.apiRole,
+    };
     return { accessToken: await this.jwt.mintAccess(claims), claims };
   }
 
