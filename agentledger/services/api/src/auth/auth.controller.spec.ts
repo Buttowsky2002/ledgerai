@@ -60,25 +60,24 @@ describe('auth cookie helpers', () => {
   });
 
   describe('oidcTxCookieOpts', () => {
-    it('uses SameSite=Lax by default so IdP return navigations keep the tx cookie', () => {
+    it('uses an explicit SameSite=Lax (not cookieSameSite / session default)', () => {
       const o = oidcTxCookieOpts(600_000);
       expect(o.sameSite).toBe('lax');
       expect(o.httpOnly).toBe(true);
       expect(o.maxAge).toBe(600_000);
     });
 
-    it('stays Lax even when session cookies are Strict', () => {
+    it('stays Lax even when BADGERIQ_COOKIE_SAMESITE would make session cookies Strict', () => {
       process.env.BADGERIQ_COOKIE_SAMESITE = 'strict';
       expect(oidcTxCookieOpts().sameSite).toBe('lax');
       expect(cookieOpts().sameSite).toBe('strict');
     });
 
-    it('follows session SameSite=None (cross-site deploy) for the tx cookie', () => {
+    it('does not inherit session SameSite=None — tx cookie remains Lax', () => {
       process.env.NODE_ENV = 'test';
       process.env.BADGERIQ_COOKIE_SAMESITE = 'none';
-      const o = oidcTxCookieOpts(600_000);
-      expect(o.sameSite).toBe('none');
-      expect(o.secure).toBe(true);
+      expect(oidcTxCookieOpts().sameSite).toBe('lax');
+      expect(cookieOpts().sameSite).toBe('none');
     });
   });
 

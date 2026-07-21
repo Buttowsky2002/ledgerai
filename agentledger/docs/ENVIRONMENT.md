@@ -91,7 +91,7 @@ Full tables: `services/workers/README.md`.
 | `BADGERIQ_JWT_ACCESS_TTL` / `_REFRESH_TTL` | `15m` / `7d` | Token lifetimes. |
 | `BADGERIQ_OIDC_REDIRECT_BASE` | `http://localhost:8094` | OIDC callback base URL. |
 | 🔒 OIDC client id/secret env vars | _(unset)_ | Per provider; unset → provider unavailable. |
-| `BADGERIQ_COOKIE_SAMESITE` | `strict` | Session cookie SameSite (`al_access` / `al_refresh`). Use `lax`/`none` for documented cross-site dashboard↔API. The OIDC tx cookie (`al_oidc_tx`) is always `Lax` (or `None` when this is `none`) so IdP return navigations work. |
+| `BADGERIQ_COOKIE_SAMESITE` | `strict` | Session cookie SameSite (`al_access` / `al_refresh`). Use `lax`/`none` for documented cross-site dashboard↔API. The OIDC tx cookie (`al_oidc_tx`) is always explicitly `Lax` (separate from this setting) so IdP return navigations work. |
 | `BADGERIQ_DASHBOARD_URL` | `http://localhost:3000` | Post-login redirect target. |
 | `BADGERIQ_EXPOSE_DOCS` | _(unset)_ | Expose Swagger; required to enable in production. |
 | 🔒 `BADGERIQ_DOCS_TOKEN` | _(unset)_ | Bearer for Swagger in production. |
