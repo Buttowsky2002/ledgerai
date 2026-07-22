@@ -1,4 +1,11 @@
-import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus } from '@nestjs/common';
+import {
+  ArgumentsHost,
+  Catch,
+  ExceptionFilter,
+  HttpException,
+  HttpStatus,
+  Logger,
+} from '@nestjs/common';
 import { Request, Response } from 'express';
 
 /**
@@ -17,6 +24,8 @@ interface ProblemDetails {
 
 @Catch()
 export class ProblemDetailsFilter implements ExceptionFilter {
+  private readonly logger = new Logger(ProblemDetailsFilter.name);
+
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const res = ctx.getResponse<Response>();
@@ -46,6 +55,11 @@ export class ProblemDetailsFilter implements ExceptionFilter {
           detail = b.status;
         }
       }
+    } else {
+      // Keep client body opaque; log the real cause for ops (e.g. PG SQL errors).
+      const msg = exception instanceof Error ? exception.message : String(exception);
+      const stack = exception instanceof Error ? exception.stack : undefined;
+      this.logger.error({ err: msg, stack, path: req.originalUrl }, 'unhandled exception');
     }
 
     const problem: ProblemDetails = {

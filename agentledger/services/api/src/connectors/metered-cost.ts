@@ -118,28 +118,38 @@ export const RECONCILED_USER_MODEL_BREAKDOWN_SQL = `
     sum(api_usd) AS connector_usd
   FROM (
     SELECT
-      if(user_id = '', 'Unassigned', user_id) AS key,
-      toDate(ts) AS day,
+      key,
+      day,
       provider,
-      if(response_model != '', response_model, request_model) AS model,
-      sumIf(${EFFECTIVE_METERED_COST_USD}, llm_calls.source = 'portal_import') AS portal_usd,
-      sumIf(${EFFECTIVE_METERED_COST_USD}, llm_calls.source = 'api') AS api_usd,
-      sumIf(
-        ${EFFECTIVE_METERED_COST_USD},
-        llm_calls.source NOT IN ('portal_import', 'api')
-      ) AS other_usd,
-      countIf(${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source = 'portal_import') AS portal_calls,
-      countIf(${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source = 'api') AS api_calls,
-      countIf(
-        ${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source NOT IN ('portal_import', 'api')
-      ) AS other_calls,
+      model,
+      portal_usd,
+      api_usd,
+      other_usd,
       (CASE WHEN portal_usd > 0 THEN portal_usd ELSE api_usd END) + other_usd AS reconciled_usd,
       (CASE WHEN portal_calls > 0 THEN portal_calls ELSE api_calls END) + other_calls AS reconciled_calls
-    FROM llm_calls
-    WHERE tenant_id = {tenant:String}
-      AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
-      AND ${LLM_CALLS_METERED_SCOPE}
-    GROUP BY key, day, provider, model
+    FROM (
+      SELECT
+        if(user_id = '', 'Unassigned', user_id) AS key,
+        toDate(ts) AS day,
+        provider,
+        if(response_model != '', response_model, request_model) AS model,
+        sumIf(${EFFECTIVE_METERED_COST_USD}, llm_calls.source = 'portal_import') AS portal_usd,
+        sumIf(${EFFECTIVE_METERED_COST_USD}, llm_calls.source = 'api') AS api_usd,
+        sumIf(
+          ${EFFECTIVE_METERED_COST_USD},
+          llm_calls.source NOT IN ('portal_import', 'api')
+        ) AS other_usd,
+        countIf(${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source = 'portal_import') AS portal_calls,
+        countIf(${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source = 'api') AS api_calls,
+        countIf(
+          ${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source NOT IN ('portal_import', 'api')
+        ) AS other_calls
+      FROM llm_calls
+      WHERE tenant_id = {tenant:String}
+        AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
+        AND ${LLM_CALLS_METERED_SCOPE}
+      GROUP BY key, day, provider, model
+    ) AS aggregates
   ) AS per_day_model
   GROUP BY key, provider, model
   HAVING sum(reconciled_calls) > 0
@@ -182,36 +192,41 @@ export const RECONCILED_MODEL_USAGE_SQL = `
     sum(reconciled_calls) AS calls
   FROM (
     SELECT
-      if(user_id = '', 'Unassigned', user_id) AS key,
-      toDate(ts) AS day,
       provider,
-      if(response_model != '', response_model, request_model) AS model,
-      sumIf(input_tokens, llm_calls.source = 'portal_import') AS portal_in,
-      sumIf(output_tokens, llm_calls.source = 'portal_import') AS portal_out,
-      sumIf(${EFFECTIVE_METERED_COST_USD}, llm_calls.source = 'portal_import') AS portal_usd,
-      countIf(${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source = 'portal_import') AS portal_calls,
-      sumIf(input_tokens, llm_calls.source = 'api') AS api_in,
-      sumIf(output_tokens, llm_calls.source = 'api') AS api_out,
-      sumIf(${EFFECTIVE_METERED_COST_USD}, llm_calls.source = 'api') AS api_usd,
-      countIf(${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source = 'api') AS api_calls,
-      sumIf(input_tokens, llm_calls.source NOT IN ('portal_import', 'api')) AS other_in,
-      sumIf(output_tokens, llm_calls.source NOT IN ('portal_import', 'api')) AS other_out,
-      sumIf(
-        ${EFFECTIVE_METERED_COST_USD},
-        llm_calls.source NOT IN ('portal_import', 'api')
-      ) AS other_usd,
-      countIf(
-        ${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source NOT IN ('portal_import', 'api')
-      ) AS other_calls,
+      model,
       (CASE WHEN portal_usd > 0 THEN portal_in ELSE api_in END) + other_in AS reconciled_input_tokens,
       (CASE WHEN portal_usd > 0 THEN portal_out ELSE api_out END) + other_out AS reconciled_output_tokens,
       (CASE WHEN portal_usd > 0 THEN portal_usd ELSE api_usd END) + other_usd AS reconciled_usd,
       (CASE WHEN portal_calls > 0 THEN portal_calls ELSE api_calls END) + other_calls AS reconciled_calls
-    FROM llm_calls
-    WHERE tenant_id = {tenant:String}
-      AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
-      AND ${LLM_CALLS_METERED_SCOPE}
-    GROUP BY key, day, provider, model
+    FROM (
+      SELECT
+        if(user_id = '', 'Unassigned', user_id) AS key,
+        toDate(ts) AS day,
+        provider,
+        if(response_model != '', response_model, request_model) AS model,
+        sumIf(input_tokens, llm_calls.source = 'portal_import') AS portal_in,
+        sumIf(output_tokens, llm_calls.source = 'portal_import') AS portal_out,
+        sumIf(${EFFECTIVE_METERED_COST_USD}, llm_calls.source = 'portal_import') AS portal_usd,
+        countIf(${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source = 'portal_import') AS portal_calls,
+        sumIf(input_tokens, llm_calls.source = 'api') AS api_in,
+        sumIf(output_tokens, llm_calls.source = 'api') AS api_out,
+        sumIf(${EFFECTIVE_METERED_COST_USD}, llm_calls.source = 'api') AS api_usd,
+        countIf(${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source = 'api') AS api_calls,
+        sumIf(input_tokens, llm_calls.source NOT IN ('portal_import', 'api')) AS other_in,
+        sumIf(output_tokens, llm_calls.source NOT IN ('portal_import', 'api')) AS other_out,
+        sumIf(
+          ${EFFECTIVE_METERED_COST_USD},
+          llm_calls.source NOT IN ('portal_import', 'api')
+        ) AS other_usd,
+        countIf(
+          ${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source NOT IN ('portal_import', 'api')
+        ) AS other_calls
+      FROM llm_calls
+      WHERE tenant_id = {tenant:String}
+        AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
+        AND ${LLM_CALLS_METERED_SCOPE}
+      GROUP BY key, day, provider, model
+    ) AS aggregates
   ) AS per_day_model
   GROUP BY provider, model
   HAVING sum(reconciled_calls) > 0
@@ -229,28 +244,31 @@ export const RECONCILED_COST_BASIS_TOTALS_SQL = `
     countIf(reconciled_usd > 0) AS metered_keys
   FROM (
     SELECT
-      if(user_id = '', 'Unassigned', user_id) AS key,
-      toDate(ts) AS day,
-      provider,
-      if(response_model != '', response_model, request_model) AS model,
-      sumIf(${EFFECTIVE_METERED_COST_USD}, llm_calls.source = 'portal_import') AS portal_usd,
-      sumIf(${EFFECTIVE_METERED_COST_USD}, llm_calls.source = 'api') AS api_usd,
-      sumIf(
-        ${EFFECTIVE_METERED_COST_USD},
-        llm_calls.source NOT IN ('portal_import', 'api')
-      ) AS other_usd,
-      countIf(${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source = 'portal_import') AS portal_calls,
-      countIf(${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source = 'api') AS api_calls,
-      countIf(
-        ${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source NOT IN ('portal_import', 'api')
-      ) AS other_calls,
       (CASE WHEN portal_usd > 0 THEN portal_usd ELSE api_usd END) + other_usd AS reconciled_usd,
       (CASE WHEN portal_calls > 0 THEN portal_calls ELSE api_calls END) + other_calls AS reconciled_calls
-    FROM llm_calls
-    WHERE tenant_id = {tenant:String}
-      AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
-      AND ${LLM_CALLS_METERED_SCOPE}
-    GROUP BY key, day, provider, model
+    FROM (
+      SELECT
+        if(user_id = '', 'Unassigned', user_id) AS key,
+        toDate(ts) AS day,
+        provider,
+        if(response_model != '', response_model, request_model) AS model,
+        sumIf(${EFFECTIVE_METERED_COST_USD}, llm_calls.source = 'portal_import') AS portal_usd,
+        sumIf(${EFFECTIVE_METERED_COST_USD}, llm_calls.source = 'api') AS api_usd,
+        sumIf(
+          ${EFFECTIVE_METERED_COST_USD},
+          llm_calls.source NOT IN ('portal_import', 'api')
+        ) AS other_usd,
+        countIf(${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source = 'portal_import') AS portal_calls,
+        countIf(${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source = 'api') AS api_calls,
+        countIf(
+          ${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source NOT IN ('portal_import', 'api')
+        ) AS other_calls
+      FROM llm_calls
+      WHERE tenant_id = {tenant:String}
+        AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
+        AND ${LLM_CALLS_METERED_SCOPE}
+      GROUP BY key, day, provider, model
+    ) AS aggregates
   ) AS per_day_model
 `;
 
@@ -263,22 +281,26 @@ export const RECONCILED_COST_BASIS_MONTHLY_SQL = `
     sum(reconciled_usd) AS computed_cost_usd
   FROM (
     SELECT
-      if(user_id = '', 'Unassigned', user_id) AS key,
-      toDate(ts) AS day,
-      provider,
-      if(response_model != '', response_model, request_model) AS model,
-      sumIf(${EFFECTIVE_METERED_COST_USD}, llm_calls.source = 'portal_import') AS portal_usd,
-      sumIf(${EFFECTIVE_METERED_COST_USD}, llm_calls.source = 'api') AS api_usd,
-      sumIf(
-        ${EFFECTIVE_METERED_COST_USD},
-        llm_calls.source NOT IN ('portal_import', 'api')
-      ) AS other_usd,
+      day,
       (CASE WHEN portal_usd > 0 THEN portal_usd ELSE api_usd END) + other_usd AS reconciled_usd
-    FROM llm_calls
-    WHERE tenant_id = {tenant:String}
-      AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
-      AND ${LLM_CALLS_METERED_SCOPE}
-    GROUP BY key, day, provider, model
+    FROM (
+      SELECT
+        if(user_id = '', 'Unassigned', user_id) AS key,
+        toDate(ts) AS day,
+        provider,
+        if(response_model != '', response_model, request_model) AS model,
+        sumIf(${EFFECTIVE_METERED_COST_USD}, llm_calls.source = 'portal_import') AS portal_usd,
+        sumIf(${EFFECTIVE_METERED_COST_USD}, llm_calls.source = 'api') AS api_usd,
+        sumIf(
+          ${EFFECTIVE_METERED_COST_USD},
+          llm_calls.source NOT IN ('portal_import', 'api')
+        ) AS other_usd
+      FROM llm_calls
+      WHERE tenant_id = {tenant:String}
+        AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
+        AND ${LLM_CALLS_METERED_SCOPE}
+      GROUP BY key, day, provider, model
+    ) AS aggregates
   ) AS per_day_model
   GROUP BY month
   ORDER BY month

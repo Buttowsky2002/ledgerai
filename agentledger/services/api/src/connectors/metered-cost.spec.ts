@@ -82,4 +82,13 @@ describe('metered-cost', () => {
     expect(RECONCILED_MODEL_USAGE_SQL).toContain('reconciled_input_tokens');
     expect(RECONCILED_TENANT_DAILY_SPEND_SQL).toContain('GROUP BY key, day');
   });
+
+  it('reconciled SQL nests portal/api aggregates for Postgres (no same-SELECT aliases)', () => {
+    // ClickHouse allows SELECT aliases in the same list; Postgres does not —
+    // sumIf(... AS portal_usd) and CASE WHEN portal_usd must be separate SELECTs.
+    for (const sql of [RECONCILED_PROVIDER_SPEND_SQL, RECONCILED_MODEL_USAGE_SQL]) {
+      expect(sql).toContain(') AS aggregates');
+      expect(sql).toContain('CASE WHEN portal_usd > 0 THEN portal_usd ELSE api_usd END');
+    }
+  });
 });
