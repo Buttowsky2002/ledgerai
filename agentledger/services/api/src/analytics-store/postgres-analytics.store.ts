@@ -40,6 +40,25 @@ const TABLES: Record<string, TableUpsert> = {
 
 const IDENT_RE = /^[a-z_][a-z0-9_]*$/;
 
+/**
+ * Postgres prepared statements reject >32767 bind variables. Batch inserts
+ * below that ceiling (Cursor 90-day sync hit ~40k binds in one statement).
+ */
+export const PG_MAX_BIND_VARS = 30_000;
+
+/** Split rows so `rows.length * colsPerRow` never exceeds PG_MAX_BIND_VARS. */
+export function chunkRowsByBindLimit<T>(rows: T[], colsPerRow: number): T[][] {
+  if (rows.length === 0) return [];
+  if (colsPerRow <= 0) return [rows];
+  const maxRows = Math.max(1, Math.floor(PG_MAX_BIND_VARS / colsPerRow));
+  if (rows.length <= maxRows) return [rows];
+  const chunks: T[][] = [];
+  for (let i = 0; i < rows.length; i += maxRows) {
+    chunks.push(rows.slice(i, i + maxRows));
+  }
+  return chunks;
+}
+
 function assertIdent(name: string, what: string): void {
   if (!IDENT_RE.test(name)) {
     throw new Error(`postgres-analytics: invalid ${what} identifier: ${name}`);
@@ -155,8 +174,10 @@ export class PostgresAnalyticsStore extends AnalyticsStore {
       for (const [sig, groupRows] of groups) {
         const cols = sig === '' ? [] : sig.split(',');
         if (cols.length === 0) continue;
-        const { sql, values } = this.buildInsert(table, cols, groupRows, types, upsert);
-        await tx.$executeRawUnsafe(sql, ...values);
+        for (const batch of chunkRowsByBindLimit(groupRows, cols.length)) {
+          const { sql, values } = this.buildInsert(table, cols, batch, types, upsert);
+          await tx.$executeRawUnsafe(sql, ...values);
+        }
       }
     };
     if (tenant) {
