@@ -95,11 +95,13 @@ module "api" {
     BADGERIQ_DASHBOARD_URL           = local.public_url
     # Design-partner → attribution engine via Cloud Map (not localhost).
     BADGERIQ_ATTRIBUTION_WORKER_URL  = "http://attribution.badgeriq.local:8096"
+    # Pilot: Postgres analytics (ADR-052) — no ClickHouse required for API sync/dashboard.
+    BADGERIQ_ANALYTICS_BACKEND       = "postgres"
   }
 
   secrets = {
     AGENTLEDGER_PG_DSN                       = local.pg_dsn_secret
-    AGENTLEDGER_CLICKHOUSE_URL               = local.ch_url_secret
+    # ClickHouse secrets omitted while BADGERIQ_ANALYTICS_BACKEND=postgres (ADR-052).
     AGENTLEDGER_JWT_SECRET                   = "${var.jwt_secret_arn}:secret::"
     AGENTLEDGER_OIDC_MICROSOFT_CLIENT_ID     = "${var.oidc_microsoft_secret_arn}:client_id::"
     AGENTLEDGER_OIDC_MICROSOFT_CLIENT_SECRET = "${var.oidc_microsoft_secret_arn}:client_secret::"

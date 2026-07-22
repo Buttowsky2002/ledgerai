@@ -62,7 +62,7 @@
     { "type": "constant", "target": "platform_display_name", "value": "Cursor" }
   ],
   "validationRules": [
-    { "field": "cost_usd", "type": "currency", "required": true, "min": 0.000001 },
+    { "field": "cost_usd", "type": "currency", "required": true, "min": 0 },
     { "field": "user_email", "type": "string", "required": true }
   ],
   "dedupe": {

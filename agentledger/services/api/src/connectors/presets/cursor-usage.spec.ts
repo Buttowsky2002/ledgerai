@@ -112,6 +112,21 @@ describe('cursor-usage preset', () => {
     expect(metrics.provider).toBe('cursor');
   });
 
+  it('accepts zero chargedCents included usage (subscription-covered)', () => {
+    const raw = {
+      timestamp: '1750978339901',
+      userEmail: 'developer@company.com',
+      model: 'default',
+      kind: 'Included',
+      isChargeable: false,
+      chargedCents: 0,
+      tokenUsage: { inputTokens: 10, outputTokens: 5 },
+    };
+    const { metrics } = mapFields(raw, preset.fieldMappings);
+    expect(metrics.cost_usd).toBe(0);
+    expect(validateMetrics(metrics, preset.validationRules)).toEqual([]);
+  });
+
   it('splits included usage value from billed overage after finalize', () => {
     const raw = {
       timestamp: '1750978339901',
