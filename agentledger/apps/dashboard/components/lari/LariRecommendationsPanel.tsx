@@ -32,17 +32,17 @@ const CATEGORY_LABEL: Record<string, string> = {
 };
 
 function RecommendationRow({ rec }: { rec: LariActionableRecommendation }) {
-  const meta = PRIORITY_META[rec.priority];
+  const meta = PRIORITY_META[rec.priority] ?? { label: String(rec.priority ?? 'Unknown'), tone: 'neutral' as BadgeTone };
   return (
     <div className="rounded-lg border border-edge bg-panel/50 p-4">
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <Badge tone={meta.tone}>{meta.label}</Badge>
         <Badge tone="neutral">{CATEGORY_LABEL[rec.category] ?? rec.category}</Badge>
-        <span className="ml-auto text-xs text-muted">ML score {rec.mlScore}</span>
+        <span className="ml-auto text-xs text-muted">ML score {rec.mlScore ?? '—'}</span>
       </div>
       <h4 className="text-sm font-medium text-gray-100">{rec.title}</h4>
       <p className="mt-1 text-sm text-muted">{rec.message}</p>
-      <p className="mt-2 text-sm text-accent">{rec.action}</p>
+      {rec.action ? <p className="mt-2 text-sm text-accent">{rec.action}</p> : null}
       {(rec.estimatedSavingsUsd !== undefined || rec.estimatedImpactUsd !== undefined) && (
         <p className="mt-2 text-xs text-muted">
           {rec.estimatedSavingsUsd !== undefined && (
@@ -53,7 +53,7 @@ function RecommendationRow({ rec }: { rec: LariActionableRecommendation }) {
           )}
         </p>
       )}
-      {rec.relatedEntity?.type === 'agent' && (
+      {rec.relatedEntity?.type === 'agent' && rec.relatedEntity.id && (
         <Link
           href={`/agents/${encodeURIComponent(rec.relatedEntity.id)}`}
           className="mt-2 inline-block text-xs text-accent hover:underline"
@@ -100,21 +100,26 @@ export function LariRecommendationsPanel({
     };
   }, [from, to]);
 
-  const recs = data?.recommendations ?? [];
+  const recs = Array.isArray(data?.recommendations) ? data!.recommendations : [];
   const shown = compact ? recs.slice(0, 5) : recs;
+  const summary = data?.summary;
+  const providerRankings = Array.isArray(data?.providerRankings) ? data!.providerRankings : [];
+  const agentHighlights = Array.isArray(data?.agentEconomicsHighlights)
+    ? data!.agentEconomicsHighlights
+    : [];
 
   return (
     <Card
       title="LARI recommendations"
       subtitle={`Savings & configuration · ${from} → ${to}`}
       actions={
-        data ? (
+        summary ? (
           <div className="flex gap-2 text-xs">
-            <Badge tone={data.summary.criticalCount > 0 ? 'neg' : 'neutral'}>
-              {data.summary.criticalCount} critical
+            <Badge tone={(summary.criticalCount ?? 0) > 0 ? 'neg' : 'neutral'}>
+              {summary.criticalCount ?? 0} critical
             </Badge>
-            <Badge tone={data.summary.highPriorityCount > 0 ? 'warn' : 'pos'}>
-              {usd(data.summary.totalEstimatedSavingsUsd)}/mo potential
+            <Badge tone={(summary.highPriorityCount ?? 0) > 0 ? 'warn' : 'pos'}>
+              {usd(summary.totalEstimatedSavingsUsd ?? 0)}/mo potential
             </Badge>
           </div>
         ) : undefined
@@ -138,7 +143,7 @@ export function LariRecommendationsPanel({
         <div className="space-y-3">{shown.map((rec) => <RecommendationRow key={rec.id} rec={rec} />)}</div>
       )}
 
-      {!loading && !compact && data && data.providerRankings.length > 0 && (
+      {!loading && !compact && providerRankings.length > 0 && (
         <div className="mt-6">
           <h3 className="mb-3 text-sm font-medium text-gray-200">Provider value ranking</h3>
           <DataTable
@@ -150,19 +155,19 @@ export function LariRecommendationsPanel({
               { key: 'vpd', label: 'Value/$', align: 'right' },
               { key: 'score', label: 'Efficiency', align: 'right' },
             ]}
-            rows={data.providerRankings.map((r) => ({
+            rows={providerRankings.map((r) => ({
               rank: String(r.rank),
               provider: r.provider,
               cost: usd(r.costUsd),
               value: usd(r.attributedValueUsd),
-              vpd: r.valuePerDollar.toFixed(2),
+              vpd: Number(r.valuePerDollar ?? 0).toFixed(2),
               score: `${r.efficiencyScore}`,
             }))}
           />
         </div>
       )}
 
-      {!loading && !compact && data && data.agentEconomicsHighlights.length > 0 && (
+      {!loading && !compact && agentHighlights.length > 0 && (
         <div className="mt-6">
           <h3 className="mb-3 text-sm font-medium text-gray-200">Agent economics highlights</h3>
           <DataTable
@@ -174,7 +179,7 @@ export function LariRecommendationsPanel({
               { key: 'rec', label: 'Action' },
               { key: 'provider', label: 'Top provider' },
             ]}
-            rows={data.agentEconomicsHighlights.slice(0, 10).map((a) => ({
+            rows={agentHighlights.slice(0, 10).map((a) => ({
               agent: (
                 <Link href={`/agents/${encodeURIComponent(a.agentId)}`} className="text-accent hover:underline">
                   {a.agentId}
@@ -182,8 +187,8 @@ export function LariRecommendationsPanel({
               ),
               value: usd(a.valueUsd),
               cost: usd(a.costUsd),
-              lari: `${a.lari.toFixed(2)}×`,
-              rec: a.recommendation.replace(/_/g, ' '),
+              lari: `${Number(a.lari ?? 0).toFixed(2)}×`,
+              rec: String(a.recommendation ?? '').replace(/_/g, ' '),
               provider: a.topProvider ?? '—',
             }))}
           />

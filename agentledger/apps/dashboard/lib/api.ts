@@ -75,5 +75,10 @@ export async function fetchData<T>(promise: Promise<{ data?: T; error?: unknown 
   if (error || data === undefined) {
     return fallback;
   }
+  // Guard against non-2xx bodies that openapi-fetch still surfaces as `data`,
+  // and against shape mismatches (e.g. expecting an array, got an error object).
+  if (Array.isArray(fallback) && !Array.isArray(data)) {
+    return fallback;
+  }
   return data;
 }

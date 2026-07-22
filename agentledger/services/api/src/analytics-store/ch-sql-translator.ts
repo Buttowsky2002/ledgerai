@@ -19,6 +19,7 @@
  *   uniqExact(x)        → count(DISTINCT x)
  *   sumIf(x, cond)      → sum(x) FILTER (WHERE cond)
  *   if(a, b, c)         → CASE WHEN a THEN b ELSE c END   (recursive)
+ *   positionCaseInsensitive(haystack, needle) → position(lower(needle) in lower(haystack))
  *   argMax(a, b)        → (array_agg(a ORDER BY b DESC))[1]
  *   now64(3)            → now()
  *
@@ -130,6 +131,12 @@ export function translateFunctions(sql: string): string {
   sql = rewriteCalls(sql, 'uniqExact', ([x]) => `count(DISTINCT ${x})`);
   sql = rewriteCalls(sql, 'sumIf', ([x, cond]) => `sum(${x}) FILTER (WHERE ${cond})`);
   sql = rewriteCalls(sql, 'argMax', ([a, b]) => `(array_agg(${a} ORDER BY ${b} DESC NULLS LAST))[1]`);
+  // CH positionCaseInsensitive(haystack, needle) is 1-based; PG position(needle in haystack) matches.
+  sql = rewriteCalls(
+    sql,
+    'positionCaseInsensitive',
+    ([haystack, needle]) => `position(lower(${needle}) in lower(${haystack}))`,
+  );
   // ClickHouse ternary if(). PG's own IF doesn't exist in SQL expressions, so
   // any if( in this codebase's queries is the CH form.
   sql = rewriteCalls(sql, 'if', ([a, b, c]) => `(CASE WHEN ${a} THEN ${b} ELSE ${c} END)`);

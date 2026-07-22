@@ -50,6 +50,12 @@ describe('ch-sql-translator', () => {
     expect(translateFunctions('uniqExact(user_id) AS members')).toBe('count(DISTINCT user_id) AS members');
   });
 
+  it('translates positionCaseInsensitive', () => {
+    expect(translateFunctions("positionCaseInsensitive(line_item, 'cursor') > 0")).toBe(
+      "position(lower('cursor') in lower(line_item)) > 0",
+    );
+  });
+
   it('translates count()/countIf/sumIf/argMax', () => {
     expect(translateFunctions('count() AS calls')).toBe('count(*) AS calls');
     expect(translateFunctions("countIf(status LIKE 'blocked%') AS b")).toBe(
