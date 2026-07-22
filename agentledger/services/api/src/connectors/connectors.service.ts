@@ -22,6 +22,7 @@ import {
   readConnectorHandoff,
   resolveConnectorSyncRange,
   resolveFirstSyncBaseline,
+  shouldLockApiSyncBaseline,
 } from './sync-handoff';
 import { ConnectorDefinition } from './types/connector-definition';
 import { toImportRow } from './types/normalized-record';
@@ -789,7 +790,17 @@ export class ConnectorsService {
         });
 
         const syncEndDay = overallEnd.toISOString().slice(0, 10);
-        if (!handoff.apiSyncBaselineFrom && (importSummary.imported > 0 || netSpend > 0)) {
+        const coveredDays =
+          Math.floor((overallEnd.getTime() - overallStart.getTime()) / 86_400_000) + 1;
+        if (
+          !handoff.apiSyncBaselineFrom &&
+          (importSummary.imported > 0 || netSpend > 0) &&
+          shouldLockApiSyncBaseline({
+            portalImportThrough: handoff.portalImportThrough,
+            coveredDays,
+            defaultBackfillDays: backfillDays,
+          })
+        ) {
           nextConfig = {
             ...cfg,
             apiSyncBaselineFrom: resolveFirstSyncBaseline(handoff.portalImportThrough, syncEndDay),

@@ -49,7 +49,11 @@
     { "type": "direct", "source": "model", "target": "model" },
     { "type": "direct", "source": "kind", "target": "product" },
     { "type": "direct", "source": "isChargeable", "target": "is_chargeable" },
-    { "type": "direct", "source": "chargedCents", "target": "amount_cents" },
+    {
+      "type": "fallback",
+      "target": "amount_cents",
+      "sources": ["chargedCents", "tokenUsage.totalCents"]
+    },
     { "type": "derived", "target": "cost_usd", "expression": "amount_cents / 100" },
     { "type": "fallback", "target": "input_tokens", "sources": ["tokenUsage.inputTokens"] },
     { "type": "fallback", "target": "output_tokens", "sources": ["tokenUsage.outputTokens"] },

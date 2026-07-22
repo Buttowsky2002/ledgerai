@@ -20,6 +20,21 @@ export function resolveFirstSyncBaseline(
   return dayAfter(syncEndDay);
 }
 
+/**
+ * Whether a completed sync window is large enough to lock apiSyncBaselineFrom.
+ * Short incremental/manual windows must not freeze history (pilot bug: 3-day
+ * sync set baseline and blocked the 90-day Cursor backfill forever).
+ */
+export function shouldLockApiSyncBaseline(opts: {
+  portalImportThrough: string | null;
+  coveredDays: number;
+  defaultBackfillDays: number;
+}): boolean {
+  if (opts.portalImportThrough) return true;
+  // Allow a day of slack for timezone / inclusive-range edge cases.
+  return opts.coveredDays >= Math.max(1, opts.defaultBackfillDays - 1);
+}
+
 export type SyncRangeResolution = { from?: string; to?: string };
 
 export interface ResolveConnectorSyncRangeOptions {

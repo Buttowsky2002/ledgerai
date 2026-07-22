@@ -686,11 +686,18 @@ export class AnalyticsService {
   /** Spend grouped by provider/platform — powers Overview and Model Mix pie charts. */
   platformSpend(from?: string, to?: string) {
     const r = this.range(from, to);
+    // Cursor subscription-included rows store value in usage_value_usd with metered=0.
+    // Surface that so the AI sources panel is not blank when local had rich Cursor activity.
+    const platformCost = `if(
+      provider = 'cursor',
+      if(${METERED_COST} > llm_calls.usage_value_usd, ${METERED_COST}, llm_calls.usage_value_usd),
+      ${METERED_COST}
+    )`;
     return this.ch
       .queryScoped<{ platform: string; cost_usd: unknown; calls: unknown }>(
         `SELECT provider AS platform,
-                sum(${METERED_COST}) AS cost_usd,
-                countIf(${METERED_COST} > 0) AS calls
+                sum(${platformCost}) AS cost_usd,
+                countIf(${platformCost} > 0) AS calls
          FROM llm_calls
          WHERE tenant_id = {tenant:String}
            AND toDate(ts) BETWEEN {from:Date} AND {to:Date}

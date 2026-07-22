@@ -2,6 +2,7 @@ import {
   readConnectorHandoff,
   resolveConnectorSyncRange,
   resolveFirstSyncBaseline,
+  shouldLockApiSyncBaseline,
 } from './sync-handoff';
 
 describe('sync-handoff', () => {
@@ -54,5 +55,36 @@ describe('sync-handoff', () => {
 
   it('sets first sync baseline day after sync end when no portal import', () => {
     expect(resolveFirstSyncBaseline(null, '2026-06-01')).toBe('2026-06-02');
+  });
+
+  it('locks baseline only after a full backfill (or portal handoff)', () => {
+    expect(
+      shouldLockApiSyncBaseline({
+        portalImportThrough: '2026-03-31',
+        coveredDays: 3,
+        defaultBackfillDays: 90,
+      }),
+    ).toBe(true);
+    expect(
+      shouldLockApiSyncBaseline({
+        portalImportThrough: null,
+        coveredDays: 3,
+        defaultBackfillDays: 90,
+      }),
+    ).toBe(false);
+    expect(
+      shouldLockApiSyncBaseline({
+        portalImportThrough: null,
+        coveredDays: 90,
+        defaultBackfillDays: 90,
+      }),
+    ).toBe(true);
+    expect(
+      shouldLockApiSyncBaseline({
+        portalImportThrough: null,
+        coveredDays: 89,
+        defaultBackfillDays: 90,
+      }),
+    ).toBe(true);
   });
 });
