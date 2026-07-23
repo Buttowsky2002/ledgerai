@@ -13,6 +13,7 @@ import { Throttle } from '@nestjs/throttler';
 import { Request, Response } from 'express';
 import { getPrincipal } from '../tenant/tenant-context';
 import { env } from '../env';
+import { clientMetaFromRequest, logSecurityEvent } from '../security/security-event';
 import { AuthService } from './auth.service';
 import { Public } from './decorators';
 import { JwtService } from './jwt.service';
@@ -241,6 +242,15 @@ export class AuthController {
   async refresh(@Req() req: Request, @Res() res: Response): Promise<void> {
     const refreshToken = req.cookies?.[REFRESH_COOKIE];
     if (!refreshToken) {
+      const meta = clientMetaFromRequest(req);
+      logSecurityEvent({
+        type: 'auth.login_failure',
+        tenantId: null,
+        userId: null,
+        ip: meta.ip,
+        userAgent: meta.userAgent,
+        detail: { reason: 'no_refresh_token' },
+      });
       throw new UnauthorizedException('no refresh token');
     }
     const { accessToken } = await this.auth.refresh(refreshToken);
@@ -252,7 +262,16 @@ export class AuthController {
   /** Clear both session cookies (access + refresh). */
   @Public()
   @Post('logout')
-  logout(@Res() res: Response): void {
+  logout(@Req() req: Request, @Res() res: Response): void {
+    const principal = getPrincipal();
+    const meta = clientMetaFromRequest(req);
+    logSecurityEvent({
+      type: 'auth.logout',
+      tenantId: principal?.tenantId ?? null,
+      userId: principal?.userId ?? null,
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+    });
     res.clearCookie(ACCESS_COOKIE, cookieOpts());
     res.clearCookie(REFRESH_COOKIE, cookieOpts());
     res.status(204).send();

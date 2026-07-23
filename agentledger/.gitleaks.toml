@@ -17,6 +17,10 @@ title = "AgentLedger gitleaks configuration"
     # clearly labelled, never used in production.
     '''dev_only_change_me''',
 
+    # Intentional AES key fallback string in connector-secrets (dev/test only;
+    # production must set BADGERIQ_CONNECTOR_SECRET_KEY). Not a real secret.
+    '''dev-only-connector-key''',
+
     # AgentLedger virtual-key identifiers (alk_* prefix).  These are routing
     # identifiers stored as SHA-256 hashes in Postgres; the plaintext form
     # shown here is meaningless without the gateway.

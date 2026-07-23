@@ -9,6 +9,7 @@ module.exports = {
   collectCoverageFrom: ['src/**/*.ts'],
   coverageDirectory: './coverage',
   testEnvironment: 'node',
+  setupFiles: ['<rootDir>/test/setup-env.ts'],
   // RLS isolation tests share one Postgres; run serially to keep state deterministic.
   testTimeout: 30000,
 };

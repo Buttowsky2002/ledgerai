@@ -9,4 +9,5 @@ RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /worker ./cmd/${CMD}
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /worker /worker
 EXPOSE 8091
+USER nonroot
 ENTRYPOINT ["/worker"]

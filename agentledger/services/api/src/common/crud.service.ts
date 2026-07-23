@@ -5,6 +5,7 @@
 import { NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { logSecurityEventFromContext } from '../security/security-event';
 import { getTenantId } from '../tenant/tenant-context';
 import { Page } from './pagination';
 import { recordAudit } from './audit';
@@ -57,6 +58,11 @@ export class CrudService {
       this.delegate(tx).findUnique({ where: { [this.cfg.idField]: id } }),
     );
     if (!row) {
+      logSecurityEventFromContext('authz.bola_attempt', {
+        object: this.cfg.object,
+        id,
+        op: 'get',
+      });
       throw new NotFoundException(`${this.cfg.object} not found`);
     }
     return row;
@@ -81,6 +87,11 @@ export class CrudService {
     return this.prisma.withTenant(getTenantId(), async (tx) => {
       const before = await this.delegate(tx).findUnique({ where: { [this.cfg.idField]: id } });
       if (!before) {
+        logSecurityEventFromContext('authz.bola_attempt', {
+          object: this.cfg.object,
+          id,
+          op: 'update',
+        });
         throw new NotFoundException(`${this.cfg.object} not found`);
       }
       const after = await this.delegate(tx).update({
@@ -96,6 +107,11 @@ export class CrudService {
     return this.prisma.withTenant(getTenantId(), async (tx) => {
       const before = await this.delegate(tx).findUnique({ where: { [this.cfg.idField]: id } });
       if (!before) {
+        logSecurityEventFromContext('authz.bola_attempt', {
+          object: this.cfg.object,
+          id,
+          op: 'delete',
+        });
         throw new NotFoundException(`${this.cfg.object} not found`);
       }
       await this.delegate(tx).delete({ where: { [this.cfg.idField]: id } });

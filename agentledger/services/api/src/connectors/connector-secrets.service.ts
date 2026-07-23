@@ -1,24 +1,37 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { logSecurityEventFromContext } from '../security/security-event';
 import { getTenantId } from '../tenant/tenant-context';
-
 import { env } from '../env';
 
 const ALGO = 'aes-256-gcm';
 
-function encryptionKey(): Buffer {
-  const raw = env('BADGERIQ_CONNECTOR_SECRET_KEY') ?? env('BADGERIQ_JWT_SECRET') ?? 'dev-only-connector-key';
-  return createHash('sha256').update(raw).digest();
-}
-
+/**
+ * AES-256-GCM encryption for connector credentials at rest.
+ *
+ * Requires BADGERIQ_CONNECTOR_SECRET_KEY (32+ chars) — never falls back to the
+ * JWT signing secret or a hardcoded default. A single compromise of JWT must
+ * not decrypt connector credentials.
+ */
 @Injectable()
 export class ConnectorSecretsService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly key: Buffer;
+
+  constructor(private readonly prisma: PrismaService) {
+    const raw = env('BADGERIQ_CONNECTOR_SECRET_KEY');
+    if (!raw || raw.length < 32) {
+      throw new Error(
+        'BADGERIQ_CONNECTOR_SECRET_KEY must be set to a random 32+ character string. ' +
+          'Generate with: openssl rand -base64 32',
+      );
+    }
+    this.key = createHash('sha256').update(raw).digest();
+  }
 
   private encrypt(plaintext: string): string {
     const iv = randomBytes(12);
-    const cipher = createCipheriv(ALGO, encryptionKey(), iv);
+    const cipher = createCipheriv(ALGO, this.key, iv);
     const enc = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
     const tag = cipher.getAuthTag();
     return Buffer.concat([iv, tag, enc]).toString('base64');
@@ -29,7 +42,7 @@ export class ConnectorSecretsService {
     const iv = buf.subarray(0, 12);
     const tag = buf.subarray(12, 28);
     const data = buf.subarray(28);
-    const decipher = createDecipheriv(ALGO, encryptionKey(), iv);
+    const decipher = createDecipheriv(ALGO, this.key, iv);
     decipher.setAuthTag(tag);
     return Buffer.concat([decipher.update(data), decipher.final()]).toString('utf8');
   }
@@ -52,6 +65,11 @@ export class ConnectorSecretsService {
       tx.connectorSecret.findUnique({ where: { secretId: secretRef } }),
     );
     if (!row) return undefined;
+    // Audit decrypt/use only — never log ciphertext or plaintext.
+    logSecurityEventFromContext('connector.secret_access', {
+      secretId: secretRef,
+      op: 'resolve',
+    });
     return this.decrypt(row.ciphertext);
   }
 
