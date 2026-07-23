@@ -22,12 +22,18 @@ function encryptWithRawKey(rawKey: string, plaintext: string): string {
 
 describe('ConnectorSecretsService', () => {
   const saved: Record<string, string | undefined> = {};
-  const update = jest.fn(async () => ({}));
+  type UpdateArgs = { where: unknown; data: { ciphertext: string } };
+  const update = jest.fn(async (args: UpdateArgs) => {
+    void args;
+    return {};
+  });
   const findUnique = jest.fn();
-  const withTenant = jest.fn(
-    async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
-      fn({ connectorSecret: { findUnique, update, create: jest.fn(), deleteMany: jest.fn() } }),
-  );
+  const withTenant = jest.fn(async (tenantId: string, fn: (tx: unknown) => Promise<unknown>) => {
+    void tenantId;
+    return fn({
+      connectorSecret: { findUnique, update, create: jest.fn(), deleteMany: jest.fn() },
+    });
+  });
   const prisma = { withTenant } as unknown as PrismaService;
 
   beforeEach(() => {
