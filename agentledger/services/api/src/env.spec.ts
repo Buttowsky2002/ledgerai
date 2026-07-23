@@ -1,4 +1,42 @@
-import { redactPgDsn, resolvePgDsn } from './env';
+import { env, redactPgDsn, resolvePgDsn } from './env';
+
+describe('required secrets (connector encryption)', () => {
+  const KEYS = [
+    'BADGERIQ_CONNECTOR_SECRET_KEY',
+    'LEDGERAI_CONNECTOR_SECRET_KEY',
+    'AGENTLEDGER_CONNECTOR_SECRET_KEY',
+  ] as const;
+  const saved: Record<string, string | undefined> = {};
+
+  beforeEach(() => {
+    for (const k of KEYS) {
+      saved[k] = process.env[k];
+      delete process.env[k];
+    }
+  });
+
+  afterEach(() => {
+    for (const k of KEYS) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  });
+
+  it('resolves BADGERIQ_CONNECTOR_SECRET_KEY when set', () => {
+    process.env.BADGERIQ_CONNECTOR_SECRET_KEY = 'a'.repeat(32);
+    expect(env('BADGERIQ_CONNECTOR_SECRET_KEY')).toBe('a'.repeat(32));
+  });
+
+  it('resolves AGENTLEDGER_CONNECTOR_SECRET_KEY alias for BADGERIQ_* lookup', () => {
+    process.env.AGENTLEDGER_CONNECTOR_SECRET_KEY = 'b'.repeat(32);
+    expect(env('BADGERIQ_CONNECTOR_SECRET_KEY')).toBe('b'.repeat(32));
+  });
+
+  it('returns undefined when connector secret key is unset (no JWT fallback in env)', () => {
+    process.env.BADGERIQ_JWT_SECRET = 'jwt-must-not-satisfy-connector-key';
+    expect(env('BADGERIQ_CONNECTOR_SECRET_KEY')).toBeUndefined();
+  });
+});
 
 describe('resolvePgDsn', () => {
   const envBackup = { ...process.env };
