@@ -47,6 +47,7 @@ async function bootstrap(): Promise<void> {
       {
         event: 'dev_tenant_header_trust_enabled',
         nodeEnv: process.env.NODE_ENV ?? 'development',
+        badgeriqEnv: env('BADGERIQ_ENV') ?? null,
         detail:
           'x-tenant-id is trusted as a dev auth bypass (grants admin). DEV ONLY — ' +
           'never enable LEDGERAI_DEV_TRUST_HEADER in production.',

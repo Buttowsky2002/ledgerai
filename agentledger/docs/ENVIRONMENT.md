@@ -30,7 +30,7 @@ for an example file see [`.env.example`](../.env.example).
 | `BADGERIQ_CONFIG` | `config.json` | Path to the gateway config file (virtual keys, providers, DLP). |
 | 🔒 `BADGERIQ_PG_DSN` | _(unset)_ | Optional: load virtual keys/DLP/tool-allowlist from Postgres (hot reload). Unset = static file config. |
 | 🔒 `BADGERIQ_OPS_TOKEN` | _(unset)_ | Bearer required for `/v1/usage` and `/metrics`. Unset in prod → those return 404. |
-| `BADGERIQ_ENV` | _(unset)_ | `production` locks ops endpoints when no token is set. |
+| `BADGERIQ_ENV` | _(unset)_ | `production` / `prod` locks ops endpoints when no token is set, and (with `NODE_ENV`) disables the API `x-tenant-id` dev-trust bypass via `env()` aliases. |
 | `BADGERIQ_ALLOW_UNAUTH_OPS` | _(unset)_ | Dev-only: allow unauthenticated ops access. Never in prod. |
 | `BADGERIQ_METRICS_PUBLIC` | _(unset)_ | `true` exposes `/metrics` unauthenticated (trusted private scrape net only). |
 | `BADGERIQ_DEFAULT_RESERVE_USD` | `0.01` | Budget hold when a request has no `max_tokens`. |
