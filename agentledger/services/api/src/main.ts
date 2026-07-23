@@ -121,7 +121,15 @@ async function bootstrap(): Promise<void> {
     PORT: env('PORT'),
   });
   await app.listen(port, host);
-  console.log('[api] listening', { host, port });
+
+  // Node 18+ defaults requestTimeout to 300s. Cursor/Anthropic multi-chunk
+  // syncs regularly exceed that; raise so the handler can finish and flip
+  // status off "syncing" instead of aborting mid-run.
+  const server = app.getHttpServer() as import('http').Server;
+  const longMs = 10 * 60 * 1000;
+  server.requestTimeout = longMs;
+  server.headersTimeout = longMs + 5_000;
+  console.log('[api] listening', { host, port, requestTimeoutMs: longMs });
 }
 
 console.log('[api] main.ts loaded');

@@ -37,5 +37,6 @@ ENV HOSTNAME=0.0.0.0
 COPY --from=build /repo/apps/dashboard/public ./public
 COPY --from=build /repo/apps/dashboard/.next/standalone ./
 COPY --from=build /repo/apps/dashboard/.next/static ./.next/static
+COPY --from=build /repo/apps/dashboard/server-entry.cjs ./server-entry.cjs
 EXPOSE 3000
-CMD ["node", "server.js"]
+CMD ["node", "server-entry.cjs"]

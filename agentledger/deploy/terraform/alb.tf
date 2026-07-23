@@ -71,6 +71,10 @@ resource "aws_lb" "main" {
   security_groups    = [aws_security_group.alb.id]
   subnets            = module.network.public_subnet_ids
 
+  # Cursor/Anthropic multi-chunk syncs can run several minutes with no response
+  # bytes; the default 60s idle timeout aborts the browser/BFF connection mid-sync.
+  idle_timeout = 600
+
   tags = local.tags
 }
 
