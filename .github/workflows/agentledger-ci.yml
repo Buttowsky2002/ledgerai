@@ -165,11 +165,12 @@ jobs:
       - name: Build shared-types (workspace dependency)
         working-directory: agentledger/packages/shared-types
         run: npm ci && npm run build
-      - name: Lint + build dashboard
+      - name: Lint + test + build dashboard
         working-directory: agentledger/apps/dashboard
         run: |
           npm ci
           npm run lint
+          npm test
           npm run build
       # Blocking for new highs once Next majors clear remaining advisories (fix only
       # via next@16 today). Until that upgrade PR lands, this stays soft-fail so the

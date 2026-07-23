@@ -29,7 +29,7 @@ aws ecs describe-task-definition --task-definition badgeriq-pilot-dashboard --re
 
 Write-Host ""
 Write-Host "=== Secrets parse check ===" -ForegroundColor Cyan
-$secrets = @("postgres", "clickhouse", "jwt", "oidc-microsoft", "ghcr", "anthropic", "github")
+$secrets = @("postgres", "clickhouse", "jwt", "connector-secret-key", "oidc-microsoft", "ghcr", "anthropic", "github")
 foreach ($s in $secrets) {
     $raw = aws secretsmanager get-secret-value --secret-id "badgeriq/pilot/$s" --query SecretString --output text --region $region 2>$null
     if ($LASTEXITCODE -ne 0) {

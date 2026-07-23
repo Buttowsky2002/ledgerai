@@ -5,10 +5,14 @@
  * without a live IdP. It MUST never be reachable in production. Two independent
  * layers enforce that:
  *
- *  1. shouldTrustDevTenantHeader() is hard-gated on NODE_ENV !== 'production', so
- *     the middleware never trusts the header in prod even if the flag is set.
+ *  1. shouldTrustDevTenantHeader() is hard-gated on isProductionEnv(), so the
+ *     middleware never trusts the header in prod even if the flag is set.
  *  2. assertDevTrustHeaderNotInProduction() fails startup when the flag is set in
  *     production, so a misconfiguration cannot silently ship.
+ *
+ * Production is detected via env('BADGERIQ_ENV') (and LEDGERAI_/AGENTLEDGER_
+ * aliases used in ECS task definitions) OR NODE_ENV === 'production'. Checking
+ * only process.env.BADGERIQ_ENV would miss the alias path.
  *
  * The flag is read with explicit OR semantics across the current and deprecated
  * names — if *either* is 'true' the shim is considered requested (fail-safe: a
@@ -17,6 +21,18 @@
 
 import { env } from '../env';
 
+/**
+ * True when the process is treated as production for auth safety.
+ * Prefers BADGERIQ_ENV (alias-aware via env()); NODE_ENV remains a second gate.
+ */
+export function isProductionEnv(): boolean {
+  const named = (env('BADGERIQ_ENV') ?? '').trim().toLowerCase();
+  if (named === 'production' || named === 'prod') {
+    return true;
+  }
+  return process.env.NODE_ENV === 'production';
+}
+
 /** True if the current or a deprecated dev-trust flag is set to 'true'. */
 export function devTrustHeaderRequested(): boolean {
   return env('BADGERIQ_DEV_TRUST_HEADER') === 'true';
@@ -24,7 +40,7 @@ export function devTrustHeaderRequested(): boolean {
 
 /** The dev x-tenant-id header is trusted only outside production and when requested. */
 export function shouldTrustDevTenantHeader(): boolean {
-  return process.env.NODE_ENV !== 'production' && devTrustHeaderRequested();
+  return !isProductionEnv() && devTrustHeaderRequested();
 }
 
 /**
@@ -33,11 +49,12 @@ export function shouldTrustDevTenantHeader(): boolean {
  * starts serving traffic.
  */
 export function assertDevTrustHeaderNotInProduction(): void {
-  if (process.env.NODE_ENV === 'production' && devTrustHeaderRequested()) {
+  if (isProductionEnv() && devTrustHeaderRequested()) {
     throw new Error(
       'FATAL: dev tenant-header auth is enabled in production ' +
         '(BADGERIQ_DEV_TRUST_HEADER / LEDGERAI_DEV_TRUST_HEADER / AGENTLEDGER_DEV_TRUST_HEADER === "true"). ' +
-        'This bypasses authentication and must never run in production — refusing to start.',
+        'This bypasses authentication and must never run in production — refusing to start. ' +
+        'Production is detected via BADGERIQ_ENV (or aliases) / NODE_ENV.',
     );
   }
 }

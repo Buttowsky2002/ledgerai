@@ -38,6 +38,10 @@ environment         = "pilot"
 clickhouse_url      = "https://xxx.clickhouse.cloud:8443"
 clickhouse_user     = "default"
 clickhouse_password = "..."
+# Secrets Manager ARNs (create secrets out-of-band; JSON key `secret`):
+# jwt_secret_arn             = "arn:aws:secretsmanager:...:secret:badgeriq/pilot/jwt-..."
+# connector_secret_key_arn   = "arn:aws:secretsmanager:...:secret:badgeriq/pilot/connector-secret-key-..."
+#   → value: {"secret":"<openssl rand -base64 32>"}  # MUST differ from JWT secret
 ```
 
 All other variables have sensible defaults. See `variables.tf` for the full list.

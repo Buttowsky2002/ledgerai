@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { getTenantId } from '../tenant/tenant-context';
 import { requireTenantFilter } from '../clickhouse/clickhouse.service';
@@ -72,13 +71,13 @@ function normalizeRow(row: Record<string, unknown>): Record<string, unknown> {
  *
  * Consumers keep their ClickHouse-dialect SQL; this store translates it (see
  * ch-sql-translator.ts) and runs it via Prisma against the analytics tables
- * and views from deploy/postgres/023_analytics_mvp.sql.
+ * and views from deploy/postgres/023_analytics_mvp.sql (+ 028 RLS harden).
  *
- * Tenant isolation is double-layered here: the same fail-closed
+ * Tenant isolation is double-layered: the same fail-closed
  * `tenant_id = {tenant:String}` filter contract as ClickHouse, PLUS Postgres
- * RLS — every statement that carries a tenant runs inside a
- * `withTenant` transaction so `app.tenant_id` is bound and the RLS policies
- * apply (fail closed to zero rows otherwise).
+ * RLS — every statement that has a tenant (param, row, or async request
+ * context via getTenantId()) runs inside `withTenant` so `app.tenant_id` is
+ * bound (fail closed to zero rows otherwise).
  */
 @Injectable()
 export class PostgresAnalyticsStore extends AnalyticsStore {
@@ -90,11 +89,18 @@ export class PostgresAnalyticsStore extends AnalyticsStore {
     super();
   }
 
+  /**
+   * Prefer an explicit tenant param/row value; otherwise the request principal
+   * from AsyncLocalStorage. Empty string is treated as absent.
+   */
+  private resolveTenantId(explicit?: string | null): string | null {
+    if (typeof explicit === 'string' && explicit !== '') return explicit;
+    return getTenantId();
+  }
+
   async query<T = Record<string, unknown>>(sql: string, params: Record<string, ChParam> = {}): Promise<T[]> {
     const { sql: pgSql, values } = translateChSql(sql, params);
-    // Bind RLS context when the query carries an explicit tenant param
-    // (e.g. fixed-costs findOne); plain probes (SELECT 1) run unscoped.
-    const tenant = typeof params.tenant === 'string' ? params.tenant : null;
+    const tenant = this.resolveTenantId(typeof params.tenant === 'string' ? params.tenant : null);
     const rows = tenant
       ? await this.prisma.withTenant(tenant, (tx) => tx.$queryRawUnsafe<Record<string, unknown>[]>(pgSql, ...values))
       : await this.prisma.$queryRawUnsafe<Record<string, unknown>[]>(pgSql, ...values);
@@ -123,7 +129,7 @@ export class PostgresAnalyticsStore extends AnalyticsStore {
     const translated = translateChSql(sql, params);
     const values = translated.values;
     const pgSql = this.upsertifyInsert(translated.sql);
-    const tenant = typeof params.tenant === 'string' ? params.tenant : null;
+    const tenant = this.resolveTenantId(typeof params.tenant === 'string' ? params.tenant : null);
     if (tenant) {
       await this.prisma.withTenant(tenant, (tx) => tx.$executeRawUnsafe(pgSql, ...values));
     } else {
@@ -150,20 +156,22 @@ export class PostgresAnalyticsStore extends AnalyticsStore {
       else groups.set(sig, [row]);
     }
 
-    const tenant = typeof rows[0].tenant_id === 'string' ? (rows[0].tenant_id as string) : null;
-    const run = async (tx: Prisma.TransactionClient | PrismaService) => {
+    const tenant = this.resolveTenantId(
+      typeof rows[0].tenant_id === 'string' ? (rows[0].tenant_id as string) : null,
+    );
+    if (!tenant) {
+      throw new Error(
+        'postgres-analytics: refuse insert without tenant_id (RLS require app.tenant_id binding)',
+      );
+    }
+    await this.prisma.withTenant(tenant, async (tx) => {
       for (const [sig, groupRows] of groups) {
         const cols = sig === '' ? [] : sig.split(',');
         if (cols.length === 0) continue;
         const { sql, values } = this.buildInsert(table, cols, groupRows, types, upsert);
         await tx.$executeRawUnsafe(sql, ...values);
       }
-    };
-    if (tenant) {
-      await this.prisma.withTenant(tenant, (tx) => run(tx));
-    } else {
-      await run(this.prisma);
-    }
+    });
   }
 
   async ping(): Promise<void> {

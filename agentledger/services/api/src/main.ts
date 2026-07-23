@@ -3,6 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import { json, type NextFunction, type Request, type Response } from 'express';
+import helmet from 'helmet';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { ProblemDetailsFilter } from './common/problem-details.filter';
@@ -10,6 +11,7 @@ import { buildOpenApiDocument } from './swagger';
 import { env } from './env';
 import { assertDevTrustHeaderNotInProduction, shouldTrustDevTenantHeader } from './auth/dev-trust';
 import { docsBearerGuard, docsToken, resolveDocsMode } from './docs';
+import { corsOptions, VALIDATION_PIPE_OPTIONS } from './http-security';
 
 /**
  * Listen port: BADGERIQ_API_ADDR (Go-style ":8094" or bare port) wins, then
@@ -45,6 +47,7 @@ async function bootstrap(): Promise<void> {
       {
         event: 'dev_tenant_header_trust_enabled',
         nodeEnv: process.env.NODE_ENV ?? 'development',
+        badgeriqEnv: env('BADGERIQ_ENV') ?? null,
         detail:
           'x-tenant-id is trusted as a dev auth bypass (grants admin). DEV ONLY — ' +
           'never enable LEDGERAI_DEV_TRUST_HEADER in production.',
@@ -54,13 +57,13 @@ async function bootstrap(): Promise<void> {
   }
 
   // Reject unknown fields on writes; strip non-whitelisted props (security rule 5).
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-    }),
-  );
+  app.useGlobalPipes(new ValidationPipe(VALIDATION_PIPE_OPTIONS));
+
+  // Baseline HTTP security headers (CSP, X-Frame-Options, etc.).
+  app.use(helmet());
+
+  // Browser clients: dashboard origin only — never '*'.
+  app.enableCors(corsOptions());
 
   // RFC 7807 problem+json for every error response.
   app.useGlobalFilters(new ProblemDetailsFilter());

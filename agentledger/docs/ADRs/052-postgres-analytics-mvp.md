@@ -58,3 +58,8 @@ this codebase.
 - Go workers (ch-insert, reconciliation, attribution, risk) remain
   ClickHouse/Redpanda-only and are simply not deployed in MVP mode; import,
   connectors, and outcomes all flow through the API, which is backend-agnostic.
+- **RLS harden (028):** Production no longer runs ClickHouse. Migration
+  `028_analytics_rls_harden.sql` idempotently re-asserts FORCE RLS +
+  `tenant_isolation` on every analytics mirror table. `PostgresAnalyticsStore`
+  binds `app.tenant_id` from the request ALS (`getTenantId()`) whenever a
+  statement has no explicit tenant param, and refuses tenant-less inserts.
