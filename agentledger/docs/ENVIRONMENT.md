@@ -92,7 +92,7 @@ Full tables: `services/workers/README.md`.
 | `BADGERIQ_OIDC_REDIRECT_BASE` | `http://localhost:8094` | OIDC callback base URL. |
 | 🔒 OIDC client id/secret env vars | _(unset)_ | Per provider; unset → provider unavailable. |
 | `BADGERIQ_COOKIE_SAMESITE` | `strict` | Session cookie SameSite (`al_access` / `al_refresh`). Use `lax`/`none` for documented cross-site dashboard↔API. The OIDC tx cookie (`al_oidc_tx`) is always `Lax` (or `None` when this is `none`) so IdP return navigations work. |
-| `BADGERIQ_DASHBOARD_URL` | `http://localhost:3000` | Post-login redirect target. |
+| `BADGERIQ_DASHBOARD_URL` | `http://localhost:3000` | Post-login redirect target **and** API CORS `origin` (credentials enabled; never `*`). |
 | `BADGERIQ_EXPOSE_DOCS` | _(unset)_ | Expose Swagger; required to enable in production. |
 | 🔒 `BADGERIQ_DOCS_TOKEN` | _(unset)_ | Bearer for Swagger in production. |
 | `BADGERIQ_DEV_TRUST_HEADER` | _(unset)_ | **Dev only.** `x-tenant-id` → dev admin. The API refuses to start in production if set. |
