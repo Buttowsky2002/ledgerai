@@ -30,7 +30,7 @@ for an example file see [`.env.example`](../.env.example).
 | `BADGERIQ_CONFIG` | `config.json` | Path to the gateway config file (virtual keys, providers, DLP). |
 | 🔒 `BADGERIQ_PG_DSN` | _(unset)_ | Optional: load virtual keys/DLP/tool-allowlist from Postgres (hot reload). Unset = static file config. |
 | 🔒 `BADGERIQ_OPS_TOKEN` | _(unset)_ | Bearer required for `/v1/usage` and `/metrics`. Unset in prod → those return 404. |
-| `BADGERIQ_ENV` | _(unset)_ | `production` locks ops endpoints when no token is set. |
+| `BADGERIQ_ENV` | _(unset)_ | `production` / `prod` locks ops endpoints when no token is set, and (with `NODE_ENV`) disables the API `x-tenant-id` dev-trust bypass via `env()` aliases. |
 | `BADGERIQ_ALLOW_UNAUTH_OPS` | _(unset)_ | Dev-only: allow unauthenticated ops access. Never in prod. |
 | `BADGERIQ_METRICS_PUBLIC` | _(unset)_ | `true` exposes `/metrics` unauthenticated (trusted private scrape net only). |
 | `BADGERIQ_DEFAULT_RESERVE_USD` | `0.01` | Budget hold when a request has no `max_tokens`. |
@@ -83,24 +83,29 @@ Full tables: `services/workers/README.md`.
 |----------|---------|---------|
 | `NODE_ENV` | _(unset)_ | Set `production` in prod (disables dev auth + Swagger by default). |
 | 🔒 `BADGERIQ_PG_DSN` | _(required)_ | Postgres DSN (`agentledger_api` role). Alternatively set `DB_HOST`/`DB_NAME`/`DB_USER`/🔒 `DB_PASSWORD` (+ optional `DB_PORT`, `DB_SSLMODE`; `DB_HOST` may be a `/cloudsql/...` unix socket) — Cloud Run MVP convention. |
-| `BADGERIQ_ANALYTICS_BACKEND` | `clickhouse` | Analytics store: `clickhouse` (full stack) or `postgres` (Cloud Run MVP, single database; requires migration `023_analytics_mvp.sql`). |
+| `BADGERIQ_ANALYTICS_BACKEND` | `postgres` (MVP) / `clickhouse` | Analytics store. Production MVP uses **postgres** (RLS via `app.tenant_id` + migration `028_analytics_rls_harden.sql`). ClickHouse path is optional and unused when set to `postgres`. |
 | ClickHouse vars | — | Analytics reads (unused when `BADGERIQ_ANALYTICS_BACKEND=postgres`). |
 | `BADGERIQ_API_ADDR` | `:8094` | Listen address. |
 | `BADGERIQ_API_BODY_LIMIT` | `256kb` | Max request body. |
 | 🔒 `BADGERIQ_JWT_SECRET` | _(required)_ | Session-JWT HS256 secret (unprefixed `JWT_SECRET` also accepted). |
+| 🔒 `BADGERIQ_CONNECTOR_SECRET_KEY` | _(required)_ | AES-256 key material for connector credentials at rest. **Must not** reuse the JWT secret. Generate: `openssl rand -base64 32`. |
 | `BADGERIQ_JWT_ACCESS_TTL` / `_REFRESH_TTL` | `15m` / `7d` | Token lifetimes. |
 | `BADGERIQ_OIDC_REDIRECT_BASE` | `http://localhost:8094` | OIDC callback base URL. |
 | 🔒 OIDC client id/secret env vars | _(unset)_ | Per provider; unset → provider unavailable. |
 | `BADGERIQ_COOKIE_SAMESITE` | `strict` | Session cookie SameSite (`al_access` / `al_refresh`). Use `lax`/`none` for documented cross-site dashboard↔API. The OIDC tx cookie (`al_oidc_tx`) is always `Lax` (or `None` when this is `none`) so IdP return navigations work. |
-| `BADGERIQ_DASHBOARD_URL` | `http://localhost:3000` | Post-login redirect target. |
+| `BADGERIQ_DASHBOARD_URL` | `http://localhost:3000` | Post-login redirect target **and** API CORS `origin` (credentials enabled; never `*`). |
 | `BADGERIQ_EXPOSE_DOCS` | _(unset)_ | Expose Swagger; required to enable in production. |
 | 🔒 `BADGERIQ_DOCS_TOKEN` | _(unset)_ | Bearer for Swagger in production. |
 | `BADGERIQ_DEV_TRUST_HEADER` | _(unset)_ | **Dev only.** `x-tenant-id` → dev admin. The API refuses to start in production if set. |
 | `BADGERIQ_CONNECTOR_SCHEDULER_ENABLED` | _(true)_ | Set `false` to disable hourly background sync for API connectors. |
 | `BADGERIQ_CONNECTOR_SCHEDULER_INTERVAL_MS` | `3600000` | How often the scheduler checks for due connectors (ms). Per-connector interval is `schedule_json.intervalMinutes` (default 60). |
+| 🔒 `BADGERIQ_CONNECTOR_SECRET_KEY` | _(required when using Postgres ciphertext)_ | AES key for `connector_secrets`. Planned move to per-connector AWS Secrets Manager ARNs — see [RUNBOOKS/secrets-manager-migration.md](./RUNBOOKS/secrets-manager-migration.md). |
 
-## Dashboard (`apps/dashboard`)
+## Runbooks
 
+| Doc | Purpose |
+|-----|---------|
+| [secrets-manager-migration.md](./RUNBOOKS/secrets-manager-migration.md) | Migrate connector credentials from Postgres ciphertext → AWS Secrets Manager. |
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `BADGERIQ_API_URL` | `http://localhost:8094` | Control-plane API base (server-side BFF). |

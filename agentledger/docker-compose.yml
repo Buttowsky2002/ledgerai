@@ -295,6 +295,8 @@ services:
       NODE_ENV: development
       # Session-JWT signing secret (dev placeholder; prod injects via secret manager).
       AGENTLEDGER_JWT_SECRET: dev_only_change_me_jwt
+      # Dedicated AES key for connector credentials (must differ from JWT secret).
+      BADGERIQ_CONNECTOR_SECRET_KEY: dev_only_change_me_connector_secret_key_32
       # DEV ONLY: trust x-tenant-id header (dev admin principal) alongside real JWT auth.
       AGENTLEDGER_DEV_TRUST_HEADER: "true"
       BADGERIQ_DESIGN_PARTNER_ONBOARD_ENABLED: "true"

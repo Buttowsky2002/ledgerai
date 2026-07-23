@@ -1,6 +1,7 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { getPrincipal } from '../tenant/tenant-context';
+import { logSecurityEventFromContext } from '../security/security-event';
 import { ApiRole, ROLES_KEY, ROLE_RANK } from './decorators';
 
 /**
@@ -24,6 +25,10 @@ export class RolesGuard implements CanActivate {
     const have = role ? (ROLE_RANK[role] ?? 0) : 0;
     const need = Math.min(...required.map((r) => ROLE_RANK[r] ?? Infinity));
     if (have < need) {
+      logSecurityEventFromContext('authz.denied', {
+        have: role,
+        need: required,
+      });
       throw new ForbiddenException('insufficient role');
     }
     return true;

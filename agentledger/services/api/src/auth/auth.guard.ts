@@ -1,6 +1,7 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { getPrincipal } from '../tenant/tenant-context';
+import { logSecurityEventFromContext } from '../security/security-event';
 import { IS_PUBLIC_KEY } from './decorators';
 
 /**
@@ -22,6 +23,7 @@ export class AuthGuard implements CanActivate {
     }
     const principal = getPrincipal();
     if (!principal || !principal.tenantId) {
+      logSecurityEventFromContext('auth.login_failure', { reason: 'authentication_required' });
       throw new UnauthorizedException('authentication required');
     }
     return true;

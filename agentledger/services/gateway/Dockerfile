@@ -16,4 +16,5 @@ COPY --from=build /gateway /gateway
 COPY --from=build /src/config.example.json /etc/agentledger/config.json
 COPY --from=build /src/pricing /etc/agentledger/pricing
 EXPOSE 8080
+USER nonroot
 ENTRYPOINT ["/gateway"]

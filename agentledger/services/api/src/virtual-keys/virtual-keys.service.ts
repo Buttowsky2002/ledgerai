@@ -4,6 +4,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { recordAudit } from '../common/audit';
 import { Page } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
+import { logSecurityEventFromContext } from '../security/security-event';
 import { getTenantId } from '../tenant/tenant-context';
 
 /** SHA-256 hex — mirrors the gateway's sha256hex (keys.go) so minted keys authenticate. */
@@ -56,6 +57,11 @@ export class VirtualKeysService {
       tx.virtualKey.findFirst({ where: { keyId: id, ...(tenantId ? { tenantId } : {}) } }),
     );
     if (!row) {
+      logSecurityEventFromContext('authz.bola_attempt', {
+        object: 'virtual_key',
+        id,
+        op: 'get',
+      });
       throw new NotFoundException('virtual_key not found');
     }
     return this.sanitize(row);
@@ -101,6 +107,11 @@ export class VirtualKeysService {
         where: { keyId: id, ...(tenantId ? { tenantId } : {}) },
       });
       if (!before) {
+        logSecurityEventFromContext('authz.bola_attempt', {
+          object: 'virtual_key',
+          id,
+          op: 'update',
+        });
         throw new NotFoundException('virtual_key not found');
       }
       const after = await tx.virtualKey.update({
@@ -132,6 +143,11 @@ export class VirtualKeysService {
         where: { keyId: id, ...(tenantId ? { tenantId } : {}) },
       });
       if (!before) {
+        logSecurityEventFromContext('authz.bola_attempt', {
+          object: 'virtual_key',
+          id,
+          op: 'revoke',
+        });
         throw new NotFoundException('virtual_key not found');
       }
       const after = await tx.virtualKey.update({

@@ -61,7 +61,7 @@ type LLMCallEvent struct {
 
 	// risk
 	PromptHash   string    `json:"prompt_hash"`
-	DLPAction    string    `json:"dlp_action"` // allow|log|warn|redact|block
+	DLPAction    string    `json:"dlp_action"` // allow|log|warn|redact|block|flag
 	DLPFindings  []Finding `json:"dlp_findings,omitempty"`
 	RiskSeverity string    `json:"risk_severity,omitempty"`
 	Streamed     bool      `json:"streamed"`

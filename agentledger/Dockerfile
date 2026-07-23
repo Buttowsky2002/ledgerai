@@ -81,4 +81,5 @@ EXPOSE 8080
 
 # distroless/nodejs entrypoint is `node`; exec form keeps it PID 1 so SIGTERM
 # from Cloud Run reaches the app directly (graceful shutdown).
+USER nonroot
 CMD ["dist/main.js"]
