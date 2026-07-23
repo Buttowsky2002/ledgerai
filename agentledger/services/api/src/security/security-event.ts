@@ -17,7 +17,8 @@ export type SecurityEventType =
   | 'dlp.finding'
   | 'prompt_injection'
   | 'budget.threshold'
-  | 'connector.secret_access';
+  | 'connector.secret_access'
+  | 'connector.secret_rekeyed';
 
 export interface SecurityEvent {
   type: SecurityEventType;
