@@ -16,6 +16,7 @@ import {
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { Public } from '../auth/decorators';
+import { SCIM_THROTTLE } from '../auth/throttle-limits';
 import { ScimAuthGuard, ScimRequest } from './scim-auth.guard';
 import { ScimCtx, ScimService } from './scim.service';
 import { parsePatch, scimError } from './scim.types';
@@ -24,14 +25,15 @@ const MAX_COUNT = 200;
 
 /**
  * SCIM 2.0 provisioning endpoint (RFC 7643/7644), mounted at /scim/v2. Tenant
- * IdPs (Okta/Entra/…) call it with a per-tenant bearer token (ScimAuthGuard).
- * @Public exempts it from the JWT AuthGuard; the SCIM guard authenticates instead
- * and resolves the tenant, which every handler passes explicitly to the service.
- * A generous throttle accommodates bulk sync without disabling rate limiting.
+ * IdPs (Okta/Entra/…) call it with a per-tenant bearer token (ScimAuthGuard) —
+ * not session/JWT cookies. @Public exempts it from the JWT AuthGuard; the SCIM
+ * guard authenticates instead and resolves the tenant, which every handler
+ * passes explicitly to the service. Throttle is tighter than the global API
+ * default but high enough for typical IdP sync bursts.
  */
 @Public()
 @UseGuards(ScimAuthGuard)
-@Throttle({ default: { limit: 300, ttl: 60_000 } })
+@Throttle(SCIM_THROTTLE)
 @Controller('scim/v2')
 export class ScimController {
   constructor(private readonly scim: ScimService) {}

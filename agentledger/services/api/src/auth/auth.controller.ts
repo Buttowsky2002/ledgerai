@@ -18,6 +18,7 @@ import { AuthService } from './auth.service';
 import { Public } from './decorators';
 import { JwtService } from './jwt.service';
 import { OidcService } from './oidc.service';
+import { AUTH_THROTTLE } from './throttle-limits';
 
 const ACCESS_COOKIE = 'al_access';
 const REFRESH_COOKIE = 'al_refresh';
@@ -100,8 +101,6 @@ export function wantsJsonResponse(req: Request): boolean {
 }
 
 @Controller('auth')
-// Stricter rate limit on auth endpoints (security rule 6) than the global default.
-@Throttle({ default: { limit: 10, ttl: 60_000 } })
 export class AuthController {
   constructor(
     private readonly oidc: OidcService,
@@ -127,6 +126,7 @@ export class AuthController {
 
   /** Begin OIDC login: redirect to the provider with state+nonce+PKCE. */
   @Public()
+  @Throttle(AUTH_THROTTLE.login)
   @Get('login/:provider')
   async login(@Param('provider') provider: string, @Res() res: Response): Promise<void> {
     const { url, state, nonce, codeVerifier } = await this.oidc.buildAuthRequest(provider);
@@ -137,6 +137,7 @@ export class AuthController {
 
   /** OIDC callback: validate, resolve identity, issue tokens. */
   @Public()
+  @Throttle(AUTH_THROTTLE.callback)
   @Get('callback/:provider')
   async callback(
     @Param('provider') provider: string,
@@ -167,6 +168,7 @@ export class AuthController {
    * tenant + idp so the callback can finish without server-side session state.
    */
   @Public()
+  @Throttle(AUTH_THROTTLE.login)
   @Get('sso/login')
   async ssoLogin(@Query('email') email: string, @Res() res: Response): Promise<void> {
     if (!email || !email.includes('@')) {
@@ -197,6 +199,7 @@ export class AuthController {
 
   /** Per-tenant SSO callback: validate, JIT-provision or look up, issue tokens. */
   @Public()
+  @Throttle(AUTH_THROTTLE.callback)
   @Get('sso/callback')
   async ssoCallback(@Req() req: Request, @Res() res: Response): Promise<void> {
     const txCookie = req.cookies?.[OIDC_TX_COOKIE];
@@ -234,6 +237,7 @@ export class AuthController {
    * carries no token, just liveness + lifetime for the caller's refresh timer.
    */
   @Public()
+  @Throttle(AUTH_THROTTLE.refresh)
   @Post('refresh')
   async refresh(@Req() req: Request, @Res() res: Response): Promise<void> {
     const refreshToken = req.cookies?.[REFRESH_COOKIE];
