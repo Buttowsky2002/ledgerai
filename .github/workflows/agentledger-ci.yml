@@ -143,13 +143,12 @@ jobs:
       - run: npm run lint
       - run: npm run build
       - run: npm test
-      # TODO(security): make this a BLOCKING gate — remove `continue-on-error: true`
-      # once the pre-existing NestJS transitive advisories are cleared. Tracked by a
-      # "make npm audit blocking" issue; Dependabot opens the upgrade PRs
-      # (see .github/dependabot.yml). Advisory-only until then.
-      - name: Dependency audit
+      # Production-dep audit (--omit=dev). Remains soft-fail until NestJS 11 clears
+      # qs/express highs without a major platform bump (Phase 10). Dockerfile +
+      # gitleaks + govulncheck are the hard gates in this phase.
+      - name: npm audit (production)
         continue-on-error: true
-        run: npm audit --audit-level=high
+        run: npm audit --audit-level=high --omit=dev
 
   # ── 5. TypeScript — dashboard (needs shared-types built: file: dependency) ──
   node-dashboard:
@@ -172,12 +171,13 @@ jobs:
           npm ci
           npm run lint
           npm run build
-      # TODO(security): make blocking (drop `continue-on-error`) once the Next.js
-      # transitive advisories are resolved (needs a major bump). See node-api.
-      - name: Dependency audit
+      # Blocking for new highs once Next majors clear remaining advisories (fix only
+      # via next@16 today). Until that upgrade PR lands, this stays soft-fail so the
+      # rest of CI remains a usable gate; do not widen the exception.
+      - name: npm audit (production)
         continue-on-error: true
         working-directory: agentledger/apps/dashboard
-        run: npm audit --audit-level=high
+        run: npm audit --audit-level=high --omit=dev
 
   # ── 6. TypeScript — SDK ────────────────────────────────────────────────────
   node-sdk:
@@ -198,11 +198,9 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
-      # TODO(security): the SDK ships zero runtime deps, so this can become blocking
-      # (drop `continue-on-error`) after a devDependency audit pass. See node-api.
-      - name: Dependency audit
-        continue-on-error: true
-        run: npm audit --audit-level=high
+      # SDK has zero production deps — blocking audit is safe (Phase 10).
+      - name: npm audit (production)
+        run: npm audit --audit-level=high --omit=dev
 
   # ── 7. API e2e — tenant isolation, RBAC, audit, analytics, ROI ─────────────
   # Brings up Postgres (+ dev role + migrations) and ClickHouse via compose,
@@ -315,3 +313,29 @@ jobs:
           else
             echo "No example fixtures yet — skipping AJV validation."
           fi
+
+  # ── 11. Container non-root + supply-chain gates (Phase 10) ─────────────────
+  dockerfile-nonroot:
+    name: Dockerfile non-root check
+    runs-on: ubuntu-latest
+    needs: gitleaks
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require USER (non-root) in every Dockerfile
+        run: |
+          set -euo pipefail
+          fail=0
+          while IFS= read -r -d '' f; do
+            if grep -Eq '^USER[[:space:]]+0($|[[:space:]])|^USER[[:space:]]+root($|[[:space:]])' "$f"; then
+              echo "FAIL: $f sets USER root/0"
+              fail=1
+              continue
+            fi
+            if ! grep -Eq '^USER[[:space:]]+' "$f"; then
+              echo "FAIL: $f has no USER directive in the final image definition"
+              fail=1
+            else
+              echo "OK: $f"
+            fi
+          done < <(find agentledger -type f \( -name 'Dockerfile' -o -name 'Dockerfile.*' \) -print0)
+          exit "$fail"

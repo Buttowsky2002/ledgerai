@@ -22,4 +22,5 @@ COPY --from=build /src/prisma ./prisma
 COPY --from=build /src/pricing ./pricing
 EXPOSE 8094
 # distroless/nodejs entrypoint is `node`; pass the bundled entry.
+USER nonroot
 CMD ["dist/main.js"]

@@ -38,4 +38,5 @@ COPY --from=build /repo/apps/dashboard/public ./public
 COPY --from=build /repo/apps/dashboard/.next/standalone ./
 COPY --from=build /repo/apps/dashboard/.next/static ./.next/static
 EXPOSE 3000
+USER node
 CMD ["node", "server.js"]

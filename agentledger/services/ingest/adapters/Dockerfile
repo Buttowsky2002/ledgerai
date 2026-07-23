@@ -8,4 +8,5 @@ RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /app ./cmd/${CMD}
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /app /app
+USER nonroot
 ENTRYPOINT ["/app"]
