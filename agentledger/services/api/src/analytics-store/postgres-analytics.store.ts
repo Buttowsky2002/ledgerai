@@ -119,10 +119,16 @@ export class PostgresAnalyticsStore extends AnalyticsStore {
     }
     safe.tenant = tenantId;
     const { sql: pgSql, values } = translateChSql(sql, safe);
-    const rows = await this.prisma.withTenant(tenantId, (tx) =>
-      tx.$queryRawUnsafe<Record<string, unknown>[]>(pgSql, ...values),
-    );
-    return rows.map(normalizeRow) as T[];
+    try {
+      const rows = await this.prisma.withTenant(tenantId, (tx) =>
+        tx.$queryRawUnsafe<Record<string, unknown>[]>(pgSql, ...values),
+      );
+      return rows.map(normalizeRow) as T[];
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Postgres analytics query failed: ${msg}`);
+      throw err;
+    }
   }
 
   async command(sql: string, params: Record<string, ChParam> = {}): Promise<void> {

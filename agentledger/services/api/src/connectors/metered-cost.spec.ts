@@ -79,7 +79,11 @@ describe('metered-cost', () => {
       expect(sql).toContain('CASE WHEN portal_usd > 0 THEN portal_usd ELSE api_usd END');
     }
     expect(RECONCILED_USER_DAILY_SPEND_SQL).toContain('AS calls');
-    expect(RECONCILED_MODEL_USAGE_SQL).toContain('reconciled_input_tokens');
+    // Reconcile CASEs must live outside the portal/api aggregate SELECT (PG alias rules).
+    expect(RECONCILED_MODEL_USAGE_SQL).toContain('sum((CASE WHEN portal_usd > 0 THEN portal_in ELSE api_in END)');
+    expect(RECONCILED_MODEL_USAGE_SQL).not.toMatch(
+      /AS portal_usd[\s\S]*CASE WHEN portal_usd[\s\S]*AS per_day_model/,
+    );
     expect(RECONCILED_TENANT_DAILY_SPEND_SQL).toContain('GROUP BY key, day');
   });
 });

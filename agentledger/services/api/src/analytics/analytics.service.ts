@@ -546,7 +546,7 @@ export class AnalyticsService {
          WHERE tenant_id = {tenant:String}
            AND day BETWEEN {from:Date} AND {to:Date}
          GROUP BY key
-         HAVING cost_usd > 0`,
+         HAVING sum(cost_usd) > 0`,
         params,
       ),
       this.ch.queryScoped<{ user_id: string; day: string; cost_usd: unknown }>(
@@ -557,7 +557,7 @@ export class AnalyticsService {
          WHERE tenant_id = {tenant:String}
            AND day BETWEEN {from:Date} AND {to:Date}
          GROUP BY user_id, day
-         HAVING cost_usd > 0
+         HAVING sum(cost_usd) > 0
          ORDER BY user_id, day`,
         params,
       ),
@@ -956,7 +956,7 @@ export class AnalyticsService {
          FROM llm_calls
          WHERE tenant_id = {tenant:String} AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
            AND ${LLM_CALLS_METERED_SCOPE}
-         GROUP BY provider HAVING cost_usd > 0 ORDER BY cost_usd DESC`,
+         GROUP BY provider HAVING sum(${METERED_COST}) > 0 ORDER BY cost_usd DESC`,
         p,
       ),
       this.ch.queryScoped(

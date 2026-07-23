@@ -172,15 +172,18 @@ export const RECONCILED_PROVIDER_SPEND_SQL = `
 /**
  * Model usage for LARI — reconciled metered cost + tokens per provider/model
  * (portal CSV wins over connector API per user+day+provider+model).
+ *
+ * Reconcile CASE expressions live in the *outer* SELECT so Postgres can resolve
+ * portal_* / api_* aliases (ClickHouse allows same-SELECT alias refs; PG does not).
  */
 export const RECONCILED_MODEL_USAGE_SQL = `
   SELECT
     provider,
     model,
-    sum(reconciled_input_tokens) AS input_tokens,
-    sum(reconciled_output_tokens) AS output_tokens,
-    sum(reconciled_usd) AS cost_usd,
-    sum(reconciled_calls) AS calls
+    sum((CASE WHEN portal_usd > 0 THEN portal_in ELSE api_in END) + other_in) AS input_tokens,
+    sum((CASE WHEN portal_usd > 0 THEN portal_out ELSE api_out END) + other_out) AS output_tokens,
+    sum((CASE WHEN portal_usd > 0 THEN portal_usd ELSE api_usd END) + other_usd) AS cost_usd,
+    sum((CASE WHEN portal_calls > 0 THEN portal_calls ELSE api_calls END) + other_calls) AS calls
   FROM (
     SELECT
       if(user_id = '', 'Unassigned', user_id) AS key,
@@ -203,11 +206,7 @@ export const RECONCILED_MODEL_USAGE_SQL = `
       ) AS other_usd,
       countIf(
         ${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source NOT IN ('portal_import', 'api')
-      ) AS other_calls,
-      (CASE WHEN portal_usd > 0 THEN portal_in ELSE api_in END) + other_in AS reconciled_input_tokens,
-      (CASE WHEN portal_usd > 0 THEN portal_out ELSE api_out END) + other_out AS reconciled_output_tokens,
-      (CASE WHEN portal_usd > 0 THEN portal_usd ELSE api_usd END) + other_usd AS reconciled_usd,
-      (CASE WHEN portal_calls > 0 THEN portal_calls ELSE api_calls END) + other_calls AS reconciled_calls
+      ) AS other_calls
     FROM llm_calls
     WHERE tenant_id = {tenant:String}
       AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
@@ -215,19 +214,19 @@ export const RECONCILED_MODEL_USAGE_SQL = `
     GROUP BY key, day, provider, model
   ) AS per_day_model
   GROUP BY provider, model
-  HAVING sum(reconciled_calls) > 0
+  HAVING sum((CASE WHEN portal_calls > 0 THEN portal_calls ELSE api_calls END) + other_calls) > 0
   ORDER BY cost_usd DESC
 `;
 
 /** Tenant-level reconciled cost basis totals (deduped llm_calls — not spend_daily MV). */
 export const RECONCILED_COST_BASIS_TOTALS_SQL = `
   SELECT
-    sum(reconciled_usd) AS effective_cost_usd,
-    sum(reconciled_usd) AS metered_cost_usd,
-    sum(reconciled_usd) AS computed_cost_usd,
-    sum(reconciled_calls) AS calls,
+    sum((CASE WHEN portal_usd > 0 THEN portal_usd ELSE api_usd END) + other_usd) AS effective_cost_usd,
+    sum((CASE WHEN portal_usd > 0 THEN portal_usd ELSE api_usd END) + other_usd) AS metered_cost_usd,
+    sum((CASE WHEN portal_usd > 0 THEN portal_usd ELSE api_usd END) + other_usd) AS computed_cost_usd,
+    sum((CASE WHEN portal_calls > 0 THEN portal_calls ELSE api_calls END) + other_calls) AS calls,
     count() AS total_keys,
-    countIf(reconciled_usd > 0) AS metered_keys
+    countIf(((CASE WHEN portal_usd > 0 THEN portal_usd ELSE api_usd END) + other_usd) > 0) AS metered_keys
   FROM (
     SELECT
       if(user_id = '', 'Unassigned', user_id) AS key,
@@ -244,9 +243,7 @@ export const RECONCILED_COST_BASIS_TOTALS_SQL = `
       countIf(${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source = 'api') AS api_calls,
       countIf(
         ${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source NOT IN ('portal_import', 'api')
-      ) AS other_calls,
-      (CASE WHEN portal_usd > 0 THEN portal_usd ELSE api_usd END) + other_usd AS reconciled_usd,
-      (CASE WHEN portal_calls > 0 THEN portal_calls ELSE api_calls END) + other_calls AS reconciled_calls
+      ) AS other_calls
     FROM llm_calls
     WHERE tenant_id = {tenant:String}
       AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
@@ -259,9 +256,9 @@ export const RECONCILED_COST_BASIS_TOTALS_SQL = `
 export const RECONCILED_COST_BASIS_MONTHLY_SQL = `
   SELECT
     toStartOfMonth(day) AS month,
-    sum(reconciled_usd) AS effective_cost_usd,
-    sum(reconciled_usd) AS metered_cost_usd,
-    sum(reconciled_usd) AS computed_cost_usd
+    sum((CASE WHEN portal_usd > 0 THEN portal_usd ELSE api_usd END) + other_usd) AS effective_cost_usd,
+    sum((CASE WHEN portal_usd > 0 THEN portal_usd ELSE api_usd END) + other_usd) AS metered_cost_usd,
+    sum((CASE WHEN portal_usd > 0 THEN portal_usd ELSE api_usd END) + other_usd) AS computed_cost_usd
   FROM (
     SELECT
       if(user_id = '', 'Unassigned', user_id) AS key,
@@ -273,8 +270,7 @@ export const RECONCILED_COST_BASIS_MONTHLY_SQL = `
       sumIf(
         ${EFFECTIVE_METERED_COST_USD},
         llm_calls.source NOT IN ('portal_import', 'api')
-      ) AS other_usd,
-      (CASE WHEN portal_usd > 0 THEN portal_usd ELSE api_usd END) + other_usd AS reconciled_usd
+      ) AS other_usd
     FROM llm_calls
     WHERE tenant_id = {tenant:String}
       AND toDate(ts) BETWEEN {from:Date} AND {to:Date}

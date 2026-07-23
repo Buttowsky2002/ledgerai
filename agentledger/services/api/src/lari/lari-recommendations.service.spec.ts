@@ -61,7 +61,7 @@ describe('LariRecommendationsService', () => {
 
     const sqls = queryScoped.mock.calls.map((c) => String(c[0]));
     expect(sqls.some((s) => s.includes('platform AS provider'))).toBe(true);
-    expect(sqls.some((s) => s.includes('reconciled_input_tokens'))).toBe(true);
+    expect(sqls.some((s) => s.includes('sum((CASE WHEN portal_usd > 0 THEN portal_in ELSE api_in END)'))).toBe(true);
     expect(sqls.some((s) => s.includes('metered_cost_usd'))).toBe(true);
     expect(sqls.some((s) => s.includes('FROM spend_daily'))).toBe(false);
     expect(sqls.some((s) => s.includes('spend_daily_by_user'))).toBe(false);
