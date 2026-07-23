@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useId, useRef, useState } from 'react';
+import { startTransition, useEffect, useId, useRef, useState } from 'react';
 import { allTimeHref, encodeRange, presetRange, RANGE_COOKIE, rangeHref, todayIso } from '../lib/date-range';
 
 function writeRangeCookie(r: { from: string; to: string }) {
@@ -46,13 +46,17 @@ export function DateRangePicker({
   const [open, setOpen] = useState(false);
   const [draftFrom, setDraftFrom] = useState(from);
   const [draftTo, setDraftTo] = useState(to);
+  const [draftAllTime, setDraftAllTime] = useState(isAllTime);
+  const [applying, setApplying] = useState(false);
 
   useEffect(() => {
     if (open) {
       setDraftFrom(from);
       setDraftTo(to);
+      setDraftAllTime(isAllTime);
+      setApplying(false);
     }
-  }, [open, from, to]);
+  }, [open, from, to, isAllTime]);
 
   useEffect(() => {
     if (!open) return;
@@ -72,25 +76,46 @@ export function DateRangePicker({
     };
   }, [open]);
 
-  const go = (href: string) => {
-    router.push(href);
-    router.refresh();
+  const commit = (href: string, cookie?: { from: string; to: string }) => {
+    setApplying(true);
     setOpen(false);
+    if (cookie) writeRangeCookie(cookie);
+    startTransition(() => {
+      router.push(href);
+      router.refresh();
+    });
   };
 
-  const navigate = (nextFrom: string, nextTo: string) => {
-    writeRangeCookie({ from: nextFrom, to: nextTo });
-    go(rangeHref(basePath, nextFrom, nextTo, extraParams));
+  const selectPreset = (days: number) => {
+    const r = presetRange(days);
+    setDraftFrom(r.from);
+    setDraftTo(r.to);
+    setDraftAllTime(false);
   };
 
-  const navigateAllTime = () => {
-    go(allTimeHref(basePath, extraParams));
+  const selectAllTime = () => {
+    setDraftFrom(earliestDay);
+    setDraftTo(latestDay);
+    setDraftAllTime(true);
   };
 
   const apply = () => {
     if (!draftFrom || !draftTo || draftFrom > draftTo) return;
-    navigate(draftFrom, draftTo);
+    if (draftAllTime) {
+      commit(allTimeHref(basePath, extraParams));
+      return;
+    }
+    commit(rangeHref(basePath, draftFrom, draftTo, extraParams), {
+      from: draftFrom,
+      to: draftTo,
+    });
   };
+
+  const draftValid = Boolean(draftFrom && draftTo && draftFrom <= draftTo);
+  const draftUnchanged =
+    draftAllTime === isAllTime &&
+    draftFrom === from &&
+    draftTo === to;
 
   const inputClass =
     'w-full rounded-md border border-edge bg-black/40 px-3 py-2 text-sm text-gray-100 [color-scheme:dark] focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/30';
@@ -106,6 +131,7 @@ export function DateRangePicker({
       >
         <span>{label}</span>
         {isAllTime && <span className="text-xs text-accent">All time</span>}
+        {applying && <span className="text-xs text-muted">Updating…</span>}
         <svg
           className={`h-3.5 w-3.5 text-muted transition-transform ${open ? 'rotate-180' : ''}`}
           viewBox="0 0 20 20"
@@ -128,7 +154,16 @@ export function DateRangePicker({
           className="absolute left-0 top-full z-50 mt-2 w-[min(100vw-2rem,22rem)] rounded-xl border border-edge bg-panel p-4 shadow-card"
         >
           <p className="mb-3 text-xs font-medium uppercase tracking-wider text-muted">Date range</p>
-          <p className="mb-3 text-sm text-gray-200">{fmtRange(draftFrom, draftTo)}</p>
+          <p className="mb-3 text-sm text-gray-200">
+            {draftAllTime ? (
+              <>
+                All time
+                <span className="mt-0.5 block text-xs text-muted">{fmtRange(draftFrom, draftTo)}</span>
+              </>
+            ) : (
+              fmtRange(draftFrom, draftTo)
+            )}
+          </p>
 
           <div className="mb-4 grid grid-cols-2 gap-3">
             <label className="block">
@@ -139,7 +174,10 @@ export function DateRangePicker({
                 value={draftFrom}
                 min={earliestDay}
                 max={draftTo || latestDay}
-                onChange={(e) => setDraftFrom(e.target.value)}
+                onChange={(e) => {
+                  setDraftFrom(e.target.value);
+                  setDraftAllTime(false);
+                }}
               />
             </label>
             <label className="block">
@@ -150,7 +188,10 @@ export function DateRangePicker({
                 value={draftTo}
                 min={draftFrom || earliestDay}
                 max={latestDay}
-                onChange={(e) => setDraftTo(e.target.value)}
+                onChange={(e) => {
+                  setDraftTo(e.target.value);
+                  setDraftAllTime(false);
+                }}
               />
             </label>
           </div>
@@ -158,12 +199,12 @@ export function DateRangePicker({
           <div className="mb-4 flex flex-wrap gap-2">
             {PRESETS.map((p) => {
               const r = presetRange(p.days);
-              const active = !isAllTime && r.from === from && r.to === to;
+              const active = !draftAllTime && r.from === draftFrom && r.to === draftTo;
               return (
                 <button
                   key={p.label}
                   type="button"
-                  onClick={() => navigate(r.from, r.to)}
+                  onClick={() => selectPreset(p.days)}
                   className={`rounded-md px-2.5 py-1 text-xs transition-colors ${
                     active
                       ? 'bg-accent/15 text-accent ring-1 ring-inset ring-accent/30'
@@ -176,9 +217,9 @@ export function DateRangePicker({
             })}
             <button
               type="button"
-              onClick={navigateAllTime}
+              onClick={selectAllTime}
               className={`rounded-md px-2.5 py-1 text-xs transition-colors ${
-                isAllTime
+                draftAllTime
                   ? 'bg-accent/15 text-accent ring-1 ring-inset ring-accent/30'
                   : 'border border-edge text-muted hover:bg-white/5 hover:text-gray-100'
               }`}
@@ -189,24 +230,34 @@ export function DateRangePicker({
 
           <p className="mb-3 text-[11px] leading-relaxed text-muted">
             All time spans from your first connection or imported spend ({earliestDay}) through today.
+            Presets only update this draft — nothing reloads until you Apply.
           </p>
 
-          <div className="flex justify-end gap-2 border-t border-edge/70 pt-3">
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="rounded-md px-3 py-1.5 text-xs text-muted hover:text-gray-100"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={apply}
-              disabled={!draftFrom || !draftTo || draftFrom > draftTo}
-              className="rounded-md bg-accent/20 px-3 py-1.5 text-xs font-medium text-accent ring-1 ring-inset ring-accent/30 enabled:hover:bg-accent/30 disabled:opacity-40"
-            >
-              Apply
-            </button>
+          <div className="flex items-center justify-between gap-2 border-t border-edge/70 pt-3">
+            <p className="min-w-0 truncate text-[11px] text-muted">
+              {draftValid
+                ? draftAllTime
+                  ? `Will apply: all time (${fmtRange(draftFrom, draftTo)})`
+                  : `Will apply: ${fmtRange(draftFrom, draftTo)}`
+                : 'Pick a valid from / to range'}
+            </p>
+            <div className="flex shrink-0 gap-2">
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="rounded-md px-3 py-1.5 text-xs text-muted hover:text-gray-100"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={apply}
+                disabled={!draftValid || draftUnchanged || applying}
+                className="rounded-md bg-accent/20 px-3 py-1.5 text-xs font-medium text-accent ring-1 ring-inset ring-accent/30 enabled:hover:bg-accent/30 disabled:opacity-40"
+              >
+                {applying ? 'Applying…' : 'Apply'}
+              </button>
+            </div>
           </div>
         </div>
       )}
