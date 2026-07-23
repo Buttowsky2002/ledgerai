@@ -10,35 +10,32 @@ const nextConfig = {
    *
    * NOTE: next.config does not specially "export" NEXT_PUBLIC_* vars — Next.js
    * inlines NEXT_PUBLIC_* from the environment at build time automatically.
-   * This app currently uses server-side BADGERIQ_API_URL (BFF /api/* proxies);
-   * NEXT_PUBLIC_BADGERIQ_API_URL is optional and only needed if the browser
-   * ever talks to the API origin directly (then it must appear in connect-src).
+   * This app uses server-side BADGERIQ_API_URL (BFF /api/* proxies). Do NOT put
+   * that internal URL in connect-src — it is not reachable from the browser and
+   * was baking Docker-compose hosts (e.g. http://api:8094) into prod CSP.
+   * Only NEXT_PUBLIC_BADGERIQ_API_URL (a browser-reachable origin) may be added.
    *
    * TODO(csp-nonce): Upgrade script-src to a per-request nonce once the App
-   * Router layout can read a middleware-injected nonce header on every
-   * response (middleware sets `x-nonce` + CSP, root layout.tsx applies
-   * nonce={...} on <Script>). Until then script-src is 'self' only — no
-   * 'unsafe-inline' / 'unsafe-eval'. style-src keeps 'unsafe-inline' for
-   * next/font and Tailwind runtime styles.
+   * Router layout can read a middleware-injected nonce on every response
+   * (middleware sets `x-nonce` + CSP, root layout applies nonce={...}).
+   * Until then Next.js App Router *requires* 'unsafe-inline' for the RSC
+   * flight payload scripts (`self.__next_f.push(...)`). Strict 'self' alone
+   * blocks hydration and renders a blank page (dark body background only).
    */
   async headers() {
-    const apiOrigin =
-      process.env.NEXT_PUBLIC_BADGERIQ_API_URL ||
-      process.env.BADGERIQ_API_URL ||
-      process.env.LEDGERAI_API_URL ||
-      process.env.AGENTLEDGER_API_URL ||
-      '';
-
-    // Strip trailing slash so connect-src origin matches the browser URL.
-    const connectApi = apiOrigin.replace(/\/$/, '');
-    const connectSrc = ["'self'", connectApi].filter(Boolean).join(' ');
+    const publicApiOrigin = (
+      process.env.NEXT_PUBLIC_BADGERIQ_API_URL || ''
+    ).replace(/\/$/, '');
+    const connectSrc = ["'self'", publicApiOrigin].filter(Boolean).join(' ');
 
     const csp = [
       "default-src 'self'",
-      "script-src 'self'",
+      // 'unsafe-inline' required for Next.js App Router inline flight scripts
+      // until TODO(csp-nonce) lands. Do not drop without a working nonce path.
+      "script-src 'self' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: https:",
-      "font-src 'self'",
+      "font-src 'self' data:",
       `connect-src ${connectSrc}`,
       "frame-ancestors 'none'",
       "base-uri 'self'",
