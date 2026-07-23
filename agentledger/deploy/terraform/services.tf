@@ -88,6 +88,8 @@ module "api" {
 
   environment = {
     NODE_ENV                         = "production"
+    # Alias-aware production gate for API auth safety (dev-trust / docs).
+    BADGERIQ_ENV                     = "production"
     # Public origin for OIDC redirect_uri (must match IdP app registration).
     # Same host as dashboard BADGERIQ_PUBLIC_URL — not the Cloud Map address.
     BADGERIQ_OIDC_REDIRECT_BASE      = local.public_url
@@ -137,6 +139,7 @@ module "dashboard" {
 
   environment = {
     NODE_ENV             = "production"
+    BADGERIQ_ENV         = "production"
     # Server-side BFF only (lib/api.ts). Use Cloud Map — never round-trip the ALB.
     # Service discovery: aws_service_discovery_service.svc.name = var.name ("api")
     # in namespace badgeriq.local → api.badgeriq.local:8094
