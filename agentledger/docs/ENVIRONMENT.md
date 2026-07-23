@@ -83,7 +83,7 @@ Full tables: `services/workers/README.md`.
 |----------|---------|---------|
 | `NODE_ENV` | _(unset)_ | Set `production` in prod (disables dev auth + Swagger by default). |
 | 🔒 `BADGERIQ_PG_DSN` | _(required)_ | Postgres DSN (`agentledger_api` role). Alternatively set `DB_HOST`/`DB_NAME`/`DB_USER`/🔒 `DB_PASSWORD` (+ optional `DB_PORT`, `DB_SSLMODE`; `DB_HOST` may be a `/cloudsql/...` unix socket) — Cloud Run MVP convention. |
-| `BADGERIQ_ANALYTICS_BACKEND` | `clickhouse` | Analytics store: `clickhouse` (full stack) or `postgres` (Cloud Run MVP, single database; requires migration `023_analytics_mvp.sql`). |
+| `BADGERIQ_ANALYTICS_BACKEND` | `postgres` (MVP) / `clickhouse` | Analytics store. Production MVP uses **postgres** (RLS via `app.tenant_id` + migration `028_analytics_rls_harden.sql`). ClickHouse path is optional and unused when set to `postgres`. |
 | ClickHouse vars | — | Analytics reads (unused when `BADGERIQ_ANALYTICS_BACKEND=postgres`). |
 | `BADGERIQ_API_ADDR` | `:8094` | Listen address. |
 | `BADGERIQ_API_BODY_LIMIT` | `256kb` | Max request body. |
