@@ -15,11 +15,12 @@ import (
 // Finding is a single DLP classifier hit; it carries class/category/severity
 // metadata but never the raw matched content.
 type Finding struct {
-	Class      string  `json:"class"`    // e.g. "aws_access_key"
-	Category   string  `json:"category"` // credentials | pii | pci | source_code
-	Severity   string  `json:"severity"` // low | medium | high | critical
-	Confidence float64 `json:"confidence"`
-	Count      int     `json:"count"`
+	Class       string  `json:"class"`    // e.g. "aws_access_key"
+	Category    string  `json:"category"` // credentials | pii | pci | prompt_injection | …
+	Severity    string  `json:"severity"` // low | medium | high | critical
+	Confidence  float64 `json:"confidence"`
+	Count       int     `json:"count"`
+	ActionTaken string  `json:"action_taken,omitempty"` // flagged | blocked | allowed
 }
 
 type classifier struct {
@@ -67,6 +68,22 @@ func NewDLPEngine(cfg DLPConfig) *DLPEngine {
 				// Each octet 0–255 only, so invalid addresses like 999.999.999.999
 				// don't match.
 				regexp.MustCompile(`\b(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\b`), nil},
+
+			// Prompt injection / jailbreak (OWASP LLM01) — flag for async
+			// semantic enrichment; never block on these alone.
+			{"jailbreak_ignore", "prompt_injection", "high", 0.75,
+				regexp.MustCompile(`(?i)\b(?:ignore\s+(?:previous|prior|all|above)\s+instructions?|disregard\s+(?:the\s+)?(?:system\s+)?(?:prompt|instructions?))\b`), nil},
+			{"jailbreak_roleplaying", "prompt_injection", "high", 0.75,
+				regexp.MustCompile(`(?i)\b(?:you\s+are\s+(?:now\s+)?(?:dan|jailbreak|unrestricted|evil|without\s+restrictions?)|act\s+as\s+(?:if\s+you\s+(?:have\s+no\s+)?(?:restrictions?|limits?|rules?)|an?\s+(?:evil|unrestricted|uncensored)))\b`), nil},
+			{"jailbreak_override", "prompt_injection", "high", 0.75,
+				// No trailing \b after [:=] — ':' is non-word so \b never fires there.
+				regexp.MustCompile(`(?i)(?:\bnew\s+(?:system\s+)?(?:prompt|instructions?)\s*[:=]|\boverride\s+(?:system|safety|content)\s+(?:prompt|filter|restriction|policy)\b)`), nil},
+			{"tool_poisoning", "prompt_injection", "critical", 0.80,
+				regexp.MustCompile(`(?i)(?:before\s+(?:calling|using|executing)|first\s+(?:read|access|fetch|send)).*(?:\.aws|credentials?|\.env|ssh|private[\s_]key|api[\s_]key|token)`), nil},
+			{"exfil_attempt", "prompt_injection", "critical", 0.80,
+				// Allow short filler ("the data") between verb and destination.
+				// Require a URL scheme, or an explicit "to webhook" (not bare "webhook").
+				regexp.MustCompile(`(?i)(?:send|post|transmit|upload|exfiltrate|leak)\b.{0,48}?(?:(?:to\s+)?(?:https?://|ftp://)|to\s+webhook)`), nil},
 		},
 	}
 }
@@ -92,12 +109,51 @@ func (d *DLPEngine) Classify(content string) []Finding {
 	return out
 }
 
-// Decide maps findings through the key's policy to an action.
-// Returns the strongest applicable action: block > redact > warn > log > allow.
+// Decide maps findings through the key's policy to an action and sets
+// ActionTaken on each finding (flagged | blocked | allowed).
+//
+// Prompt-injection hits alone yield "flag" (async enrichment) — they never
+// escalate to block/redact by themselves. Mixed with credential/PII findings,
+// the policy decision for those other categories wins for the request while
+// injection findings remain ActionTaken=flagged.
+//
+// Returns: block > redact > warn > log > flag > allow.
 func (d *DLPEngine) Decide(policyID string, findings []Finding) string {
 	if len(findings) == 0 {
 		return "allow"
 	}
+
+	var other []Finding
+	for _, f := range findings {
+		if f.Category != "prompt_injection" {
+			other = append(other, f)
+		}
+	}
+
+	var action string
+	if len(other) > 0 {
+		action = d.decidePolicy(policyID, other)
+	} else {
+		// Injection-only → flag for the risk-enrichment worker via the event bus.
+		action = "flag"
+	}
+
+	for i := range findings {
+		switch {
+		case findings[i].Category == "prompt_injection":
+			findings[i].ActionTaken = "flagged"
+		case action == "block":
+			findings[i].ActionTaken = "blocked"
+		case action == "allow":
+			findings[i].ActionTaken = "allowed"
+		default:
+			findings[i].ActionTaken = "flagged"
+		}
+	}
+	return action
+}
+
+func (d *DLPEngine) decidePolicy(policyID string, findings []Finding) string {
 	p, ok := d.policies[policyID]
 	if !ok {
 		// no policy configured: log only (audit-mode default per PRD)
@@ -123,8 +179,13 @@ func (d *DLPEngine) Decide(policyID string, findings []Finding) string {
 }
 
 // Redact replaces matched spans with category tokens, preserving structure.
+// Prompt-injection patterns are never redacted (flag-only; rewriting the prompt
+// would change model behaviour without blocking the call).
 func (d *DLPEngine) Redact(content string) string {
 	for _, c := range d.classifiers {
+		if c.category == "prompt_injection" {
+			continue
+		}
 		content = c.re.ReplaceAllStringFunc(content, func(m string) string {
 			if c.validate != nil && !c.validate(m) {
 				return m
