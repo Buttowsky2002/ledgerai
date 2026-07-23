@@ -166,11 +166,12 @@ jobs:
       - name: Build shared-types (workspace dependency)
         working-directory: agentledger/packages/shared-types
         run: npm ci && npm run build
-      - name: Lint + build dashboard
+      - name: Lint + test + build dashboard
         working-directory: agentledger/apps/dashboard
         run: |
           npm ci
           npm run lint
+          npm test
           npm run build
       # TODO(security): make blocking (drop `continue-on-error`) once the Next.js
       # transitive advisories are resolved (needs a major bump). See node-api.
