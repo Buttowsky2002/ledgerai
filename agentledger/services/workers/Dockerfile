@@ -1,6 +1,6 @@
 # Builds a single worker binary. Override the build target with:
 #   docker build --build-arg CMD=ch-insert .
-FROM golang:1.22-alpine AS build
+FROM golang:1.26-alpine AS build
 ARG CMD=ch-insert
 WORKDIR /src
 COPY . .
