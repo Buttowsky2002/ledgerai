@@ -406,7 +406,9 @@ describe('AnalyticsService.users', () => {
     const row = await svc.userDetail(uuidAlice, '2026-06-01', '2026-06-30');
     expect(row?.user_id).toBe(uuidAlice);
     expect(row?.model_breakdown).toHaveLength(2);
-    expect(await svc.userDetail('missing-user', '2026-06-01', '2026-06-30')).toBeNull();
+    await expect(svc.userDetail('missing-user', '2026-06-01', '2026-06-30')).rejects.toThrow(
+      /user not found/i,
+    );
   });
 
   it('merges Cursor billed overage into user spend via metered llm_calls query', async () => {

@@ -4,6 +4,7 @@ import { AgentRoiService } from './agent-roi.service';
 import { LariService } from '../lari/lari.service';
 import { Roles } from '../auth/decorators';
 import { CrudService } from '../common/crud.service';
+import { requireAgentInTenant } from '../common/require-agent';
 import { parsePagination } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -33,7 +34,7 @@ class UpdateAgentDto {
 export class AgentsController {
   private readonly crud: CrudService;
   constructor(
-    prisma: PrismaService,
+    private readonly prisma: PrismaService,
     private readonly agentRoi: AgentRoiService,
     private readonly lari: LariService,
   ) {
@@ -53,8 +54,11 @@ export class AgentsController {
   }
 
   // LARI — risk-adjusted incremental ROI with confidence + recommendation + ledger.
+  // Existence check at the HTTP boundary only — computeForAgent is also used by
+  // aggregate rollups for CH-only agent ids that are not control-plane rows.
   @Roles('viewer') @Get(':id/lari')
-  lariRoi(@Param('id') id: string, @Query('from') from?: string, @Query('to') to?: string) {
+  async lariRoi(@Param('id') id: string, @Query('from') from?: string, @Query('to') to?: string) {
+    await requireAgentInTenant(this.prisma, id);
     return this.lari.computeForAgent(id, from, to);
   }
 

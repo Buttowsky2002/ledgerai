@@ -51,8 +51,9 @@ export class VirtualKeysService {
   }
 
   async get(id: string) {
-    const row = await this.prisma.withTenant(getTenantId(), (tx) =>
-      tx.virtualKey.findUnique({ where: { keyId: id } }),
+    const tenantId = getTenantId();
+    const row = await this.prisma.withTenant(tenantId, (tx) =>
+      tx.virtualKey.findFirst({ where: { keyId: id, ...(tenantId ? { tenantId } : {}) } }),
     );
     if (!row) {
       throw new NotFoundException('virtual_key not found');
@@ -95,7 +96,10 @@ export class VirtualKeysService {
 
   async update(id: string, dto: UpdateVirtualKey) {
     return this.prisma.withTenant(getTenantId(), async (tx) => {
-      const before = await tx.virtualKey.findUnique({ where: { keyId: id } });
+      const tenantId = getTenantId();
+      const before = await tx.virtualKey.findFirst({
+        where: { keyId: id, ...(tenantId ? { tenantId } : {}) },
+      });
       if (!before) {
         throw new NotFoundException('virtual_key not found');
       }
@@ -123,7 +127,10 @@ export class VirtualKeysService {
   /** Revoke (soft delete): set revoked_at; the key stops authenticating at the gateway. */
   async revoke(id: string) {
     return this.prisma.withTenant(getTenantId(), async (tx) => {
-      const before = await tx.virtualKey.findUnique({ where: { keyId: id } });
+      const tenantId = getTenantId();
+      const before = await tx.virtualKey.findFirst({
+        where: { keyId: id, ...(tenantId ? { tenantId } : {}) },
+      });
       if (!before) {
         throw new NotFoundException('virtual_key not found');
       }

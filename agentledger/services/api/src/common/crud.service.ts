@@ -27,10 +27,12 @@ export interface CrudConfig {
 /**
  * Generic tenant-scoped CRUD. Every operation runs inside
  * PrismaService.withTenant(...) so Postgres RLS (ADR-010) confines it to the
- * caller's tenant — there is deliberately no `where: { tenantId }` here. Mutations
- * inject the tenant id on create and append an audit_log row in the same
- * transaction (ADR-012). A row that belongs to another tenant is invisible under
- * RLS, so get/update/delete on it raise 404 (never cross-tenant leakage).
+ * caller's tenant. Lookups also include an explicit `tenantId` predicate
+ * (defense-in-depth) whenever the table is tenant-scoped. Mutations inject the
+ * tenant id on create and append an audit_log row in the same transaction
+ * (ADR-012). A row that belongs to another tenant is invisible under RLS and
+ * fails the compound where, so get/update/delete raise 404 (never cross-tenant
+ * leakage).
  */
 export class CrudService {
   constructor(
@@ -40,6 +42,16 @@ export class CrudService {
 
   private delegate(tx: Prisma.TransactionClient): any {
     return (tx as any)[this.cfg.model];
+  }
+
+  /** PK (+ tenantId when the table is tenant-scoped). Uses findFirst-compatible where. */
+  private scopedWhere(id: string): Record<string, string> {
+    const where: Record<string, string> = { [this.cfg.idField]: id };
+    if (this.cfg.injectTenant !== false) {
+      const tid = getTenantId();
+      if (tid) where.tenantId = tid;
+    }
+    return where;
   }
 
   list(page: Page): Promise<any[]> {
@@ -54,7 +66,7 @@ export class CrudService {
 
   async get(id: string): Promise<any> {
     const row = await this.prisma.withTenant(getTenantId(), (tx) =>
-      this.delegate(tx).findUnique({ where: { [this.cfg.idField]: id } }),
+      this.delegate(tx).findFirst({ where: this.scopedWhere(id) }),
     );
     if (!row) {
       throw new NotFoundException(`${this.cfg.object} not found`);
@@ -79,7 +91,7 @@ export class CrudService {
 
   update(id: string, data: Record<string, unknown>): Promise<any> {
     return this.prisma.withTenant(getTenantId(), async (tx) => {
-      const before = await this.delegate(tx).findUnique({ where: { [this.cfg.idField]: id } });
+      const before = await this.delegate(tx).findFirst({ where: this.scopedWhere(id) });
       if (!before) {
         throw new NotFoundException(`${this.cfg.object} not found`);
       }
@@ -94,7 +106,7 @@ export class CrudService {
 
   remove(id: string): Promise<{ deleted: true }> {
     return this.prisma.withTenant(getTenantId(), async (tx) => {
-      const before = await this.delegate(tx).findUnique({ where: { [this.cfg.idField]: id } });
+      const before = await this.delegate(tx).findFirst({ where: this.scopedWhere(id) });
       if (!before) {
         throw new NotFoundException(`${this.cfg.object} not found`);
       }
