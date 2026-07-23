@@ -102,4 +102,5 @@ COPY deploy/mvp/start.js /app/start.js
 EXPOSE 8080
 # distroless/nodejs entrypoint is `node`; start.js spawns both children via
 # process.execPath, keeping SIGTERM handling intact.
+USER nonroot
 CMD ["start.js"]
