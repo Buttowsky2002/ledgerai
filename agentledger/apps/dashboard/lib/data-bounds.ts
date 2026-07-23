@@ -1,6 +1,6 @@
 import { proxyApi } from './api';
+import { defaultRange } from './auth';
 import { todayIso, type DateBounds } from './date-range';
-import { resolveRange } from './resolve-range';
 
 /** Earliest/latest spend days for date pickers (all-time bounds). */
 export async function fetchDataBounds(
@@ -13,6 +13,8 @@ export async function fetchDataBounds(
       return { earliest_day: b.earliest_day, latest_day: b.latest_day };
     }
   }
-  const fallback = resolveRange(searchParams, 90);
+  // Never fall back to the cookie/page range — that collapses "All time" to last 7d.
+  void searchParams;
+  const fallback = defaultRange(90);
   return { earliest_day: fallback.from, latest_day: fallback.to ?? todayIso() };
 }

@@ -39,6 +39,20 @@ export const EFFECTIVE_METERED_COST_USD = `if(
 )`;
 
 /**
+ * Dashboard rollups (Overview / Users / Allocation): invoice metered when present,
+ * otherwise Cursor subscription-included usage_value so included-only activity is visible.
+ */
+export const EFFECTIVE_DISPLAY_COST_USD = `if(
+  llm_calls.provider = 'cursor',
+  if(
+    (${EFFECTIVE_METERED_COST_USD}) > llm_calls.usage_value_usd,
+    (${EFFECTIVE_METERED_COST_USD}),
+    llm_calls.usage_value_usd
+  ),
+  ${EFFECTIVE_METERED_COST_USD}
+)`;
+
+/**
  * Reconciled per-user spend: portal CSV billing wins over connector API sync
  * for the same user+day so billing imports do not double-count API rows.
  */
@@ -53,16 +67,16 @@ export const RECONCILED_USER_DAY_SPEND_SQL = `
     SELECT
       if(user_id = '', 'Unassigned', user_id) AS key,
       toDate(ts) AS day,
-      sumIf(${EFFECTIVE_METERED_COST_USD}, llm_calls.source = 'portal_import') AS portal_usd,
-      sumIf(${EFFECTIVE_METERED_COST_USD}, llm_calls.source = 'api') AS api_usd,
+      sumIf(${EFFECTIVE_DISPLAY_COST_USD}, llm_calls.source = 'portal_import') AS portal_usd,
+      sumIf(${EFFECTIVE_DISPLAY_COST_USD}, llm_calls.source = 'api') AS api_usd,
       sumIf(
-        ${EFFECTIVE_METERED_COST_USD},
+        ${EFFECTIVE_DISPLAY_COST_USD},
         llm_calls.source NOT IN ('portal_import', 'api')
       ) AS other_usd,
-      countIf(${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source = 'portal_import') AS portal_calls,
-      countIf(${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source = 'api') AS api_calls,
+      countIf(${EFFECTIVE_DISPLAY_COST_USD} > 0 AND llm_calls.source = 'portal_import') AS portal_calls,
+      countIf(${EFFECTIVE_DISPLAY_COST_USD} > 0 AND llm_calls.source = 'api') AS api_calls,
       countIf(
-        ${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source NOT IN ('portal_import', 'api')
+        ${EFFECTIVE_DISPLAY_COST_USD} > 0 AND llm_calls.source NOT IN ('portal_import', 'api')
       ) AS other_calls
     FROM llm_calls
     WHERE tenant_id = {tenant:String}
@@ -82,16 +96,16 @@ export const RECONCILED_USER_DAILY_SPEND_SQL = `
     SELECT
       if(user_id = '', 'Unassigned', user_id) AS key,
       toDate(ts) AS day,
-      sumIf(${EFFECTIVE_METERED_COST_USD}, llm_calls.source = 'portal_import') AS portal_usd,
-      sumIf(${EFFECTIVE_METERED_COST_USD}, llm_calls.source = 'api') AS api_usd,
+      sumIf(${EFFECTIVE_DISPLAY_COST_USD}, llm_calls.source = 'portal_import') AS portal_usd,
+      sumIf(${EFFECTIVE_DISPLAY_COST_USD}, llm_calls.source = 'api') AS api_usd,
       sumIf(
-        ${EFFECTIVE_METERED_COST_USD},
+        ${EFFECTIVE_DISPLAY_COST_USD},
         llm_calls.source NOT IN ('portal_import', 'api')
       ) AS other_usd,
-      countIf(${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source = 'portal_import') AS portal_calls,
-      countIf(${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source = 'api') AS api_calls,
+      countIf(${EFFECTIVE_DISPLAY_COST_USD} > 0 AND llm_calls.source = 'portal_import') AS portal_calls,
+      countIf(${EFFECTIVE_DISPLAY_COST_USD} > 0 AND llm_calls.source = 'api') AS api_calls,
       countIf(
-        ${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source NOT IN ('portal_import', 'api')
+        ${EFFECTIVE_DISPLAY_COST_USD} > 0 AND llm_calls.source NOT IN ('portal_import', 'api')
       ) AS other_calls
     FROM llm_calls
     WHERE tenant_id = {tenant:String}
@@ -133,16 +147,16 @@ export const RECONCILED_USER_MODEL_BREAKDOWN_SQL = `
         toDate(ts) AS day,
         provider,
         if(response_model != '', response_model, request_model) AS model,
-        sumIf(${EFFECTIVE_METERED_COST_USD}, llm_calls.source = 'portal_import') AS portal_usd,
-        sumIf(${EFFECTIVE_METERED_COST_USD}, llm_calls.source = 'api') AS api_usd,
+        sumIf(${EFFECTIVE_DISPLAY_COST_USD}, llm_calls.source = 'portal_import') AS portal_usd,
+        sumIf(${EFFECTIVE_DISPLAY_COST_USD}, llm_calls.source = 'api') AS api_usd,
         sumIf(
-          ${EFFECTIVE_METERED_COST_USD},
+          ${EFFECTIVE_DISPLAY_COST_USD},
           llm_calls.source NOT IN ('portal_import', 'api')
         ) AS other_usd,
-        countIf(${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source = 'portal_import') AS portal_calls,
-        countIf(${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source = 'api') AS api_calls,
+        countIf(${EFFECTIVE_DISPLAY_COST_USD} > 0 AND llm_calls.source = 'portal_import') AS portal_calls,
+        countIf(${EFFECTIVE_DISPLAY_COST_USD} > 0 AND llm_calls.source = 'api') AS api_calls,
         countIf(
-          ${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source NOT IN ('portal_import', 'api')
+          ${EFFECTIVE_DISPLAY_COST_USD} > 0 AND llm_calls.source NOT IN ('portal_import', 'api')
         ) AS other_calls
       FROM llm_calls
       WHERE tenant_id = {tenant:String}
@@ -206,20 +220,20 @@ export const RECONCILED_MODEL_USAGE_SQL = `
         if(response_model != '', response_model, request_model) AS model,
         sumIf(input_tokens, llm_calls.source = 'portal_import') AS portal_in,
         sumIf(output_tokens, llm_calls.source = 'portal_import') AS portal_out,
-        sumIf(${EFFECTIVE_METERED_COST_USD}, llm_calls.source = 'portal_import') AS portal_usd,
-        countIf(${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source = 'portal_import') AS portal_calls,
+        sumIf(${EFFECTIVE_DISPLAY_COST_USD}, llm_calls.source = 'portal_import') AS portal_usd,
+        countIf(${EFFECTIVE_DISPLAY_COST_USD} > 0 AND llm_calls.source = 'portal_import') AS portal_calls,
         sumIf(input_tokens, llm_calls.source = 'api') AS api_in,
         sumIf(output_tokens, llm_calls.source = 'api') AS api_out,
-        sumIf(${EFFECTIVE_METERED_COST_USD}, llm_calls.source = 'api') AS api_usd,
-        countIf(${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source = 'api') AS api_calls,
+        sumIf(${EFFECTIVE_DISPLAY_COST_USD}, llm_calls.source = 'api') AS api_usd,
+        countIf(${EFFECTIVE_DISPLAY_COST_USD} > 0 AND llm_calls.source = 'api') AS api_calls,
         sumIf(input_tokens, llm_calls.source NOT IN ('portal_import', 'api')) AS other_in,
         sumIf(output_tokens, llm_calls.source NOT IN ('portal_import', 'api')) AS other_out,
         sumIf(
-          ${EFFECTIVE_METERED_COST_USD},
+          ${EFFECTIVE_DISPLAY_COST_USD},
           llm_calls.source NOT IN ('portal_import', 'api')
         ) AS other_usd,
         countIf(
-          ${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source NOT IN ('portal_import', 'api')
+          ${EFFECTIVE_DISPLAY_COST_USD} > 0 AND llm_calls.source NOT IN ('portal_import', 'api')
         ) AS other_calls
       FROM llm_calls
       WHERE tenant_id = {tenant:String}
@@ -252,16 +266,16 @@ export const RECONCILED_COST_BASIS_TOTALS_SQL = `
         toDate(ts) AS day,
         provider,
         if(response_model != '', response_model, request_model) AS model,
-        sumIf(${EFFECTIVE_METERED_COST_USD}, llm_calls.source = 'portal_import') AS portal_usd,
-        sumIf(${EFFECTIVE_METERED_COST_USD}, llm_calls.source = 'api') AS api_usd,
+        sumIf(${EFFECTIVE_DISPLAY_COST_USD}, llm_calls.source = 'portal_import') AS portal_usd,
+        sumIf(${EFFECTIVE_DISPLAY_COST_USD}, llm_calls.source = 'api') AS api_usd,
         sumIf(
-          ${EFFECTIVE_METERED_COST_USD},
+          ${EFFECTIVE_DISPLAY_COST_USD},
           llm_calls.source NOT IN ('portal_import', 'api')
         ) AS other_usd,
-        countIf(${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source = 'portal_import') AS portal_calls,
-        countIf(${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source = 'api') AS api_calls,
+        countIf(${EFFECTIVE_DISPLAY_COST_USD} > 0 AND llm_calls.source = 'portal_import') AS portal_calls,
+        countIf(${EFFECTIVE_DISPLAY_COST_USD} > 0 AND llm_calls.source = 'api') AS api_calls,
         countIf(
-          ${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source NOT IN ('portal_import', 'api')
+          ${EFFECTIVE_DISPLAY_COST_USD} > 0 AND llm_calls.source NOT IN ('portal_import', 'api')
         ) AS other_calls
       FROM llm_calls
       WHERE tenant_id = {tenant:String}
@@ -289,10 +303,10 @@ export const RECONCILED_COST_BASIS_MONTHLY_SQL = `
         toDate(ts) AS day,
         provider,
         if(response_model != '', response_model, request_model) AS model,
-        sumIf(${EFFECTIVE_METERED_COST_USD}, llm_calls.source = 'portal_import') AS portal_usd,
-        sumIf(${EFFECTIVE_METERED_COST_USD}, llm_calls.source = 'api') AS api_usd,
+        sumIf(${EFFECTIVE_DISPLAY_COST_USD}, llm_calls.source = 'portal_import') AS portal_usd,
+        sumIf(${EFFECTIVE_DISPLAY_COST_USD}, llm_calls.source = 'api') AS api_usd,
         sumIf(
-          ${EFFECTIVE_METERED_COST_USD},
+          ${EFFECTIVE_DISPLAY_COST_USD},
           llm_calls.source NOT IN ('portal_import', 'api')
         ) AS other_usd
       FROM llm_calls

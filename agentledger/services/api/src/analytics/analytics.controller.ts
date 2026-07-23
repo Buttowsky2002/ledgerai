@@ -32,6 +32,12 @@ export class AnalyticsController {
     return this.analytics.spend(q.from, q.to, q.team);
   }
 
+  /** Earliest/latest analytics days for date pickers (?range=all). */
+  @Roles('viewer') @Get('data-bounds')
+  dataBounds() {
+    return this.analytics.dataBounds();
+  }
+
   @Roles('viewer') @Get('allocation')
   allocation(@Query() q: AllocationQueryDto) {
     return this.analytics.allocation(q.dimension, q.from, q.to);

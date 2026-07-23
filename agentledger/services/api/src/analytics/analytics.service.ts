@@ -23,7 +23,7 @@ export interface AgentEconomicsRow {
 import { FocusRow, SpendDailyRow, toFocusRow } from './focus.mapper';
 import { PilotReport } from './report.renderer';
 import { computeSpendTrend } from './spend-trend';
-import { EFFECTIVE_METERED_COST_USD, LLM_CALLS_METERED_SCOPE, RECONCILED_USER_DAILY_SPEND_SQL, RECONCILED_USER_DAY_SPEND_SQL, RECONCILED_USER_MODEL_BREAKDOWN_SQL } from '../connectors/metered-cost';
+import { EFFECTIVE_DISPLAY_COST_USD, EFFECTIVE_METERED_COST_USD, LLM_CALLS_METERED_SCOPE, RECONCILED_USER_DAILY_SPEND_SQL, RECONCILED_USER_DAY_SPEND_SQL, RECONCILED_USER_MODEL_BREAKDOWN_SQL } from '../connectors/metered-cost';
 import {
   computeCursorSeatLicenseFromFixedCosts,
   computeCursorSeatLicenseFromPlans,
@@ -101,6 +101,8 @@ const n = (v: unknown): number => (typeof v === 'number' ? v : Number(v) || 0);
 const usd = (v: number): number => Math.round((v + Number.EPSILON) * 100) / 100;
 
 const METERED_COST = EFFECTIVE_METERED_COST_USD;
+/** Overview / Users / Allocation — include Cursor included usage_value when metered is $0. */
+const DISPLAY_COST = EFFECTIVE_DISPLAY_COST_USD;
 
 /**
  * Read-only analytics over the ClickHouse materialized views — NEVER raw
@@ -189,8 +191,8 @@ export class AnalyticsService {
     return this.ch
       .queryScoped<SpendDailyRow>(
         `SELECT toDate(ts) AS day,
-                sum(${METERED_COST}) AS cost_usd,
-                countIf(${METERED_COST} > 0) AS calls,
+                sum(${DISPLAY_COST}) AS cost_usd,
+                countIf(${DISPLAY_COST} > 0) AS calls,
                 sum(input_tokens + output_tokens) AS tokens,
                 countIf(status LIKE 'blocked%') AS blocked_calls,
                 countIf(status = 'upstream_error') AS error_calls
@@ -509,8 +511,8 @@ export class AnalyticsService {
     const col = dimension === 'team' ? 'team_id' : 'app_id';
     return this.ch.queryScoped(
       `SELECT ${col} AS key,
-              sum(${METERED_COST}) AS cost_usd,
-              countIf(${METERED_COST} > 0) AS calls
+              sum(${DISPLAY_COST}) AS cost_usd,
+              countIf(${DISPLAY_COST} > 0) AS calls
        FROM llm_calls
        WHERE tenant_id = {tenant:String}
          AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
@@ -546,7 +548,7 @@ export class AnalyticsService {
          WHERE tenant_id = {tenant:String}
            AND day BETWEEN {from:Date} AND {to:Date}
          GROUP BY key
-         HAVING cost_usd > 0`,
+         HAVING sum(cost_usd) > 0`,
         params,
       ),
       this.ch.queryScoped<{ user_id: string; day: string; cost_usd: unknown }>(
@@ -557,7 +559,7 @@ export class AnalyticsService {
          WHERE tenant_id = {tenant:String}
            AND day BETWEEN {from:Date} AND {to:Date}
          GROUP BY user_id, day
-         HAVING cost_usd > 0
+         HAVING sum(cost_usd) > 0
          ORDER BY user_id, day`,
         params,
       ),
@@ -671,8 +673,8 @@ export class AnalyticsService {
       .queryScoped<{ provider: string; model: string; cost_usd: unknown; calls: unknown }>(
         `SELECT provider,
                 if(response_model != '', response_model, request_model) AS model,
-                sum(${METERED_COST}) AS cost_usd,
-                countIf(${METERED_COST} > 0) AS calls
+                sum(${DISPLAY_COST}) AS cost_usd,
+                countIf(${DISPLAY_COST} > 0) AS calls
          FROM llm_calls
          WHERE tenant_id = {tenant:String}
            AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
@@ -686,18 +688,11 @@ export class AnalyticsService {
   /** Spend grouped by provider/platform — powers Overview and Model Mix pie charts. */
   platformSpend(from?: string, to?: string) {
     const r = this.range(from, to);
-    // Cursor subscription-included rows store value in usage_value_usd with metered=0.
-    // Surface that so the AI sources panel is not blank when local had rich Cursor activity.
-    const platformCost = `if(
-      provider = 'cursor',
-      if(${METERED_COST} > llm_calls.usage_value_usd, ${METERED_COST}, llm_calls.usage_value_usd),
-      ${METERED_COST}
-    )`;
     return this.ch
       .queryScoped<{ platform: string; cost_usd: unknown; calls: unknown }>(
         `SELECT provider AS platform,
-                sum(${platformCost}) AS cost_usd,
-                countIf(${platformCost} > 0) AS calls
+                sum(${DISPLAY_COST}) AS cost_usd,
+                countIf(${DISPLAY_COST} > 0) AS calls
          FROM llm_calls
          WHERE tenant_id = {tenant:String}
            AND toDate(ts) BETWEEN {from:Date} AND {to:Date}

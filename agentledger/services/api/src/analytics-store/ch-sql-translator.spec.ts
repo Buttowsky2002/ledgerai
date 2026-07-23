@@ -80,6 +80,16 @@ describe('ch-sql-translator', () => {
     expect((translated.match(/CASE WHEN/g) ?? []).length).toBe((translated.match(/\bEND\b/g) ?? []).length);
   });
 
+  it('translates Cursor display-cost nesting (usage_value fallback)', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { EFFECTIVE_DISPLAY_COST_USD: display } = require('../connectors/metered-cost') as {
+      EFFECTIVE_DISPLAY_COST_USD: string;
+    };
+    const out = translateFunctions(`sum(${display})`);
+    expect(out).toContain('usage_value_usd');
+    expect(out).not.toMatch(/\bif\s*\(/i);
+  });
+
   it('does not rewrite string literals containing parens or commas', () => {
     const out = translateFunctions("countIf(operation_name = 'cursor:included')");
     expect(out).toBe("count(*) FILTER (WHERE operation_name = 'cursor:included')");
