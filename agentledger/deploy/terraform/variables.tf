@@ -111,6 +111,11 @@ variable "jwt_secret_arn" {
   type        = string
 }
 
+variable "connector_secret_key_arn" {
+  description = "Secrets Manager ARN containing {secret: ...} for connector credential encryption (AES). Must be distinct from jwt_secret_arn."
+  type        = string
+}
+
 variable "oidc_microsoft_secret_arn" {
   description = "Secrets Manager ARN containing {client_id, client_secret} for Microsoft OIDC. Optional."
   type        = string

@@ -88,6 +88,7 @@ Full tables: `services/workers/README.md`.
 | `BADGERIQ_API_ADDR` | `:8094` | Listen address. |
 | `BADGERIQ_API_BODY_LIMIT` | `256kb` | Max request body. |
 | 🔒 `BADGERIQ_JWT_SECRET` | _(required)_ | Session-JWT HS256 secret (unprefixed `JWT_SECRET` also accepted). |
+| 🔒 `BADGERIQ_CONNECTOR_SECRET_KEY` | _(required)_ | AES-256 key material for connector credentials at rest. **Must not** reuse the JWT secret. Generate: `openssl rand -base64 32`. |
 | `BADGERIQ_JWT_ACCESS_TTL` / `_REFRESH_TTL` | `15m` / `7d` | Token lifetimes. |
 | `BADGERIQ_OIDC_REDIRECT_BASE` | `http://localhost:8094` | OIDC callback base URL. |
 | 🔒 OIDC client id/secret env vars | _(unset)_ | Per provider; unset → provider unavailable. |

@@ -101,6 +101,8 @@ module "api" {
     AGENTLEDGER_PG_DSN                       = local.pg_dsn_secret
     AGENTLEDGER_CLICKHOUSE_URL               = local.ch_url_secret
     AGENTLEDGER_JWT_SECRET                   = "${var.jwt_secret_arn}:secret::"
+    # Dedicated AES key for connector credentials — never reuse the JWT secret.
+    BADGERIQ_CONNECTOR_SECRET_KEY            = "${var.connector_secret_key_arn}:secret::"
     AGENTLEDGER_OIDC_MICROSOFT_CLIENT_ID     = "${var.oidc_microsoft_secret_arn}:client_id::"
     AGENTLEDGER_OIDC_MICROSOFT_CLIENT_SECRET = "${var.oidc_microsoft_secret_arn}:client_secret::"
   }
