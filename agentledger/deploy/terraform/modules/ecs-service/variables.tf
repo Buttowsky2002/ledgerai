@@ -65,6 +65,12 @@ variable "alb_path_patterns" {
   default     = []
 }
 
+variable "alb_host_headers" {
+  description = "Host header values required on the ALB forward rule (domain lockdown). Empty skips the condition."
+  type        = list(string)
+  default     = []
+}
+
 variable "alb_priority" {
   description = "ALB listener rule priority (lower = evaluated first)."
   type        = number

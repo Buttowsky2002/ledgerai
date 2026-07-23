@@ -40,6 +40,22 @@ const SPECS: ProviderEnvSpec[] = [
   },
 ];
 
+/**
+ * Microsoft issuer default: when AGENTLEDGER_OIDC_MICROSOFT_TENANT_ID (or
+ * BADGERIQ_…) is set, lock to that Entra tenant instead of /common/.
+ */
+export function microsoftDefaultIssuer(): string {
+  const tid = (
+    process.env.AGENTLEDGER_OIDC_MICROSOFT_TENANT_ID ??
+    process.env.BADGERIQ_OIDC_MICROSOFT_TENANT_ID ??
+    ''
+  ).trim();
+  if (tid) {
+    return `https://login.microsoftonline.com/${tid}/v2.0`;
+  }
+  return 'https://login.microsoftonline.com/common/v2.0';
+}
+
 /** Base URL the IdP redirects back to (shared by global + per-tenant SSO flows). */
 export function redirectBase(): string {
   return env('BADGERIQ_OIDC_REDIRECT_BASE') ?? 'http://localhost:8094';
@@ -69,9 +85,11 @@ export function loadOidcProviders(): OidcProviderConfig[] {
     if (!clientId || !clientSecret) {
       continue; // not configured → unavailable
     }
+    const fallbackIssuer =
+      spec.name === 'microsoft' ? microsoftDefaultIssuer() : spec.defaultIssuer;
     providers.push({
       name: spec.name,
-      issuer: process.env[spec.issuerEnv] ?? spec.defaultIssuer,
+      issuer: process.env[spec.issuerEnv] ?? fallbackIssuer,
       clientId,
       clientSecret,
       redirectUri: `${base}/auth/callback/${spec.name}`,

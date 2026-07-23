@@ -67,6 +67,51 @@ All other variables have sensible defaults. See `variables.tf` for the full list
    rpk cluster health --brokers redpanda.badgeriq.local:9092
    ```
 
+## Edge lockdown (ALB + CloudFront + Entra)
+
+Industry split of concerns — do not conflate these layers:
+
+| Layer | Mechanism | Controls |
+|-------|-----------|----------|
+| Network | ALB SG → CloudFront managed prefix list (`com.amazonaws.global.cloudfront.origin-facing`) + optional `alb_ingress_cidr_allowlist` | Who can open a TCP connection to the ALB |
+| Edge L7 | HTTPS:443 + HTTP→443 redirect, host-header allowlist, default **403**, CloudFront WAF | Which hostnames / protocols are accepted |
+| Identity | Entra **OIDC SSO** (`oidc_microsoft_tenant_id` → tenant-locked issuer) | Who can sign in |
+| Lifecycle | Entra **SCIM** to `/scim/v2` (bearer token via `ScimAuthGuard`) | Which users/teams exist |
+
+### Enabling HTTPS on the ALB
+
+1. Set `enable_custom_domain = true` (DNS-validated ACM + Route 53) **or** pass `alb_certificate_arn` for a pre-issued cert in the ALB region (`us-east-1`).
+2. Service path rules move to the HTTPS listener; HTTP:80 becomes a 301 to 443.
+3. With `enable_cloudfront = true` and a custom domain, CloudFront origins the ALB over **https-only:443** using the custom hostname (cert must match). Until then CF keeps `http-only:80` to the ALB DNS name.
+4. Public Route 53 for the custom hostname points at **CloudFront** when CF is enabled (ALB is CF-only at the SG).
+
+### Host allowlist
+
+```hcl
+allowed_host_headers = [
+  "pilot.badgeriq.app",
+  "app.studiodesigner.com",
+]
+```
+
+CloudFront’s `*.cloudfront.net` domain and the custom hostname are appended automatically. Unmatched Host headers hit the listener default **403**.
+
+### Entra tenant lock
+
+```hcl
+oidc_microsoft_tenant_id = "<studio-designer-entra-tenant-guid>"
+```
+
+Wires `AGENTLEDGER_OIDC_MICROSOFT_TENANT_ID` into the API so Microsoft OIDC uses
+`https://login.microsoftonline.com/<tid>/v2.0` instead of `/common/`.
+
+SCIM stays on its own ALB rule (priority 15) with the same host allowlist; it is **not** an ALB authenticate action.
+
+### Follow-ups (out of this stack)
+
+- Attach geo/IP allowlists on admin paths in WAF as needed
+- Flip `internal = true` on the ALB only after CloudFront **VPC Origins** are ready
+
 ## Security notes
 
 - No connection strings appear in Terraform state outputs — all DSNs are written to Secrets Manager
@@ -76,6 +121,7 @@ All other variables have sensible defaults. See `variables.tf` for the full list
 - All data stores accept ingress only from the ECS task security group
 - RDS encryption at rest via a dedicated KMS key with automatic rotation
 - The superuser password is only in Secrets Manager; the app uses the `app_rw` role
+- ALB is internet-facing but SG-locked to CloudFront when `enable_cloudfront = true`
 
 ## Outputs
 

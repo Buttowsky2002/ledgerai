@@ -6,7 +6,7 @@ data "aws_region" "current" {}
 locals {
   has_port = var.container_port > 0
 
-  env_pairs = [for k, v in var.environment : { name = k, value = v }]
+  env_pairs    = [for k, v in var.environment : { name = k, value = v }]
   secret_pairs = [for k, v in var.secrets : { name = k, valueFrom = v }]
 
   port_mappings = local.has_port ? [{
@@ -158,6 +158,15 @@ resource "aws_lb_listener_rule" "svc" {
   condition {
     path_pattern {
       values = var.alb_path_patterns
+    }
+  }
+
+  dynamic "condition" {
+    for_each = length(var.alb_host_headers) > 0 ? [1] : []
+    content {
+      host_header {
+        values = var.alb_host_headers
+      }
     }
   }
 
