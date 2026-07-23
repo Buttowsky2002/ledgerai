@@ -99,9 +99,13 @@ Full tables: `services/workers/README.md`.
 | `BADGERIQ_DEV_TRUST_HEADER` | _(unset)_ | **Dev only.** `x-tenant-id` → dev admin. The API refuses to start in production if set. |
 | `BADGERIQ_CONNECTOR_SCHEDULER_ENABLED` | _(true)_ | Set `false` to disable hourly background sync for API connectors. |
 | `BADGERIQ_CONNECTOR_SCHEDULER_INTERVAL_MS` | `3600000` | How often the scheduler checks for due connectors (ms). Per-connector interval is `schedule_json.intervalMinutes` (default 60). |
+| 🔒 `BADGERIQ_CONNECTOR_SECRET_KEY` | _(required when using Postgres ciphertext)_ | AES key for `connector_secrets`. Planned move to per-connector AWS Secrets Manager ARNs — see [RUNBOOKS/secrets-manager-migration.md](./RUNBOOKS/secrets-manager-migration.md). |
 
-## Dashboard (`apps/dashboard`)
+## Runbooks
 
+| Doc | Purpose |
+|-----|---------|
+| [secrets-manager-migration.md](./RUNBOOKS/secrets-manager-migration.md) | Migrate connector credentials from Postgres ciphertext → AWS Secrets Manager. |
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `BADGERIQ_API_URL` | `http://localhost:8094` | Control-plane API base (server-side BFF). |
