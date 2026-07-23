@@ -1,6 +1,7 @@
 import { Injectable, NestMiddleware } from '@nestjs/common';
 import { NextFunction, Request, Response } from 'express';
 import { Principal, runWithTenant } from '../tenant/tenant-context';
+import { clientMetaFromRequest, runWithRequestClient } from '../security/security-event';
 import { JwtService } from './jwt.service';
 import { isUuid, shouldTrustDevTenantHeader } from './dev-trust';
 
@@ -46,6 +47,7 @@ export class AuthMiddleware implements NestMiddleware {
       // Malformed/absent header → stays anonymous (never grant admin on a bad header).
     }
 
-    runWithTenant(principal, () => next());
+    const client = clientMetaFromRequest(req);
+    runWithRequestClient(client, () => runWithTenant(principal, () => next()));
   }
 }

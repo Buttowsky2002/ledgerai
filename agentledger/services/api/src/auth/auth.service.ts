@@ -1,5 +1,6 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { getRequestClientMeta, logSecurityEvent } from '../security/security-event';
 import { AccessClaims, JwtService } from './jwt.service';
 
 interface IdentityRow {
@@ -43,6 +44,7 @@ export class AuthService {
     const rows = await this.prisma.$queryRaw<IdentityRow[]>`
       SELECT user_id, tenant_id, api_role FROM auth_lookup_identity(${email})`;
     if (rows.length === 0) {
+      this.auditAuthFailure(null, null, 'no_identity');
       throw new UnauthorizedException('no identity provisioned for this email');
     }
     const claims: AccessClaims = {
@@ -50,6 +52,7 @@ export class AuthService {
       tenantId: rows[0].tenant_id,
       role: rows[0].api_role,
     };
+    this.auditAuthSuccess('auth.login_success', claims);
     return {
       accessToken: await this.jwt.mintAccess(claims),
       refreshToken: await this.jwt.mintRefresh(claims),
@@ -63,7 +66,13 @@ export class AuthService {
    * refresh (~15m) without requiring a full SSO round-trip.
    */
   async refresh(refreshToken: string): Promise<{ accessToken: string; claims: AccessClaims }> {
-    const prior = await this.jwt.verifyRefresh(refreshToken);
+    let prior: AccessClaims;
+    try {
+      prior = await this.jwt.verifyRefresh(refreshToken);
+    } catch {
+      this.auditAuthFailure(null, null, 'invalid_refresh');
+      throw new UnauthorizedException('invalid refresh token');
+    }
     const row = await this.prisma.withTenant(prior.tenantId, (tx) =>
       tx.identity.findUnique({
         where: { userId: prior.userId },
@@ -71,6 +80,7 @@ export class AuthService {
       }),
     );
     if (!row || !row.active) {
+      this.auditAuthFailure(prior.tenantId, prior.userId, 'identity_inactive');
       throw new UnauthorizedException('identity inactive or missing');
     }
     const claims: AccessClaims = {
@@ -78,6 +88,7 @@ export class AuthService {
       tenantId: prior.tenantId,
       role: row.apiRole,
     };
+    this.auditAuthSuccess('auth.token_refresh', claims);
     return { accessToken: await this.jwt.mintAccess(claims), claims };
   }
 
@@ -136,12 +147,14 @@ export class AuthService {
 
     if (found) {
       if (!found.active) {
+        this.auditAuthFailure(opts.tenantId, found.user_id, 'identity_deactivated');
         throw new UnauthorizedException('identity deactivated');
       }
       userId = found.user_id;
       apiRole = found.api_role;
     } else {
       if (!opts.jitEnabled) {
+        this.auditAuthFailure(opts.tenantId, null, 'no_identity');
         throw new UnauthorizedException('no identity provisioned for this email');
       }
       const created = await this.prisma.$queryRaw<{ user_id: string; api_role: string }[]>`
@@ -151,6 +164,7 @@ export class AuthService {
         // Lost a provisioning race (ON CONFLICT DO NOTHING) — re-resolve.
         const reread = await this.lookupInTenant(opts.tenantId, opts.email);
         if (!reread || !reread.active) {
+          this.auditAuthFailure(opts.tenantId, null, 'identity_unavailable');
           throw new UnauthorizedException('identity unavailable');
         }
         userId = reread.user_id;
@@ -163,6 +177,7 @@ export class AuthService {
     }
 
     const claims: AccessClaims = { userId, tenantId: opts.tenantId, role: apiRole };
+    this.auditAuthSuccess('auth.login_success', claims);
     return {
       accessToken: await this.jwt.mintAccess(claims),
       refreshToken: await this.jwt.mintRefresh(claims),
@@ -192,5 +207,31 @@ export class AuthService {
         },
       }),
     );
+  }
+
+  private auditAuthSuccess(
+    type: 'auth.login_success' | 'auth.token_refresh',
+    claims: AccessClaims,
+  ): void {
+    const meta = getRequestClientMeta();
+    logSecurityEvent({
+      type,
+      tenantId: claims.tenantId,
+      userId: claims.userId,
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+    });
+  }
+
+  private auditAuthFailure(tenantId: string | null, userId: string | null, reason: string): void {
+    const meta = getRequestClientMeta();
+    logSecurityEvent({
+      type: 'auth.login_failure',
+      tenantId,
+      userId,
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+      detail: { reason },
+    });
   }
 }
