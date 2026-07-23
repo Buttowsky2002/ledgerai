@@ -74,6 +74,12 @@ describe('ch-sql-translator', () => {
     expect((translated.match(/CASE WHEN/g) ?? []).length).toBe((translated.match(/\bEND\b/g) ?? []).length);
   });
 
+  it('translates positionCaseInsensitive to strpos(lower(...))', () => {
+    expect(translateFunctions("positionCaseInsensitive(line_item, 'cursor')")).toBe(
+      "strpos(lower(line_item), lower('cursor'))",
+    );
+  });
+
   it('does not rewrite string literals containing parens or commas', () => {
     const out = translateFunctions("countIf(operation_name = 'cursor:included')");
     expect(out).toBe("count(*) FILTER (WHERE operation_name = 'cursor:included')");

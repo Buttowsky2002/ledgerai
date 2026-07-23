@@ -106,14 +106,17 @@ export const RECONCILED_USER_DAILY_SPEND_SQL = `
 /**
  * Reconciled per-user model breakdown: portal CSV wins over connector API per
  * user+day+provider+model (same rule as RECONCILED_USER_DAY_SPEND_SQL).
+ *
+ * Reconcile CASE expressions live in the *outer* SELECT so Postgres can resolve
+ * portal_usd / api_usd aliases (ClickHouse allows same-SELECT alias refs; PG does not).
  */
 export const RECONCILED_USER_MODEL_BREAKDOWN_SQL = `
   SELECT
     key AS user_id,
     provider AS platform,
     model,
-    sum(reconciled_usd) AS spend_usd,
-    sum(reconciled_calls) AS calls,
+    sum((CASE WHEN portal_usd > 0 THEN portal_usd ELSE api_usd END) + other_usd) AS spend_usd,
+    sum((CASE WHEN portal_calls > 0 THEN portal_calls ELSE api_calls END) + other_calls) AS calls,
     sum(portal_usd) AS portal_import_usd,
     sum(api_usd) AS connector_usd
   FROM (
@@ -132,9 +135,7 @@ export const RECONCILED_USER_MODEL_BREAKDOWN_SQL = `
       countIf(${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source = 'api') AS api_calls,
       countIf(
         ${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source NOT IN ('portal_import', 'api')
-      ) AS other_calls,
-      (CASE WHEN portal_usd > 0 THEN portal_usd ELSE api_usd END) + other_usd AS reconciled_usd,
-      (CASE WHEN portal_calls > 0 THEN portal_calls ELSE api_calls END) + other_calls AS reconciled_calls
+      ) AS other_calls
     FROM llm_calls
     WHERE tenant_id = {tenant:String}
       AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
@@ -142,7 +143,7 @@ export const RECONCILED_USER_MODEL_BREAKDOWN_SQL = `
     GROUP BY key, day, provider, model
   ) AS per_day_model
   GROUP BY key, provider, model
-  HAVING sum(reconciled_calls) > 0
+  HAVING sum((CASE WHEN portal_calls > 0 THEN portal_calls ELSE api_calls END) + other_calls) > 0
 `;
 
 /** Spend with no user_id on metered llm_calls rows (reconciled per-user-day rollup). */

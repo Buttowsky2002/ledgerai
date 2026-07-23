@@ -20,6 +20,7 @@
  *   sumIf(x, cond)      → sum(x) FILTER (WHERE cond)
  *   if(a, b, c)         → CASE WHEN a THEN b ELSE c END   (recursive)
  *   argMax(a, b)        → (array_agg(a ORDER BY b DESC))[1]
+ *   positionCaseInsensitive(h, n) → strpos(lower(h), lower(n))
  *   now64(3)            → now()
  *
  * This is intentionally NOT a general SQL transpiler — it covers the dialect
@@ -130,6 +131,12 @@ export function translateFunctions(sql: string): string {
   sql = rewriteCalls(sql, 'uniqExact', ([x]) => `count(DISTINCT ${x})`);
   sql = rewriteCalls(sql, 'sumIf', ([x, cond]) => `sum(${x}) FILTER (WHERE ${cond})`);
   sql = rewriteCalls(sql, 'argMax', ([a, b]) => `(array_agg(${a} ORDER BY ${b} DESC NULLS LAST))[1]`);
+  // ClickHouse positionCaseInsensitive(haystack, needle) → 1-based index or 0.
+  sql = rewriteCalls(
+    sql,
+    'positionCaseInsensitive',
+    ([haystack, needle]) => `strpos(lower(${haystack}), lower(${needle}))`,
+  );
   // ClickHouse ternary if(). PG's own IF doesn't exist in SQL expressions, so
   // any if( in this codebase's queries is the CH form.
   sql = rewriteCalls(sql, 'if', ([a, b, c]) => `(CASE WHEN ${a} THEN ${b} ELSE ${c} END)`);
