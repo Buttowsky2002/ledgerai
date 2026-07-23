@@ -1,6 +1,7 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { logSecurityEventFromContext } from '../security/security-event';
 import { getTenantId } from '../tenant/tenant-context';
 
 import { env } from '../env';
@@ -52,6 +53,11 @@ export class ConnectorSecretsService {
       tx.connectorSecret.findUnique({ where: { secretId: secretRef } }),
     );
     if (!row) return undefined;
+    // Audit decrypt/use only — never log ciphertext or plaintext.
+    logSecurityEventFromContext('connector.secret_access', {
+      secretId: secretRef,
+      op: 'resolve',
+    });
     return this.decrypt(row.ciphertext);
   }
 
