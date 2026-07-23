@@ -15,9 +15,9 @@ import (
 // Finding is a single DLP classifier hit; it carries class/category/severity
 // metadata but never the raw matched content.
 type Finding struct {
-	Class       string  `json:"class"`                 // e.g. "aws_access_key"
-	Category    string  `json:"category"`              // credentials | pii | pci | prompt_injection | …
-	Severity    string  `json:"severity"`              // low | medium | high | critical
+	Class       string  `json:"class"`    // e.g. "aws_access_key"
+	Category    string  `json:"category"` // credentials | pii | pci | prompt_injection | …
+	Severity    string  `json:"severity"` // low | medium | high | critical
 	Confidence  float64 `json:"confidence"`
 	Count       int     `json:"count"`
 	ActionTaken string  `json:"action_taken,omitempty"` // flagged | blocked | allowed
@@ -130,7 +130,7 @@ func (d *DLPEngine) Decide(policyID string, findings []Finding) string {
 		}
 	}
 
-	action := "allow"
+	var action string
 	if len(other) > 0 {
 		action = d.decidePolicy(policyID, other)
 	} else {
