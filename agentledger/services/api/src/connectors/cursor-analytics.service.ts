@@ -182,7 +182,7 @@ export class CursorAnalyticsService {
          AND user_id != ''
          AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
        GROUP BY user_id, day
-       HAVING cost_usd > 0
+       HAVING sum(${METERED_COST}) > 0
        ORDER BY user_id, day`,
       { tenant: tenantId, from, to },
     );
