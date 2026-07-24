@@ -98,6 +98,10 @@ module "api" {
       BADGERIQ_OIDC_REDIRECT_BASE = local.public_url
       # Post-login browser redirect target (auth.controller dashboardUrl).
       BADGERIQ_DASHBOARD_URL = local.public_url
+      # OIDC returns cross-site; SameSite=Strict session cookies are dropped on
+      # the post-IdP redirect to the dashboard → bounce back to /login. Lax keeps
+      # al_access/al_refresh on that top-level navigation (same public host).
+      BADGERIQ_COOKIE_SAMESITE = "lax"
       # Design-partner → attribution engine via Cloud Map (not localhost).
       BADGERIQ_ATTRIBUTION_WORKER_URL = "http://attribution.badgeriq.local:8096"
     },
