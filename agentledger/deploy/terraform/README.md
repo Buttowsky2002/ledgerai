@@ -96,6 +96,8 @@ allowed_host_headers = [
 
 CloudFront’s `*.cloudfront.net` domain and the custom hostname are appended automatically. Unmatched Host headers hit the listener default **403**.
 
+**SG rule quota:** the CloudFront origin-facing prefix list expands to ~45 CIDRs. Default inbound rules-per-SG is 60, so Terraform opens only the single origin port CF uses (HTTP:80 today; HTTPS:443 once `enable_custom_domain` flips origin to https-only). Request a quota increase before opening both ports at once.
+
 ### Entra tenant lock
 
 ```hcl

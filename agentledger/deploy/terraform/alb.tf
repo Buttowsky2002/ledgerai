@@ -45,7 +45,7 @@ check "alb_host_header_limit" {
 
 resource "aws_security_group" "alb" {
   name_prefix = "${local.name}-alb-"
-  description = "ALB origin — ingress from CloudFront (and optional break-glass CIDRs)"
+  description = "ALB origin - ingress from CloudFront (and optional break-glass CIDRs)"
   vpc_id      = module.network.vpc_id
   tags        = merge(local.tags, { Name = "${local.name}-alb" })
 
@@ -61,19 +61,22 @@ data "aws_ec2_managed_prefix_list" "cloudfront" {
 }
 
 # When CloudFront is the public edge, lock ALB ingress to the CF prefix list.
+# The origin-facing prefix list expands to ~45 CIDRs; default SG inbound quota
+# is 60, so only open the single origin port CloudFront actually uses
+# (HTTP:80 until a custom-domain cert enables https-only origin).
 resource "aws_vpc_security_group_ingress_rule" "alb_http_cloudfront" {
-  count = var.enable_cloudfront ? 1 : 0
+  count = var.enable_cloudfront && !local.cloudfront_origin_https ? 1 : 0
 
   security_group_id = aws_security_group.alb.id
   prefix_list_id    = data.aws_ec2_managed_prefix_list.cloudfront[0].id
   from_port         = 80
   to_port           = 80
   ip_protocol       = "tcp"
-  description       = "HTTP from CloudFront (redirect to 443 when HTTPS enabled)"
+  description       = "HTTP from CloudFront"
 }
 
 resource "aws_vpc_security_group_ingress_rule" "alb_https_cloudfront" {
-  count = var.enable_cloudfront ? 1 : 0
+  count = var.enable_cloudfront && local.cloudfront_origin_https ? 1 : 0
 
   security_group_id = aws_security_group.alb.id
   prefix_list_id    = data.aws_ec2_managed_prefix_list.cloudfront[0].id
