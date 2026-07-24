@@ -77,3 +77,23 @@ export async function fetchData<T>(promise: Promise<{ data?: T; error?: unknown 
   }
   return data;
 }
+
+/**
+ * Server-route helper: proxy to the NestJS API with the session cookie and return
+ * a NextResponse. Used by app/api/** route handlers.
+ */
+export async function proxyApiServer(
+  method: string,
+  path: string,
+  body?: unknown,
+): Promise<Response> {
+  const init: RequestInit = { method };
+  if (body !== undefined) {
+    init.body = typeof body === 'string' ? body : JSON.stringify(body);
+  }
+  const { status, data } = await proxyApi(path, init);
+  if (status === 204) {
+    return new Response(null, { status: 204 });
+  }
+  return Response.json(data ?? {}, { status: status >= 400 ? status : status || 502 });
+}

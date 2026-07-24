@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useMemo, useState } from 'react';
+import { UserProfile } from './UserProfile';
 
 type NavItem = { href: string; label: string };
 type NavGroup = { label: string; items: NavItem[] };
@@ -182,6 +183,9 @@ export function Sidebar() {
       <Suspense fallback={<nav className="space-y-1 text-sm text-muted">Loading…</nav>}>
         <SidebarNav />
       </Suspense>
+      <div className="mt-auto border-t border-edge pt-4">
+        <UserProfile />
+      </div>
     </aside>
   );
 }

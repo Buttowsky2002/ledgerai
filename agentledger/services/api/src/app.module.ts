@@ -20,6 +20,7 @@ import { ClickHouseModule } from './clickhouse/clickhouse.module';
 import { HealthModule } from './health/health.module';
 import { IdentitiesModule } from './identities/identities.module';
 import { ImportModule } from './import/import.module';
+import { InvitesModule } from './invites/invites.module';
 import { PortalImportModule } from './portal-import/portal-import.module';
 import { MetricsModule } from './metrics/metrics.module';
 import { OutcomesModule } from './outcomes/outcomes.module';
@@ -66,6 +67,7 @@ import { DesignPartnerModule } from './design-partner/design-partner.module';
     // Control-plane resources (CRUD + audit; RLS-scoped, admin-write/viewer-read).
     TeamsModule,
     IdentitiesModule,
+    InvitesModule,
     AppsModule,
     AgentsModule,
     PoliciesModule,
