@@ -8,20 +8,21 @@
 #   - vpc_id               = module.network.vpc_id
 #   - cloudmap_namespace   = module.redpanda.namespace_id   (badgeriq.local)
 #   - registry_secret_arn  = var.ghcr_secret_arn
-#   - alb_listener_arn     = local.alb_service_listener_arn (HTTPS when a custom
-#                            domain is enabled, otherwise HTTP:80 — see alb.tf)
+#   - alb_listener_arn     = local.alb_service_listener_arn (HTTPS:443 when a
+#                            cert is configured, otherwise HTTP:80 — see alb.tf)
+#   - alb_host_headers     = local.allowed_host_headers (domain lockdown)
 
 locals {
   svc_common = {
-    name_prefix               = local.name
-    execution_role_arn        = aws_iam_role.ecs_execution.arn
-    ecs_cluster_id            = aws_ecs_cluster.main.id
-    private_subnet_ids        = module.network.private_subnet_ids
+    name_prefix                = local.name
+    execution_role_arn         = aws_iam_role.ecs_execution.arn
+    ecs_cluster_id             = aws_ecs_cluster.main.id
+    private_subnet_ids         = module.network.private_subnet_ids
     ecs_task_security_group_id = module.network.ecs_task_security_group_id
-    vpc_id                    = module.network.vpc_id
-    cloudmap_namespace_id     = module.redpanda.namespace_id
-    registry_secret_arn       = var.ghcr_secret_arn
-    tags                      = local.tags
+    vpc_id                     = module.network.vpc_id
+    cloudmap_namespace_id      = module.redpanda.namespace_id
+    registry_secret_arn        = var.ghcr_secret_arn
+    tags                       = local.tags
   }
 
   pg_dsn_secret  = "${module.postgres.dsn_secret_arn}:dsn::"
@@ -62,17 +63,18 @@ module "gateway" {
   expose_via_alb    = true
   alb_listener_arn  = local.alb_service_listener_arn
   alb_path_patterns = ["/proxy/*", "/ops/*"]
+  alb_host_headers  = local.allowed_host_headers
   alb_priority      = 10
 
-  name_prefix               = local.svc_common.name_prefix
-  execution_role_arn        = local.svc_common.execution_role_arn
-  ecs_cluster_id            = local.svc_common.ecs_cluster_id
-  private_subnet_ids        = local.svc_common.private_subnet_ids
+  name_prefix                = local.svc_common.name_prefix
+  execution_role_arn         = local.svc_common.execution_role_arn
+  ecs_cluster_id             = local.svc_common.ecs_cluster_id
+  private_subnet_ids         = local.svc_common.private_subnet_ids
   ecs_task_security_group_id = local.svc_common.ecs_task_security_group_id
-  vpc_id                    = local.svc_common.vpc_id
-  cloudmap_namespace_id     = local.svc_common.cloudmap_namespace_id
-  registry_secret_arn       = local.svc_common.registry_secret_arn
-  tags                      = local.svc_common.tags
+  vpc_id                     = local.svc_common.vpc_id
+  cloudmap_namespace_id      = local.svc_common.cloudmap_namespace_id
+  registry_secret_arn        = local.svc_common.registry_secret_arn
+  tags                       = local.svc_common.tags
 }
 
 # ── 2. API (NestJS) ─────────────────────────────────────────────────────────
@@ -86,46 +88,89 @@ module "api" {
   cpu            = 512
   memory         = 1024
 
-  environment = {
-    NODE_ENV                         = "production"
-    # Alias-aware production gate for API auth safety (dev-trust / docs).
-    BADGERIQ_ENV                     = "production"
-    # Public origin for OIDC redirect_uri (must match IdP app registration).
-    # Same host as dashboard BADGERIQ_PUBLIC_URL — not the Cloud Map address.
-    BADGERIQ_OIDC_REDIRECT_BASE      = local.public_url
-    # Post-login browser redirect target (auth.controller dashboardUrl).
-    BADGERIQ_DASHBOARD_URL           = local.public_url
-    # Design-partner → attribution engine via Cloud Map (not localhost).
-    BADGERIQ_ATTRIBUTION_WORKER_URL  = "http://attribution.badgeriq.local:8096"
-  }
+  environment = merge(
+    {
+      NODE_ENV = "production"
+      # Alias-aware production gate for API auth safety (dev-trust / docs).
+      BADGERIQ_ENV = "production"
+      # Public origin for OIDC redirect_uri (must match IdP app registration).
+      # Same host as dashboard BADGERIQ_PUBLIC_URL — not the Cloud Map address.
+      BADGERIQ_OIDC_REDIRECT_BASE = local.public_url
+      # Post-login browser redirect target (auth.controller dashboardUrl).
+      BADGERIQ_DASHBOARD_URL = local.public_url
+      # OIDC returns cross-site; SameSite=Strict session cookies are dropped on
+      # the post-IdP redirect to the dashboard → bounce back to /login. Lax keeps
+      # al_access/al_refresh on that top-level navigation (same public host).
+      BADGERIQ_COOKIE_SAMESITE = "lax"
+      # Pilot analytics live in Postgres (023_analytics_mvp.sql), not ClickHouse.
+      # Without this the API defaults to ClickHouse and overview/connectors go empty.
+      BADGERIQ_ANALYTICS_BACKEND = "postgres"
+      # Design-partner → attribution engine via Cloud Map (not localhost).
+      BADGERIQ_ATTRIBUTION_WORKER_URL = "http://attribution.badgeriq.local:8096"
+    },
+    var.oidc_microsoft_tenant_id != "" ? {
+      # Lock Microsoft OIDC to the Studio Designer Entra tenant (not /common/).
+      AGENTLEDGER_OIDC_MICROSOFT_TENANT_ID = var.oidc_microsoft_tenant_id
+    } : {},
+  )
 
   secrets = {
-    AGENTLEDGER_PG_DSN                       = local.pg_dsn_secret
-    AGENTLEDGER_CLICKHOUSE_URL               = local.ch_url_secret
-    AGENTLEDGER_JWT_SECRET                   = "${var.jwt_secret_arn}:secret::"
+    AGENTLEDGER_PG_DSN         = local.pg_dsn_secret
+    AGENTLEDGER_CLICKHOUSE_URL = local.ch_url_secret
+    AGENTLEDGER_JWT_SECRET     = "${var.jwt_secret_arn}:secret::"
     # Dedicated AES key for connector credentials — never reuse the JWT secret.
     BADGERIQ_CONNECTOR_SECRET_KEY            = "${var.connector_secret_key_arn}:secret::"
     AGENTLEDGER_OIDC_MICROSOFT_CLIENT_ID     = "${var.oidc_microsoft_secret_arn}:client_id::"
     AGENTLEDGER_OIDC_MICROSOFT_CLIENT_SECRET = "${var.oidc_microsoft_secret_arn}:client_secret::"
   }
 
-  expose_via_alb    = true
-  alb_listener_arn  = local.alb_service_listener_arn
+  expose_via_alb   = true
+  alb_listener_arn = local.alb_service_listener_arn
   # Nest has no setGlobalPrefix — controllers mount at /auth, /v1/*, /scim/v2,
-  # /healthz, /readyz (and /metrics, /docs internally). ALB max 5 path values
-  # per rule; omit /metrics and /docs from the public edge.
-  alb_path_patterns = ["/auth/*", "/v1/*", "/scim/*", "/healthz", "/readyz"]
+  # /healthz, /readyz (and /metrics, /docs internally). /scim/* has its own
+  # higher-priority listener rule below. ALB max 5 path values per rule.
+  alb_path_patterns = ["/auth/*", "/v1/*", "/healthz", "/readyz"]
+  alb_host_headers  = local.allowed_host_headers
   alb_priority      = 20
 
-  name_prefix               = local.svc_common.name_prefix
-  execution_role_arn        = local.svc_common.execution_role_arn
-  ecs_cluster_id            = local.svc_common.ecs_cluster_id
-  private_subnet_ids        = local.svc_common.private_subnet_ids
+  name_prefix                = local.svc_common.name_prefix
+  execution_role_arn         = local.svc_common.execution_role_arn
+  ecs_cluster_id             = local.svc_common.ecs_cluster_id
+  private_subnet_ids         = local.svc_common.private_subnet_ids
   ecs_task_security_group_id = local.svc_common.ecs_task_security_group_id
-  vpc_id                    = local.svc_common.vpc_id
-  cloudmap_namespace_id     = local.svc_common.cloudmap_namespace_id
-  registry_secret_arn       = local.svc_common.registry_secret_arn
-  tags                      = local.svc_common.tags
+  vpc_id                     = local.svc_common.vpc_id
+  cloudmap_namespace_id      = local.svc_common.cloudmap_namespace_id
+  registry_secret_arn        = local.svc_common.registry_secret_arn
+  tags                       = local.svc_common.tags
+}
+
+# SCIM lifecycle (/scim/v2) — dedicated higher-priority rule. Auth stays at the
+# app layer (ScimAuthGuard bearer token); this is host/path edge lockdown only.
+resource "aws_lb_listener_rule" "scim" {
+  listener_arn = local.alb_service_listener_arn
+  priority     = 15
+
+  action {
+    type             = "forward"
+    target_group_arn = module.api.target_group_arn
+  }
+
+  condition {
+    path_pattern {
+      values = ["/scim/*"]
+    }
+  }
+
+  dynamic "condition" {
+    for_each = length(local.allowed_host_headers) > 0 ? [1] : []
+    content {
+      host_header {
+        values = local.allowed_host_headers
+      }
+    }
+  }
+
+  tags = local.svc_common.tags
 }
 
 # ── 3. Dashboard (Next.js) ──────────────────────────────────────────────────
@@ -140,15 +185,15 @@ module "dashboard" {
   memory         = 1024
 
   environment = {
-    NODE_ENV             = "production"
-    BADGERIQ_ENV         = "production"
+    NODE_ENV     = "production"
+    BADGERIQ_ENV = "production"
     # Server-side BFF only (lib/api.ts). Use Cloud Map — never round-trip the ALB.
     # Service discovery: aws_service_discovery_service.svc.name = var.name ("api")
     # in namespace badgeriq.local → api.badgeriq.local:8094
-    BADGERIQ_API_URL     = "http://api.badgeriq.local:8094"
+    BADGERIQ_API_URL = "http://api.badgeriq.local:8094"
     # Browser-facing OIDC login links (lib/auth.ts loginUrl) — public hostname.
-    BADGERIQ_PUBLIC_URL  = local.public_url
-    BADGERIQ_DEMO_MODE   = "false"
+    BADGERIQ_PUBLIC_URL = local.public_url
+    BADGERIQ_DEMO_MODE  = "false"
   }
 
   secrets = {}
@@ -156,17 +201,18 @@ module "dashboard" {
   expose_via_alb    = true
   alb_listener_arn  = local.alb_service_listener_arn
   alb_path_patterns = ["/*"]
+  alb_host_headers  = local.allowed_host_headers
   alb_priority      = 100
 
-  name_prefix               = local.svc_common.name_prefix
-  execution_role_arn        = local.svc_common.execution_role_arn
-  ecs_cluster_id            = local.svc_common.ecs_cluster_id
-  private_subnet_ids        = local.svc_common.private_subnet_ids
+  name_prefix                = local.svc_common.name_prefix
+  execution_role_arn         = local.svc_common.execution_role_arn
+  ecs_cluster_id             = local.svc_common.ecs_cluster_id
+  private_subnet_ids         = local.svc_common.private_subnet_ids
   ecs_task_security_group_id = local.svc_common.ecs_task_security_group_id
-  vpc_id                    = local.svc_common.vpc_id
-  cloudmap_namespace_id     = local.svc_common.cloudmap_namespace_id
-  registry_secret_arn       = local.svc_common.registry_secret_arn
-  tags                      = local.svc_common.tags
+  vpc_id                     = local.svc_common.vpc_id
+  cloudmap_namespace_id      = local.svc_common.cloudmap_namespace_id
+  registry_secret_arn        = local.svc_common.registry_secret_arn
+  tags                       = local.svc_common.tags
 }
 
 # ── 4. Collector (Go) ───────────────────────────────────────────────────────
@@ -187,15 +233,15 @@ module "collector" {
 
   secrets = {}
 
-  name_prefix               = local.svc_common.name_prefix
-  execution_role_arn        = local.svc_common.execution_role_arn
-  ecs_cluster_id            = local.svc_common.ecs_cluster_id
-  private_subnet_ids        = local.svc_common.private_subnet_ids
+  name_prefix                = local.svc_common.name_prefix
+  execution_role_arn         = local.svc_common.execution_role_arn
+  ecs_cluster_id             = local.svc_common.ecs_cluster_id
+  private_subnet_ids         = local.svc_common.private_subnet_ids
   ecs_task_security_group_id = local.svc_common.ecs_task_security_group_id
-  vpc_id                    = local.svc_common.vpc_id
-  cloudmap_namespace_id     = local.svc_common.cloudmap_namespace_id
-  registry_secret_arn       = local.svc_common.registry_secret_arn
-  tags                      = local.svc_common.tags
+  vpc_id                     = local.svc_common.vpc_id
+  cloudmap_namespace_id      = local.svc_common.cloudmap_namespace_id
+  registry_secret_arn        = local.svc_common.registry_secret_arn
+  tags                       = local.svc_common.tags
 }
 
 # ── 5. CH-Insert worker (Go) ────────────────────────────────────────────────
@@ -221,15 +267,15 @@ module "ch_insert" {
     AGENTLEDGER_CLICKHOUSE_PASSWORD = local.ch_pass_secret
   }
 
-  name_prefix               = local.svc_common.name_prefix
-  execution_role_arn        = local.svc_common.execution_role_arn
-  ecs_cluster_id            = local.svc_common.ecs_cluster_id
-  private_subnet_ids        = local.svc_common.private_subnet_ids
+  name_prefix                = local.svc_common.name_prefix
+  execution_role_arn         = local.svc_common.execution_role_arn
+  ecs_cluster_id             = local.svc_common.ecs_cluster_id
+  private_subnet_ids         = local.svc_common.private_subnet_ids
   ecs_task_security_group_id = local.svc_common.ecs_task_security_group_id
-  vpc_id                    = local.svc_common.vpc_id
-  cloudmap_namespace_id     = local.svc_common.cloudmap_namespace_id
-  registry_secret_arn       = local.svc_common.registry_secret_arn
-  tags                      = local.svc_common.tags
+  vpc_id                     = local.svc_common.vpc_id
+  cloudmap_namespace_id      = local.svc_common.cloudmap_namespace_id
+  registry_secret_arn        = local.svc_common.registry_secret_arn
+  tags                       = local.svc_common.tags
 }
 
 # ── 6. Reconciliation worker (Go) ───────────────────────────────────────────
@@ -250,15 +296,15 @@ module "reconcile" {
     AGENTLEDGER_CLICKHOUSE_URL = local.ch_url_secret
   }
 
-  name_prefix               = local.svc_common.name_prefix
-  execution_role_arn        = local.svc_common.execution_role_arn
-  ecs_cluster_id            = local.svc_common.ecs_cluster_id
-  private_subnet_ids        = local.svc_common.private_subnet_ids
+  name_prefix                = local.svc_common.name_prefix
+  execution_role_arn         = local.svc_common.execution_role_arn
+  ecs_cluster_id             = local.svc_common.ecs_cluster_id
+  private_subnet_ids         = local.svc_common.private_subnet_ids
   ecs_task_security_group_id = local.svc_common.ecs_task_security_group_id
-  vpc_id                    = local.svc_common.vpc_id
-  cloudmap_namespace_id     = local.svc_common.cloudmap_namespace_id
-  registry_secret_arn       = local.svc_common.registry_secret_arn
-  tags                      = local.svc_common.tags
+  vpc_id                     = local.svc_common.vpc_id
+  cloudmap_namespace_id      = local.svc_common.cloudmap_namespace_id
+  registry_secret_arn        = local.svc_common.registry_secret_arn
+  tags                       = local.svc_common.tags
 }
 
 # ── 7. Attribution engine (Go) ──────────────────────────────────────────────
@@ -279,15 +325,15 @@ module "attribution" {
     AGENTLEDGER_CLICKHOUSE_URL = local.ch_url_secret
   }
 
-  name_prefix               = local.svc_common.name_prefix
-  execution_role_arn        = local.svc_common.execution_role_arn
-  ecs_cluster_id            = local.svc_common.ecs_cluster_id
-  private_subnet_ids        = local.svc_common.private_subnet_ids
+  name_prefix                = local.svc_common.name_prefix
+  execution_role_arn         = local.svc_common.execution_role_arn
+  ecs_cluster_id             = local.svc_common.ecs_cluster_id
+  private_subnet_ids         = local.svc_common.private_subnet_ids
   ecs_task_security_group_id = local.svc_common.ecs_task_security_group_id
-  vpc_id                    = local.svc_common.vpc_id
-  cloudmap_namespace_id     = local.svc_common.cloudmap_namespace_id
-  registry_secret_arn       = local.svc_common.registry_secret_arn
-  tags                      = local.svc_common.tags
+  vpc_id                     = local.svc_common.vpc_id
+  cloudmap_namespace_id      = local.svc_common.cloudmap_namespace_id
+  registry_secret_arn        = local.svc_common.registry_secret_arn
+  tags                       = local.svc_common.tags
 }
 
 # ── 8. Risk engine (Go) ─────────────────────────────────────────────────────
@@ -307,15 +353,15 @@ module "risk_engine" {
     AGENTLEDGER_CLICKHOUSE_URL = local.ch_url_secret
   }
 
-  name_prefix               = local.svc_common.name_prefix
-  execution_role_arn        = local.svc_common.execution_role_arn
-  ecs_cluster_id            = local.svc_common.ecs_cluster_id
-  private_subnet_ids        = local.svc_common.private_subnet_ids
+  name_prefix                = local.svc_common.name_prefix
+  execution_role_arn         = local.svc_common.execution_role_arn
+  ecs_cluster_id             = local.svc_common.ecs_cluster_id
+  private_subnet_ids         = local.svc_common.private_subnet_ids
   ecs_task_security_group_id = local.svc_common.ecs_task_security_group_id
-  vpc_id                    = local.svc_common.vpc_id
-  cloudmap_namespace_id     = local.svc_common.cloudmap_namespace_id
-  registry_secret_arn       = local.svc_common.registry_secret_arn
-  tags                      = local.svc_common.tags
+  vpc_id                     = local.svc_common.vpc_id
+  cloudmap_namespace_id      = local.svc_common.cloudmap_namespace_id
+  registry_secret_arn        = local.svc_common.registry_secret_arn
+  tags                       = local.svc_common.tags
 }
 
 # ── 9. Connector sync (Go) ──────────────────────────────────────────────────
@@ -336,15 +382,15 @@ module "connector_sync" {
     AGENTLEDGER_CLICKHOUSE_URL = local.ch_url_secret
   }
 
-  name_prefix               = local.svc_common.name_prefix
-  execution_role_arn        = local.svc_common.execution_role_arn
-  ecs_cluster_id            = local.svc_common.ecs_cluster_id
-  private_subnet_ids        = local.svc_common.private_subnet_ids
+  name_prefix                = local.svc_common.name_prefix
+  execution_role_arn         = local.svc_common.execution_role_arn
+  ecs_cluster_id             = local.svc_common.ecs_cluster_id
+  private_subnet_ids         = local.svc_common.private_subnet_ids
   ecs_task_security_group_id = local.svc_common.ecs_task_security_group_id
-  vpc_id                    = local.svc_common.vpc_id
-  cloudmap_namespace_id     = local.svc_common.cloudmap_namespace_id
-  registry_secret_arn       = local.svc_common.registry_secret_arn
-  tags                      = local.svc_common.tags
+  vpc_id                     = local.svc_common.vpc_id
+  cloudmap_namespace_id      = local.svc_common.cloudmap_namespace_id
+  registry_secret_arn        = local.svc_common.registry_secret_arn
+  tags                       = local.svc_common.tags
 }
 
 # ── 10. Outcome sync (Go) ───────────────────────────────────────────────────
@@ -366,15 +412,15 @@ module "outcome_sync" {
     GITHUB_TOKEN               = "${var.github_token_secret_arn}:token::"
   }
 
-  name_prefix               = local.svc_common.name_prefix
-  execution_role_arn        = local.svc_common.execution_role_arn
-  ecs_cluster_id            = local.svc_common.ecs_cluster_id
-  private_subnet_ids        = local.svc_common.private_subnet_ids
+  name_prefix                = local.svc_common.name_prefix
+  execution_role_arn         = local.svc_common.execution_role_arn
+  ecs_cluster_id             = local.svc_common.ecs_cluster_id
+  private_subnet_ids         = local.svc_common.private_subnet_ids
   ecs_task_security_group_id = local.svc_common.ecs_task_security_group_id
-  vpc_id                    = local.svc_common.vpc_id
-  cloudmap_namespace_id     = local.svc_common.cloudmap_namespace_id
-  registry_secret_arn       = local.svc_common.registry_secret_arn
-  tags                      = local.svc_common.tags
+  vpc_id                     = local.svc_common.vpc_id
+  cloudmap_namespace_id      = local.svc_common.cloudmap_namespace_id
+  registry_secret_arn        = local.svc_common.registry_secret_arn
+  tags                       = local.svc_common.tags
 }
 
 # ── 11. LiteLLM adapter (Go) ────────────────────────────────────────────────
@@ -394,13 +440,13 @@ module "litellm_adapter" {
 
   secrets = {}
 
-  name_prefix               = local.svc_common.name_prefix
-  execution_role_arn        = local.svc_common.execution_role_arn
-  ecs_cluster_id            = local.svc_common.ecs_cluster_id
-  private_subnet_ids        = local.svc_common.private_subnet_ids
+  name_prefix                = local.svc_common.name_prefix
+  execution_role_arn         = local.svc_common.execution_role_arn
+  ecs_cluster_id             = local.svc_common.ecs_cluster_id
+  private_subnet_ids         = local.svc_common.private_subnet_ids
   ecs_task_security_group_id = local.svc_common.ecs_task_security_group_id
-  vpc_id                    = local.svc_common.vpc_id
-  cloudmap_namespace_id     = local.svc_common.cloudmap_namespace_id
-  registry_secret_arn       = local.svc_common.registry_secret_arn
-  tags                      = local.svc_common.tags
+  vpc_id                     = local.svc_common.vpc_id
+  cloudmap_namespace_id      = local.svc_common.cloudmap_namespace_id
+  registry_secret_arn        = local.svc_common.registry_secret_arn
+  tags                       = local.svc_common.tags
 }
