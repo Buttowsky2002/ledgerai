@@ -46,6 +46,12 @@ clickhouse_password = "..."
 
 All other variables have sensible defaults. See `variables.tf` for the full list.
 
+**Keep `image_tag` current.** A terraform apply redeploys every ECS service to
+whatever tag is in `pilot.auto.tfvars` / `pilot.tfvars`. Pinning an old tag
+(e.g. before a dashboard CSP hotfix) will silently roll the fleet backward and
+can blank the UI. After every release tag (`v0.1.x-pilot`), bump `image_tag`
+before the next infra apply.
+
 ## Post-apply manual steps
 
 1. **Create Kafka topics** on Redpanda (via `rpk` from inside the VPC):

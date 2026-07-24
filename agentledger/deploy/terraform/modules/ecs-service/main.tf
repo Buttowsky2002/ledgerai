@@ -6,8 +6,8 @@ data "aws_region" "current" {}
 locals {
   has_port = var.container_port > 0
 
-  env_pairs    = [for k, v in var.environment : { name = k, value = v }]
-  secret_pairs = [for k, v in var.secrets : { name = k, valueFrom = v }]
+  env_pairs    = [for k in sort(keys(var.environment)) : { name = k, value = var.environment[k] }]
+  secret_pairs = [for k in sort(keys(var.secrets)) : { name = k, valueFrom = var.secrets[k] }]
 
   port_mappings = local.has_port ? [{
     containerPort = var.container_port
@@ -100,6 +100,17 @@ resource "aws_ecs_service" "svc" {
   desired_count   = 1
   launch_type     = "FARGATE"
 
+  # Keep at least one healthy task during rolls (desired=1 → temporarily run 2).
+  # Circuit breaker rolls back a bad task def instead of draining to zero.
+  deployment_minimum_healthy_percent = 100
+  deployment_maximum_percent         = 200
+  health_check_grace_period_seconds  = var.expose_via_alb ? 120 : 0
+
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
+
   network_configuration {
     subnets          = var.private_subnet_ids
     security_groups  = [var.ecs_task_security_group_id]
@@ -120,6 +131,13 @@ resource "aws_ecs_service" "svc" {
   }
 
   tags = var.tags
+
+  # Avoid spurious replace churn from AWS reordering env/secret JSON when the
+  # operator only changed unrelated edge resources. Image/env updates still
+  # flow through because task_definition ARN changes on those edits.
+  lifecycle {
+    ignore_changes = [desired_count]
+  }
 }
 
 # ── ALB target group + listener rule (conditional) ───────────────────────────
