@@ -102,6 +102,9 @@ module "api" {
       # the post-IdP redirect to the dashboard → bounce back to /login. Lax keeps
       # al_access/al_refresh on that top-level navigation (same public host).
       BADGERIQ_COOKIE_SAMESITE = "lax"
+      # Pilot analytics live in Postgres (023_analytics_mvp.sql), not ClickHouse.
+      # Without this the API defaults to ClickHouse and overview/connectors go empty.
+      BADGERIQ_ANALYTICS_BACKEND = "postgres"
       # Design-partner → attribution engine via Cloud Map (not localhost).
       BADGERIQ_ATTRIBUTION_WORKER_URL = "http://attribution.badgeriq.local:8096"
     },
