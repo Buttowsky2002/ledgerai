@@ -1,7 +1,7 @@
 # Control-plane API (NestJS + Prisma). Build on glibc so the Prisma engine
 # matches the distroless debian runtime (musl/glibc mismatch otherwise crashes
 # the query engine at startup).
-FROM node:20-slim AS build
+FROM node:26-slim AS build
 WORKDIR /src
 # OpenSSL is needed for `prisma generate` to pick the right engine.
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
