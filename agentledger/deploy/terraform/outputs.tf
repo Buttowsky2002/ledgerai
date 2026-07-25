@@ -86,8 +86,16 @@ output "alb_arn" {
 }
 
 output "alb_url" {
-  description = "Base URL to reach the ALB: HTTPS custom domain when enabled, otherwise the plain-HTTP ALB DNS name."
-  value       = var.enable_custom_domain ? "https://${var.environment}.${var.domain_name}" : "http://${aws_lb.main.dns_name}"
+  description = "Browser-facing base URL (custom domain, else CloudFront, else ALB). Prefer CloudFront/custom domain; ALB DNS is not public when CF SG lock is on."
+  value = (
+    var.enable_custom_domain
+    ? "https://${var.environment}.${var.domain_name}"
+    : (
+      var.enable_cloudfront
+      ? "https://${aws_cloudfront_distribution.main[0].domain_name}"
+      : (local.alb_https_enabled ? "https://${aws_lb.main.dns_name}" : "http://${aws_lb.main.dns_name}")
+    )
+  )
 }
 
 output "pilot_url" {
@@ -96,8 +104,23 @@ output "pilot_url" {
 }
 
 output "acm_certificate_arn" {
-  description = "ACM certificate ARN for the custom domain (null when enable_custom_domain = false)."
-  value       = var.enable_custom_domain ? aws_acm_certificate.pilot[0].arn : null
+  description = "ACM certificate ARN used by the ALB HTTPS listener (null when HTTPS is not enabled)."
+  value       = local.alb_https_enabled ? local.alb_certificate_arn : null
+}
+
+output "alb_https_enabled" {
+  description = "True when the ALB HTTPS:443 listener is provisioned."
+  value       = local.alb_https_enabled
+}
+
+output "allowed_host_headers" {
+  description = "Host header allowlist attached to ALB forward rules."
+  value       = local.allowed_host_headers
+}
+
+output "waf_web_acl_arn" {
+  description = "CloudFront WAF WebACL ARN (null when WAF or CloudFront is disabled)."
+  value       = var.enable_waf && var.enable_cloudfront ? aws_wafv2_web_acl.edge[0].arn : null
 }
 
 output "ecs_execution_role_arn" {

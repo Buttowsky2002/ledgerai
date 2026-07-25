@@ -73,13 +73,49 @@ variable "clickhouse_password" {
 # ── Phase 4: ECS services + ALB + DNS ────────────────────────────────────────
 
 variable "enable_custom_domain" {
-  description = "Provision the ACM cert, HTTPS listener, and Route 53 records for a real domain. When false, the ALB serves traffic over plain HTTP:80 (no domain required)."
+  description = "Provision a DNS-validated ACM cert, HTTPS:443 listener, HTTP→443 redirect, and Route 53 alias for environment.domain_name."
   type        = bool
   default     = false
 }
 
+variable "alb_certificate_arn" {
+  description = "Optional pre-existing ACM certificate ARN for the ALB HTTPS listener (us-east-1). When set, HTTPS is enabled even if enable_custom_domain = false."
+  type        = string
+  default     = ""
+}
+
+variable "acm_subject_alternative_names" {
+  description = "Optional SANs on the DNS-validated ACM cert (e.g. app.studiodesigner.com)."
+  type        = list(string)
+  default     = []
+}
+
+variable "allowed_host_headers" {
+  description = "Extra Host header values allowed on ALB forward rules (Studio Designer / BadgerIQ hostnames). CloudFront domain and custom hostname are added automatically."
+  type        = list(string)
+  default     = []
+}
+
+variable "alb_ingress_cidr_allowlist" {
+  description = "Optional CIDRs allowed to hit the ALB in addition to the CloudFront prefix list (office/VPN break-glass)."
+  type        = list(string)
+  default     = []
+}
+
+variable "oidc_microsoft_tenant_id" {
+  description = "Entra (Azure AD) tenant ID. When set, Microsoft OIDC uses https://login.microsoftonline.com/<tid>/v2.0 instead of /common/."
+  type        = string
+  default     = ""
+}
+
+variable "enable_waf" {
+  description = "Attach an AWS WAF WebACL to the CloudFront distribution (managed common rules + auth/SCIM rate limits)."
+  type        = bool
+  default     = true
+}
+
 variable "enable_cloudfront" {
-  description = "Provision a CloudFront distribution in front of the ALB for HTTPS termination without a custom domain (temporary until domain registration completes)."
+  description = "Provision a CloudFront distribution in front of the ALB for public HTTPS termination."
   type        = bool
   default     = false
 }
