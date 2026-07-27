@@ -1,4 +1,14 @@
+import type { CostStackBreakdown } from '../lari/lari-cfo-view.types';
 import type { ModelSpendTableRow, UserSpendTableRow } from './report-tables';
+
+/** CFO fully-loaded projection for the selected window → forecast horizon. */
+export interface ExecutiveReportProjection {
+  forecastDays: number;
+  observedPeriodDays: number;
+  observedFullyLoadedCost: number;
+  projectedFullyLoadedCost: number;
+  stack: CostStackBreakdown;
+}
 
 /** Raw spend totals from spend_daily. */
 export interface SpendTotals {
@@ -86,4 +96,6 @@ export interface ExecutiveReportData {
   risk: RiskRollupRow[];
   blockedEvents: number;
   oneLiner: string;
+  /** Null when CFO view is unavailable; metered sections still export. */
+  projection: ExecutiveReportProjection | null;
 }

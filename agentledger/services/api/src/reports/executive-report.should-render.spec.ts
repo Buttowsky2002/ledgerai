@@ -9,6 +9,7 @@ import {
   rollupUserSpend,
   shouldRenderPctChange,
   shouldRenderProviderChart,
+  shouldRenderProjection,
   shouldRenderRisk,
   shouldRenderSingleProviderLabel,
   shouldRenderSpendTrend,
@@ -116,6 +117,12 @@ describe('executive-report.should-render', () => {
       expect(shouldRenderRisk(0, [{ dlpAction: 'allow', riskSeverity: 'low', events: 5 }])).toBe(false);
       expect(shouldRenderRisk(1, [])).toBe(true);
       expect(shouldRenderRisk(0, [{ dlpAction: 'block', riskSeverity: 'high', events: 2 }])).toBe(true);
+    });
+
+    it('renders CFO projection only when projected spend is positive', () => {
+      expect(shouldRenderProjection(null)).toBe(false);
+      expect(shouldRenderProjection({ projectedFullyLoadedCost: 0 })).toBe(false);
+      expect(shouldRenderProjection({ projectedFullyLoadedCost: 10 })).toBe(true);
     });
   });
 

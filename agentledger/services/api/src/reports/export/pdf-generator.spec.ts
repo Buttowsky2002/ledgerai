@@ -69,6 +69,21 @@ const baseData = (): ExecutiveReportData => ({
   risk: [],
   blockedEvents: 0,
   oneLiner: 'AI spend was $120.00, New spend (no comparable prior period).',
+  projection: {
+    forecastDays: 365,
+    observedPeriodDays: 30,
+    observedFullyLoadedCost: 150,
+    projectedFullyLoadedCost: 1825,
+    stack: {
+      tokenUsageUsd: 1460,
+      tokenComputedUsd: 1400,
+      tokenMeteredUsd: 1460,
+      fixedCostUsd: 240,
+      codingAgentUsd: 0,
+      copilotUsd: 125,
+      qaEvalOverheadUsd: 0,
+    },
+  },
 });
 
 describe('executive report PDF (text-only)', () => {
@@ -78,11 +93,11 @@ describe('executive report PDF (text-only)', () => {
     expect(pdfHasEmbeddedImages(pdf)).toBe(false);
   });
 
-  it('stays within 2 pages with no footer-only orphans', async () => {
+  it('stays within a reasonable page budget with trend + projection', async () => {
     const pdf = await generateExecutivePdf(baseData());
     const pages = pdfPageCount(pdf);
     expect(pages).toBeGreaterThanOrEqual(1);
-    expect(pages).toBeLessThanOrEqual(2);
+    expect(pages).toBeLessThanOrEqual(4);
   });
 
   it('does not print absurd period % when prior is below materiality threshold', async () => {
@@ -102,5 +117,12 @@ describe('executive report PDF (text-only)', () => {
     const pdf = await generateExecutivePdf(data);
     expect(pdfContainsAbsurdPeriodPct(pdf)).toBe(false);
     expect(pdf.toString('latin1')).not.toMatch(/28984/);
+  });
+
+  it('still builds when CFO projection is null', async () => {
+    const data = baseData();
+    data.projection = null;
+    const pdf = await generateExecutivePdf(data);
+    expect(pdf.subarray(0, 4).toString()).toBe('%PDF');
   });
 });

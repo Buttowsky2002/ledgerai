@@ -123,6 +123,12 @@ export function shouldRenderRisk(blockedEvents: number, rows: RiskRollupRow[]): 
   return rows.some((r) => r.dlpAction !== 'allow' && r.events > 0);
 }
 
+export function shouldRenderProjection(
+  projection: { projectedFullyLoadedCost: number } | null | undefined,
+): boolean {
+  return projection != null && projection.projectedFullyLoadedCost > 0;
+}
+
 /** Top 15 users plus optional "All others" rollup. */
 export function rollupUserSpend(rows: UserSpendRow[], topN = 15): UserSpendRow[] {
   const sorted = [...rows].filter((r) => r.costUsd > 0).sort((a, b) => b.costUsd - a.costUsd);
