@@ -25,11 +25,30 @@ export interface CursorUserSpendRow {
   calls: number;
 }
 
+/** Per-user Cursor activity: on-demand (invoice) + included usage value (not invoice). */
+export interface CursorUserActivityRow {
+  user_id: string;
+  on_demand_usd: number;
+  usage_value_usd: number;
+  calls: number;
+  included_calls: number;
+  on_demand_calls: number;
+}
+
 export interface CursorUserBreakdownRow {
   user_id: string;
   model: string;
   spend_usd: number;
   calls: number;
+}
+
+export interface CursorUserActivityBreakdownRow {
+  user_id: string;
+  model: string;
+  on_demand_usd: number;
+  usage_value_usd: number;
+  calls: number;
+  on_demand_calls: number;
 }
 
 export interface CursorUserDailySpendRow {
@@ -95,17 +114,50 @@ export class CursorAnalyticsService {
     to: string,
     userId?: string,
   ): Promise<CursorUserSpendRow[]> {
+    const activity = await this.getUserActivity(tenantId, from, to, userId);
+    return activity
+      .filter((row) => row.on_demand_usd > 0 || row.on_demand_calls > 0)
+      .map((row) => ({
+        user_id: row.user_id,
+        total_spend_usd: row.on_demand_usd,
+        calls: row.on_demand_calls,
+      }));
+  }
+
+  /**
+   * Per-user Cursor activity including subscription-included usage value.
+   * Included USD is informational only — never add it to metered / invoice totals.
+   */
+  async getUserActivity(
+    tenantId: string,
+    from: string,
+    to: string,
+    userId?: string,
+  ): Promise<CursorUserActivityRow[]> {
     const params: Record<string, string> = { tenant: tenantId, from, to };
     let userFilter = '';
     if (userId) {
       params.userId = userId;
       userFilter = 'AND user_id = {userId:String}';
     }
-    const rows = await this.ch.queryScoped<{ user_id: string; total_spend_usd: unknown; calls: unknown }>(
+    const rows = await this.ch.queryScoped<{
+      user_id: string;
+      on_demand_usd: unknown;
+      usage_value_usd: unknown;
+      calls: unknown;
+      included_calls: unknown;
+      on_demand_calls: unknown;
+    }>(
       `SELECT
          user_id,
-         sum(${METERED_COST}) AS total_spend_usd,
-         countIf(${METERED_COST} > 0) AS calls
+         sum(${METERED_COST}) AS on_demand_usd,
+         sumIf(
+           if(llm_calls.usage_value_usd > 0, llm_calls.usage_value_usd, llm_calls.cost_usd),
+           operation_name = 'cursor:included'
+         ) AS usage_value_usd,
+         count() AS calls,
+         countIf(operation_name = 'cursor:included') AS included_calls,
+         countIf(operation_name = 'cursor:on_demand' OR ${METERED_COST} > 0) AS on_demand_calls
        FROM llm_calls
        WHERE tenant_id = {tenant:String}
          AND provider = 'cursor'
@@ -114,13 +166,16 @@ export class CursorAnalyticsService {
          ${userFilter}
        GROUP BY user_id
        HAVING calls > 0
-       ORDER BY total_spend_usd DESC`,
+       ORDER BY on_demand_usd DESC, usage_value_usd DESC`,
       params,
     );
     return rows.map((row) => ({
       user_id: String(row.user_id),
-      total_spend_usd: usd(Number(row.total_spend_usd ?? 0)),
+      on_demand_usd: usd(Number(row.on_demand_usd ?? 0)),
+      usage_value_usd: usd(Number(row.usage_value_usd ?? 0)),
       calls: Number(row.calls ?? 0),
+      included_calls: Number(row.included_calls ?? 0),
+      on_demand_calls: Number(row.on_demand_calls ?? 0),
     }));
   }
 
@@ -130,6 +185,23 @@ export class CursorAnalyticsService {
     to: string,
     userId?: string,
   ): Promise<CursorUserBreakdownRow[]> {
+    const activity = await this.getUserActivityBreakdown(tenantId, from, to, userId);
+    return activity
+      .filter((row) => row.on_demand_usd > 0)
+      .map((row) => ({
+        user_id: row.user_id,
+        model: row.model,
+        spend_usd: row.on_demand_usd,
+        calls: row.on_demand_calls,
+      }));
+  }
+
+  async getUserActivityBreakdown(
+    tenantId: string,
+    from: string,
+    to: string,
+    userId?: string,
+  ): Promise<CursorUserActivityBreakdownRow[]> {
     const params: Record<string, string> = { tenant: tenantId, from, to };
     let userFilter = '';
     if (userId) {
@@ -139,14 +211,21 @@ export class CursorAnalyticsService {
     const rows = await this.ch.queryScoped<{
       user_id: string;
       model: string;
-      spend_usd: unknown;
+      on_demand_usd: unknown;
+      usage_value_usd: unknown;
       calls: unknown;
+      on_demand_calls: unknown;
     }>(
       `SELECT
          user_id,
          if(response_model != '', response_model, request_model) AS model,
-         sum(${METERED_COST}) AS spend_usd,
-         countIf(${METERED_COST} > 0) AS calls
+         sum(${METERED_COST}) AS on_demand_usd,
+         sumIf(
+           if(llm_calls.usage_value_usd > 0, llm_calls.usage_value_usd, llm_calls.cost_usd),
+           operation_name = 'cursor:included'
+         ) AS usage_value_usd,
+         count() AS calls,
+         countIf(operation_name = 'cursor:on_demand' OR ${METERED_COST} > 0) AS on_demand_calls
        FROM llm_calls
        WHERE tenant_id = {tenant:String}
          AND provider = 'cursor'
@@ -155,14 +234,16 @@ export class CursorAnalyticsService {
          ${userFilter}
        GROUP BY user_id, model
        HAVING calls > 0
-       ORDER BY user_id, spend_usd DESC`,
+       ORDER BY user_id, on_demand_usd DESC, usage_value_usd DESC`,
       params,
     );
     return rows.map((row) => ({
       user_id: String(row.user_id),
       model: String(row.model || 'default'),
-      spend_usd: usd(Number(row.spend_usd ?? 0)),
+      on_demand_usd: usd(Number(row.on_demand_usd ?? 0)),
+      usage_value_usd: usd(Number(row.usage_value_usd ?? 0)),
       calls: Number(row.calls ?? 0),
+      on_demand_calls: Number(row.on_demand_calls ?? 0),
     }));
   }
 

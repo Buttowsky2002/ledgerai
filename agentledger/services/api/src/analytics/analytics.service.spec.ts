@@ -35,6 +35,8 @@ function emptyCursorAnalytics() {
     getUserBilledSpend: jest.fn(async () => []),
     getUserBilledBreakdown: jest.fn(async () => []),
     getUserDailyBilledSpend: jest.fn(async () => []),
+    getUserActivity: jest.fn(async () => []),
+    getUserActivityBreakdown: jest.fn(async () => []),
   };
 }
 
@@ -389,7 +391,7 @@ describe('AnalyticsService.users', () => {
     );
 
     const result = await svc.users('2026-06-01', '2026-06-30');
-    expect(result.sources).toEqual({ llm_call_users: 1, copilot_members: 1 });
+    expect(result.sources).toEqual({ llm_call_users: 1, copilot_members: 1, cursor_members: 0 });
     expect(result.users).toHaveLength(2);
     const copilot = result.users.find((u) => u.user_id === 'octocat');
     expect(copilot).toMatchObject({
@@ -443,6 +445,114 @@ describe('AnalyticsService.users', () => {
         expect.objectContaining({ platform: 'cursor', spend_usd: 170.12 }),
       ]),
     );
+  });
+
+  it('surfaces Cursor included-only users without inflating metered totals', async () => {
+    const queryScoped = jest.fn(async (sql: string) => {
+      if (sql.includes('user_id, platform, model, spend_usd')) {
+        return [
+          {
+            user_id: 'dev@company.com',
+            platform: 'openai',
+            model: 'gpt-4o',
+            spend_usd: 10,
+            calls: 2,
+            portal_import_usd: 0,
+            connector_usd: 10,
+          },
+        ];
+      }
+      if (sql.includes('key, cost_usd, calls, portal_import_usd')) {
+        return [{ key: 'dev@company.com', cost_usd: 10, calls: 2, portal_import_usd: 0, connector_usd: 10 }];
+      }
+      return [];
+    });
+    const ch = { queryScoped } as unknown as ClickHouseService;
+    const cursorAnalytics = {
+      ...emptyCursorAnalytics(),
+      getUserActivity: jest.fn(async () => [
+        {
+          user_id: 'included-only@example.com',
+          on_demand_usd: 0,
+          usage_value_usd: 42.5,
+          calls: 30,
+          included_calls: 30,
+          on_demand_calls: 0,
+        },
+        {
+          user_id: 'dev@company.com',
+          on_demand_usd: 5,
+          usage_value_usd: 12,
+          calls: 8,
+          included_calls: 5,
+          on_demand_calls: 3,
+        },
+      ]),
+      getUserActivityBreakdown: jest.fn(async () => [
+        {
+          user_id: 'included-only@example.com',
+          model: 'claude-sonnet',
+          on_demand_usd: 0,
+          usage_value_usd: 42.5,
+          calls: 30,
+          on_demand_calls: 0,
+        },
+        {
+          user_id: 'dev@company.com',
+          model: 'gpt-4o',
+          on_demand_usd: 5,
+          usage_value_usd: 12,
+          calls: 8,
+          on_demand_calls: 3,
+        },
+      ]),
+    };
+    const svc = new AnalyticsService(
+      ch,
+      {} as PrismaService,
+      {} as LariService,
+      { getSpendSummary: jest.fn(async () => null) } as unknown as CopilotAnalyticsService,
+      emptyCopilotMemberSpend(),
+      cursorAnalytics as never,
+    );
+
+    mockedLoadIdentityLookups.mockResolvedValue({
+      byId: new Map(),
+      byEmail: new Map([
+        ['dev@company.com', { displayName: 'Dev User', email: 'dev@company.com', teamName: 'Eng' }],
+        [
+          'included-only@example.com',
+          { displayName: 'Included Only', email: 'included-only@example.com', teamName: 'Eng' },
+        ],
+      ]),
+      byAlias: new Map(),
+    });
+
+    const result = await svc.users('2026-07-01', '2026-07-06');
+    expect(result.sources.cursor_members).toBe(2);
+
+    const includedOnly = result.users.find((u) => u.user_id === 'included-only@example.com');
+    expect(includedOnly).toMatchObject({
+      total_spend_usd: 0,
+      cursor_on_demand_usd: 0,
+      cursor_included_usd: 42.5,
+      calls: 30,
+    });
+    expect(includedOnly?.model_breakdown).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          platform: 'cursor',
+          model: 'claude-sonnet',
+          spend_usd: 0,
+          usage_value_usd: 42.5,
+        }),
+      ]),
+    );
+
+    const mixed = result.users.find((u) => u.user_id === 'dev@company.com');
+    expect(mixed?.total_spend_usd).toBe(10);
+    expect(mixed?.cursor_on_demand_usd).toBe(5);
+    expect(mixed?.cursor_included_usd).toBe(12);
   });
 });
 

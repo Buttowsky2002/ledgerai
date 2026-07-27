@@ -60,6 +60,8 @@ export interface UserModelBreakdownRow {
   platform: string;
   spend_usd: number;
   calls: number;
+  /** Cursor subscription-included usage value for this model (not in spend_usd). */
+  usage_value_usd?: number;
 }
 
 export interface UserDirectoryRow {
@@ -74,6 +76,10 @@ export interface UserDirectoryRow {
   portal_import_usd?: number;
   /** Connector API sync portion of total_spend_usd (before identity merge). */
   connector_usd?: number;
+  /** Cursor on-demand overage (invoice-grade; also in total_spend_usd when metered). */
+  cursor_on_demand_usd?: number;
+  /** Cursor subscription-included usage value (not invoice; never in total_spend_usd). */
+  cursor_included_usd?: number;
   models: string[];
   model_breakdown: UserModelBreakdownRow[];
 }
@@ -91,6 +97,7 @@ export interface UsersAnalyticsResult {
   sources: {
     llm_call_users: number;
     copilot_members: number;
+    cursor_members: number;
   };
 }
 
@@ -526,7 +533,7 @@ export class AnalyticsService {
   private async userAllocationWithTrend(r: Range) {
     const tenantId = getTenantId();
     const params = r as Record<string, ChParam>;
-    const [totals, daily, codingTotals, codingDaily, copilotPack] = await Promise.all([
+    const [totals, daily, codingTotals, codingDaily, copilotPack, cursorPack] = await Promise.all([
       this.ch.queryScoped<{
         key: string;
         cost_usd: unknown;
@@ -561,7 +568,12 @@ export class AnalyticsService {
          ORDER BY user_id, day`,
         params,
       ),
-      tenantId ? this.fetchCopilotUserSpend(tenantId, r) : Promise.resolve({ totals: [], breakdown: [], hints: new Map() }),
+      tenantId
+        ? this.fetchCopilotUserSpend(tenantId, r)
+        : Promise.resolve({ totals: [], breakdown: [], hints: new Map() }),
+      tenantId
+        ? this.fetchCursorUserActivity(tenantId, r)
+        : Promise.resolve({ totals: [], breakdown: [] }),
     ]);
 
     const totalsMap = new Map<
@@ -573,6 +585,8 @@ export class AnalyticsService {
         connector_usd: number;
         metered_usd: number;
         seat_usd: number;
+        cursor_on_demand_usd: number;
+        cursor_included_usd: number;
       }
     >();
     for (const row of totals) {
@@ -583,6 +597,8 @@ export class AnalyticsService {
         connector_usd: n(row.connector_usd),
         metered_usd: n(row.cost_usd),
         seat_usd: 0,
+        cursor_on_demand_usd: 0,
+        cursor_included_usd: 0,
       });
     }
     for (const row of codingTotals) {
@@ -594,6 +610,8 @@ export class AnalyticsService {
         connector_usd: 0,
         metered_usd: 0,
         seat_usd: 0,
+        cursor_on_demand_usd: 0,
+        cursor_included_usd: 0,
       };
       const codingCost = n(row.cost_usd);
       totalsMap.set(key, {
@@ -603,6 +621,8 @@ export class AnalyticsService {
         connector_usd: usd(cur.connector_usd + codingCost),
         metered_usd: usd(cur.metered_usd + codingCost),
         seat_usd: cur.seat_usd,
+        cursor_on_demand_usd: cur.cursor_on_demand_usd,
+        cursor_included_usd: cur.cursor_included_usd,
       });
     }
     for (const row of copilotPack.totals) {
@@ -614,6 +634,8 @@ export class AnalyticsService {
         connector_usd: 0,
         metered_usd: 0,
         seat_usd: 0,
+        cursor_on_demand_usd: 0,
+        cursor_included_usd: 0,
       };
       const seatCost = n(row.total_spend_usd);
       totalsMap.set(key, {
@@ -623,6 +645,28 @@ export class AnalyticsService {
         connector_usd: cur.connector_usd,
         metered_usd: cur.metered_usd,
         seat_usd: usd(cur.seat_usd + seatCost),
+        cursor_on_demand_usd: cur.cursor_on_demand_usd,
+        cursor_included_usd: cur.cursor_included_usd,
+      });
+    }
+    for (const row of cursorPack.totals) {
+      const key = String(row.user_id);
+      const cur = totalsMap.get(key) ?? {
+        cost_usd: 0,
+        calls: 0,
+        portal_import_usd: 0,
+        connector_usd: 0,
+        metered_usd: 0,
+        seat_usd: 0,
+        cursor_on_demand_usd: 0,
+        cursor_included_usd: 0,
+      };
+      // Included usage value is display-only — never add to cost_usd / metered_usd.
+      totalsMap.set(key, {
+        ...cur,
+        calls: cur.calls > 0 ? cur.calls : row.calls,
+        cursor_on_demand_usd: row.on_demand_usd,
+        cursor_included_usd: row.usage_value_usd,
       });
     }
 
@@ -642,6 +686,13 @@ export class AnalyticsService {
     }
 
     return [...totalsMap.entries()]
+      .filter(
+        ([, agg]) =>
+          agg.cost_usd > 0 ||
+          agg.calls > 0 ||
+          agg.cursor_included_usd > 0 ||
+          agg.cursor_on_demand_usd > 0,
+      )
       .map(([key, agg]) => {
         const dayMap = dailyByUser.get(key);
         const trend = computeSpendTrend(
@@ -657,12 +708,17 @@ export class AnalyticsService {
           connector_usd: agg.connector_usd,
           metered_usd: agg.metered_usd,
           seat_usd: agg.seat_usd,
+          cursor_on_demand_usd: agg.cursor_on_demand_usd,
+          cursor_included_usd: agg.cursor_included_usd,
           spend_trend: trend.direction,
           ...(trend.change_pct != null ? { trend_change_pct: trend.change_pct } : {}),
           ...(trend.change_usd != null ? { trend_change_usd: trend.change_usd } : {}),
         };
       })
-      .sort((a, b) => b.cost_usd - a.cost_usd);
+      .sort(
+        (a, b) =>
+          b.cost_usd - a.cost_usd || b.cursor_included_usd - a.cursor_included_usd,
+      );
   }
 
   modelMix(from?: string, to?: string) {
@@ -1130,14 +1186,20 @@ export class AnalyticsService {
     if (!tenantId) {
       throw new BadRequestException('no tenant in context');
     }
-    const [{ totals: chTotals, breakdown: chBreakdown }, copilotPack] = await Promise.all([
+    const [{ totals: chTotals, breakdown: chBreakdown }, copilotPack, cursorPack] = await Promise.all([
       this.fetchUserSpendFromCh(r),
       this.fetchCopilotUserSpend(tenantId, r),
+      this.fetchCursorUserActivity(tenantId, r),
     ]);
-    const users = await this.assembleUserDirectory(
-      tenantId,
+    const { totals, breakdown } = this.mergeCursorActivityIntoUserSpend(
       [...chTotals, ...copilotPack.totals],
       [...chBreakdown, ...copilotPack.breakdown],
+      cursorPack,
+    );
+    const users = await this.assembleUserDirectory(
+      tenantId,
+      totals,
+      breakdown,
       q,
       copilotPack.hints,
     );
@@ -1148,6 +1210,7 @@ export class AnalyticsService {
       sources: {
         llm_call_users: chTotals.length,
         copilot_members: copilotPack.totals.length,
+        cursor_members: cursorPack.totals.length,
       },
     };
   }
@@ -1162,14 +1225,20 @@ export class AnalyticsService {
     if (!tenantId) {
       throw new BadRequestException('no tenant in context');
     }
-    const [{ totals: chTotals, breakdown: chBreakdown }, copilotPack] = await Promise.all([
+    const [{ totals: chTotals, breakdown: chBreakdown }, copilotPack, cursorPack] = await Promise.all([
       this.fetchUserSpendFromCh(r, userId),
       this.fetchCopilotUserSpend(tenantId, r, userId),
+      this.fetchCursorUserActivity(tenantId, r, userId),
     ]);
-    const rows = await this.assembleUserDirectory(
-      tenantId,
+    const { totals, breakdown } = this.mergeCursorActivityIntoUserSpend(
       [...chTotals, ...copilotPack.totals],
       [...chBreakdown, ...copilotPack.breakdown],
+      cursorPack,
+    );
+    const rows = await this.assembleUserDirectory(
+      tenantId,
+      totals,
+      breakdown,
       undefined,
       copilotPack.hints,
     );
@@ -1226,6 +1295,133 @@ export class AnalyticsService {
     };
   }
 
+  /** Cursor per-user activity (on-demand + included usage value). */
+  private async fetchCursorUserActivity(tenantId: string, r: Range, userId?: string) {
+    const [totals, breakdown] = await Promise.all([
+      this.cursorAnalytics.getUserActivity(tenantId, r.from, r.to, userId),
+      this.cursorAnalytics.getUserActivityBreakdown(tenantId, r.from, r.to, userId),
+    ]);
+    return { totals, breakdown };
+  }
+
+  /**
+   * Attach Cursor included/on-demand fields and surface included-only members.
+   * Included usage value never increases total_spend_usd (metered/invoice totals).
+   */
+  private mergeCursorActivityIntoUserSpend(
+    totals: {
+      user_id: string;
+      total_spend_usd: unknown;
+      calls: unknown;
+      portal_import_usd?: unknown;
+      connector_usd?: unknown;
+      cursor_on_demand_usd?: unknown;
+      cursor_included_usd?: unknown;
+    }[],
+    breakdown: {
+      user_id: string;
+      platform: string;
+      model: string;
+      spend_usd: unknown;
+      calls: unknown;
+      portal_import_usd?: unknown;
+      connector_usd?: unknown;
+      usage_value_usd?: unknown;
+    }[],
+    cursorPack: {
+      totals: {
+        user_id: string;
+        on_demand_usd: number;
+        usage_value_usd: number;
+        calls: number;
+      }[];
+      breakdown: {
+        user_id: string;
+        model: string;
+        on_demand_usd: number;
+        usage_value_usd: number;
+        calls: number;
+      }[];
+    },
+  ) {
+    const totalsByUser = new Map(
+      totals.map((row) => [
+        String(row.user_id),
+        {
+          user_id: String(row.user_id),
+          total_spend_usd: row.total_spend_usd,
+          calls: row.calls,
+          portal_import_usd: row.portal_import_usd,
+          connector_usd: row.connector_usd,
+          cursor_on_demand_usd: n(row.cursor_on_demand_usd),
+          cursor_included_usd: n(row.cursor_included_usd),
+        },
+      ]),
+    );
+
+    for (const row of cursorPack.totals) {
+      const existing = totalsByUser.get(row.user_id);
+      if (existing) {
+        existing.cursor_on_demand_usd = row.on_demand_usd;
+        existing.cursor_included_usd = row.usage_value_usd;
+        // Included-only users may already be absent from metered totals; if present
+        // with $0 metered, ensure call volume reflects Cursor activity.
+        if (n(existing.calls) <= 0 && row.calls > 0) {
+          existing.calls = row.calls;
+        }
+      } else {
+        totalsByUser.set(row.user_id, {
+          user_id: row.user_id,
+          // On-demand is already in metered CH totals when > 0; included-only stays $0.
+          total_spend_usd: row.on_demand_usd,
+          calls: row.calls,
+          portal_import_usd: 0,
+          connector_usd: row.on_demand_usd,
+          cursor_on_demand_usd: row.on_demand_usd,
+          cursor_included_usd: row.usage_value_usd,
+        });
+      }
+    }
+
+    const breakdownOut = [...breakdown];
+    const seenCursorModels = new Set(
+      breakdown
+        .filter((row) => String(row.platform).toLowerCase() === 'cursor')
+        .map((row) => `${row.user_id}::${row.model}`),
+    );
+    for (const row of cursorPack.breakdown) {
+      const key = `${row.user_id}::${row.model}`;
+      if (seenCursorModels.has(key)) {
+        const idx = breakdownOut.findIndex(
+          (b) =>
+            String(b.user_id) === row.user_id &&
+            String(b.platform).toLowerCase() === 'cursor' &&
+            String(b.model) === row.model,
+        );
+        if (idx >= 0) {
+          breakdownOut[idx] = {
+            ...breakdownOut[idx],
+            usage_value_usd: row.usage_value_usd,
+            // Prefer activity call count so included-only models still show volume.
+            calls: Math.max(n(breakdownOut[idx].calls), row.calls),
+          };
+        }
+        continue;
+      }
+      seenCursorModels.add(key);
+      breakdownOut.push({
+        user_id: row.user_id,
+        platform: 'cursor',
+        model: row.model,
+        spend_usd: row.on_demand_usd,
+        calls: row.calls,
+        usage_value_usd: row.usage_value_usd,
+      });
+    }
+
+    return { totals: [...totalsByUser.values()], breakdown: breakdownOut };
+  }
+
   /** GitHub Copilot allocated member spend (Postgres) — not in llm_calls metered rollups. */
   private async fetchCopilotUserSpend(
     tenantId: string,
@@ -1275,14 +1471,36 @@ export class AnalyticsService {
 
   private async assembleUserDirectory(
     tenantId: string,
-    totals: { user_id: string; total_spend_usd: unknown; calls: unknown }[],
-    breakdown: { user_id: string; platform: string; model: string; spend_usd: unknown; calls: unknown }[],
+    totals: {
+      user_id: string;
+      total_spend_usd: unknown;
+      calls: unknown;
+      portal_import_usd?: unknown;
+      connector_usd?: unknown;
+      cursor_on_demand_usd?: unknown;
+      cursor_included_usd?: unknown;
+    }[],
+    breakdown: {
+      user_id: string;
+      platform: string;
+      model: string;
+      spend_usd: unknown;
+      calls: unknown;
+      usage_value_usd?: unknown;
+    }[],
     q?: string,
     copilotHints: Map<string, CopilotIdentityHint> = new Map(),
   ): Promise<UserDirectoryRow[]> {
     const totalsByUser = new Map<
       string,
-      { total_spend_usd: number; calls: number; portal_import_usd: number; connector_usd: number }
+      {
+        total_spend_usd: number;
+        calls: number;
+        portal_import_usd: number;
+        connector_usd: number;
+        cursor_on_demand_usd: number;
+        cursor_included_usd: number;
+      }
     >();
     for (const row of totals) {
       totalsByUser.set(String(row.user_id), {
@@ -1290,6 +1508,8 @@ export class AnalyticsService {
         calls: n(row.calls),
         portal_import_usd: usd(n((row as { portal_import_usd?: unknown }).portal_import_usd)),
         connector_usd: usd(n((row as { connector_usd?: unknown }).connector_usd)),
+        cursor_on_demand_usd: usd(n(row.cursor_on_demand_usd)),
+        cursor_included_usd: usd(n(row.cursor_included_usd)),
       });
     }
 
@@ -1302,11 +1522,12 @@ export class AnalyticsService {
         platform: String(row.platform),
         spend_usd: usd(n(row.spend_usd)),
         calls: n(row.calls),
+        ...(n(row.usage_value_usd) > 0 ? { usage_value_usd: usd(n(row.usage_value_usd)) } : {}),
       });
       breakdownByUser.set(uid, list);
     }
     for (const list of breakdownByUser.values()) {
-      list.sort((a, b) => b.spend_usd - a.spend_usd);
+      list.sort((a, b) => b.spend_usd - a.spend_usd || (b.usage_value_usd ?? 0) - (a.usage_value_usd ?? 0));
     }
 
     const allUserIds = new Set([...totalsByUser.keys(), ...breakdownByUser.keys()]);
@@ -1320,10 +1541,16 @@ export class AnalyticsService {
         calls: 0,
         portal_import_usd: 0,
         connector_usd: 0,
+        cursor_on_demand_usd: 0,
+        cursor_included_usd: 0,
       };
       const total_spend_usd = totalsRow.total_spend_usd;
       const calls = totalsRow.calls;
-      if (total_spend_usd <= 0 && calls <= 0) continue;
+      const cursor_included_usd = totalsRow.cursor_included_usd;
+      const cursor_on_demand_usd = totalsRow.cursor_on_demand_usd;
+      if (total_spend_usd <= 0 && calls <= 0 && cursor_included_usd <= 0 && cursor_on_demand_usd <= 0) {
+        continue;
+      }
 
       const identity = resolveUserDirectoryIdentity(user_id, byId, byEmail, byAlias);
       const hint = copilotHints.get(user_id);
@@ -1347,6 +1574,8 @@ export class AnalyticsService {
         calls,
         portal_import_usd: totalsRow.portal_import_usd,
         connector_usd: totalsRow.connector_usd,
+        cursor_on_demand_usd,
+        cursor_included_usd,
         models,
         model_breakdown,
       };
@@ -1361,7 +1590,11 @@ export class AnalyticsService {
       merged.set(key, this.mergeUserDirectoryRows(existing, entry));
     }
 
-    return [...merged.values()].sort((a, b) => b.total_spend_usd - a.total_spend_usd);
+    return [...merged.values()].sort(
+      (a, b) =>
+        b.total_spend_usd - a.total_spend_usd ||
+        (b.cursor_included_usd ?? 0) - (a.cursor_included_usd ?? 0),
+    );
   }
 
   private canonicalUserKey(user_id: string, identity: UserDirectoryIdentity): string {
@@ -1382,6 +1615,8 @@ export class AnalyticsService {
       if (existing) {
         existing.spend_usd = usd(existing.spend_usd + row.spend_usd);
         existing.calls += row.calls;
+        const usage = (existing.usage_value_usd ?? 0) + (row.usage_value_usd ?? 0);
+        if (usage > 0) existing.usage_value_usd = usd(usage);
       } else {
         breakdownMap.set(key, { ...row });
       }
@@ -1399,6 +1634,8 @@ export class AnalyticsService {
       calls: a.calls + b.calls,
       portal_import_usd: usd((a.portal_import_usd ?? 0) + (b.portal_import_usd ?? 0)),
       connector_usd: usd((a.connector_usd ?? 0) + (b.connector_usd ?? 0)),
+      cursor_on_demand_usd: usd((a.cursor_on_demand_usd ?? 0) + (b.cursor_on_demand_usd ?? 0)),
+      cursor_included_usd: usd((a.cursor_included_usd ?? 0) + (b.cursor_included_usd ?? 0)),
       models,
       model_breakdown,
     };
