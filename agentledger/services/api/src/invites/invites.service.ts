@@ -165,7 +165,13 @@ export class InvitesService {
     } catch (err) {
       if (err instanceof BadRequestException) throw err;
       // Postgres RAISE EXCEPTION from invite_accept surfaces as a Prisma error.
-      throw new BadRequestException('invalid or expired invite token');
+      // Prefer the DB message when it is our known invite failure; otherwise keep
+      // a safe generic (do not leak internal SQL / schema details to the client).
+      const msg = err instanceof Error ? err.message : '';
+      if (/invalid or expired invite token/i.test(msg)) {
+        throw new BadRequestException('invalid or expired invite token');
+      }
+      throw new BadRequestException('invite accept failed — please try again or request a new invite');
     }
   }
 }
