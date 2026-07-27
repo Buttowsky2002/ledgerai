@@ -10,7 +10,7 @@
 -- ClickHouse seed and the dashboard's dev x-tenant-id).
 
 INSERT INTO tenants (tenant_id, name, plan)
-VALUES (:'tenant', 'Acme Demo Co', 'enterprise')
+VALUES (:'tenant', 'Studio Designer', 'enterprise')
 ON CONFLICT (tenant_id) DO UPDATE SET name = EXCLUDED.name, plan = EXCLUDED.plan;
 
 DELETE FROM budgets    WHERE tenant_id = :'tenant';
@@ -28,63 +28,63 @@ INSERT INTO teams (tenant_id, name, cost_center) VALUES
 INSERT INTO identities (tenant_id, email, display_name, team_id, aliases) VALUES
   (
     :'tenant',
-    'alice.chen@acme.test',
+    'alice.chen@studiodesigner.test',
     'Alice Chen',
     (SELECT team_id FROM teams WHERE tenant_id = :'tenant' AND name = 'Engineering'),
     '["demo-user-0"]'::jsonb
   ),
   (
     :'tenant',
-    'bob.patel@acme.test',
+    'bob.patel@studiodesigner.test',
     'Bob Patel',
     (SELECT team_id FROM teams WHERE tenant_id = :'tenant' AND name = 'Engineering'),
     '["demo-user-1"]'::jsonb
   ),
   (
     :'tenant',
-    'carla.nguyen@acme.test',
+    'carla.nguyen@studiodesigner.test',
     'Carla Nguyen',
     (SELECT team_id FROM teams WHERE tenant_id = :'tenant' AND name = 'Engineering'),
     '["demo-user-2"]'::jsonb
   ),
   (
     :'tenant',
-    'daniel.ross@acme.test',
+    'daniel.ross@studiodesigner.test',
     'Daniel Ross',
     (SELECT team_id FROM teams WHERE tenant_id = :'tenant' AND name = 'Finance'),
     '["demo-user-3"]'::jsonb
   ),
   (
     :'tenant',
-    'elena.martinez@acme.test',
+    'elena.martinez@studiodesigner.test',
     'Elena Martinez',
     (SELECT team_id FROM teams WHERE tenant_id = :'tenant' AND name = 'Finance'),
     '["demo-user-4"]'::jsonb
   ),
   (
     :'tenant',
-    'frank.okonkwo@acme.test',
+    'frank.okonkwo@studiodesigner.test',
     'Frank Okonkwo',
     (SELECT team_id FROM teams WHERE tenant_id = :'tenant' AND name = 'Security'),
     '["demo-user-5"]'::jsonb
   ),
   (
     :'tenant',
-    'grace.kim@acme.test',
+    'grace.kim@studiodesigner.test',
     'Grace Kim',
     (SELECT team_id FROM teams WHERE tenant_id = :'tenant' AND name = 'Security'),
     '["demo-user-6"]'::jsonb
   ),
   (
     :'tenant',
-    'henry.walsh@acme.test',
+    'henry.walsh@studiodesigner.test',
     'Henry Walsh',
     (SELECT team_id FROM teams WHERE tenant_id = :'tenant' AND name = 'Customer Support'),
     '["demo-user-7"]'::jsonb
   ),
   (
     :'tenant',
-    'iris.johansson@acme.test',
+    'iris.johansson@studiodesigner.test',
     'Iris Johansson',
     (SELECT team_id FROM teams WHERE tenant_id = :'tenant' AND name = 'Customer Support'),
     '["demo-user-8"]'::jsonb

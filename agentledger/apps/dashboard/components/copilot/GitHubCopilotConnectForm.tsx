@@ -97,7 +97,7 @@ export function GitHubCopilotConnectForm({
           className="mt-1 w-full rounded border border-edge bg-black/20 px-3 py-2"
           value={displayName}
           onChange={(e) => setDisplayName(e.target.value)}
-          placeholder="Acme Copilot"
+          placeholder="Studio Designer Copilot"
         />
       </label>
 
