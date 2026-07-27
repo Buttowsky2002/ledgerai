@@ -1,8 +1,10 @@
 import {
   BadRequestException,
+  Body,
   Controller,
   Get,
   Param,
+  Patch,
   Post,
   Query,
   Req,
@@ -10,14 +12,23 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
+import { IsOptional, IsString, MaxLength } from 'class-validator';
 import { Request, Response } from 'express';
-import { getPrincipal } from '../tenant/tenant-context';
 import { env } from '../env';
+import { PrismaService } from '../prisma/prisma.service';
 import { clientMetaFromRequest, logSecurityEvent } from '../security/security-event';
+import { getPrincipal } from '../tenant/tenant-context';
 import { AuthService } from './auth.service';
 import { Public } from './decorators';
 import { JwtService } from './jwt.service';
 import { OidcService } from './oidc.service';
+
+class UpdateMeDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  displayName?: string;
+}
 
 const ACCESS_COOKIE = 'al_access';
 const REFRESH_COOKIE = 'al_refresh';
@@ -107,6 +118,7 @@ export class AuthController {
     private readonly oidc: OidcService,
     private readonly auth: AuthService,
     private readonly jwt: JwtService,
+    private readonly prisma: PrismaService,
   ) {}
 
   /**
@@ -275,11 +287,42 @@ export class AuthController {
 
   /** Current principal (requires a valid access token — not @Public). */
   @Get('me')
-  me() {
+  async me() {
     const principal = getPrincipal();
     if (!principal || !principal.tenantId) {
       throw new UnauthorizedException('authentication required');
     }
-    return { userId: principal.userId, tenantId: principal.tenantId, role: principal.role };
+    const row = principal.userId
+      ? await this.prisma.withTenant(principal.tenantId, (tx) =>
+          tx.identity.findUnique({
+            where: { userId: principal.userId! },
+            select: { displayName: true, email: true },
+          }),
+        )
+      : null;
+    return {
+      userId: principal.userId,
+      tenantId: principal.tenantId,
+      role: principal.role,
+      displayName: row?.displayName ?? null,
+      email: row?.email ?? null,
+    };
+  }
+
+  /** Authenticated user updates their own display name. */
+  @Patch('me')
+  async updateMe(@Body() body: UpdateMeDto) {
+    const principal = getPrincipal();
+    if (!principal?.tenantId || !principal.userId) {
+      throw new UnauthorizedException('authentication required');
+    }
+    const displayName = (body.displayName ?? '').trim() || null;
+    await this.prisma.withTenant(principal.tenantId, (tx) =>
+      tx.identity.update({
+        where: { userId: principal.userId! },
+        data: { displayName },
+      }),
+    );
+    return { ok: true, displayName };
   }
 }

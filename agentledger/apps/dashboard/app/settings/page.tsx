@@ -4,7 +4,7 @@ import { AccountSettings } from '../../components/settings/AccountSettings';
 import { DeleteButton } from '../../components/settings/DeleteButton';
 import { CreateBudget, CreateKey, CreatePolicy } from '../../components/settings/forms';
 import { AddIdpForm, IssueScimTokenForm, RevokeButton } from '../../components/settings/IntegrationsForms';
-import { PermissionsSettings, type IdentityRow } from '../../components/settings/PermissionsSettings';
+import { PermissionsSettings, type IdentityRow, type InviteRow } from '../../components/settings/PermissionsSettings';
 import { PrivacySettings } from '../../components/settings/PrivacySettings';
 import { Card, DataTable, PageHeader, usd } from '../../components/ui';
 import { apiClient, fetchData, proxyApi } from '../../lib/api';
@@ -91,7 +91,13 @@ async function AccountTab() {
   const { ok, data } = await proxyApi('/auth/me');
   const session =
     ok && data && typeof data === 'object' && 'userId' in data
-      ? (data as { userId: string; tenantId: string; role: string })
+      ? (data as {
+          userId: string;
+          tenantId: string;
+          role: string;
+          displayName?: string | null;
+          email?: string | null;
+        })
       : null;
   return (
     <Card title="Login & session">
@@ -101,22 +107,27 @@ async function AccountTab() {
 }
 
 async function PermissionsTab({ api }: { api: Api }) {
-  const [{ ok, data: me }, identities] = await Promise.all([
+  const [{ ok, data: me }, identities, invRes] = await Promise.all([
     proxyApi('/auth/me'),
     fetchData(
       api.GET('/v1/identities', { params: { query: { limit: '200', offset: '0' } } }),
       [],
     ) as Promise<IdentityRow[]>,
+    proxyApi('/v1/invites'),
   ]);
   const session =
     ok && me && typeof me === 'object' && 'role' in me
       ? (me as { userId: string | null; role: string })
       : null;
   const canManage = session?.role === 'admin';
+  const pendingInvites: InviteRow[] = (
+    invRes.ok && Array.isArray(invRes.data) ? (invRes.data as InviteRow[]) : []
+  ).filter((i) => i.status === 'pending');
   return (
     <Card title="API roles">
       <PermissionsSettings
         identities={Array.isArray(identities) ? identities : []}
+        pendingInvites={pendingInvites}
         canManage={canManage}
         currentUserId={session?.userId ?? null}
       />

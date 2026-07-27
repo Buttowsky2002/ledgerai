@@ -38,7 +38,7 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Everything except login, Next internals, favicon, and the ALB/ECS health probe.
-    '/((?!login|_next/static|_next/image|favicon.ico|healthz).*)',
+    // Everything except login, invite accept (public), Next internals, favicon, health.
+    '/((?!login|invite/accept|api/invites/accept|_next/static|_next/image|favicon.ico|healthz).*)',
   ],
 };
