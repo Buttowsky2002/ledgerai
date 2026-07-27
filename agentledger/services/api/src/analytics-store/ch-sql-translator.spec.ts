@@ -137,4 +137,20 @@ describe('ch-sql-translator', () => {
     expect(sql).toContain("FILTER (WHERE operation_name = 'cursor:included') AS usage_value_usd");
     expect(sql).toContain('CASE WHEN llm_calls.usage_value_usd > 0 THEN llm_calls.usage_value_usd ELSE llm_calls.cost_usd END');
   });
+
+  it('translates executive-report HAVING with aggregate, not SELECT alias (Postgres-safe)', () => {
+    // HAVING cost_usd > 0 resolves to llm_calls.cost_usd on Postgres (not the
+    // sum(...) AS cost_usd alias) → 42803. Always HAVING sum(...).
+    const chSql = `
+      SELECT user_id, sum(${EFFECTIVE_METERED_COST_USD}) AS cost_usd,
+             countIf(${EFFECTIVE_METERED_COST_USD} > 0) AS calls
+      FROM llm_calls
+      WHERE tenant_id = {tenant:String}
+      GROUP BY user_id
+      HAVING sum(${EFFECTIVE_METERED_COST_USD}) > 0
+      ORDER BY cost_usd DESC`;
+    const { sql } = translateChSql(chSql, { tenant: 't' });
+    expect(sql).toMatch(/HAVING\s+sum\(/i);
+    expect(sql).not.toMatch(/HAVING\s+cost_usd\b/i);
+  });
 });

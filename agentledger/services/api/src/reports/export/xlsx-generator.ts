@@ -2,6 +2,7 @@ import ExcelJS from 'exceljs';
 import type { ExecutiveReportData } from '../executive-report.types';
 import {
   formatPeriodChange,
+  shouldRenderProjection,
   shouldRenderProviderChart,
   shouldRenderRisk,
   shouldRenderSingleProviderLabel,
@@ -21,13 +22,13 @@ export async function generateExecutiveXlsx(data: ExecutiveReportData): Promise<
   if (shouldRenderSummary(data)) {
     const ws = wb.addWorksheet('Summary');
     ws.columns = [
-      { header: 'Metric', key: 'metric', width: 32 },
+      { header: 'Metric', key: 'metric', width: 40 },
       { header: 'Value', key: 'value', width: 24 },
     ];
     ws.addRow({ metric: 'Tenant', value: data.tenantName });
     ws.addRow({ metric: 'From', value: data.window.from });
     ws.addRow({ metric: 'To', value: data.window.to });
-    ws.addRow({ metric: 'Total AI spend', value: data.current.costUsd });
+    ws.addRow({ metric: 'Selected-range metered spend', value: data.current.costUsd });
     const change = formatPeriodChange(data.prior.costUsd, data.current.costUsd, data.pctChangeVsPrior, formatPct);
     if (change) ws.addRow({ metric: 'Change vs prior', value: change });
     ws.addRow({ metric: 'Total calls', value: data.current.calls });
@@ -39,6 +40,22 @@ export async function generateExecutiveXlsx(data: ExecutiveReportData): Promise<
       if (data.valueMetrics.lari !== null) {
         ws.addRow({ metric: 'LARI', value: data.valueMetrics.lari });
       }
+    }
+    if (shouldRenderProjection(data.projection) && data.projection) {
+      const p = data.projection;
+      ws.addRow({
+        metric: 'Observed fully-loaded (selected window)',
+        value: p.observedFullyLoadedCost,
+      });
+      ws.addRow({
+        metric: `Projected fully-loaded (${p.forecastDays}d)`,
+        value: p.projectedFullyLoadedCost,
+      });
+      ws.addRow({ metric: 'Projection: tokens / API', value: p.stack.tokenUsageUsd });
+      ws.addRow({ metric: 'Projection: fixed / seats', value: p.stack.fixedCostUsd });
+      ws.addRow({ metric: 'Projection: coding agents', value: p.stack.codingAgentUsd });
+      ws.addRow({ metric: 'Projection: GitHub Copilot', value: p.stack.copilotUsd });
+      ws.addRow({ metric: 'Projection: QA / eval overhead', value: p.stack.qaEvalOverheadUsd });
     }
     ws.addRow({ metric: 'Summary', value: data.oneLiner });
     ws.addRow({ metric: 'Cached tokens', value: data.current.cachedTokens });

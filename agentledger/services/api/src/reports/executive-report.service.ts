@@ -1,8 +1,9 @@
-import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { ChParam } from '../clickhouse/clickhouse.service';
 import { AnalyticsStore } from '../analytics-store/analytics-store';
 import { EFFECTIVE_METERED_COST_USD, LLM_CALLS_METERED_SCOPE } from '../connectors/metered-cost';
 import { CopilotAnalyticsService } from '../github-copilot/github-copilot-analytics.service';
+import { LariCfoViewService } from '../lari/lari-cfo-view.service';
 import { getPrincipal, getTenantId } from '../tenant/tenant-context';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -10,9 +11,11 @@ import {
   periodDeltaPct,
   priorWindow,
 } from './executive-report.should-render';
-import { mergeCopilotSupplement, mergeProviderCostsSupplement } from './executive-report-supplemental';import type {
+import { mergeCopilotSupplement, mergeProviderCostsSupplement } from './executive-report-supplemental';
+import type {
   DailySpendRow,
   ExecutiveReportData,
+  ExecutiveReportProjection,
   ModelSpendRow,
   ProviderSpendRow,
   RiskRollupRow,
@@ -26,6 +29,8 @@ import { buildModelSpendTable, buildUserSpendTable, buildTopModelMap } from './r
 
 const n = (v: unknown): number => (typeof v === 'number' ? v : Number(v) || 0);
 const HEADLINE_CONF = 0.5;
+/** Same default horizon as CFO / cost-per-outcome views. */
+const REPORT_FORECAST_DAYS = 365;
 // Same metered-spend definition the dashboard uses: provider-reported/invoice-grade
 // cost only (no price-book estimates, no subscription-included usage value).
 // Copilot is excluded here and merged from Postgres via mergeCopilotSupplement.
@@ -35,10 +40,13 @@ type Range = { from: string; to: string };
 
 @Injectable()
 export class ExecutiveReportService {
+  private readonly logger = new Logger(ExecutiveReportService.name);
+
   constructor(
     private readonly ch: AnalyticsStore,
     private readonly prisma: PrismaService,
     private readonly copilotAnalytics: CopilotAnalyticsService,
+    private readonly cfoView: LariCfoViewService,
   ) {}
   async build(from?: string, to?: string, requestedTenantId?: string): Promise<ExecutiveReportData> {
     const tenantId = getTenantId();
@@ -145,6 +153,8 @@ export class ExecutiveReportService {
       lari: valueMetrics?.lari ?? null,
     });
 
+    const projection = await this.fetchProjection(r.from, r.to);
+
     return {
       tenantName: tenantRow?.name ?? 'Organization',
       window: { from: r.from, to: r.to, days },
@@ -162,10 +172,37 @@ export class ExecutiveReportService {
       modelSpendTable,
       providers: mergedProviders,
       models: mergedModels,
-      platformBreakdown,      risk: riskRows,
+      platformBreakdown,
+      risk: riskRows,
       blockedEvents: blockedRow,
       oneLiner,
+      projection,
     };
+  }
+
+  /** CFO fully-loaded projection; soft-fails so metered export still works. */
+  private async fetchProjection(from: string, to: string): Promise<ExecutiveReportProjection | null> {
+    try {
+      const view = await this.cfoView.getCfoView(
+        from,
+        to,
+        HEADLINE_CONF,
+        undefined,
+        'reconciled',
+        REPORT_FORECAST_DAYS,
+      );
+      return {
+        forecastDays: view.summary.forecastDays,
+        observedPeriodDays: view.summary.observedPeriodDays,
+        observedFullyLoadedCost: view.summary.observedFullyLoadedCost,
+        projectedFullyLoadedCost: view.summary.fullyLoadedCost,
+        stack: view.costProvenance.stack,
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`CFO projection unavailable for executive report: ${msg}`);
+      return null;
+    }
   }
 
   private range(from: string | undefined, to: string | undefined, defaultDays = 30): Range {
@@ -221,7 +258,7 @@ export class ExecutiveReportService {
        WHERE tenant_id = {tenant:String} AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
          AND ${LLM_CALLS_METERED_SCOPE}
        GROUP BY user_id
-       HAVING cost_usd > 0
+       HAVING sum(${METERED_COST}) > 0
        ORDER BY cost_usd DESC`,
       params,
     );
@@ -243,7 +280,7 @@ export class ExecutiveReportService {
        WHERE tenant_id = {tenant:String} AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
          AND ${LLM_CALLS_METERED_SCOPE}
        GROUP BY user_id, model
-       HAVING cost_usd > 0
+       HAVING sum(${METERED_COST}) > 0
        ORDER BY user_id, cost_usd DESC`,
       params,
     );
@@ -276,7 +313,7 @@ export class ExecutiveReportService {
        WHERE tenant_id = {tenant:String} AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
          AND ${LLM_CALLS_METERED_SCOPE}
        GROUP BY provider
-       HAVING cost_usd > 0
+       HAVING sum(${METERED_COST}) > 0
        ORDER BY cost_usd DESC`,
       params,
     );
@@ -297,7 +334,7 @@ export class ExecutiveReportService {
        WHERE tenant_id = {tenant:String} AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
          AND ${LLM_CALLS_METERED_SCOPE}
        GROUP BY provider, model
-       HAVING cost_usd > 0
+       HAVING sum(${METERED_COST}) > 0
        ORDER BY provider, cost_usd DESC`,
       params,
     );

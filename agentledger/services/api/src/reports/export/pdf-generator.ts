@@ -1,11 +1,18 @@
 import PDFDocument from 'pdfkit';
-import type { ExecutiveReportData, PlatformBreakdownRow } from '../executive-report.types';
+import type {
+  DailySpendRow,
+  ExecutiveReportData,
+  ExecutiveReportProjection,
+  PlatformBreakdownRow,
+} from '../executive-report.types';
 import type { ModelSpendTableRow, UserSpendTableRow } from '../report-tables';
 import {
   formatPeriodChange,
   shouldRenderCacheCallout,
   shouldRenderCostPer1k,
+  shouldRenderProjection,
   shouldRenderRisk,
+  shouldRenderSpendTrend,
   shouldRenderSummary,
   shouldRenderUserSpend,
 } from '../executive-report.should-render';
@@ -23,10 +30,12 @@ const MUTED = '#64748b';
 const HEADER_FILL = '#f1f5f9';
 const ROW_STRIPE = '#f8fafc';
 const ROW_LINE = '#e2e8f0';
+const ACCENT = '#0f766e';
 const ROW_H = 14;
 const HEADER_H = 16;
 const FOOTER_Y_OFFSET = 44;
 const CONTENT_BOTTOM_PAD = 72;
+const SPARKLINE_H = 48;
 
 type PdfDoc = InstanceType<typeof PDFDocument>;
 
@@ -54,6 +63,15 @@ function platformLabel(provider: string): string {
 
 function dateRangeLabel(from: string, to: string, days: number): string {
   return `${from} - ${to} (${days} days)`;
+}
+
+function forecastHorizonLabel(days: number): string {
+  if (days === 365) return '1 year';
+  if (days === 180) return '6 months';
+  if (days === 90) return '90 days';
+  if (days === 30) return '30 days';
+  if (days === 7) return '1 week';
+  return `${days} days`;
 }
 
 function contentBottomY(doc: PdfDoc): number {
@@ -331,6 +349,98 @@ function drawPlatformSection(ctx: LayoutCtx, platforms: PlatformBreakdownRow[]):
   }
 }
 
+function drawSpendTrendSparkline(ctx: LayoutCtx, rows: DailySpendRow[], periodTotal: number): void {
+  if (!shouldRenderSpendTrend(rows)) return;
+  const { doc } = ctx;
+  ensureSpace(ctx, SPARKLINE_H + 36);
+
+  doc.fillColor(BRAND).fontSize(11).text('Spend over period', ctx.marginX, doc.y, { lineBreak: false });
+  doc.y += 14;
+  doc
+    .fontSize(8)
+    .fillColor(MUTED)
+    .text(`Selected-range metered total: ${formatUsdExact(periodTotal)}`, ctx.marginX, doc.y, {
+      lineBreak: false,
+    });
+  doc.y += 12;
+
+  const chartX = ctx.marginX;
+  const chartY = doc.y;
+  const chartW = ctx.contentW;
+  const chartH = SPARKLINE_H;
+  const max = Math.max(...rows.map((r) => r.costUsd), 0.01);
+  const barGap = rows.length > 60 ? 0 : 1;
+  const barW = Math.max(1, (chartW - barGap * Math.max(0, rows.length - 1)) / rows.length);
+
+  doc.save();
+  doc.rect(chartX, chartY, chartW, chartH).fill('#f8fafc');
+  rows.forEach((row, i) => {
+    const h = Math.max(1, (row.costUsd / max) * (chartH - 4));
+    const x = chartX + i * (barW + barGap);
+    doc.rect(x, chartY + chartH - h, Math.max(barW - 0.5, 0.8), h).fill(ACCENT);
+  });
+  doc.restore();
+
+  doc.y = chartY + chartH + 8;
+}
+
+function drawProjectionSection(ctx: LayoutCtx, projection: ExecutiveReportProjection): void {
+  const { doc } = ctx;
+  ensureSpace(ctx, 110);
+
+  doc.fillColor(BRAND).fontSize(11).text('Projected spend (CFO)', ctx.marginX, doc.y, { lineBreak: false });
+  doc.y += 14;
+
+  const horizon = forecastHorizonLabel(projection.forecastDays);
+  doc
+    .fontSize(8)
+    .fillColor(MUTED)
+    .text(
+      `Scaled from selected ${projection.observedPeriodDays}-day window → ${horizon} (CFO reconciled basis)`,
+      ctx.marginX,
+      doc.y,
+      { width: ctx.contentW, lineGap: 1 },
+    );
+  doc.moveDown(0.35);
+
+  doc.fontSize(9).fillColor('#334155');
+  doc.text(
+    `Observed fully-loaded (selected window): ${formatUsdExact(projection.observedFullyLoadedCost)}`,
+    ctx.marginX,
+    doc.y,
+    { width: ctx.contentW },
+  );
+  doc.moveDown(0.15);
+  doc
+    .font('Helvetica-Bold')
+    .fillColor(BRAND)
+    .text(
+      `Projected fully-loaded (${horizon}): ${formatUsdExact(projection.projectedFullyLoadedCost)}`,
+      ctx.marginX,
+      doc.y,
+      { width: ctx.contentW },
+    );
+  doc.font('Helvetica');
+  doc.moveDown(0.3);
+
+  const { stack } = projection;
+  const stackLines: [string, number][] = [
+    ['Tokens / API', stack.tokenUsageUsd],
+    ['Fixed / seats', stack.fixedCostUsd],
+    ['Coding agents', stack.codingAgentUsd],
+    ['GitHub Copilot', stack.copilotUsd],
+    ['QA / eval overhead', stack.qaEvalOverheadUsd],
+  ];
+  doc.fontSize(8).fillColor(MUTED);
+  for (const [label, amount] of stackLines) {
+    if (amount <= 0) continue;
+    ensureSpace(ctx, 12);
+    doc.text(`  ${label}: ${formatUsdExact(amount)}`, ctx.marginX, doc.y, { width: ctx.contentW });
+    doc.moveDown(0.12);
+  }
+  doc.moveDown(0.3);
+}
+
 function drawBrandHeader(doc: PdfDoc): void {
   doc.rect(0, 0, doc.page.width, 56).fill(BRAND);
   doc.fillColor('#ffffff').fontSize(18).text('BadgerIQ', 48, 18, { lineBreak: false });
@@ -370,7 +480,7 @@ export function generateExecutivePdf(data: ExecutiveReportData): Promise<Buffer>
   if (shouldRenderSummary(data)) {
     const tiles: KpiTile[] = [];
     if (data.current.costUsd > 0) {
-      tiles.push({ label: 'Total AI spend', value: formatUsd(data.current.costUsd) });
+      tiles.push({ label: 'Selected-range spend', value: formatUsd(data.current.costUsd) });
     }
     if (data.current.calls > 0) {
       tiles.push({ label: 'Total calls', value: formatInt(data.current.calls) });
@@ -387,7 +497,14 @@ export function generateExecutivePdf(data: ExecutiveReportData): Promise<Buffer>
     if (change) {
       tiles.push({ label: 'Vs prior period', value: change });
     }
-    drawKpiBand(ctx, tiles);
+    if (shouldRenderProjection(data.projection) && data.projection) {
+      tiles.push({
+        label: `Projected ${forecastHorizonLabel(data.projection.forecastDays)}`,
+        value: formatUsd(data.projection.projectedFullyLoadedCost),
+      });
+    }
+    // Cap tiles so band stays readable on A4.
+    drawKpiBand(ctx, tiles.slice(0, 4));
   }
 
   doc.fontSize(9).fillColor(MUTED).text(data.oneLiner, ctx.marginX, doc.y, {
@@ -396,13 +513,11 @@ export function generateExecutivePdf(data: ExecutiveReportData): Promise<Buffer>
   });
   doc.moveDown(0.6);
 
+  drawSpendTrendSparkline(ctx, data.spendTrend, data.current.costUsd);
+
   if (shouldRenderUserSpend(data.userSpendTable)) {
     drawTable(ctx, 'Cost per Person', userColumns(ctx), data.userSpendTable);
   }
-
-  doc.addPage();
-  doc.y = 48;
-  ctx.contentBottom = contentBottomY(doc);
 
   if (data.modelSpendTable.length > 0) {
     drawTable(ctx, 'Spend by Model', modelColumns(ctx), data.modelSpendTable);
@@ -410,6 +525,10 @@ export function generateExecutivePdf(data: ExecutiveReportData): Promise<Buffer>
 
   if (data.platformBreakdown.length > 0) {
     drawPlatformSection(ctx, data.platformBreakdown);
+  }
+
+  if (shouldRenderProjection(data.projection) && data.projection) {
+    drawProjectionSection(ctx, data.projection);
   }
 
   if (shouldRenderCacheCallout(data.current.cachedTokens)) {
@@ -449,8 +568,8 @@ export function generateExecutivePdf(data: ExecutiveReportData): Promise<Buffer>
   });
 }
 
-/** @internal test helper — scan PDF bytes for absurd period-over-period percentages. */
+/** Detect absurd period-% strings that should never appear when prior is immaterial. */
 export function pdfContainsAbsurdPeriodPct(pdf: Buffer): boolean {
-  const raw = pdf.toString('latin1');
-  return /\+?\d{4,}\.\d%/.test(raw);
+  const text = pdf.toString('latin1');
+  return /28984|\+?\d{4,}\.\d+%/.test(text);
 }
