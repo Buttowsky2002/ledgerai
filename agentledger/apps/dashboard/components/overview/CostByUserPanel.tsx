@@ -15,6 +15,8 @@ type AllocationRow = {
   connector_usd?: number | string;
   metered_usd?: number | string;
   seat_usd?: number | string;
+  cursor_on_demand_usd?: number | string;
+  cursor_included_usd?: number | string;
   spend_trend?: 'up' | 'down' | 'flat' | 'insufficient';
   trend_change_pct?: number;
   trend_change_usd?: number;
@@ -106,7 +108,7 @@ export function CostByUserPanel({
   return (
     <Card
       title="Cost by user"
-      subtitle={`${range.from} → ${range.to} · metered usage vs per-seat license allocation`}
+      subtitle={`${range.from} → ${range.to} · metered usage, Cursor included/overage, seat allocation`}
       actions={
         <Link
           href={`/users?from=${range.from}&to=${range.to}`}
@@ -144,7 +146,11 @@ export function CostByUserPanel({
             cost: (
               <span className="inline-flex flex-col items-end gap-1">
                 <span>{usd(Number(r.cost_usd))}</span>
-                <BillingTypeBadge meteredUsd={r.metered_usd} seatUsd={r.seat_usd} />
+                <BillingTypeBadge
+                  meteredUsd={r.metered_usd}
+                  seatUsd={r.seat_usd}
+                  cursorIncludedUsd={r.cursor_included_usd}
+                />
               </span>
             ),
             billing: (
@@ -153,6 +159,8 @@ export function CostByUserPanel({
                 seatUsd={r.seat_usd}
                 portalUsd={r.portal_import_usd}
                 connectorUsd={r.connector_usd}
+                cursorOnDemandUsd={r.cursor_on_demand_usd}
+                cursorIncludedUsd={r.cursor_included_usd}
               />
             ),
             trend: (

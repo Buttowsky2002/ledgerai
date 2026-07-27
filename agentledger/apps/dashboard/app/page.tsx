@@ -62,6 +62,8 @@ type AllocationRow = {
   connector_usd?: number | string;
   metered_usd?: number | string;
   seat_usd?: number | string;
+  cursor_on_demand_usd?: number | string;
+  cursor_included_usd?: number | string;
   spend_trend?: 'up' | 'down' | 'flat' | 'insufficient';
   trend_change_pct?: number;
   trend_change_usd?: number;
