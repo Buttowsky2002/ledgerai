@@ -105,4 +105,36 @@ describe('ch-sql-translator', () => {
     expect(sql).toContain('$4::float8');
     expect(values).toEqual(['t', '2026-01-01', '2026-06-30', 0.5]);
   });
+
+  it('translates Cursor user-activity SQL without HAVING on a SELECT alias (Postgres-safe)', () => {
+    // Postgres rejects HAVING calls when calls is only a SELECT alias; groups are
+    // non-empty by definition so the HAVING was redundant — keep it that way.
+    const chSql = `
+      SELECT
+         user_id,
+         sum(${EFFECTIVE_METERED_COST_USD}) AS on_demand_usd,
+         sumIf(
+           if(llm_calls.usage_value_usd > 0, llm_calls.usage_value_usd, llm_calls.cost_usd),
+           operation_name = 'cursor:included'
+         ) AS usage_value_usd,
+         count() AS calls,
+         countIf(operation_name = 'cursor:included') AS included_calls,
+         countIf(operation_name = 'cursor:on_demand' OR ${EFFECTIVE_METERED_COST_USD} > 0) AS on_demand_calls
+       FROM llm_calls
+       WHERE tenant_id = {tenant:String}
+         AND provider = 'cursor'
+         AND user_id != ''
+         AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
+       GROUP BY user_id
+       ORDER BY on_demand_usd DESC, usage_value_usd DESC`;
+    const { sql } = translateChSql(chSql, {
+      tenant: 't',
+      from: '2026-06-01',
+      to: '2026-06-30',
+    });
+    expect(sql).not.toMatch(/\bHAVING\b/i);
+    expect(sql).toContain('count(*) AS calls');
+    expect(sql).toContain("FILTER (WHERE operation_name = 'cursor:included') AS usage_value_usd");
+    expect(sql).toContain('CASE WHEN llm_calls.usage_value_usd > 0 THEN llm_calls.usage_value_usd ELSE llm_calls.cost_usd END');
+  });
 });

@@ -1297,11 +1297,19 @@ export class AnalyticsService {
 
   /** Cursor per-user activity (on-demand + included usage value). */
   private async fetchCursorUserActivity(tenantId: string, r: Range, userId?: string) {
-    const [totals, breakdown] = await Promise.all([
-      this.cursorAnalytics.getUserActivity(tenantId, r.from, r.to, userId),
-      this.cursorAnalytics.getUserActivityBreakdown(tenantId, r.from, r.to, userId),
-    ]);
-    return { totals, breakdown };
+    try {
+      const [totals, breakdown] = await Promise.all([
+        this.cursorAnalytics.getUserActivity(tenantId, r.from, r.to, userId),
+        this.cursorAnalytics.getUserActivityBreakdown(tenantId, r.from, r.to, userId),
+      ]);
+      return { totals, breakdown };
+    } catch (err) {
+      // Users / Cost-by-user should still render metered + Copilot when Cursor
+      // analytics SQL fails (e.g. dialect gap on the Postgres MVP store).
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`Cursor user activity unavailable: ${msg}`);
+      return { totals: [], breakdown: [] };
+    }
   }
 
   /**

@@ -165,7 +165,6 @@ export class CursorAnalyticsService {
          AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
          ${userFilter}
        GROUP BY user_id
-       HAVING calls > 0
        ORDER BY on_demand_usd DESC, usage_value_usd DESC`,
       params,
     );
@@ -233,7 +232,6 @@ export class CursorAnalyticsService {
          AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
          ${userFilter}
        GROUP BY user_id, model
-       HAVING calls > 0
        ORDER BY user_id, on_demand_usd DESC, usage_value_usd DESC`,
       params,
     );
