@@ -5,7 +5,7 @@ import { generateExecutivePdf, pdfContainsAbsurdPeriodPct } from './pdf-generato
 import type { ExecutiveReportData } from '../executive-report.types';
 
 const baseData = (): ExecutiveReportData => ({
-  tenantName: 'Acme Corp',
+  tenantName: 'Studio Designer',
   window: { from: '2026-06-01', to: '2026-06-30', days: 30 },
   priorWindow: { from: '2026-05-02', to: '2026-05-31' },
   attributionLive: false,

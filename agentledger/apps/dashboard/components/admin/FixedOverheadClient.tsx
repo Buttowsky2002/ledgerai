@@ -393,7 +393,7 @@ export function FixedOverheadClient() {
                   className="w-full rounded border border-edge bg-canvas px-3 py-2 text-sm"
                   value={customLineItem}
                   onChange={(e) => setCustomLineItem(e.target.value)}
-                  placeholder="e.g. Acme AI Platform Team"
+                  placeholder="e.g. Studio Designer AI Platform Team"
                   disabled={!!editKey}
                 />
               </label>

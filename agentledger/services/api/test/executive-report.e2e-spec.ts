@@ -71,7 +71,7 @@ describe('Executive report export', () => {
       tx.tenant.create({
         data: {
           tenantId: tenantFull,
-          name: 'Acme Corp',
+          name: 'Studio Designer',
           complianceFlags: { attribution_mode: 'live' },
         },
       }),
