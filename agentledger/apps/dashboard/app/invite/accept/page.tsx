@@ -35,8 +35,13 @@ function AcceptInviteForm() {
     fetch(`/api/invites/accept?token=${encodeURIComponent(token)}`)
       .then(async (res) => {
         if (!res.ok) {
-          const body = (await res.json().catch(() => ({}))) as { message?: string };
-          throw new Error(body.message ?? 'Invite not found, already used, or expired.');
+          const body = (await res.json().catch(() => ({}))) as {
+            message?: string;
+            detail?: string;
+          };
+          throw new Error(
+            body.detail ?? body.message ?? 'Invite not found, already used, or expired.',
+          );
         }
         return res.json() as Promise<InviteDetails>;
       })
@@ -63,8 +68,11 @@ function AcceptInviteForm() {
         body: JSON.stringify({ token, displayName: displayName.trim() || undefined }),
       });
       if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { message?: string };
-        throw new Error(body.message ?? 'Failed to accept invite.');
+        const body = (await res.json().catch(() => ({}))) as {
+          message?: string;
+          detail?: string;
+        };
+        throw new Error(body.detail ?? body.message ?? 'Failed to accept invite.');
       }
       setState('done');
       setTimeout(() => router.push('/login'), 2000);
