@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { FormEvent, useState } from 'react';
+import { isDemoIdentityEmail } from '../../lib/identity-filters';
 
 const USER_ROLES = ['viewer', 'analyst', 'admin'] as const;
 type UserRole = (typeof USER_ROLES)[number];
@@ -35,11 +36,6 @@ export type InviteRow = {
 
 const FIELD =
   'rounded border border-edge bg-ink px-2 py-1.5 text-sm text-gray-100 focus:border-accent focus:outline-none';
-
-/** Demo / synthetic emails that must never appear in the live team list. */
-export function isDemoIdentityEmail(email: string): boolean {
-  return email.trim().toLowerCase().endsWith('@acme.test');
-}
 
 function InviteModal({
   onClose,

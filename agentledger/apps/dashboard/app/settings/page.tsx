@@ -6,7 +6,6 @@ import { DeleteButton } from '../../components/settings/DeleteButton';
 import { CreateBudget, CreateKey, CreatePolicy } from '../../components/settings/forms';
 import { AddIdpForm, IssueScimTokenForm, RevokeButton } from '../../components/settings/IntegrationsForms';
 import {
-  isDemoIdentityEmail,
   PermissionsSettings,
   type IdentityRow,
   type InviteRow,
@@ -14,6 +13,7 @@ import {
 import { PrivacySettings } from '../../components/settings/PrivacySettings';
 import { Card, DataTable, PageHeader, usd } from '../../components/ui';
 import { apiClient, fetchData, proxyApi } from '../../lib/api';
+import { isDemoIdentityEmail } from '../../lib/identity-filters';
 
 export const dynamic = 'force-dynamic';
 
