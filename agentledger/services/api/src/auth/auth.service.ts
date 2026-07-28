@@ -1,4 +1,5 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { recordAuthAudit } from '../common/audit';
 import { PrismaService } from '../prisma/prisma.service';
 import { getRequestClientMeta, logSecurityEvent } from '../security/security-event';
 import { AccessClaims, JwtService } from './jwt.service';
@@ -221,6 +222,21 @@ export class AuthService {
       ip: meta.ip,
       userAgent: meta.userAgent,
     });
+    // Persist sign-ins (not token refresh) to audit_log for Settings → Auditing.
+    if (type === 'auth.login_success') {
+      void this.prisma
+        .withTenant(claims.tenantId, (tx) =>
+          recordAuthAudit(tx, {
+            tenantId: claims.tenantId,
+            actor: claims.userId,
+            action: 'login',
+            detail: { ip: meta.ip, userAgent: meta.userAgent },
+          }),
+        )
+        .catch(() => {
+          /* never block login on audit write failure */
+        });
+    }
   }
 
   private auditAuthFailure(tenantId: string | null, userId: string | null, reason: string): void {
@@ -233,5 +249,19 @@ export class AuthService {
       userAgent: meta.userAgent,
       detail: { reason },
     });
+    if (tenantId) {
+      void this.prisma
+        .withTenant(tenantId, (tx) =>
+          recordAuthAudit(tx, {
+            tenantId,
+            actor: userId ?? 'unknown',
+            action: 'login_failure',
+            detail: { reason, ip: meta.ip, userAgent: meta.userAgent },
+          }),
+        )
+        .catch(() => {
+          /* never block auth on audit write failure */
+        });
+    }
   }
 }

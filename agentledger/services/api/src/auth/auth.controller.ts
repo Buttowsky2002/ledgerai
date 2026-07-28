@@ -14,6 +14,7 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import { IsOptional, IsString, MaxLength } from 'class-validator';
 import { Request, Response } from 'express';
+import { recordAuthAudit } from '../common/audit';
 import { env } from '../env';
 import { PrismaService } from '../prisma/prisma.service';
 import { clientMetaFromRequest, logSecurityEvent } from '../security/security-event';
@@ -280,6 +281,22 @@ export class AuthController {
       ip: meta.ip,
       userAgent: meta.userAgent,
     });
+    if (principal?.tenantId && principal.userId) {
+      const tenantId = principal.tenantId;
+      const userId = principal.userId;
+      void this.prisma
+        .withTenant(tenantId, (tx) =>
+          recordAuthAudit(tx, {
+            tenantId,
+            actor: userId,
+            action: 'logout',
+            detail: { ip: meta.ip, userAgent: meta.userAgent },
+          }),
+        )
+        .catch(() => {
+          /* never block logout on audit write failure */
+        });
+    }
     res.clearCookie(ACCESS_COOKIE, cookieOpts());
     res.clearCookie(REFRESH_COOKIE, cookieOpts());
     res.status(204).send();

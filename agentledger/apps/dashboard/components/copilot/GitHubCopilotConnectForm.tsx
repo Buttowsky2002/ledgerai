@@ -110,7 +110,7 @@ export function GitHubCopilotConnectForm({
             setOrgSlug(e.target.value);
             setTestResult(null);
           }}
-          placeholder="acme-corp"
+          placeholder="your-org"
           autoComplete="off"
         />
       </label>

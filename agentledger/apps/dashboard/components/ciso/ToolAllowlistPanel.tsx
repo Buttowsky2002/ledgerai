@@ -141,7 +141,7 @@ export function ToolAllowlistPanel({
 
       {!canManage && (
         <p className="text-xs text-muted">
-          Only users with the <span className="text-gray-100">admin</span> API role can change the
+          Only users with the <span className="text-gray-100">admin</span> role can change the
           allowlist.
         </p>
       )}

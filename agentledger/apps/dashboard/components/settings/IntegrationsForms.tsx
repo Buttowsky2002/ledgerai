@@ -164,7 +164,7 @@ export function AddIdpForm() {
       <div>
         <input
           className={`${FIELD} w-full max-w-sm`}
-          placeholder="e.g. ACME_OIDC_SECRET"
+          placeholder="e.g. OIDC_CLIENT_SECRET"
           value={clientSecretRef}
           onChange={(e) => setClientSecretRef(e.target.value)}
           required
