@@ -61,13 +61,25 @@ describe('AuthService SSO', () => {
     expect(out.claims).toMatchObject({ userId: 'u1', tenantId: TENANT, role: 'admin' });
     expect(out.accessToken).toBeTruthy();
     expect(queryRaw).toHaveBeenCalledTimes(1); // lookup only, no provision
-    expect(auditCreate).not.toHaveBeenCalled();
+    await Promise.resolve(); // flush fire-and-forget login audit
+    expect(auditCreate).toHaveBeenCalledTimes(1);
+    expect(auditCreate.mock.calls[0][0].data).toMatchObject({
+      actor: 'u1',
+      action: 'login',
+      object: 'session',
+    });
   });
 
   it('refuses a deactivated identity (401)', async () => {
     queryRaw.mockResolvedValueOnce([{ user_id: 'u1', api_role: 'viewer', active: false }]);
     await expect(svc.provisionAndLogin(opts())).rejects.toBeInstanceOf(UnauthorizedException);
     expect(queryRaw).toHaveBeenCalledTimes(1); // never tries to provision over an inactive row
+    await Promise.resolve();
+    expect(auditCreate).toHaveBeenCalledTimes(1);
+    expect(auditCreate.mock.calls[0][0].data).toMatchObject({
+      action: 'login_failure',
+      detail: expect.objectContaining({ reason: 'identity_deactivated' }),
+    });
   });
 
   it('JIT-provisions an absent identity and audits it', async () => {
@@ -76,11 +88,18 @@ describe('AuthService SSO', () => {
       .mockResolvedValueOnce([{ user_id: 'u2', api_role: 'viewer' }]); // provision
     const out = await svc.provisionAndLogin(opts());
     expect(out.claims).toMatchObject({ userId: 'u2', role: 'viewer' });
-    expect(auditCreate).toHaveBeenCalledTimes(1);
+    await Promise.resolve();
+    // JIT create + session login
+    expect(auditCreate).toHaveBeenCalledTimes(2);
     expect(auditCreate.mock.calls[0][0].data).toMatchObject({
       actor: 'sso:okta',
       action: 'create',
       object: 'identity:u2',
+    });
+    expect(auditCreate.mock.calls[1][0].data).toMatchObject({
+      actor: 'u2',
+      action: 'login',
+      object: 'session',
     });
   });
 
@@ -89,7 +108,12 @@ describe('AuthService SSO', () => {
     await expect(svc.provisionAndLogin(opts({ jitEnabled: false }))).rejects.toBeInstanceOf(
       UnauthorizedException,
     );
-    expect(auditCreate).not.toHaveBeenCalled();
+    await Promise.resolve();
+    expect(auditCreate).toHaveBeenCalledTimes(1);
+    expect(auditCreate.mock.calls[0][0].data).toMatchObject({
+      action: 'login_failure',
+      detail: expect.objectContaining({ reason: 'no_identity' }),
+    });
   });
 
   it('recovers from a provisioning race by re-reading the identity', async () => {
@@ -99,7 +123,14 @@ describe('AuthService SSO', () => {
       .mockResolvedValueOnce([{ user_id: 'u3', api_role: 'analyst', active: true }]); // re-read
     const out = await svc.provisionAndLogin(opts());
     expect(out.claims).toMatchObject({ userId: 'u3', role: 'analyst' });
-    expect(auditCreate).not.toHaveBeenCalled(); // the winner already audited it
+    await Promise.resolve();
+    // winner already wrote the create audit; loser only records the login
+    expect(auditCreate).toHaveBeenCalledTimes(1);
+    expect(auditCreate.mock.calls[0][0].data).toMatchObject({
+      actor: 'u3',
+      action: 'login',
+      object: 'session',
+    });
   });
 
   it('refresh re-reads api_role so Settings promotions take effect', async () => {
