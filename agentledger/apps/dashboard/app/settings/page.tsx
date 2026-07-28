@@ -1,10 +1,16 @@
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { AccountSettings } from '../../components/settings/AccountSettings';
+import { AuditingSettings, type AuditRow } from '../../components/settings/AuditingSettings';
 import { DeleteButton } from '../../components/settings/DeleteButton';
 import { CreateBudget, CreateKey, CreatePolicy } from '../../components/settings/forms';
 import { AddIdpForm, IssueScimTokenForm, RevokeButton } from '../../components/settings/IntegrationsForms';
-import { PermissionsSettings, type IdentityRow, type InviteRow } from '../../components/settings/PermissionsSettings';
+import {
+  isDemoIdentityEmail,
+  PermissionsSettings,
+  type IdentityRow,
+  type InviteRow,
+} from '../../components/settings/PermissionsSettings';
 import { PrivacySettings } from '../../components/settings/PrivacySettings';
 import { Card, DataTable, PageHeader, usd } from '../../components/ui';
 import { apiClient, fetchData, proxyApi } from '../../lib/api';
@@ -14,13 +20,14 @@ export const dynamic = 'force-dynamic';
 const TABS = [
   ['account', 'Account'],
   ['permissions', 'Permissions'],
+  ['auditing', 'Auditing'],
   ['keys', 'Virtual keys'],
   ['policies', 'Policies'],
   ['budgets', 'Budgets'],
   ['integrations', 'Integrations'],
   ['connectors', 'Data sources'],
 ] as const;
-type SettingsTab = 'account' | 'permissions' | 'keys' | 'policies' | 'budgets' | 'integrations';
+type SettingsTab = 'account' | 'permissions' | 'auditing' | 'keys' | 'policies' | 'budgets' | 'integrations';
 
 export default async function SettingsPage({ searchParams }: { searchParams: { tab?: string } }) {
   if (searchParams.tab === 'connectors') {
@@ -33,7 +40,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: { t
   }
 
   const tab: SettingsTab = (
-    ['account', 'permissions', 'keys', 'policies', 'budgets', 'integrations'] as const
+    ['account', 'permissions', 'auditing', 'keys', 'policies', 'budgets', 'integrations'] as const
   ).includes(searchParams.tab as SettingsTab)
     ? (searchParams.tab as SettingsTab)
     : 'account';
@@ -69,8 +76,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: { t
 
       {tab === 'account' && <AccountTab />}
       {tab === 'permissions' && <PermissionsTab api={api} />}
+      {tab === 'auditing' && <AuditingTab />}
 
-      {tab !== 'account' && tab !== 'permissions' && (
+      {tab !== 'account' && tab !== 'permissions' && tab !== 'auditing' && (
         <Card title="Privacy & analytics">
           <PrivacySettings
             initialIndividualAnalytics={individualAnalytics}
@@ -122,15 +130,35 @@ async function PermissionsTab({ api }: { api: Api }) {
   const canManage = session?.role === 'admin';
   const pendingInvites: InviteRow[] = (
     invRes.ok && Array.isArray(invRes.data) ? (invRes.data as InviteRow[]) : []
-  ).filter((i) => i.status === 'pending');
+  ).filter((i) => i.status === 'pending' && !isDemoIdentityEmail(i.email));
+  const members = (Array.isArray(identities) ? identities : []).filter(
+    (i) => !isDemoIdentityEmail(i.email),
+  );
   return (
-    <Card title="API roles">
+    <Card title="User roles">
       <PermissionsSettings
-        identities={Array.isArray(identities) ? identities : []}
+        identities={members}
         pendingInvites={pendingInvites}
         canManage={canManage}
         currentUserId={session?.userId ?? null}
       />
+    </Card>
+  );
+}
+
+async function AuditingTab() {
+  const { ok, data } = await proxyApi('/v1/audit?limit=200&offset=0');
+  const rows: AuditRow[] = ok && Array.isArray(data) ? (data as AuditRow[]) : [];
+  return (
+    <Card title="Activity audit">
+      {!ok ? (
+        <p className="text-sm text-muted">
+          Only users with the <span className="text-gray-100">admin</span> role can view the audit
+          log.
+        </p>
+      ) : (
+        <AuditingSettings rows={rows} />
+      )}
     </Card>
   );
 }

@@ -81,7 +81,7 @@ export function AccountSettings({ session }: { session: SessionInfo }) {
             <dd className="text-gray-100">{session!.displayName ?? '—'}</dd>
             <dt>Email</dt>
             <dd className="text-gray-100">{session!.email ?? '—'}</dd>
-            <dt>API role</dt>
+            <dt>Role</dt>
             <dd className="capitalize text-gray-100">{session!.role}</dd>
             <dt>User id</dt>
             <dd className="font-mono text-xs text-gray-100">{session!.userId}</dd>

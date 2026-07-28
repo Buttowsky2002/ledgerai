@@ -11,6 +11,8 @@ export interface AuditEvent {
   after: unknown;
 }
 
+export type AuthAuditAction = 'login' | 'logout' | 'login_failure';
+
 /**
  * Append an administrative-mutation row to audit_log (security rule 10: who/what/
  * before-after/when). Called INSIDE the same tenant-scoped transaction as the
@@ -29,6 +31,31 @@ export async function recordAudit(tx: Prisma.TransactionClient, e: AuditEvent): 
       action: e.action,
       object: e.object,
       detail: JSON.parse(JSON.stringify({ before: e.before ?? null, after: e.after ?? null })),
+    },
+  });
+}
+
+/**
+ * Append an auth/session row to audit_log (sign-in, sign-out, failed login when
+ * a tenant is known). Caller must already be inside a tenant-bound transaction
+ * so RLS WITH CHECK passes.
+ */
+export async function recordAuthAudit(
+  tx: Prisma.TransactionClient,
+  e: {
+    tenantId: string;
+    actor: string;
+    action: AuthAuditAction;
+    detail?: Record<string, unknown>;
+  },
+): Promise<void> {
+  await tx.auditLog.create({
+    data: {
+      tenantId: e.tenantId,
+      actor: e.actor,
+      action: e.action,
+      object: 'session',
+      detail: JSON.parse(JSON.stringify(e.detail ?? {})),
     },
   });
 }

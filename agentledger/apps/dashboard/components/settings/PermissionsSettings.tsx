@@ -3,14 +3,21 @@
 import { useRouter } from 'next/navigation';
 import { FormEvent, useState } from 'react';
 
-const API_ROLES = ['viewer', 'analyst', 'admin'] as const;
-type ApiRole = (typeof API_ROLES)[number];
+const USER_ROLES = ['viewer', 'analyst', 'admin'] as const;
+type UserRole = (typeof USER_ROLES)[number];
+
+const ROLE_LABEL: Record<UserRole, string> = {
+  viewer: 'Viewer — read-only',
+  analyst: 'Analyst — analytics + attribution',
+  admin: 'Admin — full access + user management',
+};
 
 export type IdentityRow = {
   userId: string;
   email: string;
   displayName: string | null;
   apiRole: string;
+  role?: string;
   active: boolean;
   source: string;
 };
@@ -29,6 +36,11 @@ export type InviteRow = {
 const FIELD =
   'rounded border border-edge bg-ink px-2 py-1.5 text-sm text-gray-100 focus:border-accent focus:outline-none';
 
+/** Demo / synthetic emails that must never appear in the live team list. */
+export function isDemoIdentityEmail(email: string): boolean {
+  return email.trim().toLowerCase().endsWith('@acme.test');
+}
+
 function InviteModal({
   onClose,
   onSuccess,
@@ -37,7 +49,7 @@ function InviteModal({
   onSuccess: () => void;
 }) {
   const [email, setEmail] = useState('');
-  const [apiRole, setApiRole] = useState<'viewer' | 'analyst' | 'admin'>('viewer');
+  const [apiRole, setApiRole] = useState<UserRole>('viewer');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [link, setLink] = useState<string | null>(null);
@@ -99,21 +111,23 @@ function InviteModal({
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="colleague@example.com"
+                placeholder="colleague@studiodesigner.com"
                 className="w-full rounded border border-edge bg-ink px-2 py-1.5 text-sm text-white placeholder:text-muted focus:border-accent focus:outline-none"
               />
             </label>
 
             <label className="block space-y-1">
-              <span className="text-sm text-muted">Access level</span>
+              <span className="text-sm text-muted">Role</span>
               <select
                 value={apiRole}
-                onChange={(e) => setApiRole(e.target.value as typeof apiRole)}
+                onChange={(e) => setApiRole(e.target.value as UserRole)}
                 className="w-full rounded border border-edge bg-ink px-2 py-1.5 text-sm text-white focus:border-accent focus:outline-none"
               >
-                <option value="viewer">Viewer — read-only</option>
-                <option value="analyst">Analyst — analytics + attribution</option>
-                <option value="admin">Admin — full access + user management</option>
+                {USER_ROLES.map((r) => (
+                  <option key={r} value={r}>
+                    {ROLE_LABEL[r]}
+                  </option>
+                ))}
               </select>
             </label>
 
@@ -157,11 +171,12 @@ export function PermissionsSettings({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [showInvite, setShowInvite] = useState(false);
+  const members = identities.filter((i) => !isDemoIdentityEmail(i.email));
   const [roles, setRoles] = useState<Record<string, string>>(() =>
-    Object.fromEntries(identities.map((i) => [i.userId, i.apiRole])),
+    Object.fromEntries(members.map((i) => [i.userId, i.apiRole])),
   );
 
-  async function saveRole(userId: string, apiRole: ApiRole) {
+  async function saveRole(userId: string, apiRole: UserRole) {
     setBusyId(userId);
     setErr(null);
     const res = await fetch(`/api/identities/${userId}`, {
@@ -175,7 +190,7 @@ export function PermissionsSettings({
       setErr(body?.message ?? body?.error ?? `Update failed (${res.status})`);
       setRoles((prev) => ({
         ...prev,
-        [userId]: identities.find((i) => i.userId === userId)?.apiRole ?? prev[userId],
+        [userId]: members.find((i) => i.userId === userId)?.apiRole ?? prev[userId],
       }));
       return;
     }
@@ -201,18 +216,20 @@ export function PermissionsSettings({
   if (!canManage) {
     return (
       <p className="text-sm text-muted">
-        Only users with the <span className="text-gray-100">admin</span> API role can change permissions.
+        Only users with the <span className="text-gray-100">admin</span> role can change permissions.
         Ask an admin to promote your identity, then sign out and back in.
       </p>
     );
   }
 
+  const invites = pendingInvites.filter((i) => !isDemoIdentityEmail(i.email));
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
         <p className="text-xs text-muted">
-          API roles gate control-plane actions (viewer → analyst → admin). Changes apply on the next
-          access-token refresh (about 15 minutes) or after the user signs out and back in.
+          Roles control what each person can do in the app (viewer → analyst → admin). Changes apply
+          on the next access-token refresh (about 15 minutes) or after the user signs out and back in.
         </p>
         <button
           type="button"
@@ -230,13 +247,13 @@ export function PermissionsSettings({
               <th className="py-2 pr-3 font-medium">Email</th>
               <th className="py-2 pr-3 font-medium">Name</th>
               <th className="py-2 pr-3 font-medium">Source</th>
-              <th className="py-2 pr-3 font-medium">API role</th>
+              <th className="py-2 pr-3 font-medium">Role</th>
               <th className="py-2 font-medium">Status</th>
             </tr>
           </thead>
           <tbody>
-            {identities.map((row) => {
-              const value = (roles[row.userId] ?? row.apiRole) as ApiRole;
+            {members.map((row) => {
+              const value = (roles[row.userId] ?? row.apiRole) as UserRole;
               const isSelf = currentUserId === row.userId;
               return (
                 <tr key={row.userId} className="border-b border-edge/60">
@@ -252,12 +269,12 @@ export function PermissionsSettings({
                       value={value}
                       disabled={busyId === row.userId || !row.active}
                       onChange={(e) => {
-                        const next = e.target.value as ApiRole;
+                        const next = e.target.value as UserRole;
                         setRoles((prev) => ({ ...prev, [row.userId]: next }));
                         void saveRole(row.userId, next);
                       }}
                     >
-                      {API_ROLES.map((r) => (
+                      {USER_ROLES.map((r) => (
                         <option key={r} value={r}>
                           {r}
                         </option>
@@ -271,10 +288,10 @@ export function PermissionsSettings({
                 </tr>
               );
             })}
-            {identities.length === 0 && (
+            {members.length === 0 && (
               <tr>
                 <td colSpan={5} className="py-4 text-muted">
-                  No identities yet. Invite a teammate or wait for SSO/SCIM provisioning.
+                  No team members yet. Invite a teammate or wait for SSO/SCIM provisioning.
                 </td>
               </tr>
             )}
@@ -282,7 +299,7 @@ export function PermissionsSettings({
         </table>
       </div>
 
-      {pendingInvites.length > 0 && (
+      {invites.length > 0 && (
         <div className="space-y-2">
           <h3 className="text-sm font-medium text-gray-100">Pending invites</h3>
           <div className="overflow-x-auto">
@@ -296,7 +313,7 @@ export function PermissionsSettings({
                 </tr>
               </thead>
               <tbody>
-                {pendingInvites.map((inv) => (
+                {invites.map((inv) => (
                   <tr key={inv.inviteId} className="border-b border-edge/60">
                     <td className="py-2 pr-3 text-gray-100">{inv.email}</td>
                     <td className="py-2 pr-3 capitalize text-muted">{inv.apiRole}</td>

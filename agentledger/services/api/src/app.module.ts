@@ -13,6 +13,7 @@ import { AllocationRulesModule } from './allocation-rules/allocation-rules.modul
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AppsModule } from './apps/apps.module';
 import { AttributionModule } from './attribution/attribution.module';
+import { AuditModule } from './audit/audit.module';
 import { BudgetsModule } from './budgets/budgets.module';
 import { ConnectorsModule } from './connectors/connectors.module';
 import { GitHubCopilotModule } from './github-copilot/github-copilot.module';
@@ -67,6 +68,7 @@ import { DesignPartnerModule } from './design-partner/design-partner.module';
     // Control-plane resources (CRUD + audit; RLS-scoped, admin-write/viewer-read).
     TeamsModule,
     IdentitiesModule,
+    AuditModule,
     InvitesModule,
     AppsModule,
     AgentsModule,
