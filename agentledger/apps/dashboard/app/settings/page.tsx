@@ -1,19 +1,16 @@
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { AccountSettings } from '../../components/settings/AccountSettings';
-import { AuditingSettings, type AuditRow } from '../../components/settings/AuditingSettings';
+import { AuditingSettings } from '../../components/settings/AuditingSettings';
 import { DeleteButton } from '../../components/settings/DeleteButton';
 import { CreateBudget, CreateKey, CreatePolicy } from '../../components/settings/forms';
 import { AddIdpForm, IssueScimTokenForm, RevokeButton } from '../../components/settings/IntegrationsForms';
-import {
-  PermissionsSettings,
-  type IdentityRow,
-  type InviteRow,
-} from '../../components/settings/PermissionsSettings';
+import { PermissionsSettings } from '../../components/settings/PermissionsSettings';
 import { PrivacySettings } from '../../components/settings/PrivacySettings';
 import { Card, DataTable, PageHeader, usd } from '../../components/ui';
 import { apiClient, fetchData, proxyApi } from '../../lib/api';
 import { isDemoIdentityEmail } from '../../lib/identity-filters';
+import type { AuditRow, IdentityRow, InviteRow } from '../../lib/settings-types';
 
 export const dynamic = 'force-dynamic';
 
@@ -115,35 +112,46 @@ async function AccountTab() {
 }
 
 async function PermissionsTab({ api }: { api: Api }) {
-  const [{ ok, data: me }, identities, invRes] = await Promise.all([
-    proxyApi('/auth/me'),
-    fetchData(
-      api.GET('/v1/identities', { params: { query: { limit: '200', offset: '0' } } }),
-      [],
-    ) as Promise<IdentityRow[]>,
-    proxyApi('/v1/invites'),
-  ]);
-  const session =
-    ok && me && typeof me === 'object' && 'role' in me
-      ? (me as { userId: string | null; role: string })
-      : null;
-  const canManage = session?.role === 'admin';
-  const pendingInvites: InviteRow[] = (
-    invRes.ok && Array.isArray(invRes.data) ? (invRes.data as InviteRow[]) : []
-  ).filter((i) => i.status === 'pending' && !isDemoIdentityEmail(i.email));
-  const members = (Array.isArray(identities) ? identities : []).filter(
-    (i) => !isDemoIdentityEmail(i.email),
-  );
-  return (
-    <Card title="User roles">
-      <PermissionsSettings
-        identities={members}
-        pendingInvites={pendingInvites}
-        canManage={canManage}
-        currentUserId={session?.userId ?? null}
-      />
-    </Card>
-  );
+  try {
+    const [{ ok, data: me }, identities, invRes] = await Promise.all([
+      proxyApi('/auth/me'),
+      fetchData(
+        api.GET('/v1/identities', { params: { query: { limit: '200', offset: '0' } } }),
+        [],
+      ) as Promise<IdentityRow[]>,
+      proxyApi('/v1/invites'),
+    ]);
+    const session =
+      ok && me && typeof me === 'object' && 'role' in me
+        ? (me as { userId: string | null; role: string })
+        : null;
+    const canManage = session?.role === 'admin';
+    const pendingInvites: InviteRow[] = (
+      invRes.ok && Array.isArray(invRes.data) ? (invRes.data as InviteRow[]) : []
+    ).filter((i) => i.status === 'pending' && !isDemoIdentityEmail(i.email));
+    const members = (Array.isArray(identities) ? identities : []).filter(
+      (i) => !isDemoIdentityEmail(i.email),
+    );
+    return (
+      <Card title="User roles">
+        <PermissionsSettings
+          identities={members}
+          pendingInvites={pendingInvites}
+          canManage={canManage}
+          currentUserId={session?.userId ?? null}
+        />
+      </Card>
+    );
+  } catch (err) {
+    console.error('settings/permissions failed', err);
+    return (
+      <Card title="User roles">
+        <p className="text-sm text-neg">
+          Could not load team permissions. Refresh the page or try again in a moment.
+        </p>
+      </Card>
+    );
+  }
 }
 
 async function AuditingTab() {

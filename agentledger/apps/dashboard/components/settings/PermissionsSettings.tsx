@@ -3,6 +3,9 @@
 import { useRouter } from 'next/navigation';
 import { FormEvent, useState } from 'react';
 import { isDemoIdentityEmail } from '../../lib/identity-filters';
+import type { IdentityRow, InviteRow } from '../../lib/settings-types';
+
+export type { IdentityRow, InviteRow };
 
 const USER_ROLES = ['viewer', 'analyst', 'admin'] as const;
 type UserRole = (typeof USER_ROLES)[number];
@@ -11,27 +14,6 @@ const ROLE_LABEL: Record<UserRole, string> = {
   viewer: 'Viewer — read-only',
   analyst: 'Analyst — analytics + attribution',
   admin: 'Admin — full access + user management',
-};
-
-export type IdentityRow = {
-  userId: string;
-  email: string;
-  displayName: string | null;
-  apiRole: string;
-  role?: string;
-  active: boolean;
-  source: string;
-};
-
-export type InviteRow = {
-  inviteId: string;
-  email: string;
-  apiRole: string;
-  status: string;
-  expiresAt: string;
-  acceptedAt: string | null;
-  displayName: string | null;
-  invitedByName: string | null;
 };
 
 const FIELD =
