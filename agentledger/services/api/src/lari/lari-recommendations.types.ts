@@ -82,6 +82,7 @@ export interface LariRecommendationsInput {
     contractMonthlyCost: number;
     monthlyPricePerUser: number;
     activeSeats: number;
+    criticalityTier?: string;
   }>;
   providerSpend: Array<{ provider: string; costUsd: number; calls: number }>;
   dailySpend: Array<{ day: string; costUsd: number }>;

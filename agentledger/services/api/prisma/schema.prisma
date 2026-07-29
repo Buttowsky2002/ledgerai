@@ -69,6 +69,7 @@ model Identity {
   aliases     Json   @default("[]")
   externalId  String? @map("external_id")
   active      Boolean @default(true)
+  criticalityTier String @default("standard") @map("criticality_tier")
 
   @@unique([tenantId, email])
   @@map("identities")

@@ -26,6 +26,21 @@ type Range = { from: string; to: string };
 
 const n = (v: unknown): number => (typeof v === 'number' ? v : Number(v) || 0);
 const MS_DAY = 86_400_000;
+const CRITICALITY_RANK: Record<string, number> = {
+  low: 0,
+  standard: 1,
+  high: 2,
+  critical: 3,
+};
+
+function higherCriticalityTier(...tiers: Array<string | null | undefined>): string {
+  return tiers
+    .map((tier) => tier?.trim().toLowerCase() || 'standard')
+    .reduce((highest, tier) => {
+      const normalized = tier in CRITICALITY_RANK ? tier : 'standard';
+      return CRITICALITY_RANK[normalized]! > CRITICALITY_RANK[highest]! ? normalized : highest;
+    }, 'standard');
+}
 
 interface MutableUserRow {
   userId: string;
@@ -41,6 +56,7 @@ interface MutableUserRow {
   planId?: string;
   planName?: string;
   seatProvider?: string;
+  criticalityTier: string;
   dailyCost?: Map<string, number>;
   dailyCalls?: Map<string, number>;
 }
@@ -141,14 +157,20 @@ export class UserValueService {
 
     const ensure = (rawUserId: string): MutableUserRow => {
       const key = resolveKey(rawUserId);
-      const existing = byKey.get(key);
-      if (existing) return existing;
       const identity = resolveUserDirectoryIdentity(
         rawUserId,
         lookups.byId,
         lookups.byEmail,
         lookups.byAlias,
       );
+      const existing = byKey.get(key);
+      if (existing) {
+        existing.criticalityTier = higherCriticalityTier(
+          existing.criticalityTier,
+          identity.criticalityTier,
+        );
+        return existing;
+      }
       const row: MutableUserRow = {
         userId: rawUserId,
         displayName: identity.display_name,
@@ -160,6 +182,7 @@ export class UserValueService {
         sessions: 0,
         seatMonthlyCostUsd: 0,
         hasSeat: false,
+        criticalityTier: identity.criticalityTier,
       };
       byKey.set(key, row);
       return row;
@@ -199,6 +222,7 @@ export class UserValueService {
       user.planId = seat.planId;
       user.planName = seat.planName;
       user.seatProvider = seat.provider;
+      user.criticalityTier = higherCriticalityTier(user.criticalityTier, seat.criticalityTier);
       user.providers.add(seat.provider);
     }
 
@@ -276,6 +300,7 @@ export class UserValueService {
         planId: row.planId,
         planName: row.planName,
         seatProvider: row.seatProvider,
+        criticalityTier: row.criticalityTier,
         dailyCost,
         dailyCalls,
       };
@@ -366,6 +391,7 @@ export class UserValueService {
           monthly_price_per_user: number | string;
           contract_monthly_cost: number | string;
           seats_purchased: number;
+          criticality_tier: string;
         }[]
       >`
         SELECT
@@ -376,7 +402,8 @@ export class UserValueService {
           p.plan_name,
           p.monthly_price_per_user,
           p.contract_monthly_cost,
-          p.seats_purchased
+          p.seats_purchased,
+          p.criticality_tier
         FROM ai_seats s
         JOIN ai_subscription_plans p ON s.plan_id = p.plan_id
         LEFT JOIN identities i ON s.user_id = i.user_id
@@ -391,6 +418,7 @@ export class UserValueService {
       monthlyPricePerUser: n(r.monthly_price_per_user),
       contractMonthlyCost: n(r.contract_monthly_cost),
       seatsPurchased: n(r.seats_purchased),
+      criticalityTier: String(r.criticality_tier || 'standard'),
     }));
   }
 

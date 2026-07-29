@@ -108,6 +108,21 @@ describe('LARI recommendations — generateLariRecommendations', () => {
     expect(seat!.estimatedSavingsUsd).toBeGreaterThan(0);
   });
 
+  it('materially dampens unused-seat urgency for a critical plan', () => {
+    const standard = generateLariRecommendations(baseInput()).recommendations.find(
+      (r) => r.id === 'remove-unused-seats',
+    )!;
+    const criticalInput = baseInput();
+    criticalInput.subscriptionPlans[0]!.criticalityTier = 'critical';
+    const critical = generateLariRecommendations(criticalInput).recommendations.find(
+      (r) => r.id === 'remove-unused-seats',
+    )!;
+
+    expect(standard.evidence).toContain('criticality=standard');
+    expect(critical.evidence).toContain('criticality=critical');
+    expect(standard.mlScore - critical.mlScore).toBeGreaterThanOrEqual(10);
+  });
+
   it('suggests switching to lower cost-per-call provider', () => {
     const { recommendations } = generateLariRecommendations(baseInput());
     const plan = recommendations.find((r) => r.id === 'switch-lower-cost-provider');
@@ -376,6 +391,23 @@ describe('LARI recommendations — user value (platform usage)', () => {
     expect(recs).toHaveLength(1);
     expect(recs[0]!.title).toContain('Unused platform access');
     expect(recs[0]!.relatedEntity).toEqual({ type: 'user', id: 'user-1' });
+  });
+
+  it('materially dampens individual urgency for a critical user', () => {
+    const standard = userValueRecs({
+      periodDays: 30,
+      perUserMode: 'individual',
+      userUtilization: [inactiveUser({ criticalityTier: 'standard' })],
+    })[0]!;
+    const critical = userValueRecs({
+      periodDays: 30,
+      perUserMode: 'individual',
+      userUtilization: [inactiveUser({ criticalityTier: 'critical' })],
+    })[0]!;
+
+    expect(standard.evidence).toContain('criticality=standard');
+    expect(critical.evidence).toContain('criticality=critical');
+    expect(standard.mlScore - critical.mlScore).toBeGreaterThanOrEqual(10);
   });
 
   it('cost-without-activity anomaly only in individual mode', () => {

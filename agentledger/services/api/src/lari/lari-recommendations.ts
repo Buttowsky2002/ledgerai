@@ -28,7 +28,31 @@ const PRIORITY_RANK: Record<RecommendationPriority, number> = {
   low: 3,
 };
 
+const CRITICALITY_DAMPENING: Record<string, number> = {
+  low: 0,
+  standard: 0.15,
+  high: 0.4,
+  critical: 0.7,
+};
+
 const usd = (v: number): number => Math.round((v + Number.EPSILON) * 100) / 100;
+
+function highestCriticalityTier(...tiers: Array<string | null | undefined>): string {
+  const normalized = tiers
+    .map((tier) => tier?.trim().toLowerCase())
+    .filter((tier): tier is string => Boolean(tier && tier in CRITICALITY_DAMPENING));
+  if (normalized.length === 0) return 'standard';
+  return normalized.reduce((highest, tier) =>
+    CRITICALITY_DAMPENING[tier]! > CRITICALITY_DAMPENING[highest]! ? tier : highest,
+  );
+}
+
+function criticalityFactor(tier: string): { weight: number; value: number } {
+  return {
+    weight: 0.25,
+    value: 1 - (CRITICALITY_DAMPENING[tier] ?? 0.15),
+  };
+}
 
 /** Seat utilization in [0,1]. */
 export function utilizationRatio(active: number, purchased: number): number {
@@ -140,6 +164,11 @@ function seatRecommendations(input: LariRecommendationsInput): LariActionableRec
   const unused = Math.max(0, seatStats.purchased - seatStats.active);
 
   if (seatStats.purchased > 0 && unused > 0) {
+    const tier = highestCriticalityTier(
+      ...subscriptionPlans
+        .filter((plan) => plan.seatsPurchased > plan.activeSeats)
+        .map((plan) => plan.criticalityTier),
+    );
     const monthlyWaste = subscriptionPlans.reduce((s, p) => {
       const planUnused = Math.max(0, p.seatsPurchased - p.activeSeats);
       const perSeat = p.seatsPurchased > 0 ? p.contractMonthlyCost / p.seatsPurchased : p.monthlyPricePerUser;
@@ -149,6 +178,7 @@ function seatRecommendations(input: LariRecommendationsInput): LariActionableRec
       { weight: 0.5, value: 1 - util },
       { weight: 0.3, value: Math.min(1, unused / seatStats.purchased) },
       { weight: 0.2, value: monthlyWaste > 500 ? 1 : monthlyWaste / 500 },
+      criticalityFactor(tier),
     ]);
     recs.push({
       id: 'remove-unused-seats',
@@ -163,16 +193,23 @@ function seatRecommendations(input: LariRecommendationsInput): LariActionableRec
         `purchased=${seatStats.purchased}, active=${seatStats.active}`,
         `utilization=${Math.round(util * 100)}%`,
         `estimated monthly waste=$${usd(monthlyWaste)}`,
+        `criticality=${tier}`,
       ],
     });
   }
 
   if (input.copilotInactiveSeats && input.copilotInactiveSeats > 0) {
+    const tier = highestCriticalityTier(
+      ...subscriptionPlans
+        .filter((plan) => plan.provider.toLowerCase().includes('copilot'))
+        .map((plan) => plan.criticalityTier),
+    );
     const seatCost = input.copilotSeatMonthlyCost ?? 19;
     const waste = input.copilotInactiveSeats * seatCost;
     const mlScore = compositeMlScore([
       { weight: 0.6, value: Math.min(1, input.copilotInactiveSeats / 10) },
       { weight: 0.4, value: Math.min(1, waste / 500) },
+      criticalityFactor(tier),
     ]);
     recs.push({
       id: 'copilot-inactive-seats',
@@ -183,23 +220,33 @@ function seatRecommendations(input: LariRecommendationsInput): LariActionableRec
       action: 'Remove or reassign inactive Copilot seats before the next billing cycle.',
       estimatedSavingsUsd: usd(waste),
       mlScore,
-      evidence: [`inactive_copilot_seats=${input.copilotInactiveSeats}`, `seat_price=$${seatCost}/mo`],
+      evidence: [
+        `inactive_copilot_seats=${input.copilotInactiveSeats}`,
+        `seat_price=$${seatCost}/mo`,
+        `criticality=${tier}`,
+      ],
       relatedEntity: { type: 'provider', id: 'github_copilot' },
     });
   }
 
   for (const plan of subscriptionPlans) {
     if (plan.seatsPurchased > 0 && plan.activeSeats === 0) {
+      const tier = highestCriticalityTier(plan.criticalityTier);
+      const mlScore = compositeMlScore([{ weight: 1, value: 0.75 }, criticalityFactor(tier)]);
       recs.push({
         id: `plan-no-active-${plan.planId}`,
-        priority: 'high',
+        priority: priorityFromScore(mlScore),
         category: 'seat_optimization',
         title: `${plan.provider} plan has no active seats`,
         message: `"${plan.planName}" costs $${usd(plan.contractMonthlyCost)}/month with zero active assignments.`,
         action: 'Cancel the plan or assign seats to active users.',
         estimatedSavingsUsd: usd(plan.contractMonthlyCost),
-        mlScore: 75,
-        evidence: [`plan=${plan.planName}`, `contract_monthly=$${usd(plan.contractMonthlyCost)}`],
+        mlScore,
+        evidence: [
+          `plan=${plan.planName}`,
+          `contract_monthly=$${usd(plan.contractMonthlyCost)}`,
+          `criticality=${tier}`,
+        ],
         relatedEntity: { type: 'plan', id: plan.planId },
       });
     }
@@ -226,12 +273,20 @@ function planRecommendations(
     const cheapest = costPerCall[0];
     const expensive = costPerCall[costPerCall.length - 1];
     if (cheapest && expensive && expensive.cpc > cheapest.cpc * 1.5 && expensive.costUsd > 100) {
-      const savings = (expensive.cpc - cheapest.cpc) * (providerSpend.find((p) => p.provider === expensive.provider)?.calls ?? 0);
+      const tier = highestCriticalityTier(
+        ...input.subscriptionPlans
+          .filter((plan) => plan.provider.toLowerCase() === expensive.provider.toLowerCase())
+          .map((plan) => plan.criticalityTier),
+      );
+      const savings =
+        (expensive.cpc - cheapest.cpc) *
+        (providerSpend.find((p) => p.provider === expensive.provider)?.calls ?? 0);
       const monthlySavings = savings * monthlyFactor(periodDays);
       const mlScore = compositeMlScore([
         { weight: 0.5, value: Math.min(1, (expensive.cpc - cheapest.cpc) / expensive.cpc) },
         { weight: 0.3, value: Math.min(1, expensive.costUsd / 1000) },
         { weight: 0.2, value: Math.min(1, monthlySavings / 500) },
+        criticalityFactor(tier),
       ]);
       recs.push({
         id: 'switch-lower-cost-provider',
@@ -247,6 +302,7 @@ function planRecommendations(
           `${expensive.provider} cpc=$${usd(expensive.cpc)}`,
           `${cheapest.provider} cpc=$${usd(cheapest.cpc)}`,
           `period_spend_${expensive.provider}=$${usd(expensive.costUsd)}`,
+          `criticality=${tier}`,
         ],
         relatedEntity: { type: 'provider', id: expensive.provider },
       });
@@ -255,12 +311,16 @@ function planRecommendations(
 
   const spendValues = dailySpend.map((d) => d.costUsd);
   if (spendValues.length >= 7) {
+    const tier = highestCriticalityTier(
+      ...input.subscriptionPlans.map((plan) => plan.criticalityTier),
+    );
     const z = zScoreLast(spendValues);
     const slope = linearTrendSlope(spendValues);
     if (z >= 2) {
       const mlScore = compositeMlScore([
         { weight: 0.6, value: Math.min(1, z / 4) },
         { weight: 0.4, value: slope > 0 ? Math.min(1, slope / 50) : 0 },
+        criticalityFactor(tier),
       ]);
       recs.push({
         id: 'spend-anomaly-spike',
@@ -270,7 +330,11 @@ function planRecommendations(
         message: `Daily spend z-score ${z.toFixed(1)} — usage is significantly above the prior baseline.`,
         action: 'Review model mix, rate limits, and agent run frequency; consider downgrading models for non-critical paths.',
         mlScore,
-        evidence: [`z_score=${z.toFixed(2)}`, `trend_slope=${slope.toFixed(2)}/day`],
+        evidence: [
+          `z_score=${z.toFixed(2)}`,
+          `trend_slope=${slope.toFixed(2)}/day`,
+          `criticality=${tier}`,
+        ],
       });
     }
     if (slope > 5 && spendValues[spendValues.length - 1]! > 50) {
@@ -281,8 +345,11 @@ function planRecommendations(
         title: 'Spend trend is rising',
         message: `Linear trend shows +$${usd(slope)}/day increase — project monthly run-rate before it compounds.`,
         action: 'Set budget alerts and evaluate prepaid vs pay-as-you-go plans at current trajectory.',
-        mlScore: compositeMlScore([{ weight: 1, value: Math.min(1, slope / 30) }]),
-        evidence: [`trend_slope=$${usd(slope)}/day`],
+        mlScore: compositeMlScore([
+          { weight: 1, value: Math.min(1, slope / 30) },
+          criticalityFactor(tier),
+        ]),
+        evidence: [`trend_slope=$${usd(slope)}/day`, `criticality=${tier}`],
       });
     }
   }
@@ -525,7 +592,14 @@ export function userValueRecs(
   if (mode === 'team') {
     const byPlan = new Map<
       string,
-      { planId: string; planName: string; provider: string; count: number; savings: number }
+      {
+        planId: string;
+        planName: string;
+        provider: string;
+        count: number;
+        savings: number;
+        criticalityTier: string;
+      }
     >();
     for (const u of inactiveWithSeat) {
       const key = u.planId ?? u.seatProvider ?? 'unknown';
@@ -535,15 +609,18 @@ export function userValueRecs(
         provider: u.seatProvider ?? 'unknown',
         count: 0,
         savings: 0,
+        criticalityTier: highestCriticalityTier(u.criticalityTier),
       };
       entry.count += 1;
       entry.savings += u.seatMonthlyCostUsd;
+      entry.criticalityTier = highestCriticalityTier(entry.criticalityTier, u.criticalityTier);
       byPlan.set(key, entry);
     }
     for (const group of byPlan.values()) {
       const mlScore = compositeMlScore([
         { weight: 0.5, value: Math.min(1, group.count / 10) },
         { weight: 0.5, value: Math.min(1, group.savings / 500) },
+        criticalityFactor(group.criticalityTier),
       ]);
       recs.push({
         id: `unused-platform-${group.planId}`,
@@ -558,6 +635,7 @@ export function userValueRecs(
           `plan=${group.planName}`,
           `provider=${group.provider}`,
           `inactive_seats=${group.count}`,
+          `criticality=${group.criticalityTier}`,
           UTILIZATION_CAVEAT,
         ],
         relatedEntity: { type: 'plan', id: group.planId },
@@ -565,7 +643,14 @@ export function userValueRecs(
     }
     const lowByPlan = new Map<
       string,
-      { planId: string; planName: string; provider: string; count: number; savings: number }
+      {
+        planId: string;
+        planName: string;
+        provider: string;
+        count: number;
+        savings: number;
+        criticalityTier: string;
+      }
     >();
     for (const u of lowUseWithSeat) {
       const key = u.planId ?? u.seatProvider ?? 'unknown';
@@ -575,15 +660,18 @@ export function userValueRecs(
         provider: u.seatProvider ?? 'unknown',
         count: 0,
         savings: 0,
+        criticalityTier: highestCriticalityTier(u.criticalityTier),
       };
       entry.count += 1;
       entry.savings += u.seatMonthlyCostUsd * 0.5;
+      entry.criticalityTier = highestCriticalityTier(entry.criticalityTier, u.criticalityTier);
       lowByPlan.set(key, entry);
     }
     for (const group of lowByPlan.values()) {
       const mlScore = compositeMlScore([
         { weight: 0.4, value: Math.min(1, group.count / 10) },
         { weight: 0.6, value: Math.min(1, group.savings / 300) },
+        criticalityFactor(group.criticalityTier),
       ]);
       recs.push({
         id: `low-use-platform-${group.planId}`,
@@ -599,6 +687,7 @@ export function userValueRecs(
           `provider=${group.provider}`,
           `low_use_seats=${group.count}`,
           `savings_assumption=50% of seat cost`,
+          `criticality=${group.criticalityTier}`,
           UTILIZATION_CAVEAT,
         ],
         relatedEntity: { type: 'plan', id: group.planId },
@@ -611,9 +700,11 @@ export function userValueRecs(
     (a, b) => b.seatMonthlyCostUsd - a.seatMonthlyCostUsd,
   );
   for (const u of sortedInactive.slice(0, MAX_INDIVIDUAL_UNUSED_RECS)) {
+    const tier = highestCriticalityTier(u.criticalityTier);
     const mlScore = compositeMlScore([
       { weight: 0.6, value: Math.min(1, u.seatMonthlyCostUsd / 100) },
       { weight: 0.4, value: 1 },
+      criticalityFactor(tier),
     ]);
     recs.push({
       id: `unused-platform-user-${u.userId}`,
@@ -628,6 +719,7 @@ export function userValueRecs(
         `user=${u.displayName}`,
         `seat_provider=${u.seatProvider ?? 'unknown'}`,
         `seat_monthly=$${usd(u.seatMonthlyCostUsd)}`,
+        `criticality=${tier}`,
         UTILIZATION_CAVEAT,
       ],
       relatedEntity: { type: 'user', id: u.userId },
@@ -640,9 +732,11 @@ export function userValueRecs(
     const callSlope = u.dailyCalls ? linearTrendSlope(u.dailyCalls) : 0;
     if (z <= 3 || callSlope > 0) continue;
 
+    const tier = highestCriticalityTier(u.criticalityTier);
     const mlScore = compositeMlScore([
       { weight: 0.6, value: Math.min(1, z / 5) },
       { weight: 0.4, value: callSlope <= 0 ? 1 : 0 },
+      criticalityFactor(tier),
     ]);
     recs.push({
       id: `cost-without-activity-${u.userId}`,
@@ -657,6 +751,7 @@ export function userValueRecs(
         `user=${u.displayName}`,
         `z_score=${z.toFixed(2)}`,
         `call_trend_slope=${callSlope.toFixed(2)}`,
+        `criticality=${tier}`,
         UTILIZATION_CAVEAT,
       ],
       relatedEntity: { type: 'user', id: u.userId },
