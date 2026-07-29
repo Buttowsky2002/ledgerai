@@ -208,9 +208,9 @@ describe('AnalyticsService.users', () => {
 
   beforeEach(() => {
     mockedLoadIdentityLookups.mockResolvedValue({
-      byId: new Map([[uuidAlice, { displayName: 'Alice Smith', email: 'alice@acme.test', teamName: 'Eng' }]]),
-      byEmail: new Map([['dev@company.com', { displayName: 'Dev User', email: 'dev@company.com', teamName: 'Eng' }]]),
-      byAlias: new Map([['cursor-user-99', { displayName: 'Cursor Dev', email: null, teamName: 'Eng' }]]),
+      byId: new Map([[uuidAlice, { displayName: 'Alice Smith', email: 'alice@acme.test', teamName: 'Eng', criticalityTier: 'standard' }]]),
+      byEmail: new Map([['dev@company.com', { displayName: 'Dev User', email: 'dev@company.com', teamName: 'Eng', criticalityTier: 'standard' }]]),
+      byAlias: new Map([['cursor-user-99', { displayName: 'Cursor Dev', email: null, teamName: 'Eng', criticalityTier: 'standard' }]]),
     });
   });
 
@@ -319,10 +319,10 @@ describe('AnalyticsService.users', () => {
     mockedLoadIdentityLookups.mockResolvedValueOnce({
       byId: new Map(),
       byEmail: new Map([
-        ['alice.chen@acme.test', { displayName: 'Alice Chen', email: 'alice.chen@acme.test', teamName: 'Eng' }],
+        ['alice.chen@acme.test', { displayName: 'Alice Chen', email: 'alice.chen@acme.test', teamName: 'Eng', criticalityTier: 'standard' }],
       ]),
       byAlias: new Map([
-        ['demo-user-0', { displayName: 'Alice Chen', email: 'alice.chen@acme.test', teamName: 'Eng' }],
+        ['demo-user-0', { displayName: 'Alice Chen', email: 'alice.chen@acme.test', teamName: 'Eng', criticalityTier: 'standard' }],
       ]),
     });
     const ch = { queryScoped } as unknown as ClickHouseService;
@@ -348,8 +348,8 @@ describe('AnalyticsService.users', () => {
 
     mockedLoadIdentityLookups.mockResolvedValueOnce({
       byId: new Map(),
-      byEmail: new Map([['dev@company.com', { displayName: 'Dev User', email: 'dev@company.com', teamName: 'Platform' }]]),
-      byAlias: new Map([['cursor-user-99', { displayName: 'Cursor Dev', email: 'dev@company.com', teamName: 'Platform' }]]),
+      byEmail: new Map([['dev@company.com', { displayName: 'Dev User', email: 'dev@company.com', teamName: 'Platform', criticalityTier: 'standard' }]]),
+      byAlias: new Map([['cursor-user-99', { displayName: 'Cursor Dev', email: 'dev@company.com', teamName: 'Platform', criticalityTier: 'standard' }]]),
     });
     const byEmail = await svc.users('2026-06-01', '2026-06-30', 'dev@company');
     expect(byEmail.users.some((u) => u.user_id === 'cursor-user-99')).toBe(true);
@@ -519,10 +519,10 @@ describe('AnalyticsService.users', () => {
     mockedLoadIdentityLookups.mockResolvedValue({
       byId: new Map(),
       byEmail: new Map([
-        ['dev@company.com', { displayName: 'Dev User', email: 'dev@company.com', teamName: 'Eng' }],
+        ['dev@company.com', { displayName: 'Dev User', email: 'dev@company.com', teamName: 'Eng', criticalityTier: 'standard' }],
         [
           'included-only@example.com',
-          { displayName: 'Included Only', email: 'included-only@example.com', teamName: 'Eng' },
+          { displayName: 'Included Only', email: 'included-only@example.com', teamName: 'Eng', criticalityTier: 'standard' },
         ],
       ]),
       byAlias: new Map(),
