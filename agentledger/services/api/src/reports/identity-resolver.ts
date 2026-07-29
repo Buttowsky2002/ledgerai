@@ -11,12 +11,18 @@ export function isEmailLike(value: string): boolean {
   return EMAIL_RE.test(value.trim());
 }
 
-type IdentityEntry = { displayName: string; email: string | null; teamName: string };
+type IdentityEntry = {
+  displayName: string;
+  email: string | null;
+  teamName: string;
+  criticalityTier: string;
+};
 
 export type UserDirectoryIdentity = {
   display_name: string;
   email: string | null;
   team: string;
+  criticalityTier: string;
   resolved: boolean;
 };
 
@@ -25,6 +31,7 @@ type VIdentityRow = {
   display_name: string | null;
   email: string | null;
   team_id: string | null;
+  criticality_tier: string | null;
 };
 
 export interface ResolvedUserSpend extends UserSpendRow {
@@ -103,6 +110,7 @@ export function resolveUserDirectoryIdentity(
       display_name: hit.displayName,
       email: hit.email,
       team: hit.teamName,
+      criticalityTier: hit.criticalityTier,
       resolved: true,
     };
   }
@@ -112,6 +120,7 @@ export function resolveUserDirectoryIdentity(
       display_name: resolveDisplayName(null, trimmed, trimmed),
       email: trimmed,
       team: '',
+      criticalityTier: 'standard',
       resolved: false,
     };
   }
@@ -119,6 +128,7 @@ export function resolveUserDirectoryIdentity(
     display_name: userId,
     email: null,
     team: '',
+    criticalityTier: 'standard',
     resolved: false,
   };
 }
@@ -217,12 +227,19 @@ export async function loadIdentityLookups(
 }> {
   return prisma.withTenant(tenantId, async (tx) => {
     const vRows = await tx.$queryRaw<VIdentityRow[]>`
-      SELECT identity_id::text, display_name, email, team_id::text
+      SELECT identity_id::text, display_name, email, team_id::text, criticality_tier
       FROM v_identities
       WHERE tenant_id = ${tenantId}::uuid AND identity_type = 'human'
     `;
     const identityRows = await tx.identity.findMany({
-      select: { userId: true, email: true, displayName: true, teamId: true, aliases: true },
+      select: {
+        userId: true,
+        email: true,
+        displayName: true,
+        teamId: true,
+        aliases: true,
+        criticalityTier: true,
+      },
     });
     const teamIds = [
       ...new Set([
@@ -245,12 +262,14 @@ export async function loadIdentityLookups(
       displayName: string | null,
       email: string | null,
       teamId: string | null,
+      criticalityTier: string | null,
       aliases: string[] = [],
     ) => {
       const entry: IdentityEntry = {
         displayName: resolveDisplayName(displayName, email, id),
         email: email?.trim() || null,
         teamName: teamId ? (teamNames.get(teamId) ?? '') : '',
+        criticalityTier: criticalityTier?.trim().toLowerCase() || 'standard',
       };
       if (UUID_RE.test(id)) byId.set(id, entry);
       if (email?.trim()) byEmail.set(normalizeKey(email), entry);
@@ -261,12 +280,12 @@ export async function loadIdentityLookups(
     };
 
     for (const row of vRows) {
-      register(row.identity_id, row.display_name, row.email, row.team_id);
+      register(row.identity_id, row.display_name, row.email, row.team_id, row.criticality_tier);
     }
 
     for (const row of identityRows) {
       const aliases = parseAliases(row.aliases);
-      register(row.userId, row.displayName, row.email, row.teamId, aliases);
+      register(row.userId, row.displayName, row.email, row.teamId, row.criticalityTier, aliases);
     }
 
     return { byId, byEmail, byAlias };

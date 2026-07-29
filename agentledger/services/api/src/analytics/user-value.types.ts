@@ -18,6 +18,7 @@ export interface UserUtilizationRow {
   planId?: string;
   planName?: string;
   seatProvider?: string;
+  criticalityTier?: string;
   /** Daily cost series for anomaly detection (individual mode only). */
   dailyCost?: number[];
   /** Daily call series for anomaly detection (individual mode only). */

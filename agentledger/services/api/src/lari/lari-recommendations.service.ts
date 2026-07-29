@@ -246,6 +246,7 @@ export class LariRecommendationsService {
           contract_monthly_cost: number | string;
           monthly_price_per_user: number | string;
           active_seats: number;
+          criticality_tier: string;
         }[]
       >`
         SELECT
@@ -255,11 +256,12 @@ export class LariRecommendationsService {
           p.seats_purchased,
           p.contract_monthly_cost,
           p.monthly_price_per_user,
+          p.criticality_tier,
           COALESCE(SUM(CASE WHEN s.active THEN s.seats_assigned ELSE 0 END), 0)::int AS active_seats
         FROM ai_subscription_plans p
         LEFT JOIN ai_seats s ON s.plan_id = p.plan_id
         GROUP BY p.plan_id, p.provider, p.plan_name, p.seats_purchased,
-                 p.contract_monthly_cost, p.monthly_price_per_user`,
+                 p.contract_monthly_cost, p.monthly_price_per_user, p.criticality_tier`,
     );
     return rows.map((p) => ({
       planId: String(p.plan_id),
@@ -269,6 +271,7 @@ export class LariRecommendationsService {
       contractMonthlyCost: n(p.contract_monthly_cost),
       monthlyPricePerUser: n(p.monthly_price_per_user),
       activeSeats: n(p.active_seats),
+      criticalityTier: String(p.criticality_tier || 'standard'),
     }));
   }
 

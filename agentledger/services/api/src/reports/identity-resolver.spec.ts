@@ -7,10 +7,16 @@ import {
   UNATTRIBUTED_LABEL,
 } from './identity-resolver';
 
-const entry = (displayName: string, teamName: string, email: string | null = null) => ({
+const entry = (
+  displayName: string,
+  teamName: string,
+  email: string | null = null,
+  criticalityTier = 'standard',
+) => ({
   displayName,
   email,
   teamName,
+  criticalityTier,
 });
 
 describe('identity-resolver', () => {
@@ -66,8 +72,21 @@ describe('identity-resolver', () => {
         display_name: 'Alice Smith',
         email: 'alice@acme.test',
         team: 'Eng',
+        criticalityTier: 'standard',
         resolved: true,
       });
+    });
+
+    it('carries business criticality through a resolved identity', () => {
+      const criticalById = new Map([
+        [uuidAlice, entry('Alice Smith', 'Eng', 'alice@acme.test', 'critical')],
+      ]);
+      expect(resolveUserDirectoryIdentity(uuidAlice, criticalById, byEmail, byAlias)).toMatchObject(
+        {
+          criticalityTier: 'critical',
+          resolved: true,
+        },
+      );
     });
 
     it('keeps raw handle for unlinked users', () => {
@@ -75,6 +94,7 @@ describe('identity-resolver', () => {
         display_name: 'orphan-handle',
         email: null,
         team: '',
+        criticalityTier: 'standard',
         resolved: false,
       });
     });

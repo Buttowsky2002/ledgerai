@@ -33,6 +33,15 @@ const CATEGORY_LABEL: Record<string, string> = {
 
 function RecommendationRow({ rec }: { rec: LariActionableRecommendation }) {
   const meta = PRIORITY_META[rec.priority];
+  const criticality = rec.evidence.find((item) => item.startsWith('criticality='))?.slice('criticality='.length);
+  const criticalityTone: BadgeTone =
+    criticality === 'critical'
+      ? 'neg'
+      : criticality === 'high'
+        ? 'warn'
+        : criticality === 'standard'
+          ? 'info'
+          : 'neutral';
   return (
     <div className="rounded-lg border border-edge bg-panel/50 p-4">
       <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -52,6 +61,12 @@ function RecommendationRow({ rec }: { rec: LariActionableRecommendation }) {
             <span>Impact {usd(rec.estimatedImpactUsd)}</span>
           )}
         </p>
+      )}
+      {rec.relatedEntity && criticality && (
+        <div className="mt-2 flex items-center gap-2 text-xs text-muted">
+          <span>{rec.relatedEntity.id}</span>
+          <Badge tone={criticalityTone}>{criticality} criticality</Badge>
+        </div>
       )}
       {rec.relatedEntity?.type === 'agent' && (
         <Link
