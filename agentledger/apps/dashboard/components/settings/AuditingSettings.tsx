@@ -1,17 +1,9 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import type { AuditRow } from '../../lib/settings-types';
 
-export type AuditRow = {
-  id: string;
-  at: string;
-  actor: string;
-  actorEmail: string | null;
-  actorDisplayName: string | null;
-  action: string;
-  object: string;
-  detail: Record<string, unknown>;
-};
+export type { AuditRow };
 
 const ACTION_FILTERS = [
   { value: '', label: 'All events' },
