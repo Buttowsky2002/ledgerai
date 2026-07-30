@@ -22,6 +22,13 @@ import {
 
 import type { ColumnMappingByName } from './column-mapping';
 
+import {
+  providerModelConflictMessage,
+  type ProviderModelConflict,
+} from './provider-model-guard';
+
+import { shouldSurfaceLegacyImportAudit } from './legacy-import-list';
+
 
 
 export interface PortalFileResult {
@@ -130,6 +137,9 @@ export interface PortalPreviewResult {
   mapping: ColumnMappingByName | null;
   provider: string | null;
   requiresProvider: boolean;
+  /** Models contradicting the stamped provider — non-empty blocks the import. */
+  providerConflicts: ProviderModelConflict[];
+  providerConflictMessage?: string;
   importable: boolean;
 
   parsed: number;
@@ -209,8 +219,13 @@ export class PortalImportService {
       mapping: parsed.mappingUsed,
       provider: parsed.provider,
       requiresProvider: parsed.requiresProvider,
+      providerConflicts: parsed.providerConflicts,
+      providerConflictMessage:
+        parsed.providerConflicts.length > 0
+          ? providerModelConflictMessage(parsed.provider ?? 'unknown', parsed.providerConflicts)
+          : undefined,
 
-      importable: parsed.rows.length > 0,
+      importable: parsed.rows.length > 0 && parsed.providerConflicts.length === 0,
 
       parsed: parsed.stats.parsed,
 
@@ -348,6 +363,40 @@ export class PortalImportService {
           mappingUsed: parsed.mappingUsed,
           ok: false,
           error: 'select a billing provider for this file',
+        });
+        continue;
+      }
+
+      // A file whose models contradict the stamped provider is rejected rather
+      // than imported: the reconciler keys on provider, so mislabelled spend
+      // can never be collapsed against the real connector's rows.
+      if (parsed.providerConflicts.length > 0) {
+        this.logger.warn(
+          {
+            event: 'portal_import_provider_mismatch',
+            tenantId,
+            fileName: file.name,
+            provider: parsed.provider,
+            conflicts: parsed.providerConflicts,
+          },
+          'portal billing CSV rejected — model vocabulary contradicts selected provider',
+        );
+        fileResults.push({
+          fileName: file.name,
+          parsed: 0,
+          skipped: parsed.stats.skipped,
+          skippedZeroCost: parsed.stats.skippedZeroCost,
+          imported: 0,
+          duplicateSkipped: 0,
+          usersDetected: 0,
+          totalCostUsd: 0,
+          dateRange: { from: parsed.stats.minDay, to: parsed.stats.maxDay },
+          parseErrors: parsed.errors,
+          preview: parsed.preview,
+          headers: parsed.headers,
+          mappingUsed: parsed.mappingUsed,
+          ok: false,
+          error: providerModelConflictMessage(parsed.provider ?? 'unknown', parsed.providerConflicts),
         });
         continue;
       }
@@ -689,7 +738,14 @@ export class PortalImportService {
         take: cap,
       }),
     );
-    const trackedIds = new Set(tracked.map((r) => r.importRunId));
+
+    // Include deleted run ids so their audit-log siblings do not resurrect as
+    // "Legacy" ghosts after a successful soft-delete (the bug that left the
+    // Anthropic CSV visible in Import History after spend was already purged).
+    const knownRunIds = await this.prisma.withTenant(tenantId, (tx) =>
+      tx.portalImportRun.findMany({ select: { importRunId: true } }),
+    );
+    const knownRunIdSet = new Set(knownRunIds.map((r) => r.importRunId));
 
     const audits = await this.prisma.withTenant(tenantId, (tx) =>
       tx.auditLog.findMany({
@@ -697,6 +753,19 @@ export class PortalImportService {
         orderBy: { at: 'desc' },
         take: cap,
       }),
+    );
+
+    // Legacy window purges write delete audits keyed portal-import:audit:<id>.
+    // Hide those import audits so Delete actually clears Import History.
+    const deletedLegacyAudits = await this.prisma.withTenant(tenantId, (tx) =>
+      tx.auditLog.findMany({
+        where: { action: 'delete', object: { startsWith: 'portal-import:audit:' } },
+        select: { object: true },
+        take: 500,
+      }),
+    );
+    const purgedAuditIds = new Set(
+      deletedLegacyAudits.map((a) => a.object.slice('portal-import:audit:'.length)),
     );
 
     const runs: PortalImportRunItem[] = tracked.map((r) => ({
@@ -720,7 +789,16 @@ export class PortalImportService {
     for (const audit of audits) {
       const detail = (audit.detail ?? {}) as Record<string, unknown>;
       const importRunId = typeof detail.importRunId === 'string' ? detail.importRunId : null;
-      if (importRunId && trackedIds.has(importRunId)) continue;
+      if (
+        !shouldSurfaceLegacyImportAudit({
+          auditId: audit.id,
+          importRunId,
+          knownRunIds: knownRunIdSet,
+          purgedAuditIds,
+        })
+      ) {
+        continue;
+      }
 
       const providers = Array.isArray(detail.providers)
         ? detail.providers.map((p) => String(p))

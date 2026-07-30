@@ -13,13 +13,25 @@ export const VALIDATION_PIPE_OPTIONS: ValidationPipeOptions = {
   transformOptions: { enableImplicitConversion: true },
 };
 
+/** Always-allowed dashboard hosts (in addition to BADGERIQ_DASHBOARD_URL). */
+export const EXTRA_CORS_ORIGINS = [
+  'https://badgeriq.studiodesigner.com',
+  'https://d1e2lzkoizqhk6.cloudfront.net',
+] as const;
+
 /**
- * Browser CORS: dashboard origin only (never `*`), with credentials for
- * cookie-based session auth. Default matches apps/dashboard (`next dev -p 3000`).
+ * Browser CORS: dashboard origin whitelist only (never `*`), with credentials
+ * for cookie-based session auth. Primary origin is BADGERIQ_DASHBOARD_URL
+ * (default `http://localhost:3000`); EXTRA_CORS_ORIGINS are always included.
  */
+export function allowedCorsOrigins(): string[] {
+  const primary = env('BADGERIQ_DASHBOARD_URL') ?? 'http://localhost:3000';
+  return [...new Set([primary, ...EXTRA_CORS_ORIGINS])];
+}
+
 export function corsOptions(): CorsOptions {
   return {
-    origin: env('BADGERIQ_DASHBOARD_URL') ?? 'http://localhost:3000',
+    origin: allowedCorsOrigins(),
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Authorization', 'Content-Type', 'x-tenant-id'],
     credentials: true,
