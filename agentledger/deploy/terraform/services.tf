@@ -229,6 +229,10 @@ module "collector" {
   environment = {
     AGENTLEDGER_KAFKA_BROKERS = "redpanda.badgeriq.local:9092"
     AGENTLEDGER_KAFKA_TOPIC   = "events.raw"
+    # Absolute path baked into the collector image (see services/collector/Dockerfile).
+    # Without this (or the image ENV), the process defaults to a local-dev relative
+    # path and exits 1 with "schema load failed".
+    AGENTLEDGER_EVENT_SCHEMA  = "/etc/agentledger/schemas/events/llm_call.schema.json"
   }
 
   secrets = {}

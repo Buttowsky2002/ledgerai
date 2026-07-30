@@ -97,7 +97,7 @@ minimal envelope check pending their own schemas; unknown kinds are rejected.
 | `AGENTLEDGER_COLLECTOR_ADDR`  | `:8090`                                          | HTTP listen address.                 |
 | `AGENTLEDGER_KAFKA_BROKERS`   | `localhost:19092`                                | Comma-separated broker list.         |
 | `AGENTLEDGER_KAFKA_TOPIC`     | `events.raw`                                     | Target topic.                        |
-| `AGENTLEDGER_EVENT_SCHEMA`    | `../../schemas/events/llm_call.schema.json`      | Path to the canonical schema.        |
+| `AGENTLEDGER_EVENT_SCHEMA`    | `../../schemas/events/llm_call.schema.json` (local); container image sets `/etc/agentledger/schemas/events/llm_call.schema.json` | Path to the canonical schema. |
 | `AGENTLEDGER_MAX_BODY_BYTES`  | `4194304` (4 MiB)                                | Request body size limit.             |
 | `AGENTLEDGER_MAX_BATCH`       | `1000`                                           | Max events per request.              |
 | `AGENTLEDGER_MAX_INFLIGHT`    | `8192`                                           | Backpressure gate (in-flight records).|

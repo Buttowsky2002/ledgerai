@@ -10,18 +10,26 @@ import (
 // has no static config file: it is a stateless ingest service, so everything
 // comes from the environment (12-factor; secrets are never read from files).
 type Config struct {
-	ListenAddr   string   // AGENTLEDGER_COLLECTOR_ADDR (default :8090)
-	Brokers      []string // AGENTLEDGER_KAFKA_BROKERS (csv, default localhost:19092)
-	Topic        string   // AGENTLEDGER_KAFKA_TOPIC (default events.raw)
-	SchemaPath   string   // AGENTLEDGER_EVENT_SCHEMA (default ../../schemas/events/llm_call.schema.json)
-	MaxBodyBytes int64    // AGENTLEDGER_MAX_BODY_BYTES (default 4 MiB)
-	MaxBatch     int      // AGENTLEDGER_MAX_BATCH (max events per request, default 1000)
-	MaxInflight  int      // AGENTLEDGER_MAX_INFLIGHT (backpressure gate, default 8192)
+	ListenAddr string   // AGENTLEDGER_COLLECTOR_ADDR (default :8090)
+	Brokers    []string // AGENTLEDGER_KAFKA_BROKERS (csv, default localhost:19092)
+	Topic      string   // AGENTLEDGER_KAFKA_TOPIC (default events.raw)
+	// SchemaPath is AGENTLEDGER_EVENT_SCHEMA. Local default is relative to
+	// services/collector for `go run`; the Docker image and ECS set the
+	// absolute baked-in path ContainerEventSchemaPath.
+	SchemaPath   string
+	MaxBodyBytes int64 // AGENTLEDGER_MAX_BODY_BYTES (default 4 MiB)
+	MaxBatch     int   // AGENTLEDGER_MAX_BATCH (max events per request, default 1000)
+	MaxInflight  int   // AGENTLEDGER_MAX_INFLIGHT (backpressure gate, default 8192)
 
 	// OTel GenAI ingestion (gateway-agnostic source, ARCHITECTURE_PIVOT.md P1).
 	OtelTenantAttr    string // AGENTLEDGER_OTEL_TENANT_ATTR (resource/span attr carrying tenant; default agentledger.tenant_id)
 	OtelDefaultTenant string // AGENTLEDGER_OTEL_DEFAULT_TENANT (fallback when no attr/header; empty = require explicit tenant)
 }
+
+// ContainerEventSchemaPath is where the release image bakes
+// schemas/events/llm_call.schema.json. Keep in sync with the collector
+// Dockerfile ENV and the ECS AGENTLEDGER_EVENT_SCHEMA value.
+const ContainerEventSchemaPath = "/etc/agentledger/schemas/events/llm_call.schema.json"
 
 // LoadConfig reads the collector configuration from environment variables,
 // applying defaults for any unset values.
