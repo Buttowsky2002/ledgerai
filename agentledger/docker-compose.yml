@@ -60,14 +60,16 @@ services:
       retries: 10
 
   collector:
-    build: ./services/collector
+    build:
+      # Context must be agentledger/ so the Dockerfile can COPY schemas/.
+      context: .
+      dockerfile: services/collector/Dockerfile
     environment:
       AGENTLEDGER_KAFKA_BROKERS: redpanda:9092
       AGENTLEDGER_KAFKA_TOPIC: events.raw
+      # Image already bakes the schema; env keeps compose/helm/ECS aligned.
       AGENTLEDGER_EVENT_SCHEMA: /etc/agentledger/schemas/events/llm_call.schema.json
     ports: ["8090:8090"]
-    volumes:
-      - ./schemas:/etc/agentledger/schemas:ro
     depends_on:
       redpanda: { condition: service_started }
 

@@ -31,7 +31,8 @@ jobs:
             dockerfile: agentledger/apps/dashboard/Dockerfile
             build_args: ""
           - name: collector
-            context: agentledger/services/collector
+            # agentledger/ context so Dockerfile can COPY schemas/events
+            context: agentledger
             dockerfile: agentledger/services/collector/Dockerfile
             build_args: ""
           - name: ch-insert
