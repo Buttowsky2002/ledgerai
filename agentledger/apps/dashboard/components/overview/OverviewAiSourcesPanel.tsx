@@ -6,6 +6,7 @@ import { GitHubCopilotDetail } from '@/components/copilot/GitHubCopilotDetail';
 import { CursorPlatformDetail, type CursorSpendSummary } from '@/components/overview/CursorPlatformDetail';
 import { Card, DataTable, Stat, num, usd } from '@/components/ui';
 import { BillingTypeBadge } from '@/components/SpendBillingCell';
+import { platformBillingSplit } from '@/lib/platform-billing';
 
 export type PlatformSpendRow = {
   platform: string;
@@ -29,21 +30,36 @@ function isCursorPlatform(platform: string): boolean {
   return platform.toLowerCase() === 'cursor';
 }
 
-function platformBillingKind(platform: string): 'metered' | 'per_seat' | 'mixed' {
-  if (isCopilotPlatform(platform)) return 'per_seat';
-  if (isCursorPlatform(platform)) return 'mixed';
-  return 'metered';
+/**
+ * Billing split for one platform row, from data only. Cursor's own summary
+ * already resolves seat cost (fixed_costs or subscription plan) and
+ * subscription-included usage value, so it wins over the vendor rollup.
+ */
+function splitForPlatform(
+  platform: string,
+  costUsd: number,
+  seatUsdByVendor?: Record<string, number>,
+  cursorSpend?: CursorSpendSummary | null,
+) {
+  if (isCursorPlatform(platform) && cursorSpend) {
+    return platformBillingSplit(
+      platform,
+      costUsd,
+      { cursor: Number(cursorSpend.seatLicenseUsd ?? 0) },
+      Number(cursorSpend.usageValueUsd ?? 0),
+    );
+  }
+  return platformBillingSplit(platform, costUsd, seatUsdByVendor);
 }
 
-function PlatformBillingBadge({ platform }: { platform: string }) {
-  const kind = platformBillingKind(platform);
-  if (kind === 'mixed') {
-    return <BillingTypeBadge meteredUsd={1} seatUsd={1} />;
-  }
-  if (kind === 'per_seat') {
-    return <BillingTypeBadge meteredUsd={0} seatUsd={1} />;
-  }
-  return <BillingTypeBadge meteredUsd={1} seatUsd={0} />;
+function PlatformBillingBadge({ split }: { split: ReturnType<typeof platformBillingSplit> }) {
+  return (
+    <BillingTypeBadge
+      meteredUsd={split.meteredUsd}
+      seatUsd={split.seatUsd}
+      cursorIncludedUsd={split.cursorIncludedUsd}
+    />
+  );
 }
 
 function modelsForPlatform(platform: string, modelMix: ModelMixRow[]): ModelMixRow[] {
@@ -113,11 +129,15 @@ function SourcePicker({
   totalSpend,
   selected,
   onSelect,
+  seatUsdByVendor,
+  cursorSpend,
 }: {
   platforms: PlatformSpendRow[];
   totalSpend: number;
   selected: string | null;
   onSelect: (platform: string) => void;
+  seatUsdByVendor?: Record<string, number>;
+  cursorSpend?: CursorSpendSummary | null;
 }) {
   if (platforms.length === 0) {
     return (
@@ -146,7 +166,9 @@ function SourcePicker({
             <div className="flex items-center justify-between gap-3">
               <span className="inline-flex items-center gap-2 text-sm font-medium text-gray-100">
                 {row.platform}
-                <PlatformBillingBadge platform={row.platform} />
+                <PlatformBillingBadge
+                  split={splitForPlatform(row.platform, row.cost_usd, seatUsdByVendor, cursorSpend)}
+                />
               </span>
               <span className="num text-sm text-gray-200">{usd(row.cost_usd)}</span>
             </div>
@@ -175,6 +197,7 @@ export function OverviewAiSourcesPanel({
   initialSource,
   cursorSpend,
   cursorSpendError = false,
+  seatUsdByVendor,
 }: {
   platforms: PlatformSpendRow[];
   modelMix: ModelMixRow[];
@@ -183,6 +206,8 @@ export function OverviewAiSourcesPanel({
   initialSource?: string;
   cursorSpend?: CursorSpendSummary | null;
   cursorSpendError?: boolean;
+  /** `fixed_costs` totals per vendor for the selected range (seat / subscription). */
+  seatUsdByVendor?: Record<string, number>;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -225,6 +250,8 @@ export function OverviewAiSourcesPanel({
           totalSpend={totalSpend}
           selected={selected}
           onSelect={selectPlatform}
+          seatUsdByVendor={seatUsdByVendor}
+          cursorSpend={cursorSpend}
         />
       </Card>
 

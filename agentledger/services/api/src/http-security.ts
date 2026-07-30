@@ -16,6 +16,7 @@ export const VALIDATION_PIPE_OPTIONS: ValidationPipeOptions = {
 /** Always-allowed dashboard hosts (in addition to BADGERIQ_DASHBOARD_URL). */
 export const EXTRA_CORS_ORIGINS = [
   'https://badgeriq.studiodesigner.com',
+  'https://d1e2lzkoizqhk6.cloudfront.net',
 ] as const;
 
 /**

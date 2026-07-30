@@ -31,6 +31,7 @@ describe('http-security', () => {
     expect(opts.origin).toEqual([
       'http://localhost:3000',
       'https://badgeriq.studiodesigner.com',
+      'https://d1e2lzkoizqhk6.cloudfront.net',
     ]);
     expect(opts.origin).not.toBe('*');
     expect(opts.credentials).toBe(true);
@@ -50,10 +51,14 @@ describe('http-security', () => {
     ]);
     expect(corsOptions().origin).toEqual(allowedCorsOrigins());
     expect(EXTRA_CORS_ORIGINS).toContain('https://badgeriq.studiodesigner.com');
+    expect(EXTRA_CORS_ORIGINS).toContain('https://d1e2lzkoizqhk6.cloudfront.net');
   });
 
   it('CORS whitelist dedupes when primary is already an extra host', () => {
     process.env.BADGERIQ_DASHBOARD_URL = 'https://badgeriq.studiodesigner.com';
-    expect(allowedCorsOrigins()).toEqual(['https://badgeriq.studiodesigner.com']);
+    expect(allowedCorsOrigins()).toEqual([
+      'https://badgeriq.studiodesigner.com',
+      'https://d1e2lzkoizqhk6.cloudfront.net',
+    ]);
   });
 });

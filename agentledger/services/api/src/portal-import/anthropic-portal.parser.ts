@@ -10,6 +10,7 @@ import {
 import { detectPortalCsvFormat, type FormatDetection } from './csv-format';
 import { platformDisplayName, resolvePortalProvider } from './portal-providers';
 import { detectDelimiter, parseCsv, stripBom } from './csv-parse';
+import { detectProviderModelConflicts, type ProviderModelConflict } from './provider-model-guard';
 
 export const PORTAL_IMPORT_SOURCE = 'portal_import';
 
@@ -23,6 +24,11 @@ export interface PortalParseResult {
   /** Resolved billing provider for imported rows (null when user must pick). */
   provider: string | null;
   requiresProvider: boolean;
+  /**
+   * Models in the file that contradict the stamped provider. Non-empty means the
+   * file was labelled as the wrong vendor and must not be imported.
+   */
+  providerConflicts: ProviderModelConflict[];
   rows: Record<string, unknown>[];
   errors: { line: number; message: string }[];
   preview: Record<string, unknown>[];
@@ -146,6 +152,7 @@ function parseGrid(
   const errors: { line: number; message: string }[] = [];
   const rows: Record<string, unknown>[] = [];
   const users = new Set<string>();
+  const models = new Set<string>();
   let minDay: string | null = null;
   let maxDay: string | null = null;
   let totalCostUsd = 0;
@@ -189,6 +196,7 @@ function parseGrid(
     const model = modelRaw || product || 'unknown';
     const userLabel = userFields.label;
 
+    models.add(model);
     if (userLabel !== 'Unassigned') users.add(userLabel);
     totalCostUsd += cost;
     if (!minDay || day < minDay) minDay = day;
@@ -238,6 +246,7 @@ function parseGrid(
   return {
     rows,
     errors,
+    providerConflicts: detectProviderModelConflicts(provider, models),
     preview: rows.slice(0, 8),
     stats: {
       parsed: rows.length,
@@ -285,6 +294,7 @@ export function parseAnthropicPortalCsv(
       provider: null,
       requiresProvider: false,
       rows: [],
+      providerConflicts: [],
       errors: [{ line: 1, message: 'CSV is empty' }],
       preview: [],
       stats: emptyStats,
@@ -314,6 +324,7 @@ export function parseAnthropicPortalCsv(
       provider,
       requiresProvider: false,
       rows: [],
+      providerConflicts: [],
       errors: [{ line: headerRow + 1, message: format.hint }],
       preview: [],
       stats: emptyStats,
@@ -335,6 +346,7 @@ export function parseAnthropicPortalCsv(
       provider,
       requiresProvider,
       rows: [],
+      providerConflicts: [],
       errors,
       preview: [],
       stats: emptyStats,
@@ -353,6 +365,7 @@ export function parseAnthropicPortalCsv(
       provider,
       requiresProvider,
       rows: [],
+      providerConflicts: [],
       errors: [{ line: headerRow + 1, message: error ?? 'invalid column mapping' }],
       preview: [],
       stats: emptyStats,
@@ -370,6 +383,7 @@ export function parseAnthropicPortalCsv(
       provider: null,
       requiresProvider: true,
       rows: [],
+      providerConflicts: [],
       errors: [{ line: headerRow + 1, message: 'select a billing provider for this file' }],
       preview: [],
       stats: emptyStats,

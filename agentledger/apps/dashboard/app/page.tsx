@@ -14,6 +14,7 @@ import { apiClient, fetchData, proxyApi } from '../lib/api';
 import { combinedAiCost } from '../lib/combined-ai-cost';
 import { fetchDataBounds } from '../lib/data-bounds';
 import { env } from '../lib/env';
+import { seatUsdByVendor } from '../lib/platform-billing';
 import { resolvePageRange } from '../lib/resolve-range';
 
 export const dynamic = 'force-dynamic';
@@ -132,7 +133,9 @@ export default async function OverviewPage({
     total_cost_of_ai_usd: number | string;
   };
 
-  const [spend, economics, costByUser, platformSpend, modelMix, totalCostRows] = await Promise.all([
+  type FixedCostVendorRow = { vendor?: string | null; cost_usd?: number | string | null };
+
+  const [spend, economics, costByUser, platformSpend, modelMix, totalCostRows, fixedCostRows] = await Promise.all([
     fetchData(
       api.GET('/v1/analytics/spend', { params: { query: { from, to } } }),
       [],
@@ -158,7 +161,16 @@ export default async function OverviewPage({
       const res = await proxyApi(`/v1/fixed-costs/total-cost-of-ai?${qs}`);
       return res.ok && Array.isArray(res.data) ? (res.data as TotalCostRow[]) : [];
     })(),
+    (async () => {
+      const qs = new URLSearchParams({ from, to }).toString();
+      const res = await proxyApi(`/v1/fixed-costs?${qs}`);
+      return res.ok && Array.isArray(res.data) ? (res.data as FixedCostVendorRow[]) : [];
+    })(),
   ]);
+
+  // Seat / subscription overhead per vendor — lets the source list badge each
+  // platform from real billing data instead of a per-provider assumption.
+  const seatUsdByVendorMap = seatUsdByVendor(fixedCostRows);
 
   const platforms = platformSpend
     .map((r) => ({
@@ -292,6 +304,7 @@ export default async function OverviewPage({
           from={from}
           to={to}
           initialSource={source}
+          seatUsdByVendor={seatUsdByVendorMap}
           cursorSpend={hasCursorPlatform ? cursorSpend : undefined}
           cursorSpendError={cursorSpendError}
         />
