@@ -35,8 +35,16 @@ function emptyCursorAnalytics() {
     getUserBilledSpend: jest.fn(async () => []),
     getUserBilledBreakdown: jest.fn(async () => []),
     getUserDailyBilledSpend: jest.fn(async () => []),
+    getUserDailyActivity: jest.fn(async () => []),
     getUserActivity: jest.fn(async () => []),
     getUserActivityBreakdown: jest.fn(async () => []),
+  };
+}
+
+function emptyCursorProductivity() {
+  return {
+    getProductivitySummary: jest.fn(async () => null),
+    getCommitAttributionSummary: jest.fn(async () => null),
   };
 }
 
@@ -59,7 +67,18 @@ function harness(agentIds: string[]) {
   const copilotAnalytics = {
     getSpendSummary: jest.fn(async () => null),
   } as unknown as CopilotAnalyticsService;
-  return { svc: new AnalyticsService(ch, prisma, lari, copilotAnalytics, emptyCopilotMemberSpend(), emptyCursorAnalytics() as never), computeForAgent };
+  return {
+    svc: new AnalyticsService(
+      ch,
+      prisma,
+      lari,
+      copilotAnalytics,
+      emptyCopilotMemberSpend(),
+      emptyCursorAnalytics() as never,
+      emptyCursorProductivity() as never,
+    ),
+    computeForAgent,
+  };
 }
 
 describe('AnalyticsService.meteredSpend', () => {
@@ -97,6 +116,7 @@ describe('AnalyticsService.meteredSpend', () => {
       copilotAnalytics,
       emptyCopilotMemberSpend(),
       cursorAnalytics as never,
+      emptyCursorProductivity() as never,
     );
 
     const rows = await svc.spend('2026-07-01', '2026-07-02');
@@ -127,6 +147,7 @@ describe('AnalyticsService.meteredSpend', () => {
       { getSpendSummary: jest.fn(async () => null) } as unknown as CopilotAnalyticsService,
       emptyCopilotMemberSpend(),
       cursorAnalytics as never,
+      emptyCursorProductivity() as never,
     );
 
     const rows = await svc.platformSpend('2026-07-01', '2026-07-06');
@@ -192,7 +213,7 @@ describe('AnalyticsService.sourceReconciliation', () => {
     const ch = { queryScoped } as unknown as ClickHouseService;
     const svc = new AnalyticsService(ch, {} as PrismaService, {} as LariService, {
       getSpendSummary: jest.fn(async () => null),
-    } as unknown as CopilotAnalyticsService, emptyCopilotMemberSpend(), emptyCursorAnalytics() as never);
+    } as unknown as CopilotAnalyticsService, emptyCopilotMemberSpend(), emptyCursorAnalytics() as never, emptyCursorProductivity() as never);
     const result = await svc.sourceReconciliation('2026-03-01', '2026-04-30');
     expect(result.summary.portalTotalUsd).toBeCloseTo(17.5);
     expect(result.summary.apiTotalUsd).toBeCloseTo(13);
@@ -270,7 +291,7 @@ describe('AnalyticsService.users', () => {
     const ch = { queryScoped } as unknown as ClickHouseService;
     const svc = new AnalyticsService(ch, {} as PrismaService, {} as LariService, {
       getSpendSummary: jest.fn(async () => null),
-    } as unknown as CopilotAnalyticsService, emptyCopilotMemberSpend(), emptyCursorAnalytics() as never);
+    } as unknown as CopilotAnalyticsService, emptyCopilotMemberSpend(), emptyCursorAnalytics() as never, emptyCursorProductivity() as never);
     return { svc, queryScoped };
   }
 
@@ -328,7 +349,7 @@ describe('AnalyticsService.users', () => {
     const ch = { queryScoped } as unknown as ClickHouseService;
     const svc = new AnalyticsService(ch, {} as PrismaService, {} as LariService, {
       getSpendSummary: jest.fn(async () => null),
-    } as unknown as CopilotAnalyticsService, emptyCopilotMemberSpend(), emptyCursorAnalytics() as never);
+    } as unknown as CopilotAnalyticsService, emptyCopilotMemberSpend(), emptyCursorAnalytics() as never, emptyCursorProductivity() as never);
     const result = await svc.users('2026-06-01', '2026-06-30');
     expect(result.users).toHaveLength(1);
     expect(result.users[0]).toMatchObject({
@@ -388,6 +409,7 @@ describe('AnalyticsService.users', () => {
       { getSpendSummary: jest.fn(async () => null) } as unknown as CopilotAnalyticsService,
       { getMemberSpend } as unknown as CopilotMemberSpendService,
       emptyCursorAnalytics() as never,
+      emptyCursorProductivity() as never,
     );
 
     const result = await svc.users('2026-06-01', '2026-06-30');
@@ -435,6 +457,7 @@ describe('AnalyticsService.users', () => {
       { getSpendSummary: jest.fn(async () => null) } as unknown as CopilotAnalyticsService,
       emptyCopilotMemberSpend(),
       emptyCursorAnalytics() as never,
+      emptyCursorProductivity() as never,
     );
 
     const result = await svc.users('2026-07-01', '2026-07-06');
@@ -514,6 +537,7 @@ describe('AnalyticsService.users', () => {
       { getSpendSummary: jest.fn(async () => null) } as unknown as CopilotAnalyticsService,
       emptyCopilotMemberSpend(),
       cursorAnalytics as never,
+      emptyCursorProductivity() as never,
     );
 
     mockedLoadIdentityLookups.mockResolvedValue({
@@ -587,6 +611,7 @@ describe('AnalyticsService.cursorSpend', () => {
       { getSpendSummary: jest.fn(async () => null) } as unknown as CopilotAnalyticsService,
       emptyCopilotMemberSpend(),
       cursorAnalytics,
+      emptyCursorProductivity() as never,
     );
 
     const result = await svc.cursorSpend('2026-06-01', '2026-06-30');
@@ -614,6 +639,7 @@ describe('AnalyticsService.cursorSpend', () => {
       { getSpendSummary: jest.fn(async () => null) } as unknown as CopilotAnalyticsService,
       emptyCopilotMemberSpend(),
       cursorAnalytics,
+      emptyCursorProductivity() as never,
     );
 
     const result = await svc.cursorSpend('2026-06-01', '2026-06-30');

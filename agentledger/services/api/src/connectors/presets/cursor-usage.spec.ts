@@ -24,8 +24,8 @@ describe('cursor-usage preset', () => {
     expect(preset.capabilities?.supportsUsers).toBe(true);
   });
 
-  it('includes companion fetch for daily code activity', () => {
-    expect(preset.companionFetches).toHaveLength(1);
+  it('includes companion fetches for daily activity and Enterprise commits', () => {
+    expect(preset.companionFetches).toHaveLength(2);
     const companion = preset.companionFetches![0];
     expect(companion.id).toBe('codingActivity');
     expect(companion.destinationRecordType).toBe('coding_activity_record');
@@ -36,6 +36,13 @@ describe('cursor-usage preset', () => {
       (m) => m.type === 'constant' && m.target === 'tool_name',
     );
     expect(toolName && toolName.type === 'constant' ? toolName.value : undefined).toBe('cursor-usage');
+
+    const commits = preset.companionFetches![1];
+    expect(commits.id).toBe('commitAttribution');
+    expect(commits.destinationRecordType).toBe('coding_commit_attribution_record');
+    expect(commits.optionalEnterprise).toBe(true);
+    expect(commits.endpoint.path).toBe('/analytics/ai-code/commits');
+    expect(commits.endpoint.method).toBe('GET');
   });
 
   it('maps daily usage rows to coding activity metrics', () => {
@@ -56,7 +63,10 @@ describe('cursor-usage preset', () => {
     expect(errors).toEqual([]);
     expect(metrics.user_email).toBe('developer@company.com');
     expect(metrics.lines_accepted).toBe(150);
-    expect(metrics.lines_committed).toBe(200);
+    expect(metrics.lines_added).toBe(200);
+    expect(metrics.lines_deleted).toBe(50);
+    // Editor activity must not be aliased as committed LOC.
+    expect(metrics.lines_committed).toBeUndefined();
     expect(metrics.tabs_accepted).toBe(42);
     expect(metrics.composer_requests).toBe(10);
     expect(metrics.chat_requests).toBe(25);
@@ -109,7 +119,27 @@ describe('cursor-usage preset', () => {
     expect(metrics.user_id).toBe('developer@company.com');
     expect(metrics.cost_usd).toBeCloseTo(0.2018232, 5);
     expect(metrics.input_tokens).toBe(126);
+    expect(metrics.output_tokens).toBe(450);
     expect(metrics.provider).toBe('cursor');
+  });
+
+  it('maps cache read/write tokens from tokenUsage', () => {
+    const raw = {
+      timestamp: '1750979225854',
+      userEmail: 'developer@company.com',
+      model: 'claude-4.5-sonnet',
+      kind: 'Usage-based',
+      chargedCents: 20,
+      tokenUsage: {
+        inputTokens: 126,
+        outputTokens: 450,
+        cacheWriteTokens: 6112,
+        cacheReadTokens: 11964,
+      },
+    };
+    const { metrics } = mapFields(raw, preset.fieldMappings);
+    expect(metrics.cache_write_tokens).toBe(6112);
+    expect(metrics.cache_read_tokens).toBe(11964);
   });
 
   it('splits included usage value from billed overage after finalize', () => {
@@ -140,7 +170,45 @@ describe('cursor-usage preset', () => {
     const { record } = finalizeConnectorRecord(rec, preset, [], []);
     expect(record.metrics.usage_value_usd).toBeCloseTo(0.08, 4);
     expect(record.metrics.cost_usd).toBe(0);
+    expect(record.metrics.metered_cost_usd).toBe(0);
     expect(record.metrics.operation_name).toBe('cursor:included');
+  });
+
+  it('keeps zero-cent Included events (call volume) through validate + finalize', () => {
+    const raw = {
+      timestamp: '1750978339901',
+      userEmail: 'developer@company.com',
+      model: 'claude-4-sonnet',
+      kind: 'Included',
+      isChargeable: false,
+      chargedCents: 0,
+      tokenUsage: { inputTokens: 10, outputTokens: 5 },
+    };
+    const { metrics } = mapFields(raw, preset.fieldMappings);
+    expect(metrics.cost_usd).toBe(0);
+    expect(validateMetrics(metrics, preset.validationRules)).toEqual([]);
+
+    const { record } = finalizeConnectorRecord(
+      {
+        tenant_id: 'tenant-1',
+        source: 'api',
+        source_type: 'coding_tool',
+        connector_id: 'conn-1',
+        connector_sync_run_id: 'run-1',
+        provider: 'cursor',
+        record_type: 'spend_usage_record',
+        ts: '2026-07-01T00:00:00.000Z',
+        lineage: { dedupe_hash: 'abc', external_record_id: '1' },
+        metrics,
+      },
+      preset,
+      [],
+      [],
+    );
+    expect(record.metrics.operation_name).toBe('cursor:included');
+    expect(record.metrics.usage_value_usd).toBe(0);
+    expect(record.metrics.cost_usd).toBe(0);
+    expect(record.metrics.metered_cost_usd).toBe(0);
   });
 
   it('uses stable dedupe hash regardless of chargedCents / billed split', () => {

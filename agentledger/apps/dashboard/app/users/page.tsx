@@ -28,6 +28,7 @@ type UserRow = {
   cursor_on_demand_usd?: number;
   cursor_included_usd?: number;
   calls: number;
+  tokens?: number;
   models: string[];
   model_breakdown: ModelBreakdown[];
 };
@@ -190,7 +191,8 @@ export default async function UsersPage({
             { key: 'spend', label: 'Metered spend', align: 'right' },
             { key: 'cursor', label: 'Cursor', align: 'right' },
             { key: 'sources', label: 'Sources' },
-            { key: 'calls', label: 'Calls', align: 'right' },
+            { key: 'calls', label: 'Calls (incl. Cursor)', align: 'right' },
+            { key: 'tokens', label: 'Tokens', align: 'right' },
             { key: 'models', label: 'Models used' },
           ]}
           rows={users.map((u) => ({
@@ -217,6 +219,7 @@ export default async function UsersPage({
             ),
             sources: <SourceMixCell portalUsd={u.portal_import_usd} connectorUsd={u.connector_usd} />,
             calls: num(u.calls),
+            tokens: num(u.tokens ?? 0),
             models: <ModelChips families={discoverModelFamilies(u.model_breakdown)} />,
           }))}
         />

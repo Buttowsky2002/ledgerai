@@ -11,6 +11,7 @@ type AllocationRow = {
   key: string;
   cost_usd: number | string;
   calls: string | number;
+  tokens?: number | string;
   portal_import_usd?: number | string;
   connector_usd?: number | string;
   metered_usd?: number | string;
@@ -44,7 +45,7 @@ function SpendTrendCell({
       : null;
   const title =
     changePct != null
-      ? `${changePct > 0 ? '+' : ''}${changePct}% avg daily spend (latter half vs first)`
+      ? `${changePct > 0 ? '+' : ''}${changePct}% avg daily activity (latter half vs first; includes Cursor included usage value)`
       : undefined;
   return (
     <span className={`inline-flex flex-col items-end text-xs font-medium ${tone}`} title={title}>
@@ -129,7 +130,8 @@ export function CostByUserPanel({
             { key: 'cost', label: 'Spend', align: 'right' },
             { key: 'billing', label: 'Billing', align: 'right' },
             { key: 'trend', label: 'Daily trend', align: 'right' },
-            { key: 'calls', label: 'Calls', align: 'right' },
+            { key: 'calls', label: 'Calls (incl. Cursor)', align: 'right' },
+            { key: 'tokens', label: 'Tokens', align: 'right' },
           ]}
           rows={rows.map((r) => ({
             user:
@@ -171,6 +173,7 @@ export function CostByUserPanel({
               />
             ),
             calls: num(r.calls),
+            tokens: num(r.tokens ?? 0),
           }))}
         />
       )}

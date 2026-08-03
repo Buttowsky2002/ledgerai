@@ -34,6 +34,7 @@ export type DestinationRecordType =
   | 'spend_usage_record'
   | 'llm_call_record'
   | 'coding_activity_record'
+  | 'coding_commit_attribution_record'
   | 'outcome_record'
   | 'risk_event_record'
   | 'tool_usage_record'
@@ -138,6 +139,11 @@ export interface CompanionFetchConfig {
   dedupe?: DedupeConfig;
   /** If true, skip when primary fetch returned zero rows (default false). */
   skipWhenPrimaryEmpty?: boolean;
+  /**
+   * Soft-degrade on 403/404 (e.g. Enterprise-only endpoints on standard tier).
+   * Sync continues without recording a hard rejection error.
+   */
+  optionalEnterprise?: boolean;
 }
 
 export interface ConnectorDefinition {

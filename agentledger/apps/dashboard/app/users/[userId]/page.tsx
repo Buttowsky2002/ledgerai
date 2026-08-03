@@ -23,6 +23,7 @@ type UserRow = {
   cursor_on_demand_usd?: number;
   cursor_included_usd?: number;
   calls: number;
+  tokens?: number;
   models: string[];
   model_breakdown: ModelBreakdown[];
 };
@@ -76,7 +77,7 @@ export default async function UserDetailPage({
         <span className="text-xs text-muted">ID: {user.user_id}</span>
       </div>
 
-      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-5">
         <Stat label="Metered spend" value={usd(user.total_spend_usd)} />
         <Stat
           label="Cursor overage"
@@ -88,7 +89,12 @@ export default async function UserDetailPage({
           value={usd(user.cursor_included_usd ?? 0)}
           sub="Subscription usage value"
         />
-        <Stat label="Calls" value={num(user.calls)} />
+        <Stat
+          label="Calls"
+          value={num(user.calls)}
+          sub="Metered + Cursor included events"
+        />
+        <Stat label="Tokens" value={num(user.tokens ?? 0)} sub="Input + output + cache" />
       </div>
 
       <Card title="Spend by model">

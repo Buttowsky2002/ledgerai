@@ -53,6 +53,8 @@
     { "type": "derived", "target": "cost_usd", "expression": "amount_cents / 100" },
     { "type": "fallback", "target": "input_tokens", "sources": ["tokenUsage.inputTokens"] },
     { "type": "fallback", "target": "output_tokens", "sources": ["tokenUsage.outputTokens"] },
+    { "type": "fallback", "target": "cache_write_tokens", "sources": ["tokenUsage.cacheWriteTokens"] },
+    { "type": "fallback", "target": "cache_read_tokens", "sources": ["tokenUsage.cacheReadTokens"] },
     {
       "type": "fallback",
       "target": "id",
@@ -62,7 +64,7 @@
     { "type": "constant", "target": "platform_display_name", "value": "Cursor" }
   ],
   "validationRules": [
-    { "field": "cost_usd", "type": "currency", "required": true, "min": 0.000001 },
+    { "field": "cost_usd", "type": "currency", "required": true, "min": 0 },
     { "field": "user_email", "type": "string", "required": true }
   ],
   "dedupe": {
@@ -96,7 +98,6 @@
         },
         { "type": "direct", "source": "totalLinesAdded", "target": "lines_added" },
         { "type": "direct", "source": "totalLinesDeleted", "target": "lines_deleted" },
-        { "type": "direct", "source": "totalLinesAdded", "target": "lines_committed" },
         { "type": "direct", "source": "totalTabsAccepted", "target": "tabs_accepted" },
         { "type": "direct", "source": "composerRequests", "target": "composer_requests" },
         { "type": "direct", "source": "chatRequests", "target": "chat_requests" },
@@ -116,6 +117,63 @@
       "dedupe": {
         "strategy": "custom",
         "fields": ["ts", "user_email", "tool_name"]
+      }
+    },
+    {
+      "id": "commitAttribution",
+      "destinationRecordType": "coding_commit_attribution_record",
+      "optionalEnterprise": true,
+      "endpoint": {
+        "path": "/analytics/ai-code/commits",
+        "method": "GET",
+        "queryParams": {
+          "startDate": "{{sync_start}}",
+          "endDate": "{{sync_end}}",
+          "page": "{{page}}",
+          "pageSize": "{{page_size}}"
+        }
+      },
+      "pagination": {
+        "type": "page",
+        "itemsPath": "items",
+        "pageSize": 100,
+        "maxPages": 500
+      },
+      "fieldMappings": [
+        { "type": "direct", "source": "commitHash", "target": "commit_hash" },
+        { "type": "direct", "source": "userEmail", "target": "user_email" },
+        { "type": "direct", "source": "userEmail", "target": "user_id" },
+        { "type": "direct", "source": "repoName", "target": "repo" },
+        { "type": "direct", "source": "branchName", "target": "branch" },
+        { "type": "direct", "source": "isPrimaryBranch", "target": "is_production_branch" },
+        { "type": "direct", "source": "totalLinesAdded", "target": "total_lines_added" },
+        { "type": "direct", "source": "totalLinesDeleted", "target": "total_lines_deleted" },
+        { "type": "direct", "source": "tabLinesAdded", "target": "tab_lines_added" },
+        { "type": "direct", "source": "tabLinesDeleted", "target": "tab_lines_deleted" },
+        { "type": "direct", "source": "composerLinesAdded", "target": "composer_lines_added" },
+        { "type": "direct", "source": "composerLinesDeleted", "target": "composer_lines_deleted" },
+        {
+          "type": "derived",
+          "target": "lines_total",
+          "expression": "totalLinesAdded + totalLinesDeleted"
+        },
+        { "type": "fallback", "target": "ts", "sources": ["commitTs", "createdAt"] },
+        {
+          "type": "fallback",
+          "target": "id",
+          "sources": ["commitHash", "userEmail", "commitTs"]
+        },
+        { "type": "constant", "target": "provider", "value": "cursor" },
+        { "type": "constant", "target": "source_tool", "value": "cursor" },
+        { "type": "constant", "target": "platform_display_name", "value": "Cursor" }
+      ],
+      "validationRules": [
+        { "field": "commit_hash", "type": "string", "required": true },
+        { "field": "user_email", "type": "string", "required": true }
+      ],
+      "dedupe": {
+        "strategy": "custom",
+        "fields": ["commit_hash", "user_email"]
       }
     }
   ],

@@ -1,6 +1,7 @@
 import { computeDedupeHash } from './engine/dedupe';
 import { enrichRecordCost } from './cost-estimator';
 import { enrichCursorBilling } from './cursor-billing';
+import { enrichCursorCommitAttribution } from './cursor-commit-attribution';
 import { computeMeteredCostUsd } from './metered-cost';
 import {
   applyAttributionToMetrics,
@@ -19,8 +20,14 @@ export function finalizeConnectorRecord(
   mappings: AttributionMapping[],
   entities: ProviderEntity[],
 ): { record: NormalizedRecord; unmapped: boolean } {
-  const enriched = enrichCursorBilling(enrichRecordCost(rec.metrics as NormalizedUsageMetrics) as Record<string, unknown>);
-  enriched.metered_cost_usd = computeMeteredCostUsd(enriched);
+  let enriched = enrichCursorBilling(
+    enrichRecordCost(rec.metrics as NormalizedUsageMetrics) as Record<string, unknown>,
+  );
+  if (rec.record_type === 'coding_commit_attribution_record') {
+    enriched = enrichCursorCommitAttribution(enriched);
+  } else {
+    enriched.metered_cost_usd = computeMeteredCostUsd(enriched);
+  }
   const dedupeHash =
     rec.record_type === definition.destinationRecordType
       ? computeDedupeHash(definition.dedupe, enriched, rec.lineage.external_record_id)

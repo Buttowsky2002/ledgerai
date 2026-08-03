@@ -316,7 +316,11 @@ export async function fetchAllRecords(ctx: SyncContext, maxPages?: number): Prom
           companionStepsCompleted.push(companionStepName(companion));
         }
       } catch (err) {
-        const e = err as { code?: string; message?: string };
+        const e = err as ConnectorError;
+        if (companion.optionalEnterprise && shouldUseFallback(err)) {
+          // Standard-tier keys cannot access Enterprise AI Code Tracking — skip cleanly.
+          continue;
+        }
         errors.push({
           recordRef: `companionFetch:${companion.id ?? companion.destinationRecordType}`,
           code: e.code ?? 'REQUEST_FAILED',

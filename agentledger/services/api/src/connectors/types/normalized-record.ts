@@ -32,6 +32,8 @@ export interface ImportFlatRow {
   input_tokens?: number;
   output_tokens?: number;
   total_tokens?: number;
+  cache_read_tokens?: number;
+  cache_write_tokens?: number;
   cost_usd?: number;
   cost_source?: string;
   metered_cost_usd?: number;
@@ -62,6 +64,15 @@ export interface ImportFlatRow {
   tabs_accepted?: number;
   composer_requests?: number;
   chat_requests?: number;
+  commit_hash?: string;
+  repo?: string;
+  branch?: string;
+  lines_total?: number;
+  lines_ai?: number;
+  ai_source?: string;
+  ai_share_pct?: number;
+  is_production_branch?: number | boolean;
+  source_tool?: string;
 }
 
 const RECORD_TYPE_TARGETS: Record<DestinationRecordType, string[]> = {
@@ -79,6 +90,17 @@ const RECORD_TYPE_TARGETS: Record<DestinationRecordType, string[]> = {
     'tabs_accepted',
     'composer_requests',
     'chat_requests',
+  ],
+  coding_commit_attribution_record: [
+    'commit_hash',
+    'user_email',
+    'user_id',
+    'repo',
+    'branch',
+    'lines_total',
+    'lines_ai',
+    'ai_source',
+    'ai_share_pct',
   ],
   outcome_record: ['outcome_type', 'outcome_value_usd', 'attribution_confidence'],
   risk_event_record: ['risk_severity', 'agent_id'],
@@ -169,6 +191,8 @@ export function toImportRow(record: NormalizedRecord): ImportFlatRow {
   assign('input_tokens', 'input_tokens', 'prompt_tokens');
   assign('output_tokens', 'output_tokens', 'completion_tokens');
   assign('total_tokens', 'total_tokens');
+  assign('cache_read_tokens', 'cache_read_tokens');
+  assign('cache_write_tokens', 'cache_write_tokens');
 
   const costKeys = ['cost_usd', 'cost', 'spend', 'amount', 'provider_reported_cost'] as const;
   for (const k of costKeys) {
@@ -209,6 +233,15 @@ export function toImportRow(record: NormalizedRecord): ImportFlatRow {
   assign('lines_committed', 'lines_committed');
   assign('tabs_accepted', 'tabs_accepted');
   assign('composer_requests', 'composer_requests');
+  assign('commit_hash', 'commit_hash');
+  assign('repo', 'repo');
+  assign('branch', 'branch');
+  assign('lines_total', 'lines_total');
+  assign('lines_ai', 'lines_ai');
+  assign('ai_source', 'ai_source');
+  assign('ai_share_pct', 'ai_share_pct');
+  assign('is_production_branch', 'is_production_branch');
+  assign('source_tool', 'source_tool');
 
   if (!row.provider && record.provider) row.provider = record.provider;
   if (!row.platform_display_name && row.provider) {

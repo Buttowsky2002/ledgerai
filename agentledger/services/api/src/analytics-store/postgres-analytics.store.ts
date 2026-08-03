@@ -33,7 +33,21 @@ const TABLES: Record<string, TableUpsert> = {
   cost_adjustments: { key: ['tenant_id', 'day', 'model'] },
   coding_agent_daily: {
     key: ['tenant_id', 'day', 'provider', 'user_id', 'team_id', 'agent_id'],
-    sum: ['cost_usd', 'sessions', 'requests'],
+    sum: [
+      'cost_usd',
+      'sessions',
+      'requests',
+      'lines_accepted',
+      'lines_added',
+      'lines_deleted',
+      'lines_committed',
+      'tabs_accepted',
+      'composer_requests',
+      'chat_requests',
+    ],
+  },
+  coding_commit_attribution: {
+    key: ['tenant_id', 'commit_hash', 'identity_email'],
   },
 };
 

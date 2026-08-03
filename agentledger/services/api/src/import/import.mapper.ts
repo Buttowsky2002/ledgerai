@@ -12,7 +12,13 @@ import { computeMeteredCostUsd } from '../connectors/metered-cost';
 export class ImportRowError extends Error {}
 
 export interface MappedEvent {
-  table: 'llm_calls' | 'agent_tool_calls' | 'outcomes' | 'risk_events' | 'coding_agent_daily';
+  table:
+    | 'llm_calls'
+    | 'agent_tool_calls'
+    | 'outcomes'
+    | 'risk_events'
+    | 'coding_agent_daily'
+    | 'coding_commit_attribution';
   row: Record<string, unknown>;
 }
 export interface MappedRow {
@@ -95,6 +101,8 @@ export function mapRow(data: unknown): MappedRow {
   const model = str(r.model, 'model');
   const inputTokens = num(r.input_tokens, 'input_tokens');
   const outputTokens = num(r.output_tokens, 'output_tokens');
+  const cacheReadTokens = num(r.cache_read_tokens, 'cache_read_tokens');
+  const cacheWriteTokens = num(r.cache_write_tokens, 'cache_write_tokens');
   const costUsd = num(r.cost_usd, 'cost_usd');
   const usageValueUsd = num(r.usage_value_usd, 'usage_value_usd');
   const costSource = str(r.cost_source, 'cost_source') ?? '';
@@ -110,19 +118,59 @@ export function mapRow(data: unknown): MappedRow {
     throw new ImportRowError(`field "risk_severity" must be one of ${RISK_SEVERITIES.join('|')}`);
   }
 
+  const commitHash = str(r.commit_hash, 'commit_hash');
+  const isCommitAttribution = !!commitHash;
+
   const hasUsage =
-    provider ||
-    model ||
-    inputTokens !== undefined ||
-    outputTokens !== undefined ||
-    costUsd !== undefined ||
-    usageValueUsd !== undefined;
-  if (!hasUsage && !outcomeType && !toolName && riskSeverity === undefined) {
-    throw new ImportRowError('row has no importable fields (need usage, tool_name, outcome_type, or risk_severity)');
+    !isCommitAttribution &&
+    (provider ||
+      model ||
+      inputTokens !== undefined ||
+      outputTokens !== undefined ||
+      costUsd !== undefined ||
+      usageValueUsd !== undefined);
+  if (
+    !hasUsage &&
+    !outcomeType &&
+    !toolName &&
+    riskSeverity === undefined &&
+    !isCommitAttribution
+  ) {
+    throw new ImportRowError(
+      'row has no importable fields (need usage, tool_name, outcome_type, risk_severity, or commit_hash)',
+    );
   }
 
   const events: MappedEvent[] = [];
 
+  if (isCommitAttribution) {
+    const linesTotal = Math.round(num(r.lines_total, 'lines_total') ?? 0);
+    const linesAi = Math.round(num(r.lines_ai, 'lines_ai') ?? 0);
+    const aiShare =
+      num(r.ai_share_pct, 'ai_share_pct') ??
+      (linesTotal > 0 ? Math.round((linesAi / linesTotal) * 10_000) / 100 : 0);
+    const isProd = r.is_production_branch;
+    events.push({
+      table: 'coding_commit_attribution',
+      row: {
+        source_tool: str(r.source_tool, 'source_tool') ?? provider ?? 'cursor',
+        commit_hash: commitHash,
+        identity_email: str(r.user_email, 'user_email') ?? userId,
+        user_id: userId,
+        repo: str(r.repo, 'repo') ?? '',
+        branch: str(r.branch, 'branch') ?? '',
+        committed_at: ts,
+        lines_total: linesTotal,
+        lines_ai: linesAi,
+        ai_source: str(r.ai_source, 'ai_source') ?? '',
+        ai_share_pct: aiShare,
+        is_production_branch:
+          isProd === true || isProd === 1 || isProd === 'true' || isProd === '1' ? 1 : 0,
+        source_record_id: idempotencyKey ?? '',
+        ingested_at: new Date().toISOString(),
+      },
+    });
+  }
   if (hasUsage) {
     events.push({
       table: 'llm_calls',
@@ -139,6 +187,8 @@ export function mapRow(data: unknown): MappedRow {
         operation_name: operationName ?? 'chat',
         input_tokens: Math.round(inputTokens ?? 0),
         output_tokens: Math.round(outputTokens ?? 0),
+        cache_read_tokens: Math.round(cacheReadTokens ?? 0),
+        cache_write_tokens: Math.round(cacheWriteTokens ?? 0),
         cost_usd: costUsd ?? 0,
         usage_value_usd: usageValueUsd ?? costUsd ?? 0,
         metered_cost_usd:
@@ -222,7 +272,9 @@ export function mapRow(data: unknown): MappedRow {
           lines_accepted: Math.round(linesAccepted ?? 0),
           lines_added: Math.round(linesAdded ?? 0),
           lines_deleted: Math.round(linesDeleted ?? 0),
-          lines_committed: Math.round(linesCommitted ?? linesAdded ?? 0),
+          // Committed LOC comes from Enterprise commit attribution only — never
+          // alias editor totalLinesAdded as "committed".
+          lines_committed: Math.round(linesCommitted ?? 0),
           tabs_accepted: Math.round(tabsAccepted ?? 0),
           composer_requests: Math.round(composerRequests ?? 0),
           chat_requests: Math.round(chatRequests ?? 0),

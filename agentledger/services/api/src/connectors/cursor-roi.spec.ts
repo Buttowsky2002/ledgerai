@@ -15,5 +15,20 @@ describe('calculateCursorDailyRoi', () => {
     // 100*0.5 + 50*0.25 + 5*3 + 10*2 = 50 + 12.5 + 15 + 20 = 97.5 min → 1.625 hr → $162.50
     expect(r.estimatedValueUsd).toBeCloseTo(162.5, 1);
     expect(r.linesCommitted).toBe(200);
+    expect(r.attributionConfidence).toBe(0.85);
+  });
+
+  it('does not treat editor lines_added as committed', () => {
+    const r = calculateCursorDailyRoi({
+      linesAccepted: 10,
+      linesAdded: 500,
+      linesDeleted: 0,
+      linesCommitted: 0,
+      tabsAccepted: 0,
+      composerRequests: 0,
+      chatRequests: 0,
+    });
+    expect(r.linesCommitted).toBe(0);
+    expect(r.attributionConfidence).toBe(0.65);
   });
 });
