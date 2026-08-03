@@ -3,6 +3,7 @@ import { ChParam } from '../clickhouse/clickhouse.service';
 import { AnalyticsStore } from '../analytics-store/analytics-store';
 import { CopilotAnalyticsService, CopilotSpendSummary } from '../github-copilot/github-copilot-analytics.service';
 import { CursorAnalyticsService, CursorSpendSummary } from '../connectors/cursor-analytics.service';
+import { CursorProductivityService } from '../connectors/cursor-productivity.service';
 import { CopilotMemberSpendService } from '../github-copilot/github-copilot-member-spend.service';
 import type { CopilotMemberSpendResponse } from '../github-copilot/github-copilot.types';
 import { LariService } from '../lari/lari.service';
@@ -72,6 +73,8 @@ export interface UserDirectoryRow {
   resolved: boolean;
   total_spend_usd: number;
   calls: number;
+  /** Input + output + cache tokens across llm_calls in range. */
+  tokens?: number;
   /** Portal CSV billing portion of total_spend_usd (before identity merge). */
   portal_import_usd?: number;
   /** Connector API sync portion of total_spend_usd (before identity merge). */
@@ -127,6 +130,7 @@ export class AnalyticsService {
     private readonly copilotAnalytics: CopilotAnalyticsService,
     private readonly copilotMemberSpend: CopilotMemberSpendService,
     private readonly cursorAnalytics: CursorAnalyticsService,
+    private readonly cursorProductivity: CursorProductivityService,
   ) {}
 
   /**
@@ -352,7 +356,33 @@ export class AnalyticsService {
       seatSource: seat.seatSource,
       activeMembersInRange: activeMembers,
       meteredOverageUsd: summary.billedUsd,
+      ...(await this.cursorLocFields(tenantId, r.from, r.to)),
     };
+  }
+
+  private async cursorLocFields(
+    tenantId: string,
+    from: string,
+    to: string,
+  ): Promise<Partial<CursorSpendSummary>> {
+    try {
+      const productivity = await this.cursorProductivity.getProductivitySummary(tenantId, from, to);
+      if (!productivity) return {};
+      return {
+        linesAccepted: productivity.linesAccepted,
+        linesAdded: productivity.linesAdded,
+        linesCommittedAi: productivity.linesCommitted,
+        aiSharePct: productivity.commitAttribution?.aiSharePct ?? 0,
+        commitCount: productivity.commitAttribution?.commitCount ?? 0,
+        productivityDisclaimer: productivity.disclaimer,
+      };
+    } catch (err) {
+      this.logger.warn(
+        { event: 'cursor_productivity_failed', err: String((err as Error)?.message ?? err) },
+        'cursor-spend LOC lookup failed',
+      );
+      return {};
+    }
   }
 
   /** Seat/subscription license cost for Cursor — fixed_costs first, then ai_subscription_plans. */
@@ -533,7 +563,8 @@ export class AnalyticsService {
   private async userAllocationWithTrend(r: Range) {
     const tenantId = getTenantId();
     const params = r as Record<string, ChParam>;
-    const [totals, daily, codingTotals, codingDaily, copilotPack, cursorPack] = await Promise.all([
+    const [totals, daily, codingTotals, codingDaily, tokenTotals, copilotPack, cursorPack, cursorDaily] =
+      await Promise.all([
       this.ch.queryScoped<{
         key: string;
         cost_usd: unknown;
@@ -568,12 +599,25 @@ export class AnalyticsService {
          ORDER BY user_id, day`,
         params,
       ),
+      this.ch.queryScoped<{ key: string; tokens: unknown }>(
+        `SELECT if(user_id = '', 'Unassigned', user_id) AS key,
+                sum(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens) AS tokens
+         FROM llm_calls
+         WHERE tenant_id = {tenant:String}
+           AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
+           AND ${LLM_CALLS_METERED_SCOPE}
+         GROUP BY key`,
+        params,
+      ),
       tenantId
         ? this.fetchCopilotUserSpend(tenantId, r)
         : Promise.resolve({ totals: [], breakdown: [], hints: new Map() }),
       tenantId
         ? this.fetchCursorUserActivity(tenantId, r)
         : Promise.resolve({ totals: [], breakdown: [] }),
+      tenantId
+        ? this.cursorAnalytics.getUserDailyActivity(tenantId, r.from, r.to).catch(() => [])
+        : Promise.resolve([]),
     ]);
 
     const totalsMap = new Map<
@@ -581,6 +625,7 @@ export class AnalyticsService {
       {
         cost_usd: number;
         calls: number;
+        tokens: number;
         portal_import_usd: number;
         connector_usd: number;
         metered_usd: number;
@@ -593,6 +638,7 @@ export class AnalyticsService {
       totalsMap.set(String(row.key), {
         cost_usd: n(row.cost_usd),
         calls: n(row.calls),
+        tokens: 0,
         portal_import_usd: n(row.portal_import_usd),
         connector_usd: n(row.connector_usd),
         metered_usd: n(row.cost_usd),
@@ -601,11 +647,27 @@ export class AnalyticsService {
         cursor_included_usd: 0,
       });
     }
+    for (const row of tokenTotals) {
+      const key = String(row.key);
+      const cur = totalsMap.get(key) ?? {
+        cost_usd: 0,
+        calls: 0,
+        tokens: 0,
+        portal_import_usd: 0,
+        connector_usd: 0,
+        metered_usd: 0,
+        seat_usd: 0,
+        cursor_on_demand_usd: 0,
+        cursor_included_usd: 0,
+      };
+      totalsMap.set(key, { ...cur, tokens: n(row.tokens) });
+    }
     for (const row of codingTotals) {
       const key = String(row.key);
       const cur = totalsMap.get(key) ?? {
         cost_usd: 0,
         calls: 0,
+        tokens: 0,
         portal_import_usd: 0,
         connector_usd: 0,
         metered_usd: 0,
@@ -617,6 +679,7 @@ export class AnalyticsService {
       totalsMap.set(key, {
         cost_usd: usd(cur.cost_usd + codingCost),
         calls: cur.calls + n(row.calls),
+        tokens: cur.tokens,
         portal_import_usd: cur.portal_import_usd,
         connector_usd: usd(cur.connector_usd + codingCost),
         metered_usd: usd(cur.metered_usd + codingCost),
@@ -630,6 +693,7 @@ export class AnalyticsService {
       const cur = totalsMap.get(key) ?? {
         cost_usd: 0,
         calls: 0,
+        tokens: 0,
         portal_import_usd: 0,
         connector_usd: 0,
         metered_usd: 0,
@@ -641,6 +705,7 @@ export class AnalyticsService {
       totalsMap.set(key, {
         cost_usd: usd(cur.cost_usd + seatCost),
         calls: cur.calls + n(row.calls),
+        tokens: cur.tokens,
         portal_import_usd: cur.portal_import_usd,
         connector_usd: cur.connector_usd,
         metered_usd: cur.metered_usd,
@@ -654,6 +719,7 @@ export class AnalyticsService {
       const cur = totalsMap.get(key) ?? {
         cost_usd: 0,
         calls: 0,
+        tokens: 0,
         portal_import_usd: 0,
         connector_usd: 0,
         metered_usd: 0,
@@ -662,9 +728,21 @@ export class AnalyticsService {
         cursor_included_usd: 0,
       };
       // Included usage value is display-only — never add to cost_usd / metered_usd.
+      // Metered call rollups exclude included events; add included_calls so totals
+      // reflect all Cursor activity without double-counting on-demand.
+      const includedCalls = Number(
+        (row as { included_calls?: number }).included_calls ?? 0,
+      );
+      const cursorTokens = Number((row as { tokens?: number }).tokens ?? 0);
       totalsMap.set(key, {
         ...cur,
-        calls: cur.calls > 0 ? cur.calls : row.calls,
+        calls:
+          cur.calls > 0
+            ? cur.calls + includedCalls
+            : row.calls,
+        // Prefer llm_calls token sum; fall back to Cursor activity tokens for
+        // included-only users who may already be covered by tokenTotals.
+        tokens: cur.tokens > 0 ? cur.tokens : cursorTokens,
         cursor_on_demand_usd: row.on_demand_usd,
         cursor_included_usd: row.usage_value_usd,
       });
@@ -672,6 +750,7 @@ export class AnalyticsService {
 
     const dailyByUser = new Map<string, Map<string, number>>();
     const addDaily = (userId: string, day: string, cost: number) => {
+      if (cost <= 0) return;
       const uid = String(userId);
       const dayKey = day.slice(0, 10);
       const perUser = dailyByUser.get(uid) ?? new Map<string, number>();
@@ -684,12 +763,19 @@ export class AnalyticsService {
     for (const row of codingDaily) {
       addDaily(String(row.user_id), String(row.day), n(row.cost_usd));
     }
+    // Include Cursor Included usage value in the trend series so included-only
+    // (or included-heavy) users still show up/down. On-demand is already in
+    // metered daily — do not add it again.
+    for (const row of cursorDaily) {
+      addDaily(String(row.user_id), String(row.day), Number(row.included_usd ?? 0));
+    }
 
     return [...totalsMap.entries()]
       .filter(
         ([, agg]) =>
           agg.cost_usd > 0 ||
           agg.calls > 0 ||
+          agg.tokens > 0 ||
           agg.cursor_included_usd > 0 ||
           agg.cursor_on_demand_usd > 0,
       )
@@ -704,6 +790,7 @@ export class AnalyticsService {
           key,
           cost_usd: agg.cost_usd,
           calls: agg.calls,
+          tokens: agg.tokens,
           portal_import_usd: agg.portal_import_usd,
           connector_usd: agg.connector_usd,
           metered_usd: agg.metered_usd,
@@ -1253,7 +1340,10 @@ export class AnalyticsService {
     const params: Record<string, ChParam> = { ...r, ...(userId ? { userId } : {}) };
     const userFilter = userId ? `AND key = {userId:String}` : '';
     const breakdownUserFilter = userId ? `AND user_id = {userId:String}` : '';
-    const [totals, breakdown] = await Promise.all([
+    const tokenUserFilter = userId
+      ? `AND if(user_id = '', 'Unassigned', user_id) = {userId:String}`
+      : '';
+    const [totals, breakdown, tokenRows] = await Promise.all([
       this.ch.queryScoped<{
         key: string;
         cost_usd: unknown;
@@ -1282,12 +1372,25 @@ export class AnalyticsService {
          ORDER BY user_id, spend_usd DESC`,
         params,
       ),
+      this.ch.queryScoped<{ key: string; tokens: unknown }>(
+        `SELECT if(user_id = '', 'Unassigned', user_id) AS key,
+                sum(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens) AS tokens
+         FROM llm_calls
+         WHERE tenant_id = {tenant:String}
+           AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
+           AND ${LLM_CALLS_METERED_SCOPE}
+           ${tokenUserFilter}
+         GROUP BY key`,
+        params,
+      ),
     ]);
+    const tokensByUser = new Map(tokenRows.map((row) => [String(row.key), n(row.tokens)]));
     return {
       totals: totals.map((row) => ({
         user_id: String(row.key),
         total_spend_usd: row.cost_usd,
         calls: row.calls,
+        tokens: tokensByUser.get(String(row.key)) ?? 0,
         portal_import_usd: row.portal_import_usd,
         connector_usd: row.connector_usd,
       })),
@@ -1321,6 +1424,7 @@ export class AnalyticsService {
       user_id: string;
       total_spend_usd: unknown;
       calls: unknown;
+      tokens?: unknown;
       portal_import_usd?: unknown;
       connector_usd?: unknown;
       cursor_on_demand_usd?: unknown;
@@ -1342,6 +1446,8 @@ export class AnalyticsService {
         on_demand_usd: number;
         usage_value_usd: number;
         calls: number;
+        included_calls?: number;
+        tokens?: number;
       }[];
       breakdown: {
         user_id: string;
@@ -1359,6 +1465,7 @@ export class AnalyticsService {
           user_id: String(row.user_id),
           total_spend_usd: row.total_spend_usd,
           calls: row.calls,
+          tokens: n(row.tokens),
           portal_import_usd: row.portal_import_usd,
           connector_usd: row.connector_usd,
           cursor_on_demand_usd: n(row.cursor_on_demand_usd),
@@ -1369,20 +1476,24 @@ export class AnalyticsService {
 
     for (const row of cursorPack.totals) {
       const existing = totalsByUser.get(row.user_id);
+      const includedCalls = Number(row.included_calls ?? 0);
       if (existing) {
         existing.cursor_on_demand_usd = row.on_demand_usd;
         existing.cursor_included_usd = row.usage_value_usd;
-        // Included-only users may already be absent from metered totals; if present
-        // with $0 metered, ensure call volume reflects Cursor activity.
         if (n(existing.calls) <= 0 && row.calls > 0) {
           existing.calls = row.calls;
+        } else if (includedCalls > 0) {
+          existing.calls = n(existing.calls) + includedCalls;
+        }
+        if (n(existing.tokens) <= 0 && (row.tokens ?? 0) > 0) {
+          existing.tokens = row.tokens ?? 0;
         }
       } else {
         totalsByUser.set(row.user_id, {
           user_id: row.user_id,
-          // On-demand is already in metered CH totals when > 0; included-only stays $0.
           total_spend_usd: row.on_demand_usd,
           calls: row.calls,
+          tokens: row.tokens ?? 0,
           portal_import_usd: 0,
           connector_usd: row.on_demand_usd,
           cursor_on_demand_usd: row.on_demand_usd,
@@ -1504,6 +1615,7 @@ export class AnalyticsService {
       {
         total_spend_usd: number;
         calls: number;
+        tokens: number;
         portal_import_usd: number;
         connector_usd: number;
         cursor_on_demand_usd: number;
@@ -1514,6 +1626,7 @@ export class AnalyticsService {
       totalsByUser.set(String(row.user_id), {
         total_spend_usd: usd(n(row.total_spend_usd)),
         calls: n(row.calls),
+        tokens: n((row as { tokens?: unknown }).tokens),
         portal_import_usd: usd(n((row as { portal_import_usd?: unknown }).portal_import_usd)),
         connector_usd: usd(n((row as { connector_usd?: unknown }).connector_usd)),
         cursor_on_demand_usd: usd(n(row.cursor_on_demand_usd)),
@@ -1547,6 +1660,7 @@ export class AnalyticsService {
       const totalsRow = totalsByUser.get(user_id) ?? {
         total_spend_usd: 0,
         calls: 0,
+        tokens: 0,
         portal_import_usd: 0,
         connector_usd: 0,
         cursor_on_demand_usd: 0,
@@ -1554,9 +1668,16 @@ export class AnalyticsService {
       };
       const total_spend_usd = totalsRow.total_spend_usd;
       const calls = totalsRow.calls;
+      const tokens = totalsRow.tokens;
       const cursor_included_usd = totalsRow.cursor_included_usd;
       const cursor_on_demand_usd = totalsRow.cursor_on_demand_usd;
-      if (total_spend_usd <= 0 && calls <= 0 && cursor_included_usd <= 0 && cursor_on_demand_usd <= 0) {
+      if (
+        total_spend_usd <= 0 &&
+        calls <= 0 &&
+        tokens <= 0 &&
+        cursor_included_usd <= 0 &&
+        cursor_on_demand_usd <= 0
+      ) {
         continue;
       }
 
@@ -1580,6 +1701,7 @@ export class AnalyticsService {
         resolved: identity.resolved,
         total_spend_usd,
         calls,
+        tokens,
         portal_import_usd: totalsRow.portal_import_usd,
         connector_usd: totalsRow.connector_usd,
         cursor_on_demand_usd,
@@ -1640,6 +1762,7 @@ export class AnalyticsService {
       resolved: a.resolved || b.resolved,
       total_spend_usd: usd(a.total_spend_usd + b.total_spend_usd),
       calls: a.calls + b.calls,
+      tokens: (a.tokens ?? 0) + (b.tokens ?? 0),
       portal_import_usd: usd((a.portal_import_usd ?? 0) + (b.portal_import_usd ?? 0)),
       connector_usd: usd((a.connector_usd ?? 0) + (b.connector_usd ?? 0)),
       cursor_on_demand_usd: usd((a.cursor_on_demand_usd ?? 0) + (b.cursor_on_demand_usd ?? 0)),

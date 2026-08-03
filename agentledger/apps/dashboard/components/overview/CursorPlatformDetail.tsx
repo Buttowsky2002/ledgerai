@@ -16,8 +16,15 @@ export interface CursorSpendSummary {
   totalCalls: number;
   includedCalls: number;
   onDemandCalls: number;
+  totalTokens?: number;
   legacyUntagged: boolean;
   disclaimer: string;
+  linesAccepted?: number;
+  linesAdded?: number;
+  linesCommittedAi?: number;
+  aiSharePct?: number;
+  commitCount?: number;
+  productivityDisclaimer?: string;
   modelMix: {
     model: string;
     billed_usd: number;
@@ -111,10 +118,11 @@ export function CursorPlatformDetail({
   const seat = data.seatLicenseUsd ?? 0;
   const totalInvoiceStyle = seat + metered;
   const models = [...(data.modelMix ?? [])].sort((a, b) => b.usage_value_usd - a.usage_value_usd);
+  const hasEnterpriseCommits = (data.commitCount ?? 0) > 0 || (data.linesCommittedAi ?? 0) > 0;
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
         <Stat
           label="Seat licenses"
           value={usd(seat)}
@@ -138,9 +146,47 @@ export function CursorPlatformDetail({
         />
         <Stat label="Total (seats + metered)" value={usd(totalInvoiceStyle)} />
         <Stat
+          label="Events (all calls)"
+          value={num(data.totalCalls)}
+          sub={`${num(data.onDemandCalls)} on-demand / ${num(data.includedCalls)} included`}
+        />
+        <Stat
+          label="Tokens"
+          value={num(data.totalTokens ?? 0)}
+          sub="Input + output + cache"
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+        <Stat
+          label="Accepted AI lines"
+          value={num(data.linesAccepted ?? 0)}
+          sub="Editor Tab/Composer accepts"
+        />
+        <Stat
+          label="Editor lines added"
+          value={num(data.linesAdded ?? 0)}
+          sub="Total editor activity — not git"
+        />
+        <Stat
+          label="Committed AI lines"
+          value={num(data.linesCommittedAi ?? 0)}
+          accent={hasEnterpriseCommits}
+          sub={
+            hasEnterpriseCommits
+              ? `${num(data.commitCount ?? 0)} commits · Enterprise attribution`
+              : 'Requires Enterprise AI Code Tracking'
+          }
+        />
+        <Stat
+          label="AI share of commits"
+          value={hasEnterpriseCommits ? `${(data.aiSharePct ?? 0).toFixed(1)}%` : '—'}
+          sub="lines_ai ÷ lines_total"
+        />
+        <Stat
           label="Active members"
           value={num(data.activeMembersInRange)}
-          sub={`${num(data.onDemandCalls)} on-demand / ${num(data.includedCalls)} included events`}
+          sub={`${seatSourceLabel(data.seatSource)}`}
         />
       </div>
 
@@ -155,6 +201,14 @@ export function CursorPlatformDetail({
             AI subscription plan
           </Link>{' '}
           to show license cost separately from metered overage.
+        </p>
+      )}
+
+      {!hasEnterpriseCommits && (
+        <p className="rounded-lg border border-edge/60 bg-panel/40 px-4 py-3 text-sm text-muted">
+          Committed AI LOC needs Cursor Enterprise{' '}
+          <code className="text-xs">/analytics/ai-code/commits</code>. Background Agents and Cursor
+          CLI are not tracked by Cursor.
         </p>
       )}
 
@@ -176,6 +230,9 @@ export function CursorPlatformDetail({
       ) : null}
 
       <p className="text-xs leading-relaxed text-muted">{data.disclaimer}</p>
+      {data.productivityDisclaimer ? (
+        <p className="text-xs leading-relaxed text-muted">{data.productivityDisclaimer}</p>
+      ) : null}
     </div>
   );
 }

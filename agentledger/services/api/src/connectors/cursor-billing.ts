@@ -1,17 +1,36 @@
 export type CursorBillingKind = 'on_demand' | 'included' | 'errored';
 
+/** Coerce Cursor Admin API isChargeable (boolean | string | number). */
+export function coerceIsChargeable(v: unknown): boolean | undefined {
+  if (v === true || v === 1) return true;
+  if (v === false || v === 0) return false;
+  if (typeof v === 'string') {
+    const s = v.trim().toLowerCase();
+    if (s === 'true' || s === '1') return true;
+    if (s === 'false' || s === '0') return false;
+  }
+  return undefined;
+}
+
 export function classifyCursorBillingKind(
   kind: string,
-  isChargeable?: boolean,
+  isChargeable?: boolean | unknown,
 ): CursorBillingKind {
-  const k = kind.trim().toLowerCase();
-  if (!k && isChargeable === true) return 'on_demand';
-  if (!k && isChargeable === false) return 'included';
+  const chargeable = coerceIsChargeable(isChargeable);
+  // Prefer explicit chargeability from the Admin API when present.
+  if (chargeable === true) return 'on_demand';
+  if (chargeable === false) {
+    const k = kind.trim().toLowerCase().replace(/[_ ]+/g, '-');
+    if (k.includes('error')) return 'errored';
+    return 'included';
+  }
+
+  const k = kind.trim().toLowerCase().replace(/[_ ]+/g, '-');
+  if (!k) return 'included';
   if (k.includes('error')) return 'errored';
   if (k.includes('on-demand') || k.includes('usage-based')) return 'on_demand';
   if (k.includes('included')) return 'included';
-  if (isChargeable === true) return 'on_demand';
-  if (isChargeable === false) return 'included';
+  // Unknown kind without isChargeable — default included so we never invent invoice lines.
   return 'included';
 }
 
@@ -29,7 +48,7 @@ export function enrichCursorBilling(metrics: Record<string, unknown>): Record<st
   const usageValueUsd = num(metrics.cost_usd);
   const kind = classifyCursorBillingKind(
     String(metrics.product ?? metrics.kind ?? ''),
-    metrics.is_chargeable as boolean | undefined,
+    metrics.is_chargeable ?? metrics.isChargeable,
   );
   const billedUsd = kind === 'on_demand' ? usageValueUsd : 0;
 

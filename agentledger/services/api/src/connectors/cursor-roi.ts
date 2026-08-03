@@ -21,6 +21,7 @@ export interface CursorDailyActivityInput {
   linesAccepted: number;
   linesAdded: number;
   linesDeleted: number;
+  /** True committed AI lines from Enterprise commit attribution — not editor activity. */
   linesCommitted: number;
   tabsAccepted: number;
   composerRequests: number;
@@ -33,7 +34,7 @@ export interface CursorDailyRoiResult {
   linesAccepted: number;
   estimatedHoursSaved: number;
   estimatedValueUsd: number;
-  /** Productivity proxy suitable for outcome attribution (0.65 default). */
+  /** Productivity proxy: 0.65 editor-only; higher when commit attribution present. */
   attributionConfidence: number;
 }
 
@@ -41,7 +42,8 @@ export interface CursorDailyRoiResult {
 export function calculateCursorDailyRoi(input: CursorDailyActivityInput): CursorDailyRoiResult {
   const a = { ...DEFAULT_CURSOR_ROI_ASSUMPTIONS, ...input.assumptions };
   const linesAccepted = Math.max(0, input.linesAccepted);
-  const linesCommitted = Math.max(0, input.linesCommitted || input.linesAdded);
+  // Never alias editor lines_added as committed — Enterprise commit analytics only.
+  const linesCommitted = Math.max(0, input.linesCommitted);
   const tabsAccepted = Math.max(0, input.tabsAccepted);
   const composerRequests = Math.max(0, input.composerRequests);
   const chatRequests = Math.max(0, input.chatRequests);
@@ -59,7 +61,7 @@ export function calculateCursorDailyRoi(input: CursorDailyActivityInput): Cursor
     linesAccepted,
     estimatedHoursSaved: round4(estimatedHoursSaved),
     estimatedValueUsd: round2(estimatedValueUsd),
-    attributionConfidence: 0.65,
+    attributionConfidence: linesCommitted > 0 ? 0.85 : 0.65,
   };
 }
 

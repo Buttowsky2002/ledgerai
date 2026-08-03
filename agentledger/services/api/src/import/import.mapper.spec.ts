@@ -151,4 +151,50 @@ describe('import mapRow', () => {
       cost_source: 'anthropic_cost_report',
     });
   });
+
+  it('maps Cursor Enterprise commit attribution without creating llm_calls', () => {
+    const { events } = mapRow({
+      provider: 'cursor',
+      commit_hash: 'a1b2c3d4',
+      user_email: 'developer@company.com',
+      repo: 'company/repo',
+      branch: 'main',
+      lines_total: 150,
+      lines_ai: 105,
+      ai_source: 'mixed',
+      ai_share_pct: 70,
+      is_production_branch: true,
+      timestamp: '2025-07-30T14:12:03.000Z',
+    });
+    expect(events).toHaveLength(1);
+    expect(events[0].table).toBe('coding_commit_attribution');
+    expect(events[0].row).toMatchObject({
+      commit_hash: 'a1b2c3d4',
+      identity_email: 'developer@company.com',
+      lines_total: 150,
+      lines_ai: 105,
+      ai_source: 'mixed',
+      ai_share_pct: 70,
+      is_production_branch: 1,
+    });
+  });
+
+  it('does not alias editor lines_added as lines_committed', () => {
+    const { events } = mapRow({
+      provider: 'cursor',
+      tool_name: 'cursor-usage',
+      user_email: 'developer@company.com',
+      lines_accepted: 150,
+      lines_added: 200,
+      lines_deleted: 50,
+      timestamp: '2026-06-15T00:00:00.000Z',
+    });
+    const coding = events.find((e) => e.table === 'coding_agent_daily');
+    expect(coding?.row).toMatchObject({
+      lines_accepted: 150,
+      lines_added: 200,
+      lines_deleted: 50,
+      lines_committed: 0,
+    });
+  });
 });

@@ -1,9 +1,15 @@
-import { classifyCursorBillingKind, enrichCursorBilling } from './cursor-billing';
+import {
+  classifyCursorBillingKind,
+  coerceIsChargeable,
+  enrichCursorBilling,
+} from './cursor-billing';
 
 describe('classifyCursorBillingKind', () => {
   it('maps On-Demand and Usage-based to on_demand', () => {
     expect(classifyCursorBillingKind('On-Demand')).toBe('on_demand');
     expect(classifyCursorBillingKind('Usage-based')).toBe('on_demand');
+    expect(classifyCursorBillingKind('on_demand')).toBe('on_demand');
+    expect(classifyCursorBillingKind('usage_based')).toBe('on_demand');
   });
 
   it('maps Included to included', () => {
@@ -14,6 +20,28 @@ describe('classifyCursorBillingKind', () => {
   it('respects isChargeable when kind is empty', () => {
     expect(classifyCursorBillingKind('', true)).toBe('on_demand');
     expect(classifyCursorBillingKind('', false)).toBe('included');
+  });
+
+  it('prefers isChargeable over unknown kind strings', () => {
+    expect(classifyCursorBillingKind('SomethingElse', true)).toBe('on_demand');
+    expect(classifyCursorBillingKind('SomethingElse', false)).toBe('included');
+    expect(classifyCursorBillingKind('weird', 'true')).toBe('on_demand');
+    expect(classifyCursorBillingKind('weird', 'false')).toBe('included');
+  });
+
+  it('maps errored kinds', () => {
+    expect(classifyCursorBillingKind('Errored')).toBe('errored');
+    expect(classifyCursorBillingKind('error', false)).toBe('errored');
+  });
+});
+
+describe('coerceIsChargeable', () => {
+  it('coerces string and number forms', () => {
+    expect(coerceIsChargeable('true')).toBe(true);
+    expect(coerceIsChargeable('false')).toBe(false);
+    expect(coerceIsChargeable(1)).toBe(true);
+    expect(coerceIsChargeable(0)).toBe(false);
+    expect(coerceIsChargeable(undefined)).toBeUndefined();
   });
 });
 

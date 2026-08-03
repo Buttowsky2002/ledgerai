@@ -59,6 +59,7 @@ type AllocationRow = {
   key: string;
   cost_usd: number | string;
   calls: string;
+  tokens?: number | string;
   portal_import_usd?: number | string;
   connector_usd?: number | string;
   metered_usd?: number | string;
@@ -188,17 +189,31 @@ export default async function OverviewPage({
   }));
 
   const hasCursorPlatform = platforms.some((p) => p.platform.toLowerCase() === 'cursor');
-  let cursorSpend: CursorSpendSummary | null = null;
-  let cursorSpendError = false;
-  if (hasCursorPlatform) {
-    const cursorRes = await proxyApi(
-      `/v1/analytics/cursor-spend?${new URLSearchParams({ from, to })}`,
-    );
-    cursorSpendError = !cursorRes.ok;
-    cursorSpend =
-      cursorRes.ok && cursorRes.data && typeof cursorRes.data === 'object'
-        ? (cursorRes.data as CursorSpendSummary)
-        : null;
+  // Always fetch cursor-spend so included-only tenants (no metered overage) still
+  // surface in the AI sources panel.
+  const cursorRes = await proxyApi(
+    `/v1/analytics/cursor-spend?${new URLSearchParams({ from, to })}`,
+  );
+  const cursorSpendError = !cursorRes.ok;
+  const cursorSpend: CursorSpendSummary | null =
+    cursorRes.ok && cursorRes.data && typeof cursorRes.data === 'object'
+      ? (cursorRes.data as CursorSpendSummary)
+      : null;
+
+  if (
+    cursorSpend &&
+    !hasCursorPlatform &&
+    (cursorSpend.totalCalls > 0 ||
+      cursorSpend.usageValueUsd > 0 ||
+      cursorSpend.billedUsd > 0 ||
+      (cursorSpend.linesAccepted ?? 0) > 0)
+  ) {
+    platforms.push({
+      platform: 'cursor',
+      cost_usd: cursorSpend.billedUsd ?? cursorSpend.meteredOverageUsd ?? 0,
+      calls: cursorSpend.onDemandCalls ?? 0,
+    });
+    platforms.sort((a, b) => b.cost_usd - a.cost_usd);
   }
 
   const meteredCost = spend.reduce((s, r) => s + Number(r.cost_usd), 0);
