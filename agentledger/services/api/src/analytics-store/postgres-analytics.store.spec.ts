@@ -1,4 +1,4 @@
-import { PostgresAnalyticsStore } from './postgres-analytics.store';
+import { insertBatchSize, PostgresAnalyticsStore } from './postgres-analytics.store';
 import { PrismaService } from '../prisma/prisma.service';
 import { runWithTenant } from '../tenant/tenant-context';
 
@@ -68,5 +68,36 @@ describe('PostgresAnalyticsStore RLS binding', () => {
     });
     expect(withTenant).toHaveBeenCalledWith(tenantA, expect.any(Function));
     expect(tx.$executeRawUnsafe).toHaveBeenCalled();
+  });
+
+  it('insertRows chunks so bind variables stay under the Postgres 32767 limit', async () => {
+    const { store, tx, prisma } = harness();
+    // 3 typed columns → batch size floor(30000/3)=10000; 10001 rows → 2 executes.
+    (prisma.$queryRaw as jest.Mock).mockResolvedValueOnce([
+      { column_name: 'tenant_id', udt_name: 'text' },
+      { column_name: 'call_id', udt_name: 'text' },
+      { column_name: 'ts', udt_name: 'timestamptz' },
+    ]);
+    const rows = Array.from({ length: 10_001 }, (_, i) => ({
+      tenant_id: tenantA,
+      call_id: `c${i}`,
+      ts: '2026-01-01T00:00:00Z',
+    }));
+    await runWithTenant({ tenantId: tenantA, userId: null, role: 'admin' }, async () => {
+      await store.insertRows('llm_calls', rows);
+    });
+    expect(tx.$executeRawUnsafe).toHaveBeenCalledTimes(2);
+    for (const call of tx.$executeRawUnsafe.mock.calls) {
+      // sql + bind values; values length must stay under the protocol cap
+      expect(call.length - 1).toBeLessThanOrEqual(30_000);
+    }
+  });
+});
+
+describe('insertBatchSize', () => {
+  it('keeps cols*batch under the bind cap', () => {
+    expect(insertBatchSize(15) * 15).toBeLessThanOrEqual(30_000);
+    expect(insertBatchSize(1)).toBe(30_000);
+    expect(insertBatchSize(0)).toBe(1);
   });
 });
