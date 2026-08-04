@@ -87,13 +87,15 @@ function companionStepName(config: CompanionFetchConfig): string {
 
 function shouldUseFallback(err: unknown): boolean {
   const e = err as ConnectorError;
-  if (e.statusCode === 403 || e.statusCode === 404) return true;
+  // 401: non-Enterprise Admin keys often get unauthorized (not just 403) on
+  // /analytics/* endpoints — treat like 403 for optional companions / fallbacks.
+  if (e.statusCode === 401 || e.statusCode === 403 || e.statusCode === 404) return true;
   if (e.statusCode === 400) {
     const msg = e.message ?? '';
     return /analytics|enterprise|permission|group_by|invalid/i.test(msg);
   }
   if (e.code === 'AUTH_FAILED' || e.code === 'REQUEST_FAILED') {
-    return /analytics|enterprise|not found|permission/i.test(e.message ?? '');
+    return /analytics|enterprise|not found|permission|unauthorized/i.test(e.message ?? '');
   }
   return false;
 }

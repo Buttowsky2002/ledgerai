@@ -53,10 +53,22 @@ const TABLES: Record<string, TableUpsert> = {
 
 const IDENT_RE = /^[a-z_][a-z0-9_]*$/;
 
+/**
+ * Postgres prepared statements cap bind variables at 32767 (protocol limit).
+ * Stay under that with headroom so ON CONFLICT / casts never edge us over.
+ */
+export const PG_MAX_BIND_PARAMS = 30_000;
+
 function assertIdent(name: string, what: string): void {
   if (!IDENT_RE.test(name)) {
     throw new Error(`postgres-analytics: invalid ${what} identifier: ${name}`);
   }
+}
+
+/** Rows per INSERT so `cols * rows <= PG_MAX_BIND_PARAMS`. */
+export function insertBatchSize(columnCount: number): number {
+  if (columnCount <= 0) return 1;
+  return Math.max(1, Math.floor(PG_MAX_BIND_PARAMS / columnCount));
 }
 
 /** Normalize a Postgres row to the shapes ClickHouse JSON output produced. */
@@ -188,8 +200,12 @@ export class PostgresAnalyticsStore extends AnalyticsStore {
       for (const [sig, groupRows] of groups) {
         const cols = sig === '' ? [] : sig.split(',');
         if (cols.length === 0) continue;
-        const { sql, values } = this.buildInsert(table, cols, groupRows, types, upsert);
-        await tx.$executeRawUnsafe(sql, ...values);
+        const batchSize = insertBatchSize(cols.length);
+        for (let i = 0; i < groupRows.length; i += batchSize) {
+          const chunk = groupRows.slice(i, i + batchSize);
+          const { sql, values } = this.buildInsert(table, cols, chunk, types, upsert);
+          await tx.$executeRawUnsafe(sql, ...values);
+        }
       }
     });
   }

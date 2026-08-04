@@ -873,10 +873,13 @@ export class ConnectorsService {
     } catch (e) {
       const err = e as { code?: string; message?: string };
       const code = err.code ?? 'SYNC_FAILED';
+      const rawMsg = err.message ?? 'sync failed';
       const msg =
         code === 'RATE_LIMITED'
-          ? `${safeErrorMessage(err.message ?? 'rate limit exceeded')} Wait ~60s, then click Sync now once.`
-          : safeErrorMessage(err.message ?? 'sync failed');
+          ? `${safeErrorMessage(rawMsg)} Wait ~60s, then click Sync now once.`
+          : /too many bind variables/i.test(rawMsg)
+            ? 'Sync window returned too many rows for a single write. Try a shorter range (e.g. Last 30d), or sync again after the latest API fix.'
+            : safeErrorMessage(rawMsg);
 
       await this.prisma.withTenant(tenantId!, async (tx) => {
         await tx.connectorSyncRun.update({
