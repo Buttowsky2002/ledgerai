@@ -9,7 +9,12 @@ function harness(summary: Record<string, unknown>, daily: Record<string, unknown
     async (sql: string) => (/v_agent_daily_unit_economics/.test(sql) ? daily : [summary]),
   );
   const ch = { queryScoped } as unknown as ClickHouseService;
-  return { svc: new AgentRoiService(ch), queryScoped };
+  const prisma = {
+    withTenant: jest.fn(async (_t: string, fn: (tx: unknown) => Promise<unknown>) =>
+      fn({ agent: { findFirst: jest.fn().mockResolvedValue({ agentId: 'agent-9' }) } }),
+    ),
+  } as unknown as import('../prisma/prisma.service').PrismaService;
+  return { svc: new AgentRoiService(ch, prisma), queryScoped };
 }
 
 describe('AgentRoiService.agentRoi', () => {

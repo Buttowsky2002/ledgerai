@@ -1,6 +1,7 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ChParam } from '../clickhouse/clickhouse.service';
 import { AnalyticsStore } from '../analytics-store/analytics-store';
+import { requireAgentInTenant } from '../common/require-agent';
 import { CopilotAnalyticsService, CopilotSpendSummary } from '../github-copilot/github-copilot-analytics.service';
 import { CursorAnalyticsService, CursorSpendSummary } from '../connectors/cursor-analytics.service';
 import { CursorProductivityService } from '../connectors/cursor-productivity.service';
@@ -1040,6 +1041,7 @@ export class AnalyticsService {
     if (!agentId) {
       throw new BadRequestException('agentId required');
     }
+    await requireAgentInTenant(this.prisma, agentId);
     const r = this.range(from, to);
     const params: Record<string, ChParam> = { ...r, agent: agentId };
     const [spend, runs, statusMix] = await Promise.all([
@@ -1303,7 +1305,7 @@ export class AnalyticsService {
   }
 
   /** Single-user drill-down for /users/[userId]. */
-  async userDetail(userId: string, from?: string, to?: string): Promise<UserDirectoryRow | null> {
+  async userDetail(userId: string, from?: string, to?: string): Promise<UserDirectoryRow> {
     if (!userId) {
       throw new BadRequestException('userId required');
     }
@@ -1329,7 +1331,10 @@ export class AnalyticsService {
       undefined,
       copilotPack.hints,
     );
-    return rows[0] ?? null;
+    if (!rows[0]) {
+      throw new NotFoundException('user not found');
+    }
+    return rows[0];
   }
 
   private userSpendExcludeKey(): string {

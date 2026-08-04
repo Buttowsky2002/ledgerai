@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { getTenantId } from '../tenant/tenant-context';
@@ -45,13 +45,16 @@ export class AttributionService {
   }
 
   /** One multi-agent coalition's members + Shapley split. */
-  async coalition(coalitionId: string): Promise<AttributionCoalition | null> {
+  async coalition(coalitionId: string): Promise<AttributionCoalition> {
     const rows = await this.prisma.withTenant(this.tenant(), (tx) =>
       tx.$queryRaw<AttributionCoalition[]>`
         SELECT coalition_id, outcome_id, members, method, sample_count, created_at
         FROM attribution_coalitions WHERE coalition_id = ${coalitionId}::uuid`,
     );
-    return rows[0] ?? null;
+    if (!rows[0]) {
+      throw new NotFoundException('coalition not found');
+    }
+    return rows[0];
   }
 
   /** Counterfactual baselines (with confounder-check caveats) for the audit trail. */
