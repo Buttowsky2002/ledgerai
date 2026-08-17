@@ -9,7 +9,9 @@ import type { SyncContext } from '../engine/connector-engine';
 import type { NormalizedRecord } from '../types/normalized-record';
 
 function loadPreset(): ConnectorDefinition {
-  return JSON.parse(readFileSync(join(__dirname, 'cursor-usage.json'), 'utf8')) as ConnectorDefinition;
+  return JSON.parse(
+    readFileSync(join(__dirname, 'cursor-usage.json'), 'utf8'),
+  ) as ConnectorDefinition;
 }
 
 describe('cursor-usage preset', () => {
@@ -32,10 +34,14 @@ describe('cursor-usage preset', () => {
     expect(companion.endpoint.path).toBe('/teams/daily-usage-data');
     expect(companion.pagination?.itemsPath).toBe('data');
     expect(companion.pagination?.type).toBe('page');
+    expect(companion.pagination?.hasMorePath).toBe('pagination.hasNextPage');
+    expect(companion.pagination?.pageSize).toBe(1000);
     const toolName = companion.fieldMappings.find(
       (m) => m.type === 'constant' && m.target === 'tool_name',
     );
-    expect(toolName && toolName.type === 'constant' ? toolName.value : undefined).toBe('cursor-usage');
+    expect(toolName && toolName.type === 'constant' ? toolName.value : undefined).toBe(
+      'cursor-usage',
+    );
 
     const commits = preset.companionFetches![1];
     expect(commits.id).toBe('commitAttribution');
@@ -85,11 +91,34 @@ describe('cursor-usage preset', () => {
       syncEnd: new Date('2026-06-07T00:00:00.000Z'),
     } as SyncContext;
     const tmpl = buildTemplateContext(ctx, { page: 2, page_size: 100 });
-    const body = preset.endpoints[0].bodyTemplate!
-      .replace(/\{\{(\w+)\}\}/g, (_, key: string) => String(tmpl[key as keyof typeof tmpl] ?? ''));
+    const body = preset.endpoints[0].bodyTemplate!.replace(/\{\{(\w+)\}\}/g, (_, key: string) =>
+      String(tmpl[key as keyof typeof tmpl] ?? ''),
+    );
     const parsed = JSON.parse(body) as Record<string, number>;
     expect(parsed.page).toBe(2);
     expect(parsed.pageSize).toBe(100);
+    expect(parsed.startDate).toBeLessThan(parsed.endDate);
+  });
+
+  it('paginates daily activity requests with Cursor pagination fields', () => {
+    const companion = preset.companionFetches![0];
+    const ctx = {
+      tenantId: 'tenant-1',
+      connectorId: 'conn-1',
+      syncRunId: 'run-1',
+      definition: preset,
+      credentials: {},
+      syncStart: new Date('2026-06-01T00:00:00.000Z'),
+      syncEnd: new Date('2026-06-07T00:00:00.000Z'),
+    } as SyncContext;
+    const tmpl = buildTemplateContext(ctx, { page: 2, page_size: companion.pagination?.pageSize });
+    const body = companion.endpoint.bodyTemplate!.replace(/\{\{(\w+)\}\}/g, (_, key: string) =>
+      String(tmpl[key as keyof typeof tmpl] ?? ''),
+    );
+    const parsed = JSON.parse(body) as Record<string, number>;
+
+    expect(parsed.page).toBe(2);
+    expect(parsed.pageSize).toBe(1000);
     expect(parsed.startDate).toBeLessThan(parsed.endDate);
   });
 
