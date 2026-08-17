@@ -1,9 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { getTenantId } from '../tenant/tenant-context';
@@ -28,14 +23,14 @@ import { toImportRow } from './types/normalized-record';
 import { runSyncOrchestrator } from './sync-orchestrator';
 import { finalizeConnectorRecord } from './connector-record-pipeline';
 import { AttributionMappingsService } from './attribution/attribution-mappings.service';
-import {
-  attributionWarning,
-  resolveCapabilities,
-} from './types/connector-capabilities';
+import { attributionWarning, resolveCapabilities } from './types/connector-capabilities';
 import { applyAnthropicKeyRouting } from './anthropic-key-routing';
 import { DEFAULT_SYNC_INTERVAL_MINUTES } from './sync-range';
 
-const DEFAULT_CONNECTOR_SCHEDULE = { intervalMinutes: DEFAULT_SYNC_INTERVAL_MINUTES, enabled: true };
+const DEFAULT_CONNECTOR_SCHEDULE = {
+  intervalMinutes: DEFAULT_SYNC_INTERVAL_MINUTES,
+  enabled: true,
+};
 
 const NO_COST_ROWS_WARNING =
   'API connected, but no billable cost rows were returned for the selected window. ' +
@@ -62,6 +57,20 @@ const ANTHROPIC_CHUNK_PAUSE_MS = 4_000;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+type SyncRecordError = {
+  recordRef: string;
+  code: string;
+  message: string;
+};
+
+function incompleteSyncError(errors: SyncRecordError[]): Error & { code: string } {
+  const error = new Error(
+    `Sync was incomplete: ${errors.length} record${errors.length === 1 ? '' : 's'} failed validation or a companion request. Existing spend was preserved.`,
+  ) as Error & { code: string };
+  error.code = 'PARTIAL_SYNC_FAILED';
+  return error;
 }
 
 /** True when cost_report returned day buckets but every results[] array is empty. */
@@ -109,7 +118,8 @@ export class ConnectorsService {
     dto: CreateConnectorDto,
   ): ConnectorDefinition {
     const cfg = dto.configJson ?? {};
-    const locked = LOCKED_BUILTIN_PRESETS.has(def.id ?? '') || LOCKED_BUILTIN_PRESETS.has(dto.presetId ?? '');
+    const locked =
+      LOCKED_BUILTIN_PRESETS.has(def.id ?? '') || LOCKED_BUILTIN_PRESETS.has(dto.presetId ?? '');
     const authType = locked
       ? def.authType
       : ((cfg.authType as ConnectorDefinition['authType']) ?? def.authType);
@@ -128,14 +138,12 @@ export class ConnectorsService {
       baseUrl: locked ? def.baseUrl : (dto.baseUrl ?? def.baseUrl),
       authType,
       authHeaderName:
-        authType === 'api_key_header' ? def.authHeaderName ?? 'x-api-key' : def.authHeaderName,
+        authType === 'api_key_header' ? (def.authHeaderName ?? 'x-api-key') : def.authHeaderName,
       endpoints,
     };
   }
 
-  private resolveStoredDefinition(
-    cfg: Record<string, unknown>,
-  ): ConnectorDefinition | undefined {
+  private resolveStoredDefinition(cfg: Record<string, unknown>): ConnectorDefinition | undefined {
     if (!cfg?.definition) return undefined;
     const def = { ...(cfg.definition as ConnectorDefinition) };
     if (cfg.baseUrl) def.baseUrl = String(cfg.baseUrl);
@@ -146,10 +154,7 @@ export class ConnectorsService {
     return def;
   }
 
-  private mergeBuiltinDefinition(
-    kind: string,
-    cfg: Record<string, unknown>,
-  ): ConnectorDefinition {
+  private mergeBuiltinDefinition(kind: string, cfg: Record<string, unknown>): ConnectorDefinition {
     const fresh = this.definitions.getBuiltin(kind);
     if (LOCKED_BUILTIN_PRESETS.has(kind)) {
       return { ...fresh };
@@ -317,14 +322,18 @@ export class ConnectorsService {
           provider: dto.provider ?? definition?.provider ?? 'custom',
           category: dto.category ?? definition?.category ?? 'custom',
           kind: dto.presetId ?? 'api_connector',
-          config: JSON.parse(JSON.stringify({
-            ...(dto.configJson ?? {}),
-            baseUrl: dto.baseUrl ?? definition?.baseUrl,
-            definition,
-          })) as Prisma.InputJsonValue,
+          config: JSON.parse(
+            JSON.stringify({
+              ...(dto.configJson ?? {}),
+              baseUrl: dto.baseUrl ?? definition?.baseUrl,
+              definition,
+            }),
+          ) as Prisma.InputJsonValue,
           secretRef,
           mappingOverridesJson: (dto.mappingOverridesJson ?? {}) as Prisma.InputJsonValue,
-          scheduleJson: (dto.scheduleJson ?? definition?.schedule ?? DEFAULT_CONNECTOR_SCHEDULE) as Prisma.InputJsonValue,
+          scheduleJson: (dto.scheduleJson ??
+            definition?.schedule ??
+            DEFAULT_CONNECTOR_SCHEDULE) as Prisma.InputJsonValue,
           status: secretRef ? 'connected' : 'draft',
           enabled: dto.enabled !== false,
         },
@@ -376,7 +385,9 @@ export class ConnectorsService {
           provider: dto.provider,
           category: dto.category,
           config: dto.configJson
-            ? (JSON.parse(JSON.stringify({ ...(before.config as object), ...dto.configJson })) as Prisma.InputJsonValue)
+            ? (JSON.parse(
+                JSON.stringify({ ...(before.config as object), ...dto.configJson }),
+              ) as Prisma.InputJsonValue)
             : undefined,
           mappingOverridesJson: dto.mappingOverridesJson as Prisma.InputJsonValue | undefined,
           scheduleJson: dto.scheduleJson as Prisma.InputJsonValue | undefined,
@@ -431,7 +442,12 @@ export class ConnectorsService {
     const creds = this.parseCredentials(secret, definition.authType);
 
     const maxDaysPerRequest = definition.syncRange?.maxDaysPerRequest ?? undefined;
-    const { syncStart, syncEnd } = resolvePreviewWindow(range?.from, range?.to, 30, maxDaysPerRequest);
+    const { syncStart, syncEnd } = resolvePreviewWindow(
+      range?.from,
+      range?.to,
+      30,
+      maxDaysPerRequest,
+    );
 
     try {
       const result = await fetchPreviewPage({
@@ -446,8 +462,8 @@ export class ConnectorsService {
       });
 
       const mappings = await this.attributionMappings.loadForConnector(id);
-      const finalized = result.records.map((r) =>
-        finalizeConnectorRecord(r, definition, mappings, []).record,
+      const finalized = result.records.map(
+        (r) => finalizeConnectorRecord(r, definition, mappings, []).record,
       );
       const normalizedPreview = finalized.map((r) => toImportRow(r));
       const previewSpend = normalizedPreview.reduce(
@@ -561,7 +577,12 @@ export class ConnectorsService {
     }
     const maxDaysPerRequest = definition.syncRange?.maxDaysPerRequest ?? undefined;
     const backfillDays = definition.syncRange?.defaultBackfillDays ?? DEFAULT_BACKFILL_DAYS;
-    const chunks = resolveSyncChunks(effectiveRange.from, effectiveRange.to, backfillDays, maxDaysPerRequest);
+    const chunks = resolveSyncChunks(
+      effectiveRange.from,
+      effectiveRange.to,
+      backfillDays,
+      maxDaysPerRequest,
+    );
     if (chunks.length === 0) {
       throw new BadRequestException(
         handoff.apiSyncBaselineFrom
@@ -612,12 +633,6 @@ export class ConnectorsService {
       };
       let keysReleased = false;
 
-      if (definition.provider === 'cursor') {
-        await this.purgeProviderApiImports(tenantId!, 'cursor', overallStart, overallEnd);
-        await this.importService.releaseConnectorImportKeys(id);
-        keysReleased = true;
-      }
-
       for (let chunkIdx = 0; chunkIdx < chunks.length; chunkIdx++) {
         const chunk = chunks[chunkIdx];
         const fetched = await runSyncOrchestrator({
@@ -651,14 +666,15 @@ export class ConnectorsService {
           tokenCount += Number(r.metrics.input_tokens ?? 0) + Number(r.metrics.output_tokens ?? 0);
         }
 
-        if (netSpend > 0 && !keysReleased) {
+        if (definition.provider !== 'cursor' && netSpend > 0 && !keysReleased) {
           await this.purgeZeroCostApiImports(tenantId!, overallStart, overallEnd);
           await this.importService.releaseConnectorImportKeys(id);
           keysReleased = true;
         }
 
-        const importRows = fetched.records.map(toImportRow);
-        if (importRows.length) {
+        if (definition.provider !== 'cursor') {
+          const importRows = fetched.records.map(toImportRow);
+          if (!importRows.length) continue;
           const chunkSummary = await this.importService.importEvents({
             events: importRows as unknown as Record<string, unknown>[],
           });
@@ -670,12 +686,15 @@ export class ConnectorsService {
             received: importSummary.received + chunkSummary.received,
             keyless: importSummary.keyless + chunkSummary.keyless,
             byTable: Object.fromEntries(
-              [...new Set([...Object.keys(importSummary.byTable), ...Object.keys(chunkSummary.byTable)])].map(
-                (table) => [
-                  table,
-                  (importSummary.byTable[table] ?? 0) + (chunkSummary.byTable[table] ?? 0),
-                ],
-              ),
+              [
+                ...new Set([
+                  ...Object.keys(importSummary.byTable),
+                  ...Object.keys(chunkSummary.byTable),
+                ]),
+              ].map((table) => [
+                table,
+                (importSummary.byTable[table] ?? 0) + (chunkSummary.byTable[table] ?? 0),
+              ]),
             ),
           };
         }
@@ -696,6 +715,25 @@ export class ConnectorsService {
         capabilities,
         finalCursor,
       };
+
+      if (fetched.errors.length > 0) {
+        await this.persistSyncErrors(tenantId!, id, syncRun.syncRunId, fetched.errors);
+        throw incompleteSyncError(fetched.errors);
+      }
+
+      if (definition.provider === 'cursor') {
+        // Cursor re-syncs replace the selected window. Do not erase prior spend
+        // until every range and companion request has fetched and validated.
+        await this.purgeProviderApiImports(tenantId!, 'cursor', overallStart, overallEnd);
+        await this.importService.releaseConnectorImportKeys(id);
+
+        const importRows = fetched.records.map(toImportRow);
+        if (importRows.length) {
+          importSummary = await this.importService.importEvents({
+            events: importRows as unknown as Record<string, unknown>[],
+          });
+        }
+      }
 
       let nextConfig = cfg;
       await this.prisma.withTenant(tenantId!, async (tx) => {
@@ -827,7 +865,12 @@ export class ConnectorsService {
       });
 
       this.logger.log(
-        { event: 'connector_sync', connectorId: id, imported: importSummary.imported, skipped: importSummary.skipped },
+        {
+          event: 'connector_sync',
+          connectorId: id,
+          imported: importSummary.imported,
+          skipped: importSummary.skipped,
+        },
         'connector sync complete',
       );
 
@@ -856,17 +899,18 @@ export class ConnectorsService {
             : importSummary.imported === 0 && fetched.records.length > 0
               ? 'Records were fetched but all were skipped as duplicates from a prior import or sync.'
               : undefined,
-        duplicateWarning: importSummary.skipped > 0
-          ? 'Some records were skipped as duplicates — they may overlap with prior CSV imports or syncs.'
-          : undefined,
+        duplicateWarning:
+          importSummary.skipped > 0
+            ? 'Some records were skipped as duplicates — they may overlap with prior CSV imports or syncs.'
+            : undefined,
         handoff: readConnectorHandoff(nextConfig),
         syncRangeApplied: {
           from: overallStart.toISOString().slice(0, 10),
           to: overallEnd.toISOString().slice(0, 10),
           clampedToBaseline: Boolean(
             handoff.apiSyncBaselineFrom &&
-              range?.from &&
-              range.from.slice(0, 10) < handoff.apiSyncBaselineFrom,
+            range?.from &&
+            range.from.slice(0, 10) < handoff.apiSyncBaselineFrom,
           ),
         },
       };
@@ -884,7 +928,12 @@ export class ConnectorsService {
       await this.prisma.withTenant(tenantId!, async (tx) => {
         await tx.connectorSyncRun.update({
           where: { syncRunId: syncRun.syncRunId },
-          data: { status: 'failed', completedAt: new Date(), errorCode: code, errorMessageSafe: msg },
+          data: {
+            status: 'failed',
+            completedAt: new Date(),
+            errorCode: code,
+            errorMessageSafe: msg,
+          },
         });
         await tx.connector.update({
           where: { connectorId: id },
@@ -906,8 +955,32 @@ export class ConnectorsService {
     }
   }
 
+  private async persistSyncErrors(
+    tenantId: string,
+    connectorId: string,
+    syncRunId: string,
+    errors: SyncRecordError[],
+  ): Promise<void> {
+    await this.prisma.withTenant(tenantId, (tx) =>
+      tx.connectorSyncError.createMany({
+        data: errors.map((err) => ({
+          tenantId,
+          connectorId,
+          syncRunId,
+          recordRef: err.recordRef,
+          errorCode: err.code,
+          errorMessageSafe: err.message,
+        })),
+      }),
+    );
+  }
+
   /** Remove prior zero-cost API imports in the sync window so a backfill can replace them. */
-  private async purgeZeroCostApiImports(tenantId: string, syncStart: Date, syncEnd: Date): Promise<void> {
+  private async purgeZeroCostApiImports(
+    tenantId: string,
+    syncStart: Date,
+    syncEnd: Date,
+  ): Promise<void> {
     const from = syncStart.toISOString().slice(0, 10);
     const to = syncEnd.toISOString().slice(0, 10);
     await this.ch.command(

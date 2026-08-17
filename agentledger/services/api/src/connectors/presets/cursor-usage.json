@@ -78,12 +78,13 @@
       "endpoint": {
         "path": "/teams/daily-usage-data",
         "method": "POST",
-        "bodyTemplate": "{\"startDate\":{{sync_start_unix_ms}},\"endDate\":{{sync_end_unix_ms}}}"
+        "bodyTemplate": "{\"startDate\":{{sync_start_unix_ms}},\"endDate\":{{sync_end_unix_ms}},\"page\":{{page}},\"pageSize\":{{page_size}}}"
       },
       "pagination": {
         "type": "page",
         "itemsPath": "data",
-        "pageSize": 100,
+        "hasMorePath": "pagination.hasNextPage",
+        "pageSize": 1000,
         "maxPages": 500
       },
       "fieldMappings": [
