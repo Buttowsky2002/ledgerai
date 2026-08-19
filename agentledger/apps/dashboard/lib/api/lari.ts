@@ -1,4 +1,10 @@
-import type { CfoViewResponse, CostBasisMode, LariRecommendationsResponse, UserValueResponse } from '@/types/lari';
+import type {
+  CfoViewResponse,
+  CostBasisMode,
+  LariRecommendationsResponse,
+  ProductWorthResponse,
+  UserValueResponse,
+} from '@/types/lari';
 
 export type CfoViewParams = {
   startDate?: string;
@@ -40,6 +46,26 @@ export async function fetchLariRecommendations(
   });
   if (!res.ok) return null;
   return (await res.json()) as LariRecommendationsResponse;
+}
+
+export type ProductWorthParams = {
+  startDate?: string;
+  endDate?: string;
+};
+
+/** Fetch per-product worth scorecard. */
+export async function fetchProductWorth(
+  params: ProductWorthParams,
+): Promise<ProductWorthResponse | null> {
+  const qs = new URLSearchParams();
+  if (params.startDate) qs.set('startDate', params.startDate);
+  if (params.endDate) qs.set('endDate', params.endDate);
+  const suffix = qs.toString();
+  const res = await fetch(`/api/lari/product-worth${suffix ? `?${suffix}` : ''}`, {
+    cache: 'no-store',
+  });
+  if (!res.ok) return null;
+  return (await res.json()) as ProductWorthResponse;
 }
 
 export type UserValueParams = {

@@ -47,6 +47,34 @@ export class LariRecommendationsService {
     if (!tenantId) {
       throw new BadRequestException('no tenant in context');
     }
+    const engineInput = await this.assembleEngineInput(tenantId, from, to);
+    const { recommendations, providerRankings } = generateLariRecommendations(engineInput);
+
+    const totalEstimatedSavingsUsd = recommendations.reduce(
+      (s, rec) => s + (rec.estimatedSavingsUsd ?? 0),
+      0,
+    );
+
+    return {
+      from: engineInput.from,
+      to: engineInput.to,
+      recommendations,
+      providerRankings,
+      agentEconomicsHighlights: engineInput.agentEconomics,
+      summary: {
+        totalEstimatedSavingsUsd: Math.round(totalEstimatedSavingsUsd * 100) / 100,
+        highPriorityCount: recommendations.filter((rec) => rec.priority === 'high').length,
+        criticalCount: recommendations.filter((rec) => rec.priority === 'critical').length,
+      },
+    };
+  }
+
+  /** Shared data assembly for LARI recommendations and product-worth scorecard. */
+  async assembleEngineInput(
+    tenantId: string,
+    from?: string,
+    to?: string,
+  ): Promise<LariRecommendationsInput> {
     const r = this.range(from, to, 365);
     const periodDays = Math.max(
       1,
@@ -66,6 +94,7 @@ export class LariRecommendationsService {
       subscriptionPlans,
       copilotInactive,
       perUserMode,
+      copilotRoiPct,
     ] = await Promise.all([
       this.ch.queryScoped<{ provider: string; cost_usd: number; calls: number }>(
         RECONCILED_PROVIDER_SPEND_SQL,
@@ -106,6 +135,7 @@ export class LariRecommendationsService {
       this.subscriptionPlans(tenantId),
       this.copilotInactiveSeats(tenantId),
       getPerUserAnalyticsMode(this.prisma, tenantId),
+      this.copilotPortfolioRoiPct(tenantId, r),
     ]);
 
     const userUtilization = await this.userValue.assembleUserUtilization(tenantId, r, perUserMode);
@@ -116,7 +146,7 @@ export class LariRecommendationsService {
       r,
     );
 
-    const engineInput: LariRecommendationsInput = {
+    return {
       from: r.from,
       to: r.to,
       periodDays,
@@ -151,26 +181,7 @@ export class LariRecommendationsService {
       priceBook,
       userUtilization,
       perUserMode,
-    };
-
-    const { recommendations, providerRankings } = generateLariRecommendations(engineInput);
-
-    const totalEstimatedSavingsUsd = recommendations.reduce(
-      (s, rec) => s + (rec.estimatedSavingsUsd ?? 0),
-      0,
-    );
-
-    return {
-      from: r.from,
-      to: r.to,
-      recommendations,
-      providerRankings,
-      agentEconomicsHighlights: agentEconomics,
-      summary: {
-        totalEstimatedSavingsUsd: Math.round(totalEstimatedSavingsUsd * 100) / 100,
-        highPriorityCount: recommendations.filter((rec) => rec.priority === 'high').length,
-        criticalCount: recommendations.filter((rec) => rec.priority === 'critical').length,
-      },
+      copilotRoiPct,
     };
   }
 
@@ -300,6 +311,43 @@ export class LariRecommendationsService {
       return (now - s.lastActivityAt.getTime()) / MS_DAY >= 14;
     });
     return { count: inactive.length, seatPrice: 19 };
+  }
+
+  /** Org-level Copilot ROI % for product-worth verdicts (undefined when no Copilot data). */
+  private async copilotPortfolioRoiPct(
+    tenantId: string,
+    r: Range,
+  ): Promise<number | undefined> {
+    const rows = await this.prisma.withTenant(tenantId, async (tx) => {
+      const connections = await tx.aiProviderConnection.findMany({
+        where: { tenantId, provider: COPILOT_PROVIDER },
+        select: { connectionId: true },
+      });
+      if (connections.length === 0) return [];
+      const connectionIds = connections.map((c) => c.connectionId);
+      return tx.githubCopilotRoiDaily.findMany({
+        where: {
+          tenantId,
+          connectionId: { in: connectionIds },
+          usageDate: {
+            gte: new Date(`${r.from}T00:00:00.000Z`),
+            lte: new Date(`${r.to}T23:59:59.999Z`),
+          },
+          teamSlug: '',
+        },
+        select: {
+          totalCopilotCost: true,
+          estimatedValue: true,
+          roiPercentage: true,
+        },
+      });
+    });
+    if (rows.length === 0) return undefined;
+
+    const totalValue = rows.reduce((s, row) => s + n(row.estimatedValue), 0);
+    const totalCost = rows.reduce((s, row) => s + n(row.totalCopilotCost), 0);
+    if (totalCost <= 0) return n(rows[0]?.roiPercentage) || undefined;
+    return Math.round(((totalValue - totalCost) / totalCost) * 10000) / 100;
   }
 
   /** Global price book rows effective at range end — pivoted to input/output ModelRate pairs. */

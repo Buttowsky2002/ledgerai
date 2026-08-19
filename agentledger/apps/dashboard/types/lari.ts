@@ -102,7 +102,10 @@ export type SavingsCategory =
   | 'attribution'
   | 'configuration'
   | 'model_substitution'
-  | 'user_value';
+  | 'user_value'
+  | 'product_worth'
+  | 'budget_suggestion'
+  | 'spend_driver';
 
 export interface LariActionableRecommendation {
   id: string;
@@ -213,3 +216,120 @@ export interface UserValueIndividualResponse {
 }
 
 export type UserValueResponse = UserValueTeamResponse | UserValueIndividualResponse;
+
+/** Product worth scorecard — mirrors GET /v1/lari/product-worth. */
+export type ProductWorthVerdict = 'worth_it' | 'marginal' | 'not_worth_it' | 'insufficient_data';
+
+export type ProductDataMode = 'import_only' | 'live_only' | 'mixed' | 'unknown';
+
+export type SpendTrend = 'up' | 'down' | 'flat' | 'insufficient';
+
+export interface ProductSpendBySource {
+  portalImportUsd: number;
+  connectorUsd: number;
+  liveUsd: number;
+  portalImportCalls: number;
+  connectorCalls: number;
+  liveCalls: number;
+}
+
+export type ProductConfidenceBasis =
+  | 'outcomes'
+  | 'utilization'
+  | 'productivity_proxy'
+  | 'mixed'
+  | 'none';
+
+export interface ProductSpendDriver {
+  type: 'user' | 'model' | 'seat_waste';
+  label: string;
+  costUsd: number;
+  detail?: string;
+}
+
+export interface ProductWorthEntry {
+  product: string;
+  totalSpendUsd: number;
+  seatCostUsd: number;
+  meteredSpendUsd: number;
+  attributedValueUsd: number;
+  worthRatio: number | null;
+  verdict: ProductWorthVerdict;
+  confidenceScore: number;
+  confidenceBasis: ProductConfidenceBasis;
+  monthlyRunRateUsd: number;
+  recommendedBudgetUsd: number | null;
+  topDrivers: ProductSpendDriver[];
+  spendNarrative: string;
+  spendTrend: SpendTrend;
+  periodChangePct: number | null;
+  periodChangeUsd: number | null;
+  connectOutcomesPrompt: boolean;
+  spendBySource?: ProductSpendBySource;
+  dataMode?: ProductDataMode;
+}
+
+export interface DataCoverageSummary {
+  totalSpendUsd: number;
+  portalImportUsd: number;
+  connectorUsd: number;
+  liveUsd: number;
+  portalImportSharePct: number;
+  importOnlyProducts: number;
+  productsWithoutOutcomes: number;
+  totalOutcomes: number;
+  importOutcomes: number;
+  connectorOutcomes: number;
+  roiLinkedOutcomes: number;
+  roiLinkedValueUsd: number;
+  roiCoveragePct: number;
+  headlineEligibleOutcomes: number;
+  portalImportRuns: number;
+  bulkImportEvents: number;
+  billingConnectors: string[];
+  outcomeConnectors: string[];
+  worthAnalysisReady: boolean;
+  outcomeRoiReady: boolean;
+}
+
+export interface RecommendedOutcomeSource {
+  id: string;
+  label: string;
+  outcomeType: string;
+  href: string;
+  reason: string;
+}
+
+export interface OutcomeSourceStatus {
+  connected: string[];
+  recommended: RecommendedOutcomeSource[];
+}
+
+export interface BudgetSuggestionEntry {
+  scope: 'tenant' | 'product' | 'agent';
+  scopeId: string;
+  label: string;
+  currentRunRateUsd: number;
+  recommendedBudgetUsd: number;
+  deltaUsd: number;
+  rationale: string;
+  verdict?: ProductWorthVerdict;
+}
+
+export interface ProductWorthResponse {
+  from: string;
+  to: string;
+  products: ProductWorthEntry[];
+  summary: {
+    productCount: number;
+    worthItCount: number;
+    notWorthItCount: number;
+    totalSpendUsd: number;
+    totalAttributedValueUsd: number;
+    portfolioWorthRatio: number | null;
+  };
+  budgetSuggestions: BudgetSuggestionEntry[];
+  dataCoverage: DataCoverageSummary;
+  outcomeSources: OutcomeSourceStatus;
+  importParityMessage: string | null;
+}

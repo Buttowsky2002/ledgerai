@@ -1,4 +1,6 @@
+import { Suspense } from 'react';
 import { LineChartClient } from '../../components/charts';
+import { SuggestedBudgetsPanel } from '../../components/lari/SuggestedBudgetsPanel';
 import { Card, DataTable, PageHeader, usd } from '../../components/ui';
 import { apiClient, fetchData } from '../../lib/api';
 import { defaultRange } from '../../lib/auth';
@@ -27,6 +29,17 @@ export default async function BudgetsPage() {
   return (
     <>
       <PageHeader title="Budgets" subtitle={`Burn-down · ${from} → ${to}`} />
+
+      <Suspense
+        fallback={
+          <Card title="Suggested budgets">
+            <p className="py-8 text-center text-sm text-muted">Loading suggestions…</p>
+          </Card>
+        }
+      >
+        <SuggestedBudgetsPanel from={from} to={to} />
+      </Suspense>
+
       <Card title="Cumulative spend (USD)">
         <LineChartClient data={chart} xKey="hour" yKey="cumulative" />
       </Card>
