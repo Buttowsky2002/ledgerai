@@ -35,7 +35,7 @@ export function ImportCoverageBanner({ from, to }: { from: string; to: string })
   return (
     <Card
       title="Data coverage"
-      subtitle="Import & outcome linkage"
+      subtitle="Connectors, imports & outcome linkage"
       actions={
         <Badge tone={healthy ? 'pos' : 'warn'}>
           {cov.roiLinkedOutcomes}/{cov.totalOutcomes || '—'} outcomes in ROI

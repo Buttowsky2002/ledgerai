@@ -1,12 +1,19 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
-import { ChParam } from '../clickhouse/clickhouse.service';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { ChParam } from '../analytics-store/analytics-store';
 import { AnalyticsStore } from '../analytics-store/analytics-store';
+import { CursorAnalyticsService } from '../connectors/cursor-analytics.service';
 import {
   PROVIDER_SOURCE_BREAKDOWN_SQL,
   RECONCILED_MODEL_USAGE_SQL,
   RECONCILED_PROVIDER_SPEND_SQL,
 } from '../connectors/metered-cost';
+import { CopilotAnalyticsService } from '../github-copilot/github-copilot-analytics.service';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  mergeProviderSpendRows,
+  normalizeProviderKey,
+  supplementalConnectorSpend,
+} from './lari-connector-spend';
 import { rankProviders } from './lari-recommendations';
 import { LariRecommendationsService } from './lari-recommendations.service';
 import { buildProductWorthScorecard } from './lari-product-worth';
@@ -23,10 +30,14 @@ const n = (v: unknown): number => (typeof v === 'number' ? v : Number(v) || 0);
 
 @Injectable()
 export class LariProductWorthService {
+  private readonly logger = new Logger(LariProductWorthService.name);
+
   constructor(
     private readonly recommendations: LariRecommendationsService,
     private readonly ch: AnalyticsStore,
     private readonly prisma: PrismaService,
+    private readonly copilotAnalytics: CopilotAnalyticsService,
+    private readonly cursorAnalytics: CursorAnalyticsService,
   ) {}
 
   async getProductWorth(from?: string, to?: string) {
@@ -46,6 +57,8 @@ export class LariProductWorthService {
       outcomeStats,
       importStats,
       connectors,
+      copilotSpend,
+      cursorSpend,
     ] = await Promise.all([
       this.ch.queryScoped<{ provider: string; cost_usd: number }>(
         RECONCILED_PROVIDER_SPEND_SQL,
@@ -67,11 +80,13 @@ export class LariProductWorthService {
       this.fetchOutcomeStats(params),
       this.fetchImportStats(tenantId, engineInput.from, engineInput.to),
       this.fetchConnectorPresence(tenantId),
+      this.copilotAnalytics.getSpendSummary(tenantId, engineInput.from, engineInput.to),
+      this.cursorAnalytics.getSpendSummary(tenantId, engineInput.from, engineInput.to),
     ]);
 
     const spendBySource = new Map<string, ProductSpendBySource>();
     for (const row of sourceBreakdown) {
-      spendBySource.set(String(row.provider).trim().toLowerCase(), {
+      spendBySource.set(normalizeProviderKey(String(row.provider)), {
         portalImportUsd: n(row.portal_import_usd),
         connectorUsd: n(row.connector_usd),
         liveUsd: n(row.live_usd),
@@ -81,15 +96,35 @@ export class LariProductWorthService {
       });
     }
 
-    const providerRankings = rankProviders(
+    const connectorSupplement = supplementalConnectorSpend(
+      copilotSpend,
+      cursorSpend,
       engineInput.providerSpend,
+    );
+    for (const [key, src] of connectorSupplement.spendBySource) {
+      const existing = spendBySource.get(key);
+      if (existing) {
+        existing.connectorUsd = n(existing.connectorUsd + src.connectorUsd);
+        existing.connectorCalls += src.connectorCalls;
+      } else {
+        spendBySource.set(key, src);
+      }
+    }
+
+    const providerSpend = mergeProviderSpendRows(
+      engineInput.providerSpend,
+      connectorSupplement.providerSpend,
+    );
+
+    const providerRankings = rankProviders(
+      providerSpend,
       engineInput.agentProviderSpend,
       engineInput.agentEconomics,
     );
 
     return buildProductWorthScorecard(engineInput.from, engineInput.to, {
       periodDays: engineInput.periodDays,
-      providerSpend: engineInput.providerSpend,
+      providerSpend,
       subscriptionPlans: engineInput.subscriptionPlans,
       providerRankings,
       modelUsage: engineInput.modelUsage,
@@ -122,53 +157,71 @@ export class LariProductWorthService {
   private async fetchOutcomeStats(
     params: Record<string, ChParam>,
   ): Promise<OutcomeStats> {
-    const [outcomeRows, roiRows] = await Promise.all([
-      this.ch.queryScoped<{
-        total_outcomes: number;
-        import_outcomes: number;
-        connector_outcomes: number;
-        api_outcomes: number;
-        total_value_usd: number;
-      }>(
-        `SELECT
-           count() AS total_outcomes,
-           countIf(source_system = 'import') AS import_outcomes,
-           countIf(source_system IN ('github', 'jira', 'zendesk')) AS connector_outcomes,
-           countIf(source_system = 'api') AS api_outcomes,
-           sum(business_value_usd) AS total_value_usd
-         FROM outcomes
-         WHERE tenant_id = {tenant:String}
-           AND toDate(ts) BETWEEN {from:Date} AND {to:Date}`,
-        params,
-      ),
-      this.ch.queryScoped<{
-        roi_linked: number;
-        roi_value_usd: number;
-        headline_eligible: number;
-      }>(
-        `SELECT
-           count() AS roi_linked,
-           sum(value_usd) AS roi_value_usd,
-           countIf(headline_eligible) AS headline_eligible
-         FROM v_roi
-         WHERE tenant_id = {tenant:String}
-           AND toDate(outcome_ts) BETWEEN {from:Date} AND {to:Date}`,
-        params,
-      ),
-    ]);
-
-    const o = outcomeRows[0];
-    const r = roiRows[0];
-    return {
-      totalOutcomes: n(o?.total_outcomes),
-      importOutcomes: n(o?.import_outcomes),
-      connectorOutcomes: n(o?.connector_outcomes),
-      apiOutcomes: n(o?.api_outcomes),
-      totalValueUsd: n(o?.total_value_usd),
-      roiLinkedOutcomes: n(r?.roi_linked),
-      roiLinkedValueUsd: n(r?.roi_value_usd),
-      headlineEligibleOutcomes: n(r?.headline_eligible),
+    const empty: OutcomeStats = {
+      totalOutcomes: 0,
+      importOutcomes: 0,
+      connectorOutcomes: 0,
+      apiOutcomes: 0,
+      totalValueUsd: 0,
+      roiLinkedOutcomes: 0,
+      roiLinkedValueUsd: 0,
+      headlineEligibleOutcomes: 0,
     };
+
+    try {
+      const [outcomeRows, roiRows] = await Promise.all([
+        this.ch.queryScoped<{
+          total_outcomes: number;
+          import_outcomes: number;
+          connector_outcomes: number;
+          api_outcomes: number;
+          total_value_usd: number;
+        }>(
+          `SELECT
+             count() AS total_outcomes,
+             countIf(source_system = 'import') AS import_outcomes,
+             countIf(source_system IN ('github', 'jira', 'zendesk')) AS connector_outcomes,
+             countIf(source_system = 'api') AS api_outcomes,
+             sum(business_value_usd) AS total_value_usd
+           FROM outcomes
+           WHERE tenant_id = {tenant:String}
+             AND toDate(ts) BETWEEN {from:Date} AND {to:Date}`,
+          params,
+        ),
+        this.ch.queryScoped<{
+          roi_linked: number;
+          roi_value_usd: number;
+          headline_eligible: number;
+        }>(
+          `SELECT
+             count() AS roi_linked,
+             sum(value_usd) AS roi_value_usd,
+             countIf(headline_eligible) AS headline_eligible
+           FROM v_roi
+           WHERE tenant_id = {tenant:String}
+             AND toDate(outcome_ts) BETWEEN {from:Date} AND {to:Date}`,
+          params,
+        ),
+      ]);
+
+      const o = outcomeRows[0];
+      const r = roiRows[0];
+      return {
+        totalOutcomes: n(o?.total_outcomes),
+        importOutcomes: n(o?.import_outcomes),
+        connectorOutcomes: n(o?.connector_outcomes),
+        apiOutcomes: n(o?.api_outcomes),
+        totalValueUsd: n(o?.total_value_usd),
+        roiLinkedOutcomes: n(r?.roi_linked),
+        roiLinkedValueUsd: n(r?.roi_value_usd),
+        headlineEligibleOutcomes: n(r?.headline_eligible),
+      };
+    } catch (err) {
+      this.logger.warn(
+        `outcome stats unavailable for product-worth: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return empty;
+    }
   }
 
   private async fetchImportStats(

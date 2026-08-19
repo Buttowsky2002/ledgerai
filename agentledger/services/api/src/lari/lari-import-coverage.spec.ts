@@ -46,6 +46,24 @@ describe('Import coverage', () => {
     expect(enriched[0]!.spendBySource?.portalImportUsd).toBe(800);
   });
 
+  it('tags connector-only products', () => {
+    const src = new Map([
+      [
+        'anthropic',
+        {
+          portalImportUsd: 0,
+          connectorUsd: 400,
+          liveUsd: 0,
+          portalImportCalls: 0,
+          connectorCalls: 80,
+          liveCalls: 0,
+        },
+      ],
+    ]);
+    const enriched = enrichProductsWithSources([{ ...baseProduct(), product: 'anthropic' }], src);
+    expect(enriched[0]!.dataMode).toBe('connector_only');
+  });
+
   it('builds tenant data coverage summary', () => {
     const coverage = buildDataCoverage({
       products: [{ ...baseProduct(), dataMode: 'import_only', connectOutcomesPrompt: true }],
@@ -111,6 +129,33 @@ describe('Import coverage', () => {
       outcomeRoiReady: false,
     });
     expect(msg).toContain('portal CSV');
+  });
+
+  it('prompts connector sync when billing connectors exist but no spend', () => {
+    const msg = importParityNarrative({
+      totalSpendUsd: 0,
+      portalImportUsd: 0,
+      connectorUsd: 0,
+      liveUsd: 0,
+      portalImportSharePct: 0,
+      importOnlyProducts: 0,
+      productsWithoutOutcomes: 0,
+      totalOutcomes: 0,
+      importOutcomes: 0,
+      connectorOutcomes: 0,
+      roiLinkedOutcomes: 0,
+      roiLinkedValueUsd: 0,
+      roiCoveragePct: 0,
+      headlineEligibleOutcomes: 0,
+      portalImportRuns: 0,
+      bulkImportEvents: 0,
+      billingConnectors: ['Anthropic Usage', 'GitHub Copilot'],
+      outcomeConnectors: [],
+      worthAnalysisReady: false,
+      outcomeRoiReady: false,
+    });
+    expect(msg).toContain('Billing connectors connected');
+    expect(msg).toContain('Anthropic Usage');
   });
 
   it('returns null when imports and outcomes both feed ROI', () => {

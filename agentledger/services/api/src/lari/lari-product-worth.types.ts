@@ -15,7 +15,7 @@ export type SpendDriverType = 'user' | 'model' | 'seat_waste';
 
 export type SpendTrend = 'up' | 'down' | 'flat' | 'insufficient';
 
-export type ProductDataMode = 'import_only' | 'live_only' | 'mixed' | 'unknown';
+export type ProductDataMode = 'import_only' | 'connector_only' | 'live_only' | 'mixed' | 'unknown';
 
 /** Raw ingest breakdown — portal CSV vs API connector vs live telemetry. */
 export interface ProductSpendBySource {

@@ -55,9 +55,11 @@ export function enrichProductsWithSources(
       dataMode:
         dominant === 'portal_import' && src.connectorUsd === 0 && src.liveUsd === 0
           ? 'import_only'
-          : dominant === 'live' && src.portalImportUsd === 0 && src.connectorUsd === 0
-            ? 'live_only'
-            : 'mixed',
+          : dominant === 'connector' && src.portalImportUsd === 0 && src.liveUsd === 0
+            ? 'connector_only'
+            : dominant === 'live' && src.portalImportUsd === 0 && src.connectorUsd === 0
+              ? 'live_only'
+              : 'mixed',
     };
   });
 }
@@ -133,7 +135,12 @@ export function buildOutcomeSourceStatus(connectors: ConnectorPresence): Outcome
 /** Actionable prompt when imports exist but outcomes do not feed v_roi. */
 export function importParityNarrative(coverage: DataCoverageSummary): string | null {
   if (!coverage.worthAnalysisReady) {
-    return 'No spend data in range — import a billing CSV or connect a provider to begin worth analysis.';
+    if (coverage.billingConnectors.length > 0) {
+      const names = coverage.billingConnectors.slice(0, 3).join(', ');
+      const suffix = coverage.billingConnectors.length > 3 ? '…' : '';
+      return `Billing connector${coverage.billingConnectors.length === 1 ? '' : 's'} connected (${names}${suffix}) — run a sync or widen the date range to populate worth analysis.`;
+    }
+    return 'No spend data in range — connect a billing provider under Settings → Connectors, or import a billing CSV.';
   }
   if (coverage.outcomeRoiReady) {
     if (coverage.portalImportSharePct >= 50 && coverage.importOutcomes > 0) {

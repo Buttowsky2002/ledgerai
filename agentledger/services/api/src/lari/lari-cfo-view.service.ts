@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 
-import { ChParam } from '../clickhouse/clickhouse.service';
+import { ChParam } from '../analytics-store/analytics-store';
 
 import { AnalyticsStore } from '../analytics-store/analytics-store';
 

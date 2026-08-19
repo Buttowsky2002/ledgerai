@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { ChParam } from '../clickhouse/clickhouse.service';
+import { ChParam } from '../analytics-store/analytics-store';
 import { AnalyticsStore } from '../analytics-store/analytics-store';
 import { UserValueService } from '../analytics/user-value.service';
 import {
@@ -30,8 +30,8 @@ const n = (v: unknown): number => (typeof v === 'number' ? v : Number(v) || 0);
 const MS_DAY = 86_400_000;
 
 /**
- * Assembles data from ClickHouse + Postgres and runs the LARI recommendations
- * engine (deterministic statistical ML — no LLM financial figures).
+ * Assembles data from the analytics store (Postgres in production) + control-plane Postgres
+ * and runs the LARI recommendations engine (deterministic statistical ML — no LLM figures).
  */
 @Injectable()
 export class LariRecommendationsService {

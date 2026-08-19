@@ -22,9 +22,20 @@ const TREND_LABEL: Record<SpendTrend, string> = {
 
 const DATA_MODE_LABEL: Record<string, string> = {
   import_only: 'CSV import',
-  live_only: 'Live',
+  connector_only: 'Billing connector',
+  live_only: 'Live telemetry',
   mixed: 'Mixed sources',
 };
+
+function emptyStateMessage(data: ProductWorthResponse | null): string {
+  const billing = data?.dataCoverage?.billingConnectors ?? [];
+  if (billing.length > 0) {
+    const names = billing.slice(0, 2).join(', ');
+    const suffix = billing.length > 2 ? ` +${billing.length - 2} more` : '';
+    return `No product spend in this range — billing connector${billing.length === 1 ? '' : 's'} (${names}${suffix}) may need a sync, or try a wider date window. You can also import a billing CSV.`;
+  }
+  return 'No AI products with spend in this range — connect a billing provider under Settings → Connectors, or import usage data.';
+}
 
 const BASIS_LABEL: Record<string, string> = {
   outcomes: 'Outcome-linked',
@@ -108,10 +119,8 @@ export function ProductWorthPanel({ from, to }: { from: string; to: string }) {
           <div className="h-12 rounded-lg bg-edge" />
           <div className="h-12 rounded-lg bg-edge" />
         </div>
-      ) : products.length === 0 ? (
-        <p className="py-8 text-center text-sm text-muted">
-          No AI products with spend in this range — connect a billing source or import usage data.
-        </p>
+      ) : error ? null : products.length === 0 ? (
+        <p className="py-8 text-center text-sm text-muted">{emptyStateMessage(data)}</p>
       ) : (
         <div className="space-y-4">
           {products.map((p) => {

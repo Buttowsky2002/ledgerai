@@ -220,7 +220,7 @@ export type UserValueResponse = UserValueTeamResponse | UserValueIndividualRespo
 /** Product worth scorecard — mirrors GET /v1/lari/product-worth. */
 export type ProductWorthVerdict = 'worth_it' | 'marginal' | 'not_worth_it' | 'insufficient_data';
 
-export type ProductDataMode = 'import_only' | 'live_only' | 'mixed' | 'unknown';
+export type ProductDataMode = 'import_only' | 'connector_only' | 'live_only' | 'mixed' | 'unknown';
 
 export type SpendTrend = 'up' | 'down' | 'flat' | 'insufficient';
 
