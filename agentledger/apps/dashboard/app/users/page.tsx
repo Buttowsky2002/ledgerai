@@ -5,6 +5,7 @@ import { SpendBillingCell } from '../../components/SpendBillingCell';
 import { proxyApi } from '../../lib/api';
 import { resolveRange } from '../../lib/resolve-range';
 import { discoverModelFamilies } from '../../lib/model-family';
+import { userTotalSpendUsd } from '../../lib/user-spend';
 
 export const dynamic = 'force-dynamic';
 
@@ -188,7 +189,7 @@ export default async function UsersPage({
             { key: 'user', label: 'User' },
             { key: 'email', label: 'Email' },
             { key: 'team', label: 'Team' },
-            { key: 'spend', label: 'Metered spend', align: 'right' },
+            { key: 'spend', label: 'Total spend', align: 'right' },
             { key: 'cursor', label: 'Cursor', align: 'right' },
             { key: 'sources', label: 'Sources' },
             { key: 'calls', label: 'Calls (incl. Cursor)', align: 'right' },
@@ -210,7 +211,7 @@ export default async function UsersPage({
             ),
             email: u.email || (isEmailLike(u.user_id) ? u.user_id : '—'),
             team: u.team || '—',
-            spend: usd(u.total_spend_usd),
+            spend: usd(userTotalSpendUsd(u)),
             cursor: (
               <SpendBillingCell
                 cursorOnDemandUsd={u.cursor_on_demand_usd}

@@ -804,9 +804,10 @@ export class AnalyticsService {
       })
       .sort(
         (a, b) =>
-          b.cost_usd - a.cost_usd ||
-          b.cursor_on_demand_usd - a.cursor_on_demand_usd ||
-          b.cursor_included_usd - a.cursor_included_usd,
+          b.cost_usd +
+          b.cursor_included_usd -
+          (a.cost_usd + a.cursor_included_usd) ||
+          b.cursor_on_demand_usd - a.cursor_on_demand_usd,
       );
   }
 
@@ -1724,8 +1725,9 @@ export class AnalyticsService {
 
     return [...merged.values()].sort(
       (a, b) =>
-        b.total_spend_usd - a.total_spend_usd ||
-        (b.cursor_included_usd ?? 0) - (a.cursor_included_usd ?? 0),
+        b.total_spend_usd +
+        (b.cursor_included_usd ?? 0) -
+        (a.total_spend_usd + (a.cursor_included_usd ?? 0)),
     );
   }
 

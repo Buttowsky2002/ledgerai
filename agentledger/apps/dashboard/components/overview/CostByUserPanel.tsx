@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { Card, DataTable, num, usd } from '@/components/ui';
 import { SpendBillingCell, BillingTypeBadge } from '@/components/SpendBillingCell';
 import { decodeRange, RANGE_COOKIE, resolveRangeWithCookie } from '@/lib/date-range';
-import { userBillableSpendUsd } from '@/lib/user-spend';
+import { userTotalSpendUsd } from '@/lib/user-spend';
 
 type AllocationRow = {
   key: string;
@@ -110,7 +110,7 @@ export function CostByUserPanel({
   return (
     <Card
       title="Cost by user"
-      subtitle={`${range.from} → ${range.to} · metered usage, Cursor included/overage, seat allocation`}
+      subtitle={`${range.from} → ${range.to} · total spend includes Cursor overage + included usage value`}
       actions={
         <Link
           href={`/users?from=${range.from}&to=${range.to}`}
@@ -128,7 +128,7 @@ export function CostByUserPanel({
         <DataTable
           columns={[
             { key: 'user', label: 'User' },
-            { key: 'cost', label: 'Spend', align: 'right' },
+            { key: 'cost', label: 'Total spend', align: 'right' },
             { key: 'billing', label: 'Billing', align: 'right' },
             { key: 'trend', label: 'Daily trend', align: 'right' },
             { key: 'calls', label: 'Calls (incl. Cursor)', align: 'right' },
@@ -148,12 +148,7 @@ export function CostByUserPanel({
               ),
             cost: (
               <span className="inline-flex flex-col items-end gap-1">
-                <span>{usd(userBillableSpendUsd(r))}</span>
-                {Number(r.cursor_included_usd ?? 0) > 0 ? (
-                  <span className="text-[10px] text-muted">
-                    Incl. {usd(Number(r.cursor_included_usd))} usage value
-                  </span>
-                ) : null}
+                <span>{usd(userTotalSpendUsd(r))}</span>
                 <BillingTypeBadge
                   meteredUsd={r.metered_usd}
                   seatUsd={r.seat_usd}
