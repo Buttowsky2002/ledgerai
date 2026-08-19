@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Badge, Card, DataTable, PageHeader, Stat, num, usd } from '../../../components/ui';
 import { proxyApi } from '../../../lib/api';
 import { resolveRange } from '../../../lib/resolve-range';
+import { userTotalSpendUsd } from '../../../lib/user-spend';
 
 export const dynamic = 'force-dynamic';
 
@@ -78,7 +79,12 @@ export default async function UserDetailPage({
       </div>
 
       <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-5">
-        <Stat label="Metered spend" value={usd(user.total_spend_usd)} />
+        <Stat
+          label="Total spend"
+          value={usd(userTotalSpendUsd(user))}
+          accent
+          sub="Overage + included usage value"
+        />
         <Stat
           label="Cursor overage"
           value={usd(user.cursor_on_demand_usd ?? 0)}

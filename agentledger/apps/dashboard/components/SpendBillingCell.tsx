@@ -22,8 +22,9 @@ export function SpendBillingCell({
   const connector = Number(connectorUsd ?? 0);
   const cursorOnDemand = Number(cursorOnDemandUsd ?? 0);
   const cursorIncluded = Number(cursorIncludedUsd ?? 0);
+  const meteredNonCursor = Math.max(0, metered - cursorOnDemand);
 
-  if (metered <= 0 && seat <= 0 && cursorOnDemand <= 0 && cursorIncluded <= 0) {
+  if (meteredNonCursor <= 0 && seat <= 0 && cursorOnDemand <= 0 && cursorIncluded <= 0) {
     return <span className="text-xs text-muted">—</span>;
   }
 
@@ -33,9 +34,9 @@ export function SpendBillingCell({
 
   return (
     <span className="text-[11px] leading-snug text-muted">
-      {metered > 0 ? (
+      {meteredNonCursor > 0 ? (
         <span className="block">
-          <span className="font-medium text-gray-300">Metered</span> {usd(metered)}
+          <span className="font-medium text-gray-300">Metered</span> {usd(meteredNonCursor)}
           {showMeteredProvenance ? (
             <span className="mt-0.5 block pl-2 text-[10px] opacity-90">
               {portal > 0 ? <span className="block">Import {usd(portal)}</span> : null}
