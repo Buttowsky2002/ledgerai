@@ -52,12 +52,19 @@ function splitForPlatform(
   return platformBillingSplit(platform, costUsd, seatUsdByVendor);
 }
 
-function PlatformBillingBadge({ split }: { split: ReturnType<typeof platformBillingSplit> }) {
+function PlatformBillingBadge({
+  split,
+  cursorOnDemandUsd,
+}: {
+  split: ReturnType<typeof platformBillingSplit>;
+  cursorOnDemandUsd?: number;
+}) {
   return (
     <BillingTypeBadge
       meteredUsd={split.meteredUsd}
       seatUsd={split.seatUsd}
       cursorIncludedUsd={split.cursorIncludedUsd}
+      cursorOnDemandUsd={cursorOnDemandUsd}
     />
   );
 }
@@ -168,6 +175,9 @@ function SourcePicker({
                 {row.platform}
                 <PlatformBillingBadge
                   split={splitForPlatform(row.platform, row.cost_usd, seatUsdByVendor, cursorSpend)}
+                  cursorOnDemandUsd={
+                    isCursorPlatform(row.platform) ? cursorSpend?.meteredOverageUsd : undefined
+                  }
                 />
               </span>
               <span className="num text-sm text-gray-200">{usd(row.cost_usd)}</span>

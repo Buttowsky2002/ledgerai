@@ -804,7 +804,9 @@ export class AnalyticsService {
       })
       .sort(
         (a, b) =>
-          b.cost_usd - a.cost_usd || b.cursor_included_usd - a.cursor_included_usd,
+          b.cost_usd - a.cost_usd ||
+          b.cursor_on_demand_usd - a.cursor_on_demand_usd ||
+          b.cursor_included_usd - a.cursor_included_usd,
       );
   }
 

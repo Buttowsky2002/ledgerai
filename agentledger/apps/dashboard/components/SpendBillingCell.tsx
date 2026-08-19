@@ -71,11 +71,17 @@ export function billingTypeLabel(
   meteredUsd: number,
   seatUsd: number,
   cursorIncludedUsd = 0,
+  cursorOnDemandUsd = 0,
 ): 'metered' | 'per_seat' | 'mixed' | 'cursor_included' | null {
-  if (meteredUsd <= 0 && seatUsd <= 0 && cursorIncludedUsd <= 0) return null;
-  if (meteredUsd <= 0 && seatUsd <= 0 && cursorIncludedUsd > 0) return 'cursor_included';
-  if (meteredUsd > 0 && seatUsd > 0) return 'mixed';
+  const onDemand = Math.max(0, cursorOnDemandUsd);
+  const included = Math.max(0, cursorIncludedUsd);
+  const metered = Math.max(meteredUsd, onDemand);
+
+  if (metered <= 0 && seatUsd <= 0 && included <= 0 && onDemand <= 0) return null;
+  if (metered <= 0 && seatUsd <= 0 && included > 0 && onDemand <= 0) return 'cursor_included';
+  if (metered > 0 && seatUsd > 0) return 'mixed';
   if (seatUsd > 0) return 'per_seat';
+  if (metered > 0 && included > 0) return 'mixed';
   return 'metered';
 }
 
@@ -83,15 +89,18 @@ export function BillingTypeBadge({
   meteredUsd,
   seatUsd,
   cursorIncludedUsd,
+  cursorOnDemandUsd,
 }: {
   meteredUsd?: number | string;
   seatUsd?: number | string;
   cursorIncludedUsd?: number | string;
+  cursorOnDemandUsd?: number | string;
 }) {
   const kind = billingTypeLabel(
     Number(meteredUsd ?? 0),
     Number(seatUsd ?? 0),
     Number(cursorIncludedUsd ?? 0),
+    Number(cursorOnDemandUsd ?? 0),
   );
   if (!kind) return null;
   const label =
