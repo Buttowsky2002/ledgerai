@@ -29,6 +29,16 @@ describe('classifyCursorBillingKind', () => {
     expect(classifyCursorBillingKind('weird', 'false')).toBe('included');
   });
 
+  it('prefers Usage-based kind over isChargeable false (true overage)', () => {
+    expect(classifyCursorBillingKind('Usage-based', false)).toBe('on_demand');
+    expect(classifyCursorBillingKind('USAGE_EVENT_KIND_USAGE_BASED', false)).toBe('on_demand');
+  });
+
+  it('prefers Included kind over isChargeable true (subscription pool)', () => {
+    expect(classifyCursorBillingKind('Included in Business', true)).toBe('included');
+    expect(classifyCursorBillingKind('USAGE_EVENT_KIND_INCLUDED_IN_BUSINESS', true)).toBe('included');
+  });
+
   it('maps errored kinds', () => {
     expect(classifyCursorBillingKind('Errored')).toBe('errored');
     expect(classifyCursorBillingKind('error', false)).toBe('errored');
@@ -71,6 +81,18 @@ describe('enrichCursorBilling', () => {
     expect(out.cost_usd).toBe(8.75);
     expect(out.operation_name).toBe('cursor:on_demand');
     expect(out.cost_source).toBe('cursor_billed');
+  });
+
+  it('classifies Usage-based as on-demand even when isChargeable is false', () => {
+    const out = enrichCursorBilling({
+      provider: 'cursor',
+      product: 'Usage-based',
+      cost_usd: 37.33,
+      is_chargeable: false,
+    });
+    expect(out.operation_name).toBe('cursor:on_demand');
+    expect(out.cost_usd).toBe(37.33);
+    expect(out.metered_cost_usd).toBeUndefined();
   });
 
   it('passes through non-cursor metrics', () => {

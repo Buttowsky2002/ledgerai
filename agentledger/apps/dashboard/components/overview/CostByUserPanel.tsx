@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { Card, DataTable, num, usd } from '@/components/ui';
 import { SpendBillingCell, BillingTypeBadge } from '@/components/SpendBillingCell';
 import { decodeRange, RANGE_COOKIE, resolveRangeWithCookie } from '@/lib/date-range';
+import { userBillableSpendUsd } from '@/lib/user-spend';
 
 type AllocationRow = {
   key: string;
@@ -147,11 +148,17 @@ export function CostByUserPanel({
               ),
             cost: (
               <span className="inline-flex flex-col items-end gap-1">
-                <span>{usd(Number(r.cost_usd))}</span>
+                <span>{usd(userBillableSpendUsd(r))}</span>
+                {Number(r.cursor_included_usd ?? 0) > 0 ? (
+                  <span className="text-[10px] text-muted">
+                    Incl. {usd(Number(r.cursor_included_usd))} usage value
+                  </span>
+                ) : null}
                 <BillingTypeBadge
                   meteredUsd={r.metered_usd}
                   seatUsd={r.seat_usd}
                   cursorIncludedUsd={r.cursor_included_usd}
+                  cursorOnDemandUsd={r.cursor_on_demand_usd}
                 />
               </span>
             ),

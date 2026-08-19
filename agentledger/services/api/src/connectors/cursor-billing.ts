@@ -16,20 +16,20 @@ export function classifyCursorBillingKind(
   kind: string,
   isChargeable?: boolean | unknown,
 ): CursorBillingKind {
-  const chargeable = coerceIsChargeable(isChargeable);
-  // Prefer explicit chargeability from the Admin API when present.
-  if (chargeable === true) return 'on_demand';
-  if (chargeable === false) {
-    const k = kind.trim().toLowerCase().replace(/[_ ]+/g, '-');
-    if (k.includes('error')) return 'errored';
-    return 'included';
-  }
-
   const k = kind.trim().toLowerCase().replace(/[_ ]+/g, '-');
-  if (!k) return 'included';
-  if (k.includes('error')) return 'errored';
-  if (k.includes('on-demand') || k.includes('usage-based')) return 'on_demand';
+  const chargeable = coerceIsChargeable(isChargeable);
+
+  // Cursor documents `kind` as the billing outcome per request. Prefer it over
+  // isChargeable when the two disagree — some Usage-based rows arrive with
+  // isChargeable:false while still being true on-demand overage.
+  if (k.includes('error') || k.includes('not-charged')) return 'errored';
+  if (k.includes('usage-based') || k.includes('on-demand')) return 'on_demand';
   if (k.includes('included')) return 'included';
+
+  if (chargeable === true) return 'on_demand';
+  if (chargeable === false) return 'included';
+
+  if (!k) return 'included';
   // Unknown kind without isChargeable — default included so we never invent invoice lines.
   return 'included';
 }
