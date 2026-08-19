@@ -18,11 +18,8 @@ import {
 } from './lari-import-coverage';
 import type {
   BudgetSuggestionEntry,
-  ConnectorPresence,
-  ImportStats,
   OutcomeStats,
   ProductConfidenceBasis,
-  ProductSpendBySource,
   ProductSpendDriver,
   ProductWorthEntry,
   ProductWorthInput,
