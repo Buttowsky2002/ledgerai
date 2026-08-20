@@ -48,6 +48,23 @@ describe('import mapRow', () => {
     });
   });
 
+  it('honours explicit outcome_id and source_system for Azure DevOps imports', () => {
+    const { events } = mapRow({
+      outcome_type: 'pr_merged',
+      outcome_id: 'azure_devops:org/proj/repo#42',
+      source_system: 'azure_devops',
+      attribution_confidence: 0,
+      idempotency_key: 'azure_devops:org/proj/repo#42',
+    });
+    expect(events).toHaveLength(1);
+    expect(events[0].row).toMatchObject({
+      outcome_id: 'azure_devops:org/proj/repo#42',
+      source_system: 'azure_devops',
+      outcome_type: 'pr_merged',
+      attribution_confidence: 0,
+    });
+  });
+
   it('honours an explicit attribution_confidence on an outcome', () => {
     const { events } = mapRow({ outcome_type: 'lead', attribution_confidence: 0.4 });
     expect(events[0].row).toMatchObject({ attribution_confidence: 0.4 });

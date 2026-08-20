@@ -1,11 +1,13 @@
 import {
   computeMeteredCostUsd,
   isNonMeteredCostSource,
+  PROVIDER_SOURCE_BREAKDOWN_SQL,
   RECONCILED_MODEL_USAGE_SQL,
   RECONCILED_PROVIDER_SPEND_SQL,
   RECONCILED_TENANT_DAILY_SPEND_SQL,
   RECONCILED_USER_DAILY_SPEND_SQL,
 } from './metered-cost';
+import { translateChSql } from '../analytics-store/ch-sql-translator';
 
 describe('metered-cost', () => {
   it('excludes price-book estimates', () => {
@@ -85,5 +87,20 @@ describe('metered-cost', () => {
       /AS portal_usd[\s\S]*CASE WHEN portal_usd[\s\S]*AS per_day_model/,
     );
     expect(RECONCILED_TENANT_DAILY_SPEND_SQL).toContain('GROUP BY key, day');
+  });
+
+  it('provider source breakdown ORDER BY is Postgres-safe (no alias math)', () => {
+    // PG error 42703: aliases cannot appear inside ORDER BY expressions.
+    expect(PROVIDER_SOURCE_BREAKDOWN_SQL).not.toMatch(
+      /ORDER BY\s+portal_import_usd\s*\+\s*connector_usd/,
+    );
+    expect(PROVIDER_SOURCE_BREAKDOWN_SQL).toContain('ORDER BY');
+    const { sql } = translateChSql(PROVIDER_SOURCE_BREAKDOWN_SQL, {
+      tenant: 't1',
+      from: '2026-01-01',
+      to: '2026-01-31',
+    });
+    expect(sql.toLowerCase()).toContain('filter (where');
+    expect(sql).not.toMatch(/ORDER BY\s+portal_import_usd\s*\+/i);
   });
 });

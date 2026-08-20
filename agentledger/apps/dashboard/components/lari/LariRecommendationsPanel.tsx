@@ -29,6 +29,9 @@ const CATEGORY_LABEL: Record<string, string> = {
   configuration: 'Configuration',
   model_substitution: 'Model right-sizing',
   user_value: 'Platform usage',
+  product_worth: 'Product worth',
+  budget_suggestion: 'Budget suggestion',
+  spend_driver: 'Spend drivers',
 };
 
 function RecommendationRow({ rec }: { rec: LariActionableRecommendation }) {

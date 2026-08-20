@@ -169,6 +169,36 @@ export const RECONCILED_PROVIDER_SPEND_SQL = `
   ORDER BY cost_usd DESC
 `;
 
+/** Raw ingest source breakdown by provider — for import parity / data coverage (not reconciled). */
+export const PROVIDER_SOURCE_BREAKDOWN_SQL = `
+  SELECT
+    provider,
+    sumIf(${EFFECTIVE_METERED_COST_USD}, llm_calls.source = 'portal_import') AS portal_import_usd,
+    sumIf(${EFFECTIVE_METERED_COST_USD}, llm_calls.source = 'api') AS connector_usd,
+    sumIf(
+      ${EFFECTIVE_METERED_COST_USD},
+      llm_calls.source NOT IN ('portal_import', 'api')
+    ) AS live_usd,
+    countIf(${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source = 'portal_import') AS portal_import_calls,
+    countIf(${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source = 'api') AS connector_calls,
+    countIf(
+      ${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source NOT IN ('portal_import', 'api')
+    ) AS live_calls
+  FROM llm_calls
+  WHERE tenant_id = {tenant:String}
+    AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
+    AND ${LLM_CALLS_METERED_SCOPE}
+  GROUP BY provider
+  -- Postgres forbids SELECT aliases inside ORDER BY expressions; repeat the sums.
+  ORDER BY
+    sumIf(${EFFECTIVE_METERED_COST_USD}, llm_calls.source = 'portal_import')
+    + sumIf(${EFFECTIVE_METERED_COST_USD}, llm_calls.source = 'api')
+    + sumIf(
+      ${EFFECTIVE_METERED_COST_USD},
+      llm_calls.source NOT IN ('portal_import', 'api')
+    ) DESC
+`;
+
 /**
  * Model usage for LARI — reconciled metered cost + tokens per provider/model
  * (portal CSV wins over connector API per user+day+provider+model).

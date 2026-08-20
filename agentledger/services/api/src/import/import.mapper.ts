@@ -215,12 +215,16 @@ export function mapRow(data: unknown): MappedRow {
   }
 
   if (outcomeType) {
+    const explicitOutcomeId = str(r.outcome_id, 'outcome_id');
+    const explicitSourceSystem = str(r.source_system, 'source_system');
     events.push({
       table: 'outcomes',
       row: {
-        outcome_id: id('out', idempotencyKey, '_out'),
+        outcome_id: explicitOutcomeId ?? id('out', idempotencyKey, '_out'),
         ts,
-        source_system: str(r.source, 'source') === 'api' ? 'api' : 'import',
+        source_system:
+          explicitSourceSystem ??
+          (str(r.source, 'source') === 'api' ? 'api' : 'import'),
         outcome_type: outcomeType,
         team_id: teamId,
         user_id: userId,

@@ -3,6 +3,7 @@ import { Type } from 'class-transformer';
 import { IsDateString, IsIn, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
 import { Roles } from '../auth/decorators';
 import { LariCfoViewService } from './lari-cfo-view.service';
+import { LariProductWorthService } from './lari-product-worth.service';
 import { LariRecommendationsService } from './lari-recommendations.service';
 
 class CfoViewQueryDto {
@@ -25,6 +26,7 @@ export class LariController {
   constructor(
     private readonly cfoView: LariCfoViewService,
     private readonly recommendations: LariRecommendationsService,
+    private readonly productWorth: LariProductWorthService,
   ) {}
 
   @Roles('viewer')
@@ -45,5 +47,12 @@ export class LariController {
   @Get('recommendations')
   getRecommendations(@Query() q: RecommendationsQueryDto) {
     return this.recommendations.getRecommendations(q.startDate, q.endDate);
+  }
+
+  /** Per-product worth scorecard — spend vs outcomes/utilization with budget suggestions. */
+  @Roles('viewer')
+  @Get('product-worth')
+  getProductWorth(@Query() q: RecommendationsQueryDto) {
+    return this.productWorth.getProductWorth(q.startDate, q.endDate);
   }
 }

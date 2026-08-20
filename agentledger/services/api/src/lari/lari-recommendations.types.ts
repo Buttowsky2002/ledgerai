@@ -14,7 +14,10 @@ export type RecommendationCategory =
   | 'attribution'
   | 'configuration'
   | 'model_substitution'
-  | 'user_value';
+  | 'user_value'
+  | 'product_worth'
+  | 'budget_suggestion'
+  | 'spend_driver';
 
 export interface LariActionableRecommendation {
   id: string;
@@ -102,4 +105,6 @@ export interface LariRecommendationsInput {
   priceBook: ModelRate[];
   userUtilization?: UserUtilizationRow[];
   perUserMode?: PerUserAnalyticsMode;
+  /** GitHub Copilot productivity ROI % — enables import-only worth verdict for Copilot. */
+  copilotRoiPct?: number;
 }

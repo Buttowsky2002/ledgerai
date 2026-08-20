@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { AuditRow } from '../../lib/settings-types';
 
 export type { AuditRow };
@@ -13,7 +13,20 @@ const ACTION_FILTERS = [
   { value: 'create', label: 'Creates' },
   { value: 'update', label: 'Updates' },
   { value: 'delete', label: 'Deletes' },
+  { value: 'import', label: 'Imports' },
 ] as const;
+
+const PAGE_SIZE = 50;
+
+function isoDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+function defaultRange(): { from: string; to: string } {
+  const to = new Date();
+  const from = new Date(to.getTime() - 29 * 86_400_000);
+  return { from: isoDate(from), to: isoDate(to) };
+}
 
 function formatWhen(iso: string): string {
   try {
@@ -85,68 +98,178 @@ function summarizeDetail(row: AuditRow): string {
   return '—';
 }
 
-export function AuditingSettings({ rows }: { rows: AuditRow[] }) {
-  const [actionFilter, setActionFilter] = useState('');
+type AuditListResponse = {
+  rows: AuditRow[];
+  total: number;
+  limit: number;
+  offset: number;
+};
 
-  const filtered = useMemo(() => {
-    if (!actionFilter) return rows;
-    return rows.filter((r) => r.action === actionFilter);
-  }, [rows, actionFilter]);
+export function AuditingSettings() {
+  const defaults = defaultRange();
+  const [from, setFrom] = useState(defaults.from);
+  const [to, setTo] = useState(defaults.to);
+  const [actionFilter, setActionFilter] = useState('');
+  const [rows, setRows] = useState<AuditRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState(false);
+
+  const fetchPage = useCallback(
+    async (offset: number, append: boolean) => {
+      const qs = new URLSearchParams({
+        limit: String(PAGE_SIZE),
+        offset: String(offset),
+        from,
+        to,
+      });
+      if (actionFilter) qs.set('action', actionFilter);
+      const res = await fetch(`/api/audit?${qs.toString()}`, { cache: 'no-store' });
+      if (!res.ok) {
+        setError(true);
+        return;
+      }
+      const data = (await res.json()) as AuditListResponse;
+      setError(false);
+      setTotal(data.total ?? 0);
+      setRows((prev) => (append ? [...prev, ...(data.rows ?? [])] : (data.rows ?? [])));
+    },
+    [from, to, actionFilter],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetchPage(0, false)
+      .catch(() => {
+        if (!cancelled) setError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchPage]);
+
+  const hasMore = rows.length < total;
+
+  const onLoadMore = async () => {
+    setLoadingMore(true);
+    try {
+      await fetchPage(rows.length, true);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <p className="text-xs text-muted">
           Administrative changes and sign-in activity for your organization. Newest events first.
+          {total > 0 && (
+            <span className="ml-2 text-gray-300">
+              Showing {rows.length} of {total}
+            </span>
+          )}
         </p>
-        <select
-          className="rounded border border-edge bg-ink px-2 py-1.5 text-sm text-gray-100 focus:border-accent focus:outline-none"
-          value={actionFilter}
-          onChange={(e) => setActionFilter(e.target.value)}
-        >
-          {ACTION_FILTERS.map((f) => (
-            <option key={f.value || 'all'} value={f.value}>
-              {f.label}
-            </option>
-          ))}
-        </select>
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="text-xs text-muted">
+            From
+            <input
+              type="date"
+              className="mt-1 block rounded border border-edge bg-ink px-2 py-1.5 text-sm text-gray-100"
+              value={from}
+              onChange={(e) => setFrom(e.target.value)}
+            />
+          </label>
+          <label className="text-xs text-muted">
+            To
+            <input
+              type="date"
+              className="mt-1 block rounded border border-edge bg-ink px-2 py-1.5 text-sm text-gray-100"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+            />
+          </label>
+          <select
+            className="rounded border border-edge bg-ink px-2 py-1.5 text-sm text-gray-100 focus:border-accent focus:outline-none"
+            value={actionFilter}
+            onChange={(e) => setActionFilter(e.target.value)}
+          >
+            {ACTION_FILTERS.map((f) => (
+              <option key={f.value || 'all'} value={f.value}>
+                {f.label}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-edge text-xs uppercase tracking-wide text-muted">
-            <tr>
-              <th className="py-2 pr-3 font-medium">When</th>
-              <th className="py-2 pr-3 font-medium">User</th>
-              <th className="py-2 pr-3 font-medium">Action</th>
-              <th className="py-2 pr-3 font-medium">Object</th>
-              <th className="py-2 font-medium">Detail</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((row) => (
-              <tr key={row.id} className="border-b border-edge/60">
-                <td className="whitespace-nowrap py-2 pr-3 text-muted">{formatWhen(row.at)}</td>
-                <td className="py-2 pr-3 text-gray-100">{actorLabel(row)}</td>
-                <td className="py-2 pr-3 text-gray-100">{actionLabel(row.action)}</td>
-                <td className="max-w-[14rem] truncate py-2 pr-3 font-mono text-xs text-muted" title={row.object}>
-                  {row.object}
-                </td>
-                <td className="max-w-[16rem] truncate py-2 text-muted" title={summarizeDetail(row)}>
-                  {summarizeDetail(row)}
-                </td>
-              </tr>
-            ))}
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={5} className="py-6 text-center text-muted">
-                  No audit events yet. Sign-ins and settings changes will appear here.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      {error && (
+        <p className="text-sm text-neg">Could not load audit events. Confirm you have the admin role.</p>
+      )}
+
+      {loading ? (
+        <div className="animate-pulse space-y-2 py-4">
+          <div className="h-8 rounded bg-edge" />
+          <div className="h-8 rounded bg-edge" />
+          <div className="h-8 rounded bg-edge" />
+        </div>
+      ) : (
+        <>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b border-edge text-xs uppercase tracking-wide text-muted">
+                <tr>
+                  <th className="py-2 pr-3 font-medium">When</th>
+                  <th className="py-2 pr-3 font-medium">User</th>
+                  <th className="py-2 pr-3 font-medium">Action</th>
+                  <th className="py-2 pr-3 font-medium">Object</th>
+                  <th className="py-2 font-medium">Detail</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr key={row.id} className="border-b border-edge/60">
+                    <td className="whitespace-nowrap py-2 pr-3 text-muted">{formatWhen(row.at)}</td>
+                    <td className="py-2 pr-3 text-gray-100">{actorLabel(row)}</td>
+                    <td className="py-2 pr-3 text-gray-100">{actionLabel(row.action)}</td>
+                    <td
+                      className="max-w-[14rem] truncate py-2 pr-3 font-mono text-xs text-muted"
+                      title={row.object}
+                    >
+                      {row.object}
+                    </td>
+                    <td className="max-w-[16rem] truncate py-2 text-muted" title={summarizeDetail(row)}>
+                      {summarizeDetail(row)}
+                    </td>
+                  </tr>
+                ))}
+                {rows.length === 0 && !error && (
+                  <tr>
+                    <td colSpan={5} className="py-6 text-center text-muted">
+                      No audit events in this range. Widen the dates or clear the action filter.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          {hasMore && (
+            <button
+              type="button"
+              className="rounded border border-edge px-3 py-1.5 text-sm text-gray-200 hover:bg-white/5 disabled:opacity-50"
+              disabled={loadingMore}
+              onClick={() => void onLoadMore()}
+            >
+              {loadingMore ? 'Loading…' : 'Load more'}
+            </button>
+          )}
+        </>
+      )}
     </div>
   );
 }

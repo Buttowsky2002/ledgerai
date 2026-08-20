@@ -8,6 +8,8 @@ import { FixedOverheadPanel } from '../components/overview/FixedOverheadPanel';
 import { ExecutiveReportExport } from '../components/overview/ExecutiveReportExport';
 import { OverviewLiveRefresh } from '../components/overview/OverviewLiveRefresh';
 import { LariRecommendationsPanel } from '../components/lari/LariRecommendationsPanel';
+import { ProductWorthPanel } from '../components/lari/ProductWorthPanel';
+import { ImportCoverageBanner } from '../components/lari/ImportCoverageBanner';
 import { Badge, BadgeTone, Card, DataTable, PageHeader, Stat, num, usd } from '../components/ui';
 import { DateRangePicker } from '../components/DateRangePicker';
 import { apiClient, fetchData, proxyApi } from '../lib/api';
@@ -299,6 +301,26 @@ export default async function OverviewPage({
           sub="policy + DLP enforcement"
         />
       </div>
+
+      <Suspense
+        fallback={
+          <Card title="Data coverage">
+            <p className="py-8 text-center text-sm text-muted">Loading coverage…</p>
+          </Card>
+        }
+      >
+        <ImportCoverageBanner from={from} to={to} />
+      </Suspense>
+
+      <Suspense
+        fallback={
+          <Card title="Product worth">
+            <p className="py-8 text-center text-sm text-muted">Loading product worth…</p>
+          </Card>
+        }
+      >
+        <ProductWorthPanel from={from} to={to} />
+      </Suspense>
 
       <Card title="Daily spend" subtitle="USD">
         <AreaChartClient data={chart} xKey="day" yKey="cost_usd" />

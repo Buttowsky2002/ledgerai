@@ -6,6 +6,12 @@
  * figures are advisory estimates traced in `evidence`.
  */
 import {
+  budgetSuggestionRecs,
+  buildProductWorthScorecard,
+  productWorthRecs,
+} from './lari-product-worth';
+import { spendDriverRecs } from './lari-spend-narrative';
+import {
   AgentEconomicsHighlight,
   LariActionableRecommendation,
   LariRecommendationsInput,
@@ -103,14 +109,14 @@ export function compositeMlScore(factors: { weight: number; value: number }[]): 
   return Math.round(score * 100);
 }
 
-function priorityFromScore(score: number): RecommendationPriority {
+export function priorityFromScore(score: number): RecommendationPriority {
   if (score >= 80) return 'critical';
   if (score >= 60) return 'high';
   if (score >= 35) return 'medium';
   return 'low';
 }
 
-function monthlyFactor(periodDays: number): number {
+export function monthlyFactor(periodDays: number): number {
   return periodDays > 0 ? 30 / periodDays : 1;
 }
 
@@ -772,6 +778,16 @@ export function generateLariRecommendations(input: LariRecommendationsInput): {
     input.agentEconomics,
   );
 
+  const scorecard = buildProductWorthScorecard(input.from, input.to, {
+    periodDays: input.periodDays,
+    providerSpend: input.providerSpend,
+    subscriptionPlans: input.subscriptionPlans,
+    providerRankings,
+    modelUsage: input.modelUsage,
+    userUtilization: input.userUtilization ?? [],
+    copilotRoiPct: input.copilotRoiPct,
+  });
+
   const all = [
     ...seatRecommendations(input),
     ...planRecommendations(input, providerRankings),
@@ -779,6 +795,18 @@ export function generateLariRecommendations(input: LariRecommendationsInput): {
     ...configurationRecommendations(input),
     ...modelSubstitutionRecs(input),
     ...userValueRecs(input),
+    ...productWorthRecs(scorecard),
+    ...budgetSuggestionRecs(scorecard),
+    ...spendDriverRecs(
+      scorecard.products.map((p) => ({
+        product: p.product,
+        totalSpendUsd: p.totalSpendUsd,
+        spendNarrative: p.spendNarrative,
+        spendTrend: p.spendTrend,
+        periodChangePct: p.periodChangePct,
+        connectOutcomesPrompt: p.connectOutcomesPrompt,
+      })),
+    ),
   ];
 
   const recommendations = all.sort((a, b) => {

@@ -5,6 +5,7 @@ import { CursorProductivityService } from '../connectors/cursor-productivity.ser
 import { GitHubCopilotModule } from '../github-copilot/github-copilot.module';
 import { LariCfoViewService } from './lari-cfo-view.service';
 import { LariController } from './lari.controller';
+import { LariProductWorthService } from './lari-product-worth.service';
 import { LariRecommendationsService } from './lari-recommendations.service';
 import { LariService } from './lari.service';
 
@@ -17,9 +18,10 @@ import { LariService } from './lari.service';
     LariService,
     LariCfoViewService,
     LariRecommendationsService,
+    LariProductWorthService,
     CursorAnalyticsService,
     CursorProductivityService,
   ],
-  exports: [LariService, LariCfoViewService, LariRecommendationsService],
+  exports: [LariService, LariCfoViewService, LariRecommendationsService, LariProductWorthService],
 })
 export class LariModule {}

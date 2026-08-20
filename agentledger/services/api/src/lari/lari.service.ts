@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { ChParam } from '../clickhouse/clickhouse.service';
+import { ChParam } from '../analytics-store/analytics-store';
 import { AnalyticsStore } from '../analytics-store/analytics-store';
 import { PrismaService } from '../prisma/prisma.service';
 import { getTenantId } from '../tenant/tenant-context';
@@ -160,8 +160,8 @@ export function buildAgentROIInput(a: AssembleInputs): AgentROIInput {
 }
 
 /**
- * Assembles an AgentROIInput from live ClickHouse + Postgres data and runs the
- * deterministic LARI engine. Tenant isolation: every ClickHouse read goes through
+ * Assembles an AgentROIInput from live analytics-store + Postgres data and runs the
+ * deterministic LARI engine. Tenant isolation: every analytics read goes through
  * queryScoped (tenant bound from the principal) and the Postgres read through
  * prisma.withTenant (RLS). The agent id is a bound parameter (rules 3 + 4). No raw
  * content is read at any point (rule 2 / requirement 8).

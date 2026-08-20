@@ -32,11 +32,11 @@ describe('AuditService', () => {
       },
     ];
 
+    const findMany = jest.fn(async () => auditRows);
+    const count = jest.fn(async () => 2);
     const withTenant = jest.fn(async (_tenant: string, fn: (tx: unknown) => Promise<unknown>) => {
       const tx = {
-        auditLog: {
-          findMany: jest.fn(async () => auditRows),
-        },
+        auditLog: { findMany, count },
         identity: {
           findMany: jest.fn(async () => identities),
         },
@@ -45,8 +45,27 @@ describe('AuditService', () => {
     });
 
     const svc = new AuditService({ withTenant } as never);
-    const rows = await svc.list({ limit: 50, offset: 0 });
-    expect(rows).toEqual([
+    const result = await svc.list({
+      limit: 50,
+      offset: 0,
+      from: '2026-07-01',
+      to: '2026-07-31',
+      action: 'login',
+    });
+
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          action: 'login',
+          at: expect.objectContaining({
+            gte: new Date('2026-07-01T00:00:00.000Z'),
+            lte: new Date('2026-07-31T23:59:59.999Z'),
+          }),
+        }),
+      }),
+    );
+    expect(result.total).toBe(2);
+    expect(result.rows).toEqual([
       {
         id: '7',
         at: '2026-07-28T12:00:00.000Z',
