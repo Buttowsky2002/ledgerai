@@ -257,7 +257,12 @@ export class ConnectorsService {
       await this.prisma.withTenant(opts.tenantId, async (tx) => {
         await tx.connectorSyncRun.update({
           where: { syncRunId: opts.syncRunId },
-          data: { status: 'failed', completedAt: new Date(), errorSummary: msg },
+          data: {
+            status: 'failed',
+            completedAt: new Date(),
+            errorCode: 'ADO_SYNC_FAILED',
+            errorMessageSafe: msg,
+          },
         });
         await tx.connector.update({
           where: { connectorId: opts.connectorId },
