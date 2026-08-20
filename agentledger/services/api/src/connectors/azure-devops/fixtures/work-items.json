@@ -1,0 +1,30 @@
+{
+  "count": 2,
+  "value": [
+    {
+      "id": 1001,
+      "fields": {
+        "System.Id": 1001,
+        "System.Title": "Ship Product Worth",
+        "System.ChangedDate": "2026-08-12T18:00:00Z",
+        "System.State": "Done",
+        "System.WorkItemType": "User Story",
+        "System.AssignedTo": {
+          "uniqueName": "pm@studiodesigner.com",
+          "displayName": "PM"
+        }
+      }
+    },
+    {
+      "id": 1002,
+      "fields": {
+        "System.Id": 1002,
+        "System.Title": "Close sprint bug",
+        "System.ChangedDate": "2026-08-11T09:00:00Z",
+        "System.State": "Closed",
+        "System.WorkItemType": "Bug",
+        "System.AssignedTo": "qa@studiodesigner.com"
+      }
+    }
+  ]
+}

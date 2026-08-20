@@ -195,7 +195,7 @@ export class LariProductWorthService {
           `SELECT
              count() AS total_outcomes,
              countIf(source_system = 'import') AS import_outcomes,
-             countIf(source_system IN ('github', 'jira', 'zendesk')) AS connector_outcomes,
+             countIf(source_system IN ('github', 'jira', 'zendesk', 'azure_devops')) AS connector_outcomes,
              countIf(source_system = 'api') AS api_outcomes,
              sum(business_value_usd) AS total_value_usd
            FROM outcomes

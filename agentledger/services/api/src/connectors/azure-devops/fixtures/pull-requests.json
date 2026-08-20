@@ -1,0 +1,27 @@
+{
+  "value": [
+    {
+      "pullRequestId": 42,
+      "title": "Fix billing import",
+      "status": "completed",
+      "closedDate": "2026-08-10T15:30:00Z",
+      "creationDate": "2026-08-09T10:00:00Z",
+      "createdBy": {
+        "uniqueName": "dev@studiodesigner.com",
+        "displayName": "Dev User"
+      },
+      "repository": { "name": "studio-app" }
+    },
+    {
+      "pullRequestId": 7,
+      "title": "Old PR outside lookback",
+      "status": "completed",
+      "closedDate": "2025-01-01T12:00:00Z",
+      "createdBy": {
+        "uniqueName": "old@studiodesigner.com",
+        "displayName": "Old User"
+      }
+    }
+  ],
+  "count": 2
+}

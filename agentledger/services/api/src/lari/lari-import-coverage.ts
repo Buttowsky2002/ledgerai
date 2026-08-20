@@ -13,6 +13,12 @@ import type {
 const usd = (v: number): number => Math.round((v + Number.EPSILON) * 100) / 100;
 
 export const RECOMMENDED_OUTCOME_SOURCES = [
+  {
+    id: 'azure_devops',
+    label: 'Azure DevOps',
+    outcomeType: 'pr_merged',
+    href: '/settings/connectors?preset=azure-devops-outcomes',
+  },
   { id: 'github', label: 'GitHub', outcomeType: 'merged_pr', href: '/settings/connectors' },
   { id: 'jira', label: 'Jira', outcomeType: 'closed_issue', href: '/settings/connectors' },
   { id: 'zendesk', label: 'Zendesk', outcomeType: 'resolved_ticket', href: '/settings/connectors' },
@@ -115,9 +121,14 @@ export function buildDataCoverage(input: CoverageAssemblyInput): DataCoverageSum
 /** Which outcome sources are connected vs still recommended. */
 export function buildOutcomeSourceStatus(connectors: ConnectorPresence): OutcomeSourceStatus {
   const connected = new Set(connectors.outcomeConnectors.map((c) => c.toLowerCase()));
-  const connectedSources = RECOMMENDED_OUTCOME_SOURCES.filter((s) =>
-    [...connected].some((c) => c.includes(s.id)),
-  ).map((s) => s.label);
+  const normalize = (s: string) => s.toLowerCase().replace(/[_\s-]+/g, '');
+  const connectedNorm = [...connected].map(normalize);
+
+  const connectedSources = RECOMMENDED_OUTCOME_SOURCES.filter((s) => {
+    const idNorm = normalize(s.id);
+    const labelNorm = normalize(s.label);
+    return connectedNorm.some((c) => c.includes(idNorm) || c.includes(labelNorm));
+  }).map((s) => s.label);
 
   const recommended = RECOMMENDED_OUTCOME_SOURCES.filter(
     (s) => !connectedSources.includes(s.label),

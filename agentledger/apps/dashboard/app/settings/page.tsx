@@ -10,7 +10,7 @@ import { PrivacySettings } from '../../components/settings/PrivacySettings';
 import { Card, DataTable, PageHeader, usd } from '../../components/ui';
 import { apiClient, fetchData, proxyApi } from '../../lib/api';
 import { isDemoIdentityEmail } from '../../lib/identity-filters';
-import type { AuditRow, IdentityRow, InviteRow } from '../../lib/settings-types';
+import type { IdentityRow, InviteRow } from '../../lib/settings-types';
 
 export const dynamic = 'force-dynamic';
 
@@ -155,18 +155,13 @@ async function PermissionsTab({ api }: { api: Api }) {
 }
 
 async function AuditingTab() {
-  const { ok, data } = await proxyApi('/v1/audit?limit=200&offset=0');
-  const rows: AuditRow[] = ok && Array.isArray(data) ? (data as AuditRow[]) : [];
   return (
     <Card title="Activity audit">
-      {!ok ? (
-        <p className="text-sm text-muted">
-          Only users with the <span className="text-gray-100">admin</span> role can view the audit
-          log.
-        </p>
-      ) : (
-        <AuditingSettings rows={rows} />
-      )}
+      <p className="mb-4 text-xs text-muted">
+        Only users with the <span className="text-gray-100">admin</span> role can view the audit
+        log. History defaults to the last 30 days — widen the range or load more to see older events.
+      </p>
+      <AuditingSettings />
     </Card>
   );
 }

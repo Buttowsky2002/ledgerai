@@ -6,6 +6,7 @@ import { ConnectorSchedulerService } from './connector-scheduler.service';
 import { ConnectorSecretsService } from './connector-secrets.service';
 import { ConnectorsService } from './connectors.service';
 import { AttributionMappingsService } from './attribution/attribution-mappings.service';
+import { AzureDevOpsOutcomesService } from './azure-devops/azure-devops-outcomes.service';
 
 @Module({
   imports: [ImportModule],
@@ -16,6 +17,7 @@ import { AttributionMappingsService } from './attribution/attribution-mappings.s
     ConnectorsService,
     ConnectorSchedulerService,
     AttributionMappingsService,
+    AzureDevOpsOutcomesService,
   ],
   exports: [ConnectorsService, ConnectorSecretsService, AttributionMappingsService],
 })

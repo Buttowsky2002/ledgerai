@@ -103,6 +103,16 @@ describe('Import coverage', () => {
     const status = buildOutcomeSourceStatus({ billingConnectors: [], outcomeConnectors: [] });
     expect(status.recommended.length).toBeGreaterThan(0);
     expect(status.connected).toHaveLength(0);
+    expect(status.recommended.some((s) => s.id === 'azure_devops')).toBe(true);
+  });
+
+  it('marks Azure DevOps connected when outcome connector label matches', () => {
+    const status = buildOutcomeSourceStatus({
+      billingConnectors: [],
+      outcomeConnectors: ['Azure DevOps Outcomes'],
+    });
+    expect(status.connected).toContain('Azure DevOps');
+    expect(status.recommended.some((s) => s.id === 'azure_devops')).toBe(false);
   });
 
   it('generates import parity narrative for import-only tenants', () => {

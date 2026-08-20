@@ -78,7 +78,14 @@ const CATEGORIES = [
 const AUTH_TYPES = ['api_key_header', 'bearer_token', 'basic_auth', 'custom_header', 'none'] as const;
 
 const COPILOT_PRESET = 'github-copilot-business';
-const LOCKED_PRESETS = new Set(['anthropic-usage', 'openai-usage', 'cursor-usage', COPILOT_PRESET]);
+const ADO_PRESET = 'azure-devops-outcomes';
+const LOCKED_PRESETS = new Set([
+  'anthropic-usage',
+  'openai-usage',
+  'cursor-usage',
+  COPILOT_PRESET,
+  ADO_PRESET,
+]);
 
 function isCopilotConnector(c: Connector): boolean {
   return c.provider === 'github_copilot_business' || c.category === 'license_usage_roi';
@@ -111,6 +118,12 @@ const PRESET_DEFAULTS: Record<
     authType: 'bearer_token',
     endpointPath: '/orgs/{org}/copilot/billing',
     category: 'license_usage_roi',
+  },
+  'azure-devops-outcomes': {
+    baseUrl: 'https://dev.azure.com',
+    authType: 'basic_auth',
+    endpointPath: '/',
+    category: 'outcome_system',
   },
 };
 
@@ -206,6 +219,10 @@ export function ConnectorsClient() {
     authType: 'bearer_token',
     authSecret: '',
     endpointPath: '/v1/spend',
+    adoOrganization: '',
+    adoProject: '',
+    adoRepos: '',
+    adoLookbackDays: '30',
   });
 
   const [syncingCopilot, setSyncingCopilot] = useState<string | null>(null);
@@ -244,9 +261,10 @@ export function ConnectorsClient() {
   }, []);
 
   useEffect(() => {
-    if (searchParams.get('preset') === COPILOT_PRESET) {
+    const preset = searchParams.get('preset');
+    if (preset === COPILOT_PRESET || preset === ADO_PRESET) {
       setFormOpen(true);
-      setForm((f) => ({ ...f, ...presetFormFields(COPILOT_PRESET, presets) }));
+      setForm((f) => ({ ...f, ...presetFormFields(preset, presets) }));
     }
   }, [searchParams, presets]);
 
@@ -267,8 +285,35 @@ export function ConnectorsClient() {
       setError('Use Test token and Connect Copilot below for GitHub Copilot Business.');
       return;
     }
+    if (form.presetId === ADO_PRESET) {
+      if (!form.adoOrganization.trim() || !form.adoProject.trim()) {
+        setError('Azure DevOps requires organization and project.');
+        return;
+      }
+      if (!form.authSecret.trim()) {
+        setError('Azure DevOps requires a Personal Access Token (Code read + Work Items read).');
+        return;
+      }
+    }
     setError(null);
     const locked = LOCKED_PRESETS.has(form.presetId);
+    const lookback = Number(form.adoLookbackDays);
+    const adoConfig =
+      form.presetId === ADO_PRESET
+        ? {
+            organization: form.adoOrganization.trim(),
+            project: form.adoProject.trim(),
+            lookback_days: Number.isFinite(lookback) && lookback > 0 ? Math.floor(lookback) : 30,
+            ...(form.adoRepos.trim()
+              ? {
+                  repos: form.adoRepos
+                    .split(',')
+                    .map((r) => r.trim())
+                    .filter(Boolean),
+                }
+              : {}),
+          }
+        : undefined;
     const res = await fetch('/api/connectors', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -278,7 +323,12 @@ export function ConnectorsClient() {
         category: form.category,
         baseUrl: locked ? undefined : form.baseUrl,
         authSecret: form.authSecret || undefined,
-        configJson: locked ? {} : { endpointPath: form.endpointPath, authType: form.authType },
+        configJson:
+          form.presetId === ADO_PRESET
+            ? adoConfig
+            : locked
+              ? {}
+              : { endpointPath: form.endpointPath, authType: form.authType },
       }),
     });
     if (!res.ok) {
@@ -287,7 +337,15 @@ export function ConnectorsClient() {
       return;
     }
     setFormOpen(false);
-    setForm((f) => ({ ...f, authSecret: '', displayName: '' }));
+    setForm((f) => ({
+      ...f,
+      authSecret: '',
+      displayName: '',
+      adoOrganization: '',
+      adoProject: '',
+      adoRepos: '',
+      adoLookbackDays: '30',
+    }));
     await load();
   };
 
@@ -565,12 +623,65 @@ export function ConnectorsClient() {
                   Background Agents and Cursor CLI are not tracked by Cursor.
                 </p>
               )}
+              {form.presetId === ADO_PRESET && (
+                <p className="mt-1 text-xs text-muted">
+                  Connect Azure DevOps to import <strong>merged PRs</strong> and{' '}
+                  <strong>completed work items</strong> as outcomes for Product Worth / ROI. Create a Personal
+                  Access Token with <strong>Code (Read)</strong> and <strong>Work Items (Read)</strong> scopes.
+                  Organization is the name in <code className="text-xs">dev.azure.com/&#123;org&#125;</code>; project
+                  is the Azure DevOps project name. Optional repos list limits PR sync (comma-separated); leave blank
+                  for all repos in the project. Default lookback is 30 days.
+                </p>
+              )}
             </div>
+            {form.presetId === ADO_PRESET && (
+              <>
+                <label className="block text-sm">
+                  <span className="text-muted">Organization</span>
+                  <input
+                    className="mt-1 w-full rounded border border-edge bg-black/20 px-3 py-2"
+                    value={form.adoOrganization}
+                    onChange={(e) => setForm({ ...form, adoOrganization: e.target.value })}
+                    placeholder="my-org"
+                  />
+                </label>
+                <label className="block text-sm">
+                  <span className="text-muted">Project</span>
+                  <input
+                    className="mt-1 w-full rounded border border-edge bg-black/20 px-3 py-2"
+                    value={form.adoProject}
+                    onChange={(e) => setForm({ ...form, adoProject: e.target.value })}
+                    placeholder="MyProject"
+                  />
+                </label>
+                <label className="block text-sm">
+                  <span className="text-muted">Repos (optional)</span>
+                  <input
+                    className="mt-1 w-full rounded border border-edge bg-black/20 px-3 py-2"
+                    value={form.adoRepos}
+                    onChange={(e) => setForm({ ...form, adoRepos: e.target.value })}
+                    placeholder="repo-a, repo-b"
+                  />
+                </label>
+                <label className="block text-sm">
+                  <span className="text-muted">Lookback days</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={365}
+                    className="mt-1 w-full rounded border border-edge bg-black/20 px-3 py-2"
+                    value={form.adoLookbackDays}
+                    onChange={(e) => setForm({ ...form, adoLookbackDays: e.target.value })}
+                  />
+                </label>
+              </>
+            )}
             <label className="block text-sm">
               <span className="text-muted">Category</span>
               <select
-                className="mt-1 w-full rounded border border-edge bg-black/20 px-3 py-2"
+                className="mt-1 w-full rounded border border-edge bg-black/20 px-3 py-2 disabled:opacity-50"
                 value={form.category}
+                disabled={LOCKED_PRESETS.has(form.presetId)}
                 onChange={(e) => setForm({ ...form, category: e.target.value })}
               >
                 {CATEGORIES.map((c) => (
@@ -587,6 +698,7 @@ export function ConnectorsClient() {
                 onChange={(e) => setForm({ ...form, baseUrl: e.target.value })}
               />
             </label>
+            {form.presetId !== ADO_PRESET && (
             <label className="block text-sm">
               <span className="text-muted">Endpoint path</span>
               <input
@@ -596,6 +708,8 @@ export function ConnectorsClient() {
                 onChange={(e) => setForm({ ...form, endpointPath: e.target.value })}
               />
             </label>
+            )}
+            {form.presetId !== ADO_PRESET && (
             <label className="block text-sm">
               <span className="text-muted">Auth type</span>
               <select
@@ -609,6 +723,7 @@ export function ConnectorsClient() {
                 ))}
               </select>
             </label>
+            )}
             <label className="block text-sm md:col-span-2">
               <span className="text-muted">Auth secret (stored encrypted, never logged)</span>
               <input
@@ -617,11 +732,13 @@ export function ConnectorsClient() {
                 value={form.authSecret}
                 onChange={(e) => setForm({ ...form, authSecret: e.target.value })}
                 placeholder={
-                  form.presetId === 'cursor-usage'
-                    ? 'Cursor Team Admin API key'
-                    : form.presetId === 'anthropic-usage'
-                      ? 'Claude Console Admin API key (sk-ant-admin…)'
-                      : 'API key or bearer token'
+                  form.presetId === ADO_PRESET
+                    ? 'Azure DevOps PAT (Code read + Work Items read)'
+                    : form.presetId === 'cursor-usage'
+                      ? 'Cursor Team Admin API key'
+                      : form.presetId === 'anthropic-usage'
+                        ? 'Claude Console Admin API key (sk-ant-admin…)'
+                        : 'API key or bearer token'
                 }
               />
             </label>
@@ -630,7 +747,11 @@ export function ConnectorsClient() {
             <button
               type="button"
               onClick={() => void createConnector()}
-              disabled={!form.displayName}
+              disabled={
+                !form.displayName ||
+                (form.presetId === ADO_PRESET &&
+                  (!form.adoOrganization.trim() || !form.adoProject.trim() || !form.authSecret.trim()))
+              }
               className="rounded bg-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
             >
               Save connector

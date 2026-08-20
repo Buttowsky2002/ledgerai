@@ -26,6 +26,10 @@ import { AttributionMappingsService } from './attribution/attribution-mappings.s
 import { attributionWarning, resolveCapabilities } from './types/connector-capabilities';
 import { applyAnthropicKeyRouting } from './anthropic-key-routing';
 import { DEFAULT_SYNC_INTERVAL_MINUTES } from './sync-range';
+import {
+  AZURE_DEVOPS_PRESET_ID,
+  AzureDevOpsOutcomesService,
+} from './azure-devops/azure-devops-outcomes.service';
 
 const DEFAULT_CONNECTOR_SCHEDULE = {
   intervalMinutes: DEFAULT_SYNC_INTERVAL_MINUTES,
@@ -42,7 +46,12 @@ const NO_USER_ATTRIBUTION_WARNING =
   '(sk-ant-admin) only support org-level cost_report, not user_cost_report.';
 
 /** Built-in presets — UI must not override auth, URL, or endpoints from stale form defaults. */
-const LOCKED_BUILTIN_PRESETS = new Set(['anthropic-usage', 'openai-usage', 'cursor-usage']);
+const LOCKED_BUILTIN_PRESETS = new Set([
+  'anthropic-usage',
+  'openai-usage',
+  'cursor-usage',
+  'azure-devops-outcomes',
+]);
 
 function omitSecretRef<T extends { secretRef?: unknown }>(row: T): Omit<T, 'secretRef'> {
   const { secretRef, ...safe } = row;
@@ -111,6 +120,7 @@ export class ConnectorsService {
     private readonly importService: ImportService,
     private readonly attributionMappings: AttributionMappingsService,
     private readonly ch: AnalyticsStore,
+    private readonly azureDevOps: AzureDevOpsOutcomesService,
   ) {}
 
   private applyCreateOverrides(
@@ -177,6 +187,91 @@ export class ConnectorsService {
       }
     }
     return { ...fresh, baseUrl, endpoints };
+  }
+
+  /** Dedicated ADO sync — WIQL work items + completed PRs → Postgres outcomes. */
+  private async syncAzureDevOpsOutcomes(opts: {
+    tenantId: string;
+    connectorId: string;
+    syncRunId: string;
+    config: Record<string, unknown>;
+    pat: string;
+  }) {
+    try {
+      const result = await this.azureDevOps.sync({
+        connectorId: opts.connectorId,
+        config: opts.config,
+        pat: opts.pat,
+      });
+
+      await this.prisma.withTenant(opts.tenantId, async (tx) => {
+        await tx.connectorSyncRun.update({
+          where: { syncRunId: opts.syncRunId },
+          data: {
+            status: 'completed',
+            completedAt: new Date(),
+            recordsSeen: result.recordsFetched,
+            recordsImported: result.recordsImported,
+            recordsRejected: 0,
+          },
+        });
+        await tx.connector.update({
+          where: { connectorId: opts.connectorId },
+          data: {
+            status: 'connected',
+            lastSyncAt: new Date(),
+            lastSyncCompletedAt: new Date(),
+            lastSuccessAt: result.recordsImported > 0 ? new Date() : undefined,
+            lastError: null,
+            lastErrorCode: null,
+            lastErrorMessageSafe: null,
+          },
+        });
+        await recordAudit(tx, {
+          action: 'update',
+          object: `connector:${opts.connectorId}:sync`,
+          before: null,
+          after: {
+            syncRunId: opts.syncRunId,
+            imported: result.recordsImported,
+            fetched: result.recordsFetched,
+            provider: 'azure_devops',
+          },
+        });
+      });
+
+      return {
+        syncRunId: opts.syncRunId,
+        status: 'completed' as const,
+        recordsSeen: result.recordsFetched,
+        recordsImported: result.recordsImported,
+        recordsRejected: 0,
+        emptyWarning:
+          result.recordsFetched === 0
+            ? 'Connected, but no completed work items or merged PRs were found in the lookback window. Check organization/project and PAT scopes (Code read, Work Items read).'
+            : undefined,
+      };
+    } catch (e) {
+      const rawMsg = e instanceof Error ? e.message : 'Azure DevOps sync failed';
+      const msg = safeErrorMessage(rawMsg);
+      await this.prisma.withTenant(opts.tenantId, async (tx) => {
+        await tx.connectorSyncRun.update({
+          where: { syncRunId: opts.syncRunId },
+          data: { status: 'failed', completedAt: new Date(), errorSummary: msg },
+        });
+        await tx.connector.update({
+          where: { connectorId: opts.connectorId },
+          data: {
+            status: 'error',
+            lastError: msg,
+            lastErrorCode: 'ADO_SYNC_FAILED',
+            lastErrorMessageSafe: msg,
+            lastSyncCompletedAt: new Date(),
+          },
+        });
+      });
+      throw e instanceof BadRequestException ? e : new BadRequestException(msg);
+    }
   }
 
   private async resolveDefinition(row: {
@@ -555,6 +650,33 @@ export class ConnectorsService {
         { connectorId: id, elapsedMs: elapsed },
         'resetting stale connector sync state',
       );
+    }
+
+    // Azure DevOps outcomes use a dedicated syncer (WIQL + PRs), not the generic REST engine.
+    if (row.kind === AZURE_DEVOPS_PRESET_ID) {
+      const definitionBase = await this.resolveDefinition(row);
+      const secret = await this.resolveProviderSecret(row, definitionBase);
+      if (!secret?.trim()) {
+        throw new BadRequestException('connector has no credentials');
+      }
+      const syncRun = await this.prisma.withTenant(tenantId!, (tx) =>
+        tx.connectorSyncRun.create({
+          data: { tenantId: tenantId!, connectorId: id, status: 'running' },
+        }),
+      );
+      await this.prisma.withTenant(tenantId!, (tx) =>
+        tx.connector.update({
+          where: { connectorId: id },
+          data: { status: 'syncing', lastSyncStartedAt: new Date() },
+        }),
+      );
+      return this.syncAzureDevOpsOutcomes({
+        tenantId: tenantId!,
+        connectorId: id,
+        syncRunId: syncRun.syncRunId,
+        config: (row.config ?? {}) as Record<string, unknown>,
+        pat: secret,
+      });
     }
 
     const definitionBase = await this.resolveDefinition(row);

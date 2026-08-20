@@ -14,6 +14,13 @@ export type AuditListItem = {
   detail: Record<string, unknown>;
 };
 
+export type AuditListResult = {
+  rows: AuditListItem[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
 /**
  * Tenant-scoped reads of audit_log for the Settings → Auditing UI.
  * Mutations continue to go through recordAudit() / recordAuthAudit() writers.
@@ -26,21 +33,37 @@ export class AuditService {
     limit: number;
     offset: number;
     action?: string;
-  }): Promise<AuditListItem[]> {
+    from?: string;
+    to?: string;
+  }): Promise<AuditListResult> {
     const tenantId = getTenantId();
     const where: Prisma.AuditLogWhereInput = {};
     if (opts.action) {
       where.action = opts.action;
     }
+    const atFilter: Prisma.DateTimeFilter = {};
+    if (opts.from) {
+      atFilter.gte = new Date(`${opts.from}T00:00:00.000Z`);
+    }
+    if (opts.to) {
+      atFilter.lte = new Date(`${opts.to}T23:59:59.999Z`);
+    }
+    if (Object.keys(atFilter).length > 0) {
+      where.at = atFilter;
+    }
 
-    const rows = await this.prisma.withTenant(tenantId, (tx) =>
-      tx.auditLog.findMany({
-        where,
-        orderBy: { at: 'desc' },
-        take: opts.limit,
-        skip: opts.offset,
-      }),
-    );
+    const [rows, total] = await this.prisma.withTenant(tenantId, async (tx) => {
+      const [found, count] = await Promise.all([
+        tx.auditLog.findMany({
+          where,
+          orderBy: { at: 'desc' },
+          take: opts.limit,
+          skip: opts.offset,
+        }),
+        tx.auditLog.count({ where }),
+      ]);
+      return [found, count] as const;
+    });
 
     const actorIds = [
       ...new Set(
@@ -62,22 +85,27 @@ export class AuditService {
 
     const byId = new Map(identities.map((i) => [i.userId, i]));
 
-    return rows.map((r) => {
-      const ident = byId.get(r.actor);
-      const detail =
-        r.detail && typeof r.detail === 'object' && !Array.isArray(r.detail)
-          ? (r.detail as Record<string, unknown>)
-          : {};
-      return {
-        id: String(r.id),
-        at: r.at.toISOString(),
-        actor: r.actor,
-        actorEmail: ident?.email ?? null,
-        actorDisplayName: ident?.displayName ?? null,
-        action: r.action,
-        object: r.object,
-        detail,
-      };
-    });
+    return {
+      rows: rows.map((r) => {
+        const ident = byId.get(r.actor);
+        const detail =
+          r.detail && typeof r.detail === 'object' && !Array.isArray(r.detail)
+            ? (r.detail as Record<string, unknown>)
+            : {};
+        return {
+          id: String(r.id),
+          at: r.at.toISOString(),
+          actor: r.actor,
+          actorEmail: ident?.email ?? null,
+          actorDisplayName: ident?.displayName ?? null,
+          action: r.action,
+          object: r.object,
+          detail,
+        };
+      }),
+      total,
+      limit: opts.limit,
+      offset: opts.offset,
+    };
   }
 }

@@ -1,0 +1,23 @@
+{
+  "id": "azure-devops-outcomes",
+  "name": "Azure DevOps Outcomes",
+  "provider": "azure_devops",
+  "category": "outcome_system",
+  "authType": "basic_auth",
+  "baseUrl": "https://dev.azure.com",
+  "endpoints": [],
+  "destinationRecordType": "outcome_record",
+  "capabilities": {
+    "supportsUsage": false,
+    "supportsBilling": false,
+    "supportsUsers": true,
+    "supportsProjects": true,
+    "supportsWorkspaces": false,
+    "supportsApiKeys": false,
+    "supportsUserLevelCost": false,
+    "supportsModelLevelUsage": false
+  },
+  "fieldMappings": [],
+  "schedule": { "frequency": "daily" },
+  "notes": "Imports merged pull requests (pr_merged) and completed work items (work_item_closed). Requires a PAT with Code (read) and Work Items (read). Set config.organization and config.project; optional config.repos and config.lookback_days (default 30)."
+}
