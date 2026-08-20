@@ -189,7 +189,14 @@ export const PROVIDER_SOURCE_BREAKDOWN_SQL = `
     AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
     AND ${LLM_CALLS_METERED_SCOPE}
   GROUP BY provider
-  ORDER BY portal_import_usd + connector_usd + live_usd DESC
+  -- Postgres forbids SELECT aliases inside ORDER BY expressions; repeat the sums.
+  ORDER BY
+    sumIf(${EFFECTIVE_METERED_COST_USD}, llm_calls.source = 'portal_import')
+    + sumIf(${EFFECTIVE_METERED_COST_USD}, llm_calls.source = 'api')
+    + sumIf(
+      ${EFFECTIVE_METERED_COST_USD},
+      llm_calls.source NOT IN ('portal_import', 'api')
+    ) DESC
 `;
 
 /**

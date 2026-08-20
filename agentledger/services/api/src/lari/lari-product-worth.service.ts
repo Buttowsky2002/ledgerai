@@ -68,15 +68,7 @@ export class LariProductWorthService {
         RECONCILED_MODEL_USAGE_SQL,
         priorRange as Record<string, ChParam>,
       ),
-      this.ch.queryScoped<{
-        provider: string;
-        portal_import_usd: number;
-        connector_usd: number;
-        live_usd: number;
-        portal_import_calls: number;
-        connector_calls: number;
-        live_calls: number;
-      }>(PROVIDER_SOURCE_BREAKDOWN_SQL, params),
+      this.fetchSourceBreakdown(params),
       this.fetchOutcomeStats(params),
       this.fetchImportStats(tenantId, engineInput.from, engineInput.to),
       this.fetchConnectorPresence(tenantId),
@@ -152,6 +144,29 @@ export class LariProductWorthService {
       importStats,
       connectors,
     });
+  }
+
+  private async fetchSourceBreakdown(
+    params: Record<string, ChParam>,
+  ): Promise<
+    Array<{
+      provider: string;
+      portal_import_usd: number;
+      connector_usd: number;
+      live_usd: number;
+      portal_import_calls: number;
+      connector_calls: number;
+      live_calls: number;
+    }>
+  > {
+    try {
+      return await this.ch.queryScoped(PROVIDER_SOURCE_BREAKDOWN_SQL, params);
+    } catch (err) {
+      this.logger.warn(
+        `provider source breakdown unavailable: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return [];
+    }
   }
 
   private async fetchOutcomeStats(
