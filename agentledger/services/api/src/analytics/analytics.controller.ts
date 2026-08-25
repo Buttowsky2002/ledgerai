@@ -43,6 +43,11 @@ export class AnalyticsController {
     return this.analytics.users(q.from, q.to, q.q);
   }
 
+  @Roles('viewer') @Get('vendor-billing')
+  vendorBilling(@Query() q: RangeQueryDto) {
+    return this.analytics.vendorBilling(q.from, q.to);
+  }
+
   @Roles('viewer') @Get('users/:userId')
   userDetail(@Param('userId') userId: string, @Query() q: RangeQueryDto) {
     return this.analytics.userDetail(userId, q.from, q.to);

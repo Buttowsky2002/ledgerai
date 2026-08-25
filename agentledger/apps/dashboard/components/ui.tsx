@@ -114,7 +114,15 @@ export interface Column {
   align?: 'right';
 }
 
-export function DataTable({ columns, rows }: { columns: Column[]; rows: Record<string, ReactNode>[] }) {
+export function DataTable({
+  columns,
+  rows,
+  footerRows,
+}: {
+  columns: Column[];
+  rows: Record<string, ReactNode>[];
+  footerRows?: Record<string, ReactNode>[];
+}) {
   return (
     <div className="overflow-x-auto">
       <table className="table">
@@ -139,8 +147,6 @@ export function DataTable({ columns, rows }: { columns: Column[]; rows: Record<s
               <tr key={i}>
                 {columns.map((c) => (
                   <td key={c.key} className={c.align === 'right' ? 'text-right' : ''}>
-                    {/* Right-aligned columns are numeric by convention — render them in
-                        the tabular mono house style automatically. */}
                     {c.align === 'right' ? <span className="num">{r[c.key]}</span> : r[c.key]}
                   </td>
                 ))}
@@ -148,6 +154,19 @@ export function DataTable({ columns, rows }: { columns: Column[]; rows: Record<s
             ))
           )}
         </tbody>
+        {footerRows && footerRows.length > 0 && (
+          <tfoot>
+            {footerRows.map((r, i) => (
+              <tr key={i} className="border-t border-edge bg-black/30 font-medium">
+                {columns.map((c) => (
+                  <td key={c.key} className={c.align === 'right' ? 'text-right' : ''}>
+                    {c.align === 'right' ? <span className="num">{r[c.key]}</span> : r[c.key]}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tfoot>
+        )}
       </table>
     </div>
   );

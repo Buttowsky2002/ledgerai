@@ -10,6 +10,7 @@ export const FIXED_COST_VENDORS = [
   'cohere',
   'mistral',
   'perplexity',
+  'lovable',
   'other',
 ] as const;
 

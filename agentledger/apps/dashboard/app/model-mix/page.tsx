@@ -41,7 +41,7 @@ export default async function ModelMixPage({
       <div className="grid gap-6 lg:grid-cols-2">
         <Card title="Spend by platform">
           {platformChart.length > 0 ? (
-            <PieChartClient data={platformChart} nameKey="platform" valueKey="cost_usd" />
+            <PieChartClient data={platformChart} nameKey="platform" valueKey="cost_usd" showPercent />
           ) : (
             <p className="py-8 text-center text-sm text-muted">No platform spend in this range.</p>
           )}

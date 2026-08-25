@@ -23,6 +23,7 @@ const VENDOR_OVERRIDES: Record<string, string> = {
   azure_openai: 'azure',
   vertex: 'google',
   bedrock: 'aws',
+  lovable: 'lovable',
 };
 
 function normalize(platform: string): string {

@@ -463,6 +463,7 @@ describe('AnalyticsService.users', () => {
     const result = await svc.users('2026-07-01', '2026-07-06');
     const cursorUser = result.users.find((u) => u.user_id === 'brandon@example.com');
     expect(cursorUser?.total_spend_usd).toBe(170.12);
+    expect(cursorUser?.vendor_spend?.cursor?.overage_usd).toBe(170.12);
     expect(cursorUser?.model_breakdown).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ platform: 'cursor', spend_usd: 170.12 }),
@@ -574,9 +575,11 @@ describe('AnalyticsService.users', () => {
     );
 
     const mixed = result.users.find((u) => u.user_id === 'dev@company.com');
-    expect(mixed?.total_spend_usd).toBe(10);
+    expect(mixed?.total_spend_usd).toBe(15);
     expect(mixed?.cursor_on_demand_usd).toBe(5);
     expect(mixed?.cursor_included_usd).toBe(12);
+    expect(mixed?.vendor_spend?.openai?.overage_usd).toBe(10);
+    expect(mixed?.vendor_spend?.cursor?.overage_usd).toBe(5);
   });
 });
 

@@ -31,6 +31,19 @@ import {
 } from './cursor-seat-license';
 import { loadIdentityLookups, resolveUserDirectoryIdentity, isEmailLike } from '../reports/identity-resolver';
 import type { UserDirectoryIdentity } from '../reports/identity-resolver';
+import { modelFamilyLabel } from './model-family';
+import { prorateMonthlyCost } from '../fixed-costs/fixed-cost-prorate';
+import {
+  buildOrgVendorBilling,
+  buildUserVendorSpend,
+  buildUserVendorUsage,
+  orderedVendorIds,
+  platformToVendor,
+  sumUserVendorSpend,
+  type OrgVendorBillingRow,
+  type VendorSpendSlice,
+  type VendorUsageSlice,
+} from './vendor-spend';
 
 type Range = { from: string; to: string };
 
@@ -85,6 +98,17 @@ export interface UserDirectoryRow {
   cursor_included_usd?: number;
   models: string[];
   model_breakdown: UserModelBreakdownRow[];
+  /** Per-vendor seat + overage (authoritative for member directory columns). */
+  vendor_spend?: Record<string, VendorSpendSlice>;
+  /** Per-vendor usage for detail tabs. */
+  vendor_usage?: Record<string, VendorUsageSlice>;
+}
+
+export interface VendorBillingResult {
+  from: string;
+  to: string;
+  vendors: OrgVendorBillingRow[];
+  total_cost_of_ai: number;
 }
 
 export interface AnalyticsDataBounds {
@@ -96,6 +120,9 @@ export interface UsersAnalyticsResult {
   from: string;
   to: string;
   users: UserDirectoryRow[];
+  /** Dynamic vendor column ids (sorted by spend). */
+  vendors: string[];
+  org_billing?: VendorBillingResult;
   /** How many distinct users came from each spend source before merge. */
   sources: {
     llm_call_users: number;
@@ -611,7 +638,7 @@ export class AnalyticsService {
       ),
       tenantId
         ? this.fetchCopilotUserSpend(tenantId, r)
-        : Promise.resolve({ totals: [], breakdown: [], hints: new Map() }),
+        : Promise.resolve({ totals: [], breakdown: [], hints: new Map(), byUser: new Map() }),
       tenantId
         ? this.fetchCursorUserActivity(tenantId, r)
         : Promise.resolve({ totals: [], breakdown: [] }),
@@ -1276,33 +1303,110 @@ export class AnalyticsService {
     if (!tenantId) {
       throw new BadRequestException('no tenant in context');
     }
-    const [{ totals: chTotals, breakdown: chBreakdown }, copilotPack, cursorPack] = await Promise.all([
-      this.fetchUserSpendFromCh(r),
-      this.fetchCopilotUserSpend(tenantId, r),
-      this.fetchCursorUserActivity(tenantId, r),
-    ]);
+    const [{ totals: chTotals, breakdown: chBreakdown, tokensByUserVendor }, copilotPack, cursorPack, orgBilling] =
+      await Promise.all([
+        this.fetchUserSpendFromCh(r),
+        this.fetchCopilotUserSpend(tenantId, r),
+        this.fetchCursorUserActivity(tenantId, r),
+        this.vendorBilling(from, to),
+      ]);
     const { totals, breakdown } = this.mergeCursorActivityIntoUserSpend(
       [...chTotals, ...copilotPack.totals],
       [...chBreakdown, ...copilotPack.breakdown],
       cursorPack,
     );
-    const users = await this.assembleUserDirectory(
+    const cursorSeatByUser = await this.cursorSeatUsdByUser(tenantId, r, cursorPack.totals);
+    let users = await this.assembleUserDirectory(
       tenantId,
       totals,
       breakdown,
       q,
       copilotPack.hints,
     );
+    users = this.enrichUsersWithVendorData(
+      users,
+      copilotPack.byUser,
+      cursorSeatByUser,
+      tokensByUserVendor,
+      cursorPack.totals,
+    );
+    const vendors = orderedVendorIds(
+      users.map((u) => u.vendor_spend ?? {}),
+      orgBilling.vendors,
+    );
     return {
       from: r.from,
       to: r.to,
       users,
+      vendors,
+      org_billing: orgBilling,
       sources: {
         llm_call_users: chTotals.length,
         copilot_members: copilotPack.totals.length,
         cursor_members: cursorPack.totals.length,
       },
     };
+  }
+
+  /** Org-level vendor seat + budget overage for fixed overhead and totals row. */
+  async vendorBilling(from?: string, to?: string): Promise<VendorBillingResult> {
+    const r = this.range(from, to);
+    const tenantId = getTenantId();
+    if (!tenantId) {
+      throw new BadRequestException('no tenant in context');
+    }
+
+    const [monthlyFixed, platformRows, cursorSummary, copilotMembers] = await Promise.all([
+      this.ch.queryScoped<{ vendor: string; cost_usd: unknown; period_month: string }>(
+        `SELECT vendor, cost_usd, period_month
+         FROM agentledger.v_fixed_cost_monthly
+         WHERE tenant_id = {tenant:String}
+           AND period_month >= toStartOfMonth(toDate({from:String}))
+           AND period_month <= toStartOfMonth(toDate({to:String}))`,
+        { from: r.from, to: r.to },
+      ),
+      this.platformSpend(r.from, r.to),
+      this.cursorSpend(r.from, r.to),
+      this.copilotMemberSpend.getMemberSpend(tenantId, { from: r.from, to: r.to }),
+    ]);
+
+    const seatUsdByVendor: Record<string, number> = {};
+    for (const row of monthlyFixed) {
+      const vendor = String(row.vendor).trim().toLowerCase();
+      const prorated = prorateMonthlyCost(Number(row.cost_usd ?? 0), String(row.period_month), r.from, r.to);
+      seatUsdByVendor[vendor] = (seatUsdByVendor[vendor] ?? 0) + prorated;
+    }
+
+    const overageUsdByVendor: Record<string, number> = {};
+    for (const row of platformRows) {
+      const vendor = platformToVendor(String(row.platform));
+      if (vendor === 'github' || vendor === 'cursor') continue;
+      overageUsdByVendor[vendor] = (overageUsdByVendor[vendor] ?? 0) + n(row.cost_usd);
+    }
+
+    if (cursorSummary) {
+      if (cursorSummary.seatLicenseUsd > 0) {
+        seatUsdByVendor.cursor = (seatUsdByVendor.cursor ?? 0) + cursorSummary.seatLicenseUsd;
+      }
+      if (cursorSummary.meteredOverageUsd > 0) {
+        overageUsdByVendor.cursor = (overageUsdByVendor.cursor ?? 0) + cursorSummary.meteredOverageUsd;
+      }
+    }
+
+    if (copilotMembers.connected) {
+      let ghSeat = 0;
+      let ghOverage = 0;
+      for (const m of copilotMembers.members) {
+        ghSeat += m.seatCost;
+        ghOverage += m.allocatedOverageCost;
+      }
+      if (ghSeat > 0) seatUsdByVendor.github = (seatUsdByVendor.github ?? 0) + usd(ghSeat);
+      if (ghOverage > 0) overageUsdByVendor.github = (overageUsdByVendor.github ?? 0) + usd(ghOverage);
+    }
+
+    const vendors = buildOrgVendorBilling(seatUsdByVendor, overageUsdByVendor);
+    const total_cost_of_ai = usd(vendors.reduce((s, v) => s + v.total_usd, 0));
+    return { from: r.from, to: r.to, vendors, total_cost_of_ai };
   }
 
   /** Single-user drill-down for /users/[userId]. */
@@ -1315,22 +1419,31 @@ export class AnalyticsService {
     if (!tenantId) {
       throw new BadRequestException('no tenant in context');
     }
-    const [{ totals: chTotals, breakdown: chBreakdown }, copilotPack, cursorPack] = await Promise.all([
-      this.fetchUserSpendFromCh(r, userId),
-      this.fetchCopilotUserSpend(tenantId, r, userId),
-      this.fetchCursorUserActivity(tenantId, r, userId),
-    ]);
+    const [{ totals: chTotals, breakdown: chBreakdown, tokensByUserVendor }, copilotPack, cursorPack] =
+      await Promise.all([
+        this.fetchUserSpendFromCh(r, userId),
+        this.fetchCopilotUserSpend(tenantId, r, userId),
+        this.fetchCursorUserActivity(tenantId, r, userId),
+      ]);
     const { totals, breakdown } = this.mergeCursorActivityIntoUserSpend(
       [...chTotals, ...copilotPack.totals],
       [...chBreakdown, ...copilotPack.breakdown],
       cursorPack,
     );
-    const rows = await this.assembleUserDirectory(
+    const cursorSeatByUser = await this.cursorSeatUsdByUser(tenantId, r, cursorPack.totals);
+    let rows = await this.assembleUserDirectory(
       tenantId,
       totals,
       breakdown,
       undefined,
       copilotPack.hints,
+    );
+    rows = this.enrichUsersWithVendorData(
+      rows,
+      copilotPack.byUser,
+      cursorSeatByUser,
+      tokensByUserVendor,
+      cursorPack.totals,
     );
     return rows[0] ?? null;
   }
@@ -1346,7 +1459,7 @@ export class AnalyticsService {
     const tokenUserFilter = userId
       ? `AND if(user_id = '', 'Unassigned', user_id) = {userId:String}`
       : '';
-    const [totals, breakdown, tokenRows] = await Promise.all([
+    const [totals, breakdown, tokenRows, tokenVendorRows] = await Promise.all([
       this.ch.queryScoped<{
         key: string;
         cost_usd: unknown;
@@ -1386,8 +1499,28 @@ export class AnalyticsService {
          GROUP BY key`,
         params,
       ),
+      this.ch.queryScoped<{ key: string; vendor: string; tokens: unknown }>(
+        `SELECT if(user_id = '', 'Unassigned', user_id) AS key,
+                provider AS vendor,
+                sum(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens) AS tokens
+         FROM llm_calls
+         WHERE tenant_id = {tenant:String}
+           AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
+           AND ${LLM_CALLS_METERED_SCOPE}
+           ${tokenUserFilter}
+         GROUP BY key, vendor`,
+        params,
+      ),
     ]);
     const tokensByUser = new Map(tokenRows.map((row) => [String(row.key), n(row.tokens)]));
+    const tokensByUserVendor = new Map<string, Record<string, number>>();
+    for (const row of tokenVendorRows) {
+      const uid = String(row.key);
+      const vendor = platformToVendor(String(row.vendor));
+      const cur = tokensByUserVendor.get(uid) ?? {};
+      cur[vendor] = (cur[vendor] ?? 0) + n(row.tokens);
+      tokensByUserVendor.set(uid, cur);
+    }
     return {
       totals: totals.map((row) => ({
         user_id: String(row.key),
@@ -1398,6 +1531,7 @@ export class AnalyticsService {
         connector_usd: row.connector_usd,
       })),
       breakdown,
+      tokensByUserVendor,
     };
   }
 
@@ -1553,6 +1687,7 @@ export class AnalyticsService {
     totals: { user_id: string; total_spend_usd: unknown; calls: unknown }[];
     breakdown: { user_id: string; platform: string; model: string; spend_usd: unknown; calls: unknown }[];
     hints: Map<string, CopilotIdentityHint>;
+    byUser: Map<string, { seat_usd: number; overage_usd: number; calls: number }>;
   }> {
     const resp: CopilotMemberSpendResponse = await this.copilotMemberSpend.getMemberSpend(tenantId, {
       from: r.from,
@@ -1560,8 +1695,9 @@ export class AnalyticsService {
       ...(githubLogin ? { user: githubLogin } : {}),
     });
     const hints = new Map<string, CopilotIdentityHint>();
+    const byUser = new Map<string, { seat_usd: number; overage_usd: number; calls: number }>();
     if (!resp.connected) {
-      return { totals: [], breakdown: [], hints };
+      return { totals: [], breakdown: [], hints, byUser };
     }
 
     const totals: { user_id: string; total_spend_usd: unknown; calls: unknown }[] = [];
@@ -1582,13 +1718,116 @@ export class AnalyticsService {
         spend_usd: m.totalAllocatedCost,
         calls,
       });
+      byUser.set(m.githubLogin, {
+        seat_usd: usd(m.seatCost ?? 0) > 0 || usd(m.allocatedOverageCost ?? 0) > 0
+          ? usd(m.seatCost ?? 0)
+          : usd(m.totalAllocatedCost),
+        overage_usd: usd(m.allocatedOverageCost ?? 0),
+        calls,
+      });
       hints.set(m.githubLogin, {
         displayName: m.displayName,
         email: null,
         team: m.teamName || '',
       });
     }
-    return { totals, breakdown, hints };
+    return { totals, breakdown, hints, byUser };
+  }
+
+  private enrichUsersWithVendorData(
+    users: UserDirectoryRow[],
+    copilotByUser: Map<string, { seat_usd: number; overage_usd: number; calls: number }>,
+    cursorSeatByUser: Map<string, number>,
+    tokensByUserVendor: Map<string, Record<string, number>>,
+    cursorTotals: { user_id: string; calls: number; tokens?: number }[],
+  ): UserDirectoryRow[] {
+    const cursorByUser = new Map(
+      cursorTotals.map((row) => [
+        String(row.user_id),
+        { calls: n(row.calls), tokens: n((row as { tokens?: unknown }).tokens) },
+      ]),
+    );
+
+    return users.map((user) => {
+      const copilot = copilotByUser.get(user.user_id);
+      const cursorSeat = cursorSeatByUser.get(user.user_id) ?? 0;
+      const cursorActivity = cursorByUser.get(user.user_id);
+      const vendor_spend = buildUserVendorSpend({
+        model_breakdown: user.model_breakdown,
+        cursor_on_demand_usd: user.cursor_on_demand_usd ?? 0,
+        cursor_seat_usd: cursorSeat,
+        copilot: copilot
+          ? { seat_usd: copilot.seat_usd, overage_usd: copilot.overage_usd }
+          : undefined,
+      });
+      const vendor_usage = buildUserVendorUsage({
+        model_breakdown: user.model_breakdown,
+        tokens_by_vendor: tokensByUserVendor.get(user.user_id) ?? {},
+        cursor_calls: cursorActivity?.calls ?? 0,
+        cursor_tokens: cursorActivity?.tokens ?? 0,
+        copilot_calls: copilot?.calls ?? 0,
+        modelFamilyLabel,
+      });
+      return {
+        ...user,
+        vendor_spend,
+        vendor_usage,
+        total_spend_usd: sumUserVendorSpend(vendor_spend),
+      };
+    });
+  }
+
+  /** Per-user Cursor seat cost — ai_seats assignment or equal share of org license. */
+  private async cursorSeatUsdByUser(
+    tenantId: string,
+    r: Range,
+    cursorTotals: { user_id: string }[],
+  ): Promise<Map<string, number>> {
+    const out = new Map<string, number>();
+    if (cursorTotals.length === 0) return out;
+
+    const activeMembers = cursorTotals.length;
+    let orgSeatUsd = 0;
+    try {
+      const seat = await this.cursorSeatLicenseForPeriod(tenantId, r, activeMembers);
+      orgSeatUsd = seat.seatLicenseUsd;
+    } catch {
+      orgSeatUsd = 0;
+    }
+
+    const seatRows = this.prisma?.withTenant
+      ? await this.prisma.withTenant(tenantId, (tx) =>
+          tx.$queryRaw<
+            { user_id: string | null; email: string | null; monthly_price_per_user: number | string }[]
+          >`
+        SELECT s.user_id::text, i.email, p.monthly_price_per_user
+        FROM ai_seats s
+        JOIN ai_subscription_plans p ON s.plan_id = p.plan_id
+        LEFT JOIN identities i ON s.user_id = i.user_id
+        WHERE s.active = true AND lower(s.provider) = 'cursor' AND s.user_id IS NOT NULL`,
+        )
+      : [];
+
+    const assigned = new Set<string>();
+    for (const row of seatRows) {
+      const monthly = n(row.monthly_price_per_user);
+      if (monthly <= 0) continue;
+      const prorated = prorateMonthlyCost(monthly, `${r.from.slice(0, 7)}-01`, r.from, r.to);
+      const uid = String(row.user_id);
+      out.set(uid, (out.get(uid) ?? 0) + prorated);
+      assigned.add(uid);
+      if (row.email) assigned.add(String(row.email).toLowerCase());
+    }
+
+    const perUserFallback =
+      orgSeatUsd > 0 && activeMembers > 0 ? usd(orgSeatUsd / activeMembers) : 0;
+    for (const row of cursorTotals) {
+      const uid = String(row.user_id);
+      if (out.has(uid) || assigned.has(uid.toLowerCase())) continue;
+      if (perUserFallback > 0) out.set(uid, perUserFallback);
+    }
+
+    return out;
   }
 
   private async assembleUserDirectory(
@@ -1773,7 +2012,47 @@ export class AnalyticsService {
       cursor_included_usd: usd((a.cursor_included_usd ?? 0) + (b.cursor_included_usd ?? 0)),
       models,
       model_breakdown,
+      vendor_spend: this.mergeVendorSpendRecords(a.vendor_spend, b.vendor_spend),
+      vendor_usage: this.mergeVendorUsageRecords(a.vendor_usage, b.vendor_usage),
     };
+  }
+
+  private mergeVendorSpendRecords(
+    a?: Record<string, VendorSpendSlice>,
+    b?: Record<string, VendorSpendSlice>,
+  ): Record<string, VendorSpendSlice> | undefined {
+    if (!a && !b) return undefined;
+    const out: Record<string, VendorSpendSlice> = { ...(a ?? {}) };
+    for (const [vendor, slice] of Object.entries(b ?? {})) {
+      const cur = out[vendor] ?? { seat_usd: 0, overage_usd: 0, total_usd: 0 };
+      out[vendor] = {
+        seat_usd: usd(cur.seat_usd + slice.seat_usd),
+        overage_usd: usd(cur.overage_usd + slice.overage_usd),
+        total_usd: usd(cur.total_usd + slice.total_usd),
+      };
+    }
+    return out;
+  }
+
+  private mergeVendorUsageRecords(
+    a?: Record<string, VendorUsageSlice>,
+    b?: Record<string, VendorUsageSlice>,
+  ): Record<string, VendorUsageSlice> | undefined {
+    if (!a && !b) return undefined;
+    const out: Record<string, VendorUsageSlice> = {};
+    for (const src of [a, b]) {
+      if (!src) continue;
+      for (const [vendor, slice] of Object.entries(src)) {
+        const cur = out[vendor] ?? { calls: 0, tokens: 0, models: [], model_breakdown: [] };
+        cur.calls += slice.calls;
+        cur.tokens += slice.tokens;
+        cur.model_breakdown = [...cur.model_breakdown, ...slice.model_breakdown];
+        const families = new Set([...cur.models, ...slice.models]);
+        cur.models = [...families];
+        out[vendor] = cur;
+      }
+    }
+    return out;
   }
 
   private userMatchesQuery(user: UserDirectoryRow, needle: string): boolean {

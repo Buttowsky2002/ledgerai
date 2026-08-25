@@ -12,6 +12,7 @@ export const AI_VENDORS: { id: FixedCostVendor; label: string; product: string }
   { id: 'cohere', label: 'Cohere', product: 'Cohere' },
   { id: 'mistral', label: 'Mistral', product: 'Mistral' },
   { id: 'perplexity', label: 'Perplexity', product: 'Perplexity' },
+  { id: 'lovable', label: 'Lovable', product: 'Lovable' },
   { id: 'other', label: 'Other', product: 'Custom' },
 ];
 

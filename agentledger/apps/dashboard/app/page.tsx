@@ -19,6 +19,13 @@ import { env } from '../lib/env';
 import { seatUsdByVendor } from '../lib/platform-billing';
 import { resolvePageRange } from '../lib/resolve-range';
 
+type UserRow = {
+  user_id: string;
+  display_name: string;
+  email: string | null;
+  team: string;
+};
+
 export const dynamic = 'force-dynamic';
 
 function liveRefreshIntervalMs(): number {
@@ -121,7 +128,7 @@ function ConfMeter({ score }: { score: number }) {
 export default async function OverviewPage({
   searchParams,
 }: {
-  searchParams: { from?: string; to?: string; source?: string; range?: string };
+  searchParams: { from?: string; to?: string; source?: string; vendor?: string; range?: string; aiView?: string };
 }) {
   const source = searchParams.source || undefined;
   const api = apiClient();
@@ -138,7 +145,8 @@ export default async function OverviewPage({
 
   type FixedCostVendorRow = { vendor?: string | null; cost_usd?: number | string | null };
 
-  const [spend, economics, costByUser, platformSpend, modelMix, totalCostRows, fixedCostRows] = await Promise.all([
+  const [spend, economics, costByUser, platformSpend, modelMix, totalCostRows, fixedCostRows, usersRes, vendorBillingRes] =
+    await Promise.all([
     fetchData(
       api.GET('/v1/analytics/spend', { params: { query: { from, to } } }),
       [],
@@ -168,6 +176,16 @@ export default async function OverviewPage({
       const qs = new URLSearchParams({ from, to }).toString();
       const res = await proxyApi(`/v1/fixed-costs?${qs}`);
       return res.ok && Array.isArray(res.data) ? (res.data as FixedCostVendorRow[]) : [];
+    })(),
+    (async () => {
+      const qs = new URLSearchParams({ from, to }).toString();
+      const res = await proxyApi(`/v1/analytics/users?${qs}`);
+      return res.ok && res.data && typeof res.data === 'object' ? res.data : { users: [], vendors: [] };
+    })(),
+    (async () => {
+      const qs = new URLSearchParams({ from, to }).toString();
+      const res = await proxyApi(`/v1/analytics/vendor-billing?${qs}`);
+      return res.ok && res.data && typeof res.data === 'object' ? res.data : { vendors: [], total_cost_of_ai: 0 };
     })(),
   ]);
 
@@ -336,14 +354,12 @@ export default async function OverviewPage({
         }
       >
         <OverviewAiSourcesPanel
-          platforms={platforms}
-          modelMix={models}
           from={from}
           to={to}
-          initialSource={source}
-          seatUsdByVendor={seatUsdByVendorMap}
-          cursorSpend={hasCursorPlatform ? cursorSpend : undefined}
-          cursorSpendError={cursorSpendError}
+          users={((usersRes as { users?: UserRow[] }).users ?? []) as Parameters<typeof OverviewAiSourcesPanel>[0]['users']}
+          models={models}
+          orgVendors={(vendorBillingRes as { vendors?: { vendor: string; seat_usd: number; budget_overage_usd: number; total_usd: number }[] }).vendors ?? []}
+          cursorSpend={cursorSpend}
         />
       </Suspense>
 

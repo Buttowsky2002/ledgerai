@@ -1,12 +1,7 @@
-/** One row of per-model spend — enough to infer discovered model families. */
-export type ModelUsageRow = { platform: string; model: string; spend_usd?: number };
+/** Model family labels — keep in sync with apps/dashboard/lib/model-family.ts */
 
 type FamilyRule = { label: string; test: (platform: string, model: string) => boolean };
 
-/**
- * Ordered rules — first match wins.
- * Cross-reference: services/api/src/lari/model-equivalence.ts (modelFamily) — keep in sync.
- */
 const FAMILY_RULES: FamilyRule[] = [
   {
     label: 'Copilot',
@@ -34,7 +29,6 @@ const FAMILY_RULES: FamilyRule[] = [
   },
 ];
 
-/** Map a provider/model pair to a short human label (Claude, ChatGPT, Copilot, …). */
 export function modelFamilyLabel(platform: string, model: string): string {
   const p = platform.trim().toLowerCase();
   const m = model.trim().toLowerCase();
@@ -48,16 +42,4 @@ export function modelFamilyLabel(platform: string, model: string): string {
       .join(' ');
   }
   return model.trim() || 'Other';
-}
-
-/** Distinct model families for a user, ranked by spend (highest first). */
-export function discoverModelFamilies(rows: ModelUsageRow[]): string[] {
-  const spendByFamily = new Map<string, number>();
-  for (const row of rows) {
-    const label = modelFamilyLabel(row.platform, row.model);
-    spendByFamily.set(label, (spendByFamily.get(label) ?? 0) + (row.spend_usd ?? 0));
-  }
-  return [...spendByFamily.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .map(([label]) => label);
 }

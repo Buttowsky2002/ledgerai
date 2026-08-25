@@ -1,54 +1,43 @@
 import Link from 'next/link';
-import { Card, usd } from '@/components/ui';
-import { combinedAiCost } from '@/lib/combined-ai-cost';
-import { aggregateByVendor, vendorLabel } from '@/lib/fixed-cost-catalog';
+import { PieChartClient } from '@/components/charts';
+import { Card, DataTable, usd } from '@/components/ui';
+import { vendorLabel } from '@/lib/fixed-cost-catalog';
+import { vendorDetailHref } from '@/lib/vendor-routes';
 import { proxyApi } from '@/lib/api';
 
-type TotalCostRow = {
-  month: string;
-  attributable_cost_usd: number | string;
-  fixed_cost_usd: number | string;
-  total_cost_of_ai_usd: number | string;
-  fixed_cost_pct: number | string;
-};
-
-type MonthlyFixedRow = {
-  period_month: string;
+type OrgVendorRow = {
   vendor: string;
-  cost_type: string;
-  cost_usd: number | string;
-  line_item?: string;
+  seat_usd: number;
+  budget_overage_usd: number;
+  total_usd: number;
 };
 
-async function fetchFixedCosts<T>(path: string, fallback: T): Promise<T> {
-  const { ok, data } = await proxyApi(path);
-  if (!ok || !Array.isArray(data)) return fallback;
-  return data as T;
-}
+type VendorBillingResponse = {
+  vendors: OrgVendorRow[];
+  total_cost_of_ai: number;
+};
 
 export async function FixedOverheadPanel({ from, to }: { from: string; to: string }) {
   const qs = new URLSearchParams({ from, to }).toString();
-  const [totals, monthly, spendRes, detailRows] = await Promise.all([
-    fetchFixedCosts<TotalCostRow[]>(`/v1/fixed-costs/total-cost-of-ai?${qs}`, []),
-    fetchFixedCosts<MonthlyFixedRow[]>(`/v1/fixed-costs/monthly?${qs}`, []),
-    proxyApi(`/v1/analytics/spend?${qs}`),
-    fetchFixedCosts<{ vendor: string; cost_usd: number; line_item: string; period_month: string }[]>(
-      `/v1/fixed-costs?${qs}`,
-      [],
-    ),
-  ]);
+  const vendorBillingRes = await proxyApi(`/v1/analytics/vendor-billing?${qs}`);
 
-  const metered =
-    spendRes.ok && Array.isArray(spendRes.data)
-      ? (spendRes.data as { cost_usd: number | string }[]).reduce((s, r) => s + Number(r.cost_usd), 0)
-      : 0;
-  const agg = combinedAiCost(metered, totals);
-  const fixedPct = agg.total > 0 ? (agg.fixed / agg.total) * 100 : 0;
-  const byVendor = aggregateByVendor(
-    detailRows.length > 0
-      ? detailRows.map((r) => ({ vendor: r.vendor, cost_usd: r.cost_usd }))
-      : monthly.map((r) => ({ vendor: r.vendor, cost_usd: r.cost_usd })),
-  );
+  const vendorBilling =
+    vendorBillingRes.ok && vendorBillingRes.data && typeof vendorBillingRes.data === 'object'
+      ? (vendorBillingRes.data as VendorBillingResponse)
+      : { vendors: [], total_cost_of_ai: 0 };
+
+  const orgVendors = vendorBilling.vendors ?? [];
+  const grandSeat = orgVendors.reduce((s, r) => s + r.seat_usd, 0);
+  const grandOverage = orgVendors.reduce((s, r) => s + r.budget_overage_usd, 0);
+  const grandTotal = vendorBilling.total_cost_of_ai ?? grandSeat + grandOverage;
+  const subscriptionPct = grandTotal > 0 ? (grandSeat / grandTotal) * 100 : 0;
+
+  const pieData = orgVendors.flatMap((v) => {
+    const slices = [];
+    if (v.seat_usd > 0) slices.push({ label: `${vendorLabel(v.vendor)} seats`, cost_usd: v.seat_usd });
+    if (v.budget_overage_usd > 0) slices.push({ label: `${vendorLabel(v.vendor)} overage`, cost_usd: v.budget_overage_usd });
+    return slices;
+  });
 
   return (
     <Card
@@ -63,45 +52,52 @@ export async function FixedOverheadPanel({ from, to }: { from: string; to: strin
       <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div>
           <p className="text-xs uppercase tracking-wide text-muted">Total cost of AI</p>
-          <p className="num text-xl font-semibold text-gray-100">{usd(agg.total)}</p>
+          <p className="num text-xl font-semibold text-gray-100">{usd(grandTotal)}</p>
         </div>
         <div>
-          <p className="text-xs uppercase tracking-wide text-muted">Attributable (metered)</p>
-          <p className="num text-xl text-gray-200">{usd(agg.attributable)}</p>
+          <p className="text-xs uppercase tracking-wide text-muted">Budget overage</p>
+          <p className="num text-xl text-gray-200">{usd(grandOverage)}</p>
         </div>
         <div>
-          <p className="text-xs uppercase tracking-wide text-muted">Un-attributable overhead</p>
-          <p className="num text-xl text-warn">{usd(agg.fixed)}</p>
-          <p className="text-xs text-muted">{fixedPct.toFixed(1)}% of total</p>
+          <p className="text-xs uppercase tracking-wide text-muted">Subscription amount</p>
+          <p className="num text-xl text-warn">{usd(grandSeat)}</p>
+          <p className="text-xs text-muted">{subscriptionPct.toFixed(1)}% of total</p>
         </div>
       </div>
 
-      {byVendor.length > 0 && (
-        <div className="mb-4 flex flex-wrap gap-2">
-          {byVendor.map((v) => (
-            <span
-              key={v.vendor}
-              className="rounded-md border border-edge bg-black/20 px-3 py-1.5 text-xs text-gray-200"
-            >
-              {v.label}{' '}
-              <span className="num text-muted">{usd(v.total)}</span>
-            </span>
-          ))}
+      {pieData.length > 0 && (
+        <div className="mb-6">
+          <PieChartClient data={pieData} nameKey="label" valueKey="cost_usd" showPercent />
         </div>
       )}
 
-      {monthly.length > 0 ? (
-        <ul className="divide-y divide-edge text-sm">
-          {monthly.slice(0, 8).map((r) => (
-            <li key={`${r.period_month}-${r.vendor}-${r.cost_type}`} className="flex justify-between py-2">
-              <span className="text-gray-300">
-                {String(r.period_month).slice(0, 7)} · {vendorLabel(r.vendor)}
-                {r.line_item ? ` · ${r.line_item}` : ''}
-              </span>
-              <span className="num text-gray-100">{usd(Number(r.cost_usd))}</span>
-            </li>
-          ))}
-        </ul>
+      {orgVendors.length > 0 ? (
+        <DataTable
+          columns={[
+            { key: 'vendor', label: 'Vendor' },
+            { key: 'seat', label: 'Subscription amount', align: 'right' },
+            { key: 'overage', label: 'Budget overage', align: 'right' },
+            { key: 'total', label: 'Total', align: 'right' },
+          ]}
+          rows={orgVendors.map((r) => ({
+            vendor: (
+              <Link href={vendorDetailHref(r.vendor, from, to)} className="text-accent hover:underline">
+                {vendorLabel(r.vendor)}
+              </Link>
+            ),
+            seat: usd(r.seat_usd),
+            overage: usd(r.budget_overage_usd),
+            total: usd(r.total_usd),
+          }))}
+          footerRows={[
+            {
+              vendor: <span className="text-xs uppercase tracking-wide text-muted">Grand total</span>,
+              seat: usd(grandSeat),
+              overage: usd(grandOverage),
+              total: usd(grandTotal),
+            },
+          ]}
+        />
       ) : (
         <p className="text-sm text-muted">
           No fixed overhead recorded for this period.{' '}
