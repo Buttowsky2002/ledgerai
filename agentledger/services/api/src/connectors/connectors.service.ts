@@ -381,8 +381,9 @@ export class ConnectorsService {
   }
 
   async get(id: string) {
-    const row = await this.prisma.withTenant(getTenantId(), (tx) =>
-      tx.connector.findUnique({ where: { connectorId: id } }),
+    const tenantId = getTenantId();
+    const row = await this.prisma.withTenant(tenantId, (tx) =>
+      tx.connector.findFirst({ where: { connectorId: id, ...(tenantId ? { tenantId } : {}) } }),
     );
     if (!row) throw new NotFoundException('connector not found');
     const safe = omitSecretRef(row);
@@ -468,14 +469,14 @@ export class ConnectorsService {
     let secretRef: string | undefined;
     if (dto.authSecret?.trim()) {
       const existing = await this.prisma.withTenant(tenantId!, (tx) =>
-        tx.connector.findUnique({ where: { connectorId: id } }),
+        tx.connector.findFirst({ where: { connectorId: id, tenantId: tenantId! } }),
       );
       if (existing?.secretRef) await this.secrets.deleteSecret(existing.secretRef);
       secretRef = await this.secrets.storeSecret(dto.authSecret.trim());
     }
 
     return this.prisma.withTenant(tenantId!, async (tx) => {
-      const before = await tx.connector.findUnique({ where: { connectorId: id } });
+      const before = await tx.connector.findFirst({ where: { connectorId: id, tenantId: tenantId! } });
       if (!before) throw new NotFoundException('connector not found');
 
       const updated = await tx.connector.update({
@@ -510,8 +511,11 @@ export class ConnectorsService {
   }
 
   async delete(id: string) {
-    return this.prisma.withTenant(getTenantId(), async (tx) => {
-      const before = await tx.connector.findUnique({ where: { connectorId: id } });
+    const tenantId = getTenantId();
+    return this.prisma.withTenant(tenantId, async (tx) => {
+      const before = await tx.connector.findFirst({
+        where: { connectorId: id, ...(tenantId ? { tenantId } : {}) },
+      });
       if (!before) throw new NotFoundException('connector not found');
       if (before.secretRef) await this.secrets.deleteSecret(before.secretRef);
       await tx.connector.delete({ where: { connectorId: id } });
@@ -531,8 +535,9 @@ export class ConnectorsService {
   }
 
   async preview(id: string, inlineSecret?: string, range?: { from?: string; to?: string }) {
-    const row = await this.prisma.withTenant(getTenantId(), (tx) =>
-      tx.connector.findUnique({ where: { connectorId: id } }),
+    const tenantId = getTenantId();
+    const row = await this.prisma.withTenant(tenantId, (tx) =>
+      tx.connector.findFirst({ where: { connectorId: id, ...(tenantId ? { tenantId } : {}) } }),
     );
     if (!row) throw new NotFoundException('connector not found');
 
@@ -634,7 +639,7 @@ export class ConnectorsService {
   async sync(id: string, range?: { from?: string; to?: string }) {
     const tenantId = getTenantId();
     const row = await this.prisma.withTenant(tenantId!, (tx) =>
-      tx.connector.findUnique({ where: { connectorId: id } }),
+      tx.connector.findFirst({ where: { connectorId: id, tenantId: tenantId! } }),
     );
     if (!row) throw new NotFoundException('connector not found');
     if (row.kind === 'github-copilot-business') {

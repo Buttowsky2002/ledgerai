@@ -55,11 +55,11 @@ export class GitHubCopilotService {
   async getConnection(connectionId: string): Promise<CopilotConnectionStatus> {
     const tenantId = this.requireTenant();
     const row = await this.prisma.withTenant(tenantId, (tx) =>
-      tx.aiProviderConnection.findUnique({ where: { connectionId } }),
+      tx.aiProviderConnection.findFirst({ where: { connectionId, tenantId } }),
     );
     if (!row) throw new NotFoundException('connection not found');
     const connector = await this.prisma.withTenant(tenantId, (tx) =>
-      tx.connector.findUnique({ where: { connectorId: row.connectorId } }),
+      tx.connector.findFirst({ where: { connectorId: row.connectorId, tenantId } }),
     );
     return this.toStatus(row, connector?.status ?? 'unknown');
   }
@@ -140,7 +140,7 @@ export class GitHubCopilotService {
   ): Promise<CopilotConnectionStatus> {
     const tenantId = this.requireTenant();
     const existing = await this.prisma.withTenant(tenantId, (tx) =>
-      tx.aiProviderConnection.findUnique({ where: { connectionId } }),
+      tx.aiProviderConnection.findFirst({ where: { connectionId, tenantId } }),
     );
     if (!existing) throw new NotFoundException('connection not found');
 
@@ -174,6 +174,8 @@ export class GitHubCopilotService {
   }
 
   async syncNow(connectionId: string) {
+    // Fail closed with 404 for unknown/cross-tenant IDs (BOLA) before kicking sync.
+    await this.getConnection(connectionId);
     const tenantId = this.requireTenant();
     return this.sync.syncConnection(connectionId, tenantId);
   }

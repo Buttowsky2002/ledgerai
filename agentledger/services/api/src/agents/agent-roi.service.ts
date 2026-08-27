@@ -1,6 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ChParam } from '../clickhouse/clickhouse.service';
 import { AnalyticsStore } from '../analytics-store/analytics-store';
+import { requireAgentInTenant } from '../common/require-agent';
+import { PrismaService } from '../prisma/prisma.service';
 
 /** Coerce a ClickHouse scalar (numbers can arrive as strings) to a number. */
 const n = (v: unknown): number => (typeof v === 'number' ? v : Number(v) || 0);
@@ -33,7 +35,10 @@ export interface AgentRoiResponse {
  */
 @Injectable()
 export class AgentRoiService {
-  constructor(private readonly ch: AnalyticsStore) {}
+  constructor(
+    private readonly ch: AnalyticsStore,
+    private readonly prisma: PrismaService,
+  ) {}
 
   /** Resolve an optional ISO-date range, defaulting to the last `days` days. */
   private range(from?: string, to?: string, days = 365): { from: string; to: string } {
@@ -48,6 +53,7 @@ export class AgentRoiService {
     if (!agentId) {
       throw new BadRequestException('agent id required');
     }
+    await requireAgentInTenant(this.prisma, agentId);
     const r = this.range(from, to);
     const params: Record<string, ChParam> = { ...r, agent: agentId };
 
