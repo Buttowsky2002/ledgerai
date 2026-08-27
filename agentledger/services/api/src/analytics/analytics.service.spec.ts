@@ -580,6 +580,87 @@ describe('AnalyticsService.users', () => {
     expect(mixed?.cursor_included_usd).toBe(12);
     expect(mixed?.vendor_spend?.openai?.overage_usd).toBe(10);
     expect(mixed?.vendor_spend?.cursor?.overage_usd).toBe(5);
+    expect(mixed?.vendor_usage?.cursor?.model_breakdown).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ model: 'gpt-4o', spend_usd: 5, usage_value_usd: 12 }),
+      ]),
+    );
+  });
+
+  it('merges cursor on-demand spend onto existing zero-spend model rows', async () => {
+    const queryScoped = jest.fn(async (sql: string) => {
+      if (sql.includes('user_id, platform, model, spend_usd')) {
+        return [
+          {
+            user_id: 'carl.miller@studiodesigner.com',
+            platform: 'cursor',
+            model: 'cursor-grok-4.5-high-fast',
+            spend_usd: 0,
+            calls: 153,
+            portal_import_usd: 0,
+            connector_usd: 0,
+          },
+        ];
+      }
+      if (sql.includes('key, cost_usd, calls, portal_import_usd')) {
+        return [{ key: 'carl.miller@studiodesigner.com', cost_usd: 0, calls: 153, portal_import_usd: 0, connector_usd: 0 }];
+      }
+      return [];
+    });
+    const ch = { queryScoped } as unknown as ClickHouseService;
+    const cursorAnalytics = {
+      ...emptyCursorAnalytics(),
+      getUserActivity: jest.fn(async () => [
+        {
+          user_id: 'carl.miller@studiodesigner.com',
+          on_demand_usd: 4.44,
+          usage_value_usd: 0,
+          calls: 153,
+          included_calls: 0,
+          on_demand_calls: 153,
+        },
+      ]),
+      getUserActivityBreakdown: jest.fn(async () => [
+        {
+          user_id: 'carl.miller@studiodesigner.com',
+          model: 'cursor-grok-4.5-high-fast',
+          on_demand_usd: 4.44,
+          usage_value_usd: 0,
+          calls: 153,
+          on_demand_calls: 153,
+        },
+      ]),
+    };
+    const svc = new AnalyticsService(
+      ch,
+      {} as PrismaService,
+      {} as LariService,
+      { getSpendSummary: jest.fn(async () => null) } as unknown as CopilotAnalyticsService,
+      emptyCopilotMemberSpend(),
+      cursorAnalytics as never,
+      emptyCursorProductivity() as never,
+    );
+    mockedLoadIdentityLookups.mockResolvedValue({
+      byId: new Map(),
+      byEmail: new Map([
+        [
+          'carl.miller@studiodesigner.com',
+          {
+            displayName: 'Carl Miller',
+            email: 'carl.miller@studiodesigner.com',
+            teamName: 'Engineering',
+            criticalityTier: 'standard',
+          },
+        ],
+      ]),
+      byAlias: new Map(),
+    });
+
+    const row = await svc.userDetail('carl.miller@studiodesigner.com', '2026-07-01', '2026-07-06');
+    expect(row?.vendor_spend?.cursor?.overage_usd).toBe(4.44);
+    expect(row?.vendor_usage?.cursor?.model_breakdown).toEqual([
+      expect.objectContaining({ model: 'cursor-grok-4.5-high-fast', spend_usd: 4.44, calls: 153 }),
+    ]);
   });
 });
 

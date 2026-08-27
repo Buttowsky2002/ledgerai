@@ -1657,6 +1657,7 @@ export class AnalyticsService {
         if (idx >= 0) {
           breakdownOut[idx] = {
             ...breakdownOut[idx],
+            spend_usd: Math.max(n(breakdownOut[idx].spend_usd), row.on_demand_usd),
             usage_value_usd: row.usage_value_usd,
             // Prefer activity call count so included-only models still show volume.
             calls: Math.max(n(breakdownOut[idx].calls), row.calls),

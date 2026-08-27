@@ -9,6 +9,7 @@
 
 locals {
   custom_hostname = var.enable_custom_domain ? "${var.environment}.${var.domain_name}" : ""
+  public_hostname = var.public_hostname != "" ? var.public_hostname : local.custom_hostname
 
   # Certificate: imported ARN wins; else DNS-validated ACM from custom domain.
   alb_certificate_arn = (
@@ -29,6 +30,7 @@ locals {
   # ALB host_header conditions accept at most 5 values per rule.
   allowed_host_headers = distinct(concat(
     var.allowed_host_headers,
+    local.public_hostname != "" ? [local.public_hostname] : [],
     local.custom_hostname != "" ? [local.custom_hostname] : [],
     var.enable_cloudfront ? [aws_cloudfront_distribution.main[0].domain_name] : [],
   ))

@@ -15,6 +15,15 @@ export function logoutUrl(): string {
   return `${PUBLIC_URL}/auth/logout`;
 }
 
+/** Renew the access token from the refresh cookie. */
+export function refreshUrl(): string {
+  const internal = env('BADGERIQ_API_URL');
+  if (internal) {
+    return `${internal.replace(/\/$/, '')}/auth/refresh`;
+  }
+  return `${PUBLIC_URL}/auth/refresh`;
+}
+
 /** Dev mode = the API is trusted to accept x-tenant-id and a dev tenant is set. */
 export function isDevMode(): boolean {
   return Boolean(env('BADGERIQ_DEV_TENANT_ID'));

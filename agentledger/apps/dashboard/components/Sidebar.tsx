@@ -43,6 +43,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/settings/connectors', label: 'Data sources' },
       { href: '/admin/billing', label: 'Billing import' },
+      { href: '/admin/data-coverage', label: 'Data coverage' },
       { href: '/admin/fixed-overhead', label: 'Fixed overhead' },
       { href: '/settings', label: 'Settings' },
     ],

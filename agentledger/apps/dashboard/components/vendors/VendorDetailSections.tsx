@@ -101,9 +101,9 @@ export function VendorDetailSections({
           <DataTable
             columns={[
               { key: 'model', label: 'Model' },
-              { key: 'metered', label: 'Metered overage', align: 'right' },
-              { key: 'included', label: 'Included usage value', align: 'right' },
-              { key: 'calls', label: 'Events', align: 'right' },
+              { key: 'metered', label: 'Metered overage', align: 'right', width: '9rem' },
+              { key: 'included', label: 'Included usage value', align: 'right', width: '11rem' },
+              { key: 'calls', label: 'Events', align: 'right', width: '6rem' },
             ]}
             rows={modelRows.map((m) => ({
               model: m.model,

@@ -931,7 +931,9 @@ export function ConnectorsClient() {
                             ? 'Syncing…'
                             : cooldownSec > 0
                               ? `Wait ${cooldownSec}s`
-                              : 'Sync usage data'}
+                              : c.category === 'outcome_system' || c.provider === 'azure_devops'
+                                ? 'Sync outcomes'
+                                : 'Sync usage data'}
                         </button>
                       </>
                     )}

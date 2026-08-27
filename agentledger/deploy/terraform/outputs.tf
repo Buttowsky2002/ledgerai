@@ -99,8 +99,8 @@ output "alb_url" {
 }
 
 output "pilot_url" {
-  description = "Public custom-domain URL (only meaningful when enable_custom_domain = true)."
-  value       = "https://${var.environment}.${var.domain_name}"
+  description = "Canonical browser-facing URL used by dashboard links and API OIDC redirects."
+  value       = local.public_url
 }
 
 output "acm_certificate_arn" {

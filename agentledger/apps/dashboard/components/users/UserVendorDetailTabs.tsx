@@ -15,6 +15,15 @@ type Props = {
   vendorUsage: Record<string, VendorUsageSlice>;
 };
 
+function modelTableRows(usage: VendorUsageSlice | undefined) {
+  return (usage?.model_breakdown ?? []).map((row) => ({
+    model: row.model || '(default)',
+    metered_overage: row.spend_usd ?? 0,
+    included_value: row.usage_value_usd ?? 0,
+    calls: row.calls ?? 0,
+  }));
+}
+
 export function UserVendorDetailTabs({ userId, from, to, vendors, vendorSpend, vendorUsage }: Props) {
   const activeVendors = vendors.filter((v) => (vendorSpend[v]?.total_usd ?? 0) > 0 || (vendorUsage[v]?.calls ?? 0) > 0);
   const tabs = activeVendors.length > 0 ? activeVendors : vendors;
@@ -22,6 +31,8 @@ export function UserVendorDetailTabs({ userId, from, to, vendors, vendorSpend, v
 
   const spend = vendorSpend[tab];
   const usage = vendorUsage[tab];
+  const modelRows = modelTableRows(usage);
+  const isCursor = tab === 'cursor';
 
   return (
     <div className="space-y-4">
@@ -74,18 +85,50 @@ export function UserVendorDetailTabs({ userId, from, to, vendors, vendorSpend, v
         )}
       </div>
 
-      {(usage?.model_breakdown?.length ?? 0) > 0 && (
+      {modelRows.length > 0 && (
         <DataTable
-          columns={[
-            { key: 'model', label: 'Model' },
-            { key: 'spend', label: 'Spend', align: 'right' },
-            { key: 'calls', label: 'Calls', align: 'right' },
+          columns={
+            isCursor
+              ? [
+                  { key: 'model', label: 'Model' },
+                  { key: 'metered', label: 'Metered overage', align: 'right', width: '9rem' },
+                  { key: 'included', label: 'Included usage value', align: 'right', width: '11rem' },
+                  { key: 'calls', label: 'Events', align: 'right', width: '6rem' },
+                ]
+              : [
+                  { key: 'model', label: 'Model' },
+                  { key: 'spend', label: 'Spend', align: 'right', width: '8rem' },
+                  { key: 'calls', label: 'Calls', align: 'right', width: '6rem' },
+                ]
+          }
+          rows={
+            isCursor
+              ? modelRows.map((row) => ({
+                  model: row.model,
+                  metered: usd(row.metered_overage),
+                  included: row.included_value > 0 ? usd(row.included_value) : '—',
+                  calls: num(row.calls),
+                }))
+              : modelRows.map((row) => ({
+                  model: row.model,
+                  spend: usd(row.metered_overage),
+                  calls: num(row.calls),
+                }))
+          }
+          footerRows={[
+            isCursor
+              ? {
+                  model: <span className="text-xs uppercase tracking-wide text-muted">Total</span>,
+                  metered: usd(modelRows.reduce((s, r) => s + r.metered_overage, 0)),
+                  included: usd(modelRows.reduce((s, r) => s + r.included_value, 0)),
+                  calls: num(modelRows.reduce((s, r) => s + r.calls, 0)),
+                }
+              : {
+                  model: <span className="text-xs uppercase tracking-wide text-muted">Total</span>,
+                  spend: usd(modelRows.reduce((s, r) => s + r.metered_overage, 0)),
+                  calls: num(modelRows.reduce((s, r) => s + r.calls, 0)),
+                },
           ]}
-          rows={usage!.model_breakdown.map((row) => ({
-            model: row.model,
-            spend: usd(row.spend_usd),
-            calls: num(row.calls),
-          }))}
         />
       )}
 

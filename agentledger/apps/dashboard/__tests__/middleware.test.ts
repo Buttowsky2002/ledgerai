@@ -16,11 +16,14 @@ function fakeJwt(payload: Record<string, unknown>): string {
 
 function requestFor(
   path: string,
-  opts: { cookie?: string; headers?: Record<string, string> } = {},
+  opts: { cookie?: string; refreshCookie?: string; headers?: Record<string, string> } = {},
 ): NextRequest {
   const headers = new Headers(opts.headers);
-  if (opts.cookie) {
-    headers.set('cookie', `al_access=${opts.cookie}`);
+  const cookieParts: string[] = [];
+  if (opts.cookie) cookieParts.push(`al_access=${opts.cookie}`);
+  if (opts.refreshCookie) cookieParts.push(`al_refresh=${opts.refreshCookie}`);
+  if (cookieParts.length) {
+    headers.set('cookie', cookieParts.join('; '));
   }
   return new NextRequest(new URL(path, 'http://localhost:3000'), { headers });
 }
@@ -76,11 +79,22 @@ describe('middleware', () => {
     expect(res.headers.get('location')).toBe('http://localhost:3000/login');
   });
 
-  it('redirects to /login when JWT is expired', async () => {
+  it('redirects to /login when JWT is expired and no refresh cookie', async () => {
     const token = fakeJwt({ exp: Math.floor(Date.now() / 1000) - 60 });
     const res = middleware(requestFor('/overview', { cookie: token }));
     expect(res.status).toBe(307);
     expect(res.headers.get('location')).toBe('http://localhost:3000/login');
+  });
+
+  it('redirects to refresh when JWT is expired but refresh cookie exists', async () => {
+    const token = fakeJwt({ exp: Math.floor(Date.now() / 1000) - 60 });
+    const res = middleware(
+      requestFor('/overview', { cookie: token, refreshCookie: 'refresh-token-value' }),
+    );
+    expect(res.status).toBe(307);
+    expect(res.headers.get('location')).toBe(
+      'http://localhost:3000/api/auth/refresh?next=%2Foverview',
+    );
   });
 
   it('passes when JWT has a future exp', async () => {

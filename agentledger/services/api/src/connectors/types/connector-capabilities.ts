@@ -75,6 +75,16 @@ export const PRESET_CAPABILITIES: Record<string, ConnectorCapabilities> = {
     supportsUserLevelCost: true,
     supportsModelLevelUsage: true,
   },
+  'azure-devops-outcomes': {
+    supportsUsage: false,
+    supportsBilling: false,
+    supportsUsers: true,
+    supportsProjects: true,
+    supportsWorkspaces: false,
+    supportsApiKeys: false,
+    supportsUserLevelCost: false,
+    supportsModelLevelUsage: false,
+  },
   'generic-rest-spend': DEFAULT_CAPABILITIES,
   'generic-rest-usage': DEFAULT_CAPABILITIES,
 };
@@ -116,6 +126,8 @@ export function resolveCapabilities(
 }
 
 export function attributionWarning(capabilities: ConnectorCapabilities): string | undefined {
+  // Outcome-only connectors have no spend stream — don't show spend-attribution copy.
+  if (!capabilities.supportsUsage && !capabilities.supportsBilling) return undefined;
   if (capabilities.supportsUserLevelCost) return undefined;
   return (
     'This provider does not expose direct user-level cost data. BadgerIQ is attributing spend ' +

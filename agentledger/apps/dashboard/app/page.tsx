@@ -9,7 +9,6 @@ import { ExecutiveReportExport } from '../components/overview/ExecutiveReportExp
 import { OverviewLiveRefresh } from '../components/overview/OverviewLiveRefresh';
 import { LariRecommendationsPanel } from '../components/lari/LariRecommendationsPanel';
 import { ProductWorthPanel } from '../components/lari/ProductWorthPanel';
-import { ImportCoverageBanner } from '../components/lari/ImportCoverageBanner';
 import { Badge, BadgeTone, Card, DataTable, PageHeader, Stat, num, usd } from '../components/ui';
 import { DateRangePicker } from '../components/DateRangePicker';
 import { apiClient, fetchData, proxyApi } from '../lib/api';
@@ -319,16 +318,6 @@ export default async function OverviewPage({
           sub="policy + DLP enforcement"
         />
       </div>
-
-      <Suspense
-        fallback={
-          <Card title="Data coverage">
-            <p className="py-8 text-center text-sm text-muted">Loading coverage…</p>
-          </Card>
-        }
-      >
-        <ImportCoverageBanner from={from} to={to} />
-      </Suspense>
 
       <Suspense
         fallback={

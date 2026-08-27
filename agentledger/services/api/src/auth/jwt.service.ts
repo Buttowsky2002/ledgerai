@@ -33,7 +33,7 @@ export class JwtService {
       throw new Error('BADGERIQ_JWT_SECRET (or JWT_SECRET) is required');
     }
     this.secret = new TextEncoder().encode(raw);
-    this.accessTtl = env('BADGERIQ_JWT_ACCESS_TTL') ?? '15m';
+    this.accessTtl = env('BADGERIQ_JWT_ACCESS_TTL') ?? '8h';
     this.refreshTtl = env('BADGERIQ_JWT_REFRESH_TTL') ?? '7d';
   }
 

@@ -112,6 +112,8 @@ export interface Column {
   key: string;
   label: string;
   align?: 'right';
+  /** Fixed width for numeric columns so headers align with values. */
+  width?: string;
 }
 
 export function DataTable({
@@ -125,11 +127,15 @@ export function DataTable({
 }) {
   return (
     <div className="overflow-x-auto">
-      <table className="table">
+      <table className="table table-fixed w-full">
         <thead>
           <tr>
             {columns.map((c) => (
-              <th key={c.key} className={c.align === 'right' ? 'text-right' : ''}>
+              <th
+                key={c.key}
+                className={c.align === 'right' ? 'text-right' : ''}
+                style={c.width ? { width: c.width } : undefined}
+              >
                 {c.label}
               </th>
             ))}

@@ -30,6 +30,7 @@ import {
   AZURE_DEVOPS_PRESET_ID,
   AzureDevOpsOutcomesService,
 } from './azure-devops/azure-devops-outcomes.service';
+import { listProjectRepos, parseAdoConfig } from './azure-devops/azure-devops-client';
 
 const DEFAULT_CONNECTOR_SCHEDULE = {
   intervalMinutes: DEFAULT_SYNC_INTERVAL_MINUTES,
@@ -60,7 +61,7 @@ function omitSecretRef<T extends { secretRef?: unknown }>(row: T): Omit<T, 'secr
 }
 
 /** Reject overlapping syncs unless the prior run looks stale. */
-const SYNC_IN_PROGRESS_MS = 15 * 60 * 1000;
+const SYNC_IN_PROGRESS_MS = 5 * 60 * 1000;
 /** Brief pause between Anthropic 31-day chunks (rate limiter handles per-request spacing). */
 const ANTHROPIC_CHUNK_PAUSE_MS = 4_000;
 
@@ -221,7 +222,7 @@ export class ConnectorsService {
             status: 'connected',
             lastSyncAt: new Date(),
             lastSyncCompletedAt: new Date(),
-            lastSuccessAt: result.recordsImported > 0 ? new Date() : undefined,
+            lastSuccessAt: new Date(),
             lastError: null,
             lastErrorCode: null,
             lastErrorMessageSafe: null,
@@ -249,7 +250,9 @@ export class ConnectorsService {
         emptyWarning:
           result.recordsFetched === 0
             ? 'Connected, but no completed work items or merged PRs were found in the lookback window. Check organization/project and PAT scopes (Code read, Work Items read).'
-            : undefined,
+            : result.warnings?.length
+              ? result.warnings.join(' ')
+              : undefined,
       };
     } catch (e) {
       const rawMsg = e instanceof Error ? e.message : 'Azure DevOps sync failed';
@@ -535,6 +538,37 @@ export class ConnectorsService {
       tx.connector.findUnique({ where: { connectorId: id } }),
     );
     if (!row) throw new NotFoundException('connector not found');
+
+    // ADO uses WIQL/PRs — not the generic REST preview engine.
+    if (row.kind === AZURE_DEVOPS_PRESET_ID) {
+      const definitionBase = await this.resolveDefinition(row);
+      const secret = await this.resolveProviderSecret(row, definitionBase, inlineSecret);
+      if (!secret?.trim()) {
+        throw new BadRequestException('connector has no credentials');
+      }
+      try {
+        const cfg = parseAdoConfig((row.config ?? {}) as Record<string, unknown>);
+        const repos = await listProjectRepos(fetch, { pat: secret.trim() }, cfg);
+        return {
+          ok: true,
+          sampleRecords: repos.slice(0, 5).map((r) => ({
+            id: r.id,
+            name: r.name,
+            record_type: 'azure_devops_repo',
+          })),
+          normalizedPreview: [],
+          errors: [],
+          warning:
+            repos.length === 0
+              ? `PAT authenticated, but no git repos found in ${cfg.organization}/${cfg.project}. Check project name and Code (read) scope.`
+              : `PAT ok — found ${repos.length} repo(s) in ${cfg.organization}/${cfg.project}. Click Sync outcomes to import merged PRs and completed work items.`,
+          previewSpendUsd: 0,
+        };
+      } catch (e) {
+        const msg = safeErrorMessage(e instanceof Error ? e.message : 'ADO preview failed');
+        throw new BadRequestException(msg);
+      }
+    }
 
     const definitionBase = await this.resolveDefinition(row);
     const secret = await this.resolveProviderSecret(row, definitionBase, inlineSecret);
