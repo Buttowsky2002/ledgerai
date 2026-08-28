@@ -25,5 +25,10 @@ module.exports = {
     // require braces on every control statement.
     'no-var': 'error',
     curly: ['error', 'all'],
+    // Cyclomatic-complexity ratchet. review-nodejs-code targets <=5; the current
+    // API ceiling is 85, so this only blocks regression past today's worst and is
+    // meant to be lowered as god services are decomposed (135 functions still
+    // exceed 8 — tracked follow-up, not a blocker).
+    complexity: ['warn', 85],
   },
 };
