@@ -1,12 +1,17 @@
 %% Source of truth: docker-compose.yml env (AGENTLEDGER_KAFKA_TOPIC=events.raw,
 %% AGENTLEDGER_KAFKA_DLQ_TOPIC=events.dlq, AGENTLEDGER_COLLECTOR_URL,
-%% AGENTLEDGER_CLICKHOUSE_URL) and the compose header comment on the gateway
-%% event sink. Arrows show DATA FLOW direction (producer -> topic -> consumer
-%% -> store), the inverse of the depends_on graph in deploy-topology.mmd.
+%% AGENTLEDGER_CLICKHOUSE_URL), the compose header comment on the gateway event
+%% sink, and the ch-insert router targets in
+%% services/workers/internal/chinsert/router.go:7-10 (TableLLMCalls, agent_runs,
+%% outcomes, agent_tool_calls). Arrows show DATA FLOW direction (producer ->
+%% topic -> consumer -> store), the inverse of deploy-topology.mmd's depends_on.
 flowchart LR
     litellm_adapter["litellm-adapter"] -->|"POST /v1/events"| collector["collector"]
     collector -->|"produce events.raw"| redpanda["redpanda (events.raw)"]
-    redpanda -->|"consume events.raw"| ch_insert["ch-insert"]
-    ch_insert -->|"batched insert"| llm_calls["clickhouse: llm_calls"]
+    redpanda -->|"consume events.raw"| ch_insert["ch-insert (router)"]
+    ch_insert -->|"route + batch insert"| llm_calls["clickhouse: llm_calls"]
+    ch_insert --> agent_runs["clickhouse: agent_runs"]
+    ch_insert --> outcomes["clickhouse: outcomes"]
+    ch_insert --> agent_tool_calls["clickhouse: agent_tool_calls"]
     ch_insert -->|"poison msg"| dlq["redpanda (events.dlq)"]
     gateway["gateway"] -->|"event sink (direct, dev)"| llm_calls
