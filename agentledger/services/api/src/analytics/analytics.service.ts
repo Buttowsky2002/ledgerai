@@ -34,6 +34,10 @@ import type { UserDirectoryIdentity } from '../reports/identity-resolver';
 import { modelFamilyLabel } from './model-family';
 import { prorateMonthlyCost } from '../fixed-costs/fixed-cost-prorate';
 import {
+  previousCalendarMonth,
+  vendorSeatChanges,
+} from './seat-price-delta';
+import {
   buildOrgVendorBilling,
   buildUserVendorSpend,
   buildUserVendorUsage,
@@ -109,6 +113,10 @@ export interface VendorBillingResult {
   to: string;
   vendors: OrgVendorBillingRow[];
   total_cost_of_ai: number;
+  /** Sum of monthly run-rate $ from seat-count changes (fixed_costs). */
+  seat_change_usd?: number;
+  /** Latest billing month used for the seat-change comparison. */
+  seat_change_month?: string | null;
 }
 
 export interface AnalyticsDataBounds {
@@ -1356,7 +1364,8 @@ export class AnalyticsService {
       throw new BadRequestException('no tenant in context');
     }
 
-    const [monthlyFixed, platformRows, cursorSummary, copilotMembers] = await Promise.all([
+    const seatFrom = previousCalendarMonth(`${r.from.slice(0, 7)}-01`);
+    const [monthlyFixed, seatRows, platformRows, cursorSummary, copilotMembers] = await Promise.all([
       this.ch.queryScoped<{ vendor: string; cost_usd: unknown; period_month: string }>(
         `SELECT vendor, cost_usd, period_month
          FROM agentledger.v_fixed_cost_monthly
@@ -1364,6 +1373,21 @@ export class AnalyticsService {
            AND period_month >= toStartOfMonth(toDate({from:String}))
            AND period_month <= toStartOfMonth(toDate({to:String}))`,
         { from: r.from, to: r.to },
+      ),
+      this.ch.queryScoped<{
+        period_month: string;
+        vendor: string;
+        seats: unknown;
+        unit_cost_usd: unknown;
+        cost_usd: unknown;
+      }>(
+        `SELECT period_month, vendor, seats, unit_cost_usd, cost_usd
+         FROM agentledger.fixed_costs FINAL
+         WHERE tenant_id = {tenant:String}
+           AND period_month >= toDate({seatFrom:String})
+           AND period_month <= toStartOfMonth(toDate({to:String}))
+           AND attributable = 0`,
+        { seatFrom, to: r.to },
       ),
       this.platformSpend(r.from, r.to),
       this.cursorSpend(r.from, r.to),
@@ -1405,8 +1429,26 @@ export class AnalyticsService {
     }
 
     const vendors = buildOrgVendorBilling(seatUsdByVendor, overageUsdByVendor);
+    const { latestMonth, changes } = vendorSeatChanges(seatRows, r.from, r.to);
+    for (const row of vendors) {
+      const change = changes[row.vendor];
+      if (!change) continue;
+      row.seats = change.seats;
+      row.prior_seats = change.prior_seats;
+      row.usd_from_seats = change.usd_from_seats;
+      row.usd_from_rate = change.usd_from_rate;
+      row.prior_period_month = change.prior_period_month;
+    }
     const total_cost_of_ai = usd(vendors.reduce((s, v) => s + v.total_usd, 0));
-    return { from: r.from, to: r.to, vendors, total_cost_of_ai };
+    const seat_change_usd = usd(vendors.reduce((s, v) => s + (v.usd_from_seats ?? 0), 0));
+    return {
+      from: r.from,
+      to: r.to,
+      vendors,
+      total_cost_of_ai,
+      seat_change_usd,
+      seat_change_month: latestMonth,
+    };
   }
 
   /** Single-user drill-down for /users/[userId]. */

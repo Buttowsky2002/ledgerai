@@ -28,6 +28,13 @@ export interface OrgVendorBillingRow {
   seat_usd: number;
   budget_overage_usd: number;
   total_usd: number;
+  /** Latest-month seat count from fixed_costs (monthly, not prorated). */
+  seats?: number;
+  prior_seats?: number | null;
+  /** Monthly run-rate $ from seat-count change vs previous billing month. */
+  usd_from_seats?: number;
+  usd_from_rate?: number;
+  prior_period_month?: string | null;
 }
 
 const SEAT_ALLOCATED_PLATFORMS = ['github_copilot', 'github_copilot_business'] as const;

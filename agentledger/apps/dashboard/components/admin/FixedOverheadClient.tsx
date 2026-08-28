@@ -25,6 +25,13 @@ import {
   updateFixedCost,
 } from '@/lib/api/fixed-costs';
 import type { FixedCostRow, FixedCostType, FixedCostVendor } from '@/types/fixed-costs';
+import {
+  formatSeatDeltaSummary,
+  formatSignedUsd,
+  seatPriceDelta,
+  type SeatPriceDelta,
+  type SeatSnapshot,
+} from '@/lib/seat-price-delta';
 
 function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -53,6 +60,42 @@ type EditKey = {
   lineItem?: string;
 };
 
+function snapshotFromForm(seats: string, unitCostUsd: string, costUsd: string): SeatSnapshot | null {
+  const s = seats === '' ? 0 : Number(seats);
+  const u = unitCostUsd === '' ? 0 : Number(unitCostUsd);
+  const c = costUsd === '' ? 0 : Number(costUsd);
+  if (!Number.isFinite(s) || !Number.isFinite(u) || !Number.isFinite(c)) return null;
+  return { seats: s, unitCostUsd: u, costUsd: c };
+}
+
+function SeatImpactCallout({ delta }: { delta: SeatPriceDelta }) {
+  const up = delta.usdDelta > 0 || (delta.usdDelta === 0 && delta.seatDelta > 0);
+  const tone = up ? 'text-warn' : 'text-pos';
+  const seatLine = delta.prior
+    ? `${delta.prior.seats} → ${delta.current.seats} seats (${delta.seatDelta > 0 ? '+' : ''}${delta.seatDelta})`
+    : `${delta.current.seats} seat${delta.current.seats === 1 ? '' : 's'}`;
+  const costLine = delta.prior
+    ? `${usd(delta.prior.costUsd)} → ${usd(delta.current.costUsd)}/mo (${formatSignedUsd(delta.usdDelta)})`
+    : `${usd(delta.current.costUsd)}/mo`;
+  return (
+    <div className="rounded-lg border border-edge bg-canvas px-4 py-3">
+      <p className="text-xs uppercase tracking-wide text-muted">Seat impact</p>
+      <p className={`mt-1 num text-sm font-medium ${tone}`}>
+        {seatLine} · {costLine}
+      </p>
+      {delta.usdFromSeats !== 0 && (
+        <p className="mt-1 text-xs text-muted">
+          {formatSignedUsd(delta.usdFromSeats)} from seats
+          {delta.usdFromRate !== 0 ? ` · ${formatSignedUsd(delta.usdFromRate)} from unit price` : ''}
+        </p>
+      )}
+      {delta.usdFromSeats === 0 && delta.usdFromRate !== 0 && (
+        <p className="mt-1 text-xs text-muted">{formatSignedUsd(delta.usdFromRate)} from unit price</p>
+      )}
+    </div>
+  );
+}
+
 export function FixedOverheadClient() {
   const [rangeFrom, setRangeFrom] = useState(() => defaultRange().from);
   const [rangeTo, setRangeTo] = useState(() => defaultRange().to);
@@ -73,6 +116,7 @@ export function FixedOverheadClient() {
   const [costManual, setCostManual] = useState(false);
   const [customLineItem, setCustomLineItem] = useState('');
   const [note, setNote] = useState('');
+  const [baseline, setBaseline] = useState<SeatSnapshot | null>(null);
 
   const lineItem = useMemo(
     () => lineItemFor(vendor, planTier, vendor === 'other' ? customLineItem : undefined),
@@ -80,6 +124,15 @@ export function FixedOverheadClient() {
   );
 
   const vendorTotals = useMemo(() => aggregateByVendor(rows), [rows]);
+
+  const liveDelta = useMemo(() => {
+    const current = snapshotFromForm(seats, unitCostUsd, costUsd);
+    if (!current) return null;
+    if (current.seats === 0 && current.costUsd === 0) return null;
+    const delta = seatPriceDelta(current, baseline);
+    if (delta.seatDelta === 0 && delta.usdDelta === 0) return null;
+    return delta;
+  }, [seats, unitCostUsd, costUsd, baseline]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -135,6 +188,7 @@ export function FixedOverheadClient() {
     setCustomLineItem('');
     setNote('');
     setError(null);
+    setBaseline(null);
   }
 
   function startEdit(row: FixedCostRow) {
@@ -157,6 +211,11 @@ export function FixedOverheadClient() {
     setNote(row.note || '');
     setError(null);
     setSuccess(null);
+    setBaseline({
+      seats: row.seats > 0 ? row.seats : 0,
+      unitCostUsd: row.unit_cost_usd > 0 ? row.unit_cost_usd : 0,
+      costUsd: Number(row.cost_usd) || 0,
+    });
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -225,7 +284,13 @@ export function FixedOverheadClient() {
         return;
       }
 
-      setSuccess(editKey ? 'Fixed overhead updated.' : 'Fixed overhead saved.');
+      const current = snapshotFromForm(seats, unitCostUsd, costUsd);
+      const delta = current ? seatPriceDelta(current, baseline) : null;
+      const summary =
+        delta && (delta.seatDelta !== 0 || delta.usdDelta !== 0) ? formatSeatDeltaSummary(delta) : null;
+      setSuccess(
+        (editKey ? 'Fixed overhead updated.' : 'Fixed overhead saved.') + (summary ? ` ${summary}` : ''),
+      );
       resetForm();
       await load();
     } finally {
@@ -451,6 +516,8 @@ export function FixedOverheadClient() {
               />
             </label>
           </div>
+
+          {liveDelta && <SeatImpactCallout delta={liveDelta} />}
 
           <label className="block text-sm">
             <span className="mb-1 block text-muted">Note (optional)</span>
