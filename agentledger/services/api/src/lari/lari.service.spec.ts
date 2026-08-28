@@ -1,4 +1,10 @@
-import { AssembleInputs, buildAgentROIInput, EdgeRow, OutcomeMetaRow, VRoiOutcomeRow } from './lari.service';
+import {
+  AssembleInputs,
+  buildAgentROIInput,
+  EdgeRow,
+  OutcomeMetaRow,
+  VRoiOutcomeRow,
+} from './lari.service';
 
 const vroiRow = (over: Partial<VRoiOutcomeRow>): VRoiOutcomeRow => ({
   outcome_id: 'o1',
@@ -19,7 +25,9 @@ const base = (over: Partial<AssembleInputs> = {}): AssembleInputs => ({
   from: '2026-06-01',
   to: '2026-06-30',
   vroi: [vroiRow({})],
-  meta: new Map<string, OutcomeMetaRow>([['o1', { outcome_id: 'o1', source_system: 'erp', completion_status: 'completed' }]]),
+  meta: new Map<string, OutcomeMetaRow>([
+    ['o1', { outcome_id: 'o1', source_system: 'erp', completion_status: 'completed' }],
+  ]),
   edges: new Map<string, EdgeRow>(),
   tokenCostUsd: 5,
   severity: 'low',
@@ -39,7 +47,9 @@ describe('buildAgentROIInput (LARI assembler)', () => {
   it('uses the attribution edge counterfactual when present', () => {
     const input = buildAgentROIInput(
       base({
-        edges: new Map([['o1', { outcomeId: 'o1', counterfactualDelta: 0.4, attributionMethod: 'shapley' }]]),
+        edges: new Map([
+          ['o1', { outcomeId: 'o1', counterfactualDelta: 0.4, attributionMethod: 'shapley' }],
+        ]),
       }),
     );
     expect(input.outcomes[0].incrementalityFactor).toBe(0.4);
@@ -56,7 +66,9 @@ describe('buildAgentROIInput (LARI assembler)', () => {
   it('treats manual outcomes as unverified', () => {
     const input = buildAgentROIInput(
       base({
-        meta: new Map([['o1', { outcome_id: 'o1', source_system: 'manual', completion_status: 'completed' }]]),
+        meta: new Map([
+          ['o1', { outcome_id: 'o1', source_system: 'manual', completion_status: 'completed' }],
+        ]),
       }),
     );
     expect(input.outcomes[0].outcome.source).toBe('manual');
@@ -66,12 +78,17 @@ describe('buildAgentROIInput (LARI assembler)', () => {
   it('derives confidence sub-scores from coverage', () => {
     const input = buildAgentROIInput(
       base({
-        vroi: [vroiRow({ outcome_id: 'o1', attribution_confidence: 1.0 }), vroiRow({ outcome_id: 'o2', attribution_confidence: 0.8 })],
+        vroi: [
+          vroiRow({ outcome_id: 'o1', attribution_confidence: 1.0 }),
+          vroiRow({ outcome_id: 'o2', attribution_confidence: 0.8 }),
+        ],
         meta: new Map([
           ['o1', { outcome_id: 'o1', source_system: 'erp', completion_status: 'completed' }],
           ['o2', { outcome_id: 'o2', source_system: 'manual', completion_status: 'completed' }],
         ]),
-        edges: new Map([['o1', { outcomeId: 'o1', counterfactualDelta: 0.5, attributionMethod: 'deterministic' }]]),
+        edges: new Map([
+          ['o1', { outcomeId: 'o1', counterfactualDelta: 0.5, attributionMethod: 'deterministic' }],
+        ]),
       }),
     );
     expect(input.confidence.attributionStrength).toBeCloseTo(0.9, 6); // (1.0 + 0.8)/2

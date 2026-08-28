@@ -75,7 +75,9 @@ export class AttributionMappingsService {
     const tenantId = getTenantId();
     return this.prisma.withTenant(tenantId!, async (tx) => {
       const before = await tx.connectorAttributionMapping.findUnique({ where: { mappingId } });
-      if (!before) {throw new NotFoundException('mapping not found');}
+      if (!before) {
+        throw new NotFoundException('mapping not found');
+      }
       await tx.connectorAttributionMapping.delete({ where: { mappingId } });
       await recordAudit(tx, {
         action: 'delete',

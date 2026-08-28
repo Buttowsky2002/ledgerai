@@ -66,11 +66,7 @@ export class AuditService {
     });
 
     const actorIds = [
-      ...new Set(
-        rows
-          .map((r) => r.actor)
-          .filter((a) => /^[0-9a-f-]{36}$/i.test(a)),
-      ),
+      ...new Set(rows.map((r) => r.actor).filter((a) => /^[0-9a-f-]{36}$/i.test(a))),
     ];
 
     const identities =

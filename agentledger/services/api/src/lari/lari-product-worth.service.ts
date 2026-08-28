@@ -146,9 +146,7 @@ export class LariProductWorthService {
     });
   }
 
-  private async fetchSourceBreakdown(
-    params: Record<string, ChParam>,
-  ): Promise<
+  private async fetchSourceBreakdown(params: Record<string, ChParam>): Promise<
     Array<{
       provider: string;
       portal_import_usd: number;
@@ -169,9 +167,7 @@ export class LariProductWorthService {
     }
   }
 
-  private async fetchOutcomeStats(
-    params: Record<string, ChParam>,
-  ): Promise<OutcomeStats> {
+  private async fetchOutcomeStats(params: Record<string, ChParam>): Promise<OutcomeStats> {
     const empty: OutcomeStats = {
       totalOutcomes: 0,
       importOutcomes: 0,
@@ -239,11 +235,7 @@ export class LariProductWorthService {
     }
   }
 
-  private async fetchImportStats(
-    tenantId: string,
-    from: string,
-    to: string,
-  ): Promise<ImportStats> {
+  private async fetchImportStats(tenantId: string, from: string, to: string): Promise<ImportStats> {
     const start = new Date(`${from}T00:00:00.000Z`);
     const end = new Date(`${to}T23:59:59.999Z`);
     return this.prisma.withTenant(tenantId, async (tx) => {

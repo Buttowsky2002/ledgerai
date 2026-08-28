@@ -5,10 +5,16 @@ describe('microsoftDefaultIssuer', () => {
   const prevBadger = process.env.BADGERIQ_OIDC_MICROSOFT_TENANT_ID;
 
   afterEach(() => {
-    if (prevAgent === undefined) {delete process.env.AGENTLEDGER_OIDC_MICROSOFT_TENANT_ID;}
-    else {process.env.AGENTLEDGER_OIDC_MICROSOFT_TENANT_ID = prevAgent;}
-    if (prevBadger === undefined) {delete process.env.BADGERIQ_OIDC_MICROSOFT_TENANT_ID;}
-    else {process.env.BADGERIQ_OIDC_MICROSOFT_TENANT_ID = prevBadger;}
+    if (prevAgent === undefined) {
+      delete process.env.AGENTLEDGER_OIDC_MICROSOFT_TENANT_ID;
+    } else {
+      process.env.AGENTLEDGER_OIDC_MICROSOFT_TENANT_ID = prevAgent;
+    }
+    if (prevBadger === undefined) {
+      delete process.env.BADGERIQ_OIDC_MICROSOFT_TENANT_ID;
+    } else {
+      process.env.BADGERIQ_OIDC_MICROSOFT_TENANT_ID = prevBadger;
+    }
   });
 
   it('uses /common/ when no tenant id is set', () => {
@@ -46,8 +52,11 @@ describe('loadOidcProviders microsoft tenant lock', () => {
 
   afterEach(() => {
     for (const k of keys) {
-      if (prev[k] === undefined) {delete process.env[k];}
-      else {process.env[k] = prev[k];}
+      if (prev[k] === undefined) {
+        delete process.env[k];
+      } else {
+        process.env[k] = prev[k];
+      }
     }
   });
 

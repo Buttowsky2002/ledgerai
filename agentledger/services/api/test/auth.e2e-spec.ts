@@ -67,7 +67,11 @@ describe('Auth + RBAC', () => {
   });
 
   it('allows an analyst+ token and scopes to its tenant', async () => {
-    const token = await jwt.mintAccess({ userId: randomUUID(), tenantId: tenantA, role: 'analyst' });
+    const token = await jwt.mintAccess({
+      userId: randomUUID(),
+      tenantId: tenantA,
+      role: 'analyst',
+    });
     const res = await request(app.getHttpServer()).get('/v1/teams').set(bearer(token));
     expect(res.status).toBe(200);
     expect(res.body.map((t: { name: string }) => t.name)).toEqual([teamName]);
@@ -98,7 +102,11 @@ describe('Auth + RBAC', () => {
   });
 
   it('rejects a refresh token presented as an access token (401)', async () => {
-    const refresh = await jwt.mintRefresh({ userId: randomUUID(), tenantId: tenantA, role: 'admin' });
+    const refresh = await jwt.mintRefresh({
+      userId: randomUUID(),
+      tenantId: tenantA,
+      role: 'admin',
+    });
     const res = await request(app.getHttpServer()).get('/v1/teams').set(bearer(refresh));
     expect(res.status).toBe(401);
   });
@@ -141,7 +149,9 @@ describe('Auth + RBAC', () => {
     expect(accessEntry).toMatch(/Path=\//i);
 
     // The renewed access token (from the cookie) authorizes a protected route with DB role.
-    const probe = await request(app.getHttpServer()).get('/auth/me').set(bearer(cookieValue(accessEntry!)));
+    const probe = await request(app.getHttpServer())
+      .get('/auth/me')
+      .set(bearer(cookieValue(accessEntry!)));
     expect(probe.status).toBe(200);
     expect(probe.body).toMatchObject({ userId, role: 'admin' });
   });

@@ -20,9 +20,13 @@ export function mergeProviderCostsSupplement(
   let addedCalls = 0;
 
   for (const row of providerCosts) {
-    if (row.costUsd <= 0) {continue;}
+    if (row.costUsd <= 0) {
+      continue;
+    }
     const existing = providers.find((p) => p.provider === row.provider);
-    if (existing) {continue;}
+    if (existing) {
+      continue;
+    }
     providers.push({ ...row });
     addedCostUsd += row.costUsd;
     addedCalls += row.calls;

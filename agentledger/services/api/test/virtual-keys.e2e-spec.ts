@@ -24,11 +24,15 @@ describe('Virtual keys', () => {
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+    );
     await app.init();
     prisma = app.get(PrismaService);
     jwt = app.get(JwtService);
-    await prisma.withTenant(tenant, (tx) => tx.tenant.create({ data: { tenantId: tenant, name: 'K' } }));
+    await prisma.withTenant(tenant, (tx) =>
+      tx.tenant.create({ data: { tenantId: tenant, name: 'K' } }),
+    );
     admin = await jwt.mintAccess({ userId: randomUUID(), tenantId: tenant, role: 'admin' });
   });
 

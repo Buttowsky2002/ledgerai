@@ -14,7 +14,9 @@ export function chartFontPath(): string {
     join(__dirname, '..', '..', '..', 'assets', 'fonts', 'DejaVuSans.ttf'),
   ];
   for (const p of candidates) {
-    if (existsSync(p)) {return p;}
+    if (existsSync(p)) {
+      return p;
+    }
   }
   throw new Error(
     `Chart font DejaVuSans.ttf not found (searched: ${candidates.join('; ')}). Rebuild the API (npm run build) or rebuild the Docker image.`,
@@ -43,7 +45,11 @@ ${inner}
 
 /** True when SVG includes an embedded DejaVu @font-face (chart label regression guard). */
 export function svgEmbedsChartFont(svg: string): boolean {
-  return svg.includes('@font-face') && svg.includes(CHART_FONT_FAMILY) && svg.includes('data:font/ttf;base64,');
+  return (
+    svg.includes('@font-face') &&
+    svg.includes(CHART_FONT_FAMILY) &&
+    svg.includes('data:font/ttf;base64,')
+  );
 }
 
 /** Text helper for SVG labels — always uses the embedded chart font. */

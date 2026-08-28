@@ -1,7 +1,4 @@
-import {
-  classifyCursorAiSource,
-  enrichCursorCommitAttribution,
-} from './cursor-commit-attribution';
+import { classifyCursorAiSource, enrichCursorCommitAttribution } from './cursor-commit-attribution';
 
 describe('enrichCursorCommitAttribution', () => {
   it('computes lines_ai, ai_source, and ai_share_pct from TAB + COMPOSER', () => {

@@ -1,6 +1,4 @@
-import {
-  Type,
-} from 'class-transformer';
+import { Type } from 'class-transformer';
 import {
   IsDateString,
   IsIn,

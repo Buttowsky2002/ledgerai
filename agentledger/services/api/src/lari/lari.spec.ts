@@ -14,7 +14,12 @@ function variant(mut: (i: AgentROIInput) => void): AgentROIInput {
   return i;
 }
 
-const link = (over: Partial<OutcomeLink> & { grossValueUsd?: number; source?: OutcomeLink['outcome']['source'] }): OutcomeLink => ({
+const link = (
+  over: Partial<OutcomeLink> & {
+    grossValueUsd?: number;
+    source?: OutcomeLink['outcome']['source'];
+  },
+): OutcomeLink => ({
   outcome: {
     outcomeId: 'o1',
     outcomeType: 'invoice_processed',
@@ -95,7 +100,12 @@ describe('LARI — calculation invariants', () => {
   it('zero cost does not divide by zero', () => {
     const r = calculateRiskAdjustedROI(
       variant((i) => {
-        i.cost = { tokenCostUsd: 0, humanReviewCostUsd: 0, infraCostUsd: 0, amortizedBuildCostUsd: 0 };
+        i.cost = {
+          tokenCostUsd: 0,
+          humanReviewCostUsd: 0,
+          infraCostUsd: 0,
+          amortizedBuildCostUsd: 0,
+        };
       }),
     );
     expect(Number.isFinite(r.lari)).toBe(true);
@@ -105,17 +115,32 @@ describe('LARI — calculation invariants', () => {
 
   it('manual outcome value is discounted by low confidence', () => {
     const deterministic = calculateAttributedIncrementalValue([
-      link({ grossValueUsd: 1000, source: 'deterministic', attributionConfidence: 0.95, incrementalityFactor: 0.9 }),
+      link({
+        grossValueUsd: 1000,
+        source: 'deterministic',
+        attributionConfidence: 0.95,
+        incrementalityFactor: 0.9,
+      }),
     ]);
     const manual = calculateAttributedIncrementalValue([
-      link({ grossValueUsd: 1000, source: 'manual', attributionConfidence: 0.3, incrementalityFactor: 0.9 }),
+      link({
+        grossValueUsd: 1000,
+        source: 'manual',
+        attributionConfidence: 0.3,
+        incrementalityFactor: 0.9,
+      }),
     ]);
     expect(manual).toBeLessThan(deterministic);
     expect(manual).toBeCloseTo(1000 * 0.3 * 0.9, 6);
   });
 
   it('fully loaded cost includes human review and infra', () => {
-    const cost = { tokenCostUsd: 2, humanReviewCostUsd: 40, infraCostUsd: 15, amortizedBuildCostUsd: 25 };
+    const cost = {
+      tokenCostUsd: 2,
+      humanReviewCostUsd: 40,
+      infraCostUsd: 15,
+      amortizedBuildCostUsd: 25,
+    };
     expect(calculateFullyLoadedCost(cost)).toBe(82);
     // dropping human review + infra strictly lowers the loaded cost
     expect(calculateFullyLoadedCost({ ...cost, humanReviewCostUsd: 0, infraCostUsd: 0 })).toBe(27);
@@ -123,10 +148,14 @@ describe('LARI — calculation invariants', () => {
 
   it('risk penalties reduce ROI', () => {
     const low = calculateRiskAdjustedROI(
-      variant((i) => (i.risk = { severity: 'low', riskExposurePct: 0.05, incidentProbability: 0.1 })),
+      variant(
+        (i) => (i.risk = { severity: 'low', riskExposurePct: 0.05, incidentProbability: 0.1 }),
+      ),
     );
     const high = calculateRiskAdjustedROI(
-      variant((i) => (i.risk = { severity: 'high', riskExposurePct: 0.6, incidentProbability: 0.5 })),
+      variant(
+        (i) => (i.risk = { severity: 'high', riskExposurePct: 0.6, incidentProbability: 0.5 }),
+      ),
     );
     expect(high.expectedRiskLossUsd).toBeGreaterThan(low.expectedRiskLossUsd);
     expect(high.lari).toBeLessThan(low.lari);
@@ -134,8 +163,16 @@ describe('LARI — calculation invariants', () => {
 
   it('expected risk loss rises with exposure and probability', () => {
     const value = 1000;
-    const a = calculateExpectedRiskLoss(value, { severity: 'low', riskExposurePct: 0.1, incidentProbability: 0.1 });
-    const b = calculateExpectedRiskLoss(value, { severity: 'high', riskExposurePct: 0.5, incidentProbability: 0.5 });
+    const a = calculateExpectedRiskLoss(value, {
+      severity: 'low',
+      riskExposurePct: 0.1,
+      incidentProbability: 0.1,
+    });
+    const b = calculateExpectedRiskLoss(value, {
+      severity: 'high',
+      riskExposurePct: 0.5,
+      incidentProbability: 0.5,
+    });
     expect(a).toBeCloseTo(1000 * 0.1 * 0.1, 6);
     expect(b).toBeGreaterThan(a);
   });

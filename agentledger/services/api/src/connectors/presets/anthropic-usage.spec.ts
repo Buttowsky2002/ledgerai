@@ -24,9 +24,7 @@ describe('anthropic-usage preset', () => {
     expect(preset.pagination?.flattenPath).toBe('results');
     expect(preset.pagination?.hasMorePath).toBe('has_more');
     expect(preset.pagination?.tokenPath).toBe('next_page');
-    expect(preset.supplementalFetch?.endpoint.path).toBe(
-      '/v1/organizations/usage_report/messages',
-    );
+    expect(preset.supplementalFetch?.endpoint.path).toBe('/v1/organizations/usage_report/messages');
     expect(preset.supplementalFetch?.endpoint.queryParamArrays?.['group_by[]']).toEqual([
       'workspace_id',
       'model',
@@ -104,8 +102,6 @@ describe('anthropic-usage preset', () => {
   it('keeps cost_report for sk-ant-admin keys', () => {
     const routed = applyAnthropicKeyRouting(preset, 'sk-ant-admin-example');
     expect(routed.endpoints[0].path).toBe('/v1/organizations/cost_report');
-    expect(routed.supplementalFetch?.endpoint.path).toBe(
-      '/v1/organizations/usage_report/messages',
-    );
+    expect(routed.supplementalFetch?.endpoint.path).toBe('/v1/organizations/usage_report/messages');
   });
 });

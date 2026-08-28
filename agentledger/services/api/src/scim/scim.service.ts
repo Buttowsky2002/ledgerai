@@ -42,7 +42,13 @@ export class ScimService {
 
   // ---- Users ----
 
-  async listUsers(ctx: ScimCtx, filterEmail: string | null, startIndex: number, count: number, baseUrl: string) {
+  async listUsers(
+    ctx: ScimCtx,
+    filterEmail: string | null,
+    startIndex: number,
+    count: number,
+    baseUrl: string,
+  ) {
     return this.prisma.withTenant(ctx.tenantId, async (tx) => {
       const where = filterEmail ? { email: filterEmail } : {};
       const [rows, total] = await Promise.all([
@@ -55,7 +61,11 @@ export class ScimService {
         }),
         tx.identity.count({ where }),
       ]);
-      return listResponse(rows.map((r) => toScimUser(r as IdentityShape, baseUrl)), total, startIndex);
+      return listResponse(
+        rows.map((r) => toScimUser(r as IdentityShape, baseUrl)),
+        total,
+        startIndex,
+      );
     });
   }
 
@@ -72,7 +82,10 @@ export class ScimService {
   async createUser(ctx: ScimCtx, body: Record<string, unknown>, baseUrl: string) {
     const u = fromScimUser(body);
     if (!u.email) {
-      throw new HttpException(scimError(400, 'userName or an email is required', 'invalidValue'), 400);
+      throw new HttpException(
+        scimError(400, 'userName or an email is required', 'invalidValue'),
+        400,
+      );
     }
     return this.prisma.withTenant(ctx.tenantId, async (tx) => {
       try {
@@ -115,7 +128,12 @@ export class ScimService {
     await this.updateUser(ctx, id, '', { active: false });
   }
 
-  private async updateUser(ctx: ScimCtx, id: string, baseUrl: string, data: Record<string, unknown>) {
+  private async updateUser(
+    ctx: ScimCtx,
+    id: string,
+    baseUrl: string,
+    data: Record<string, unknown>,
+  ) {
     return this.prisma.withTenant(ctx.tenantId, async (tx) => {
       const before = await tx.identity.findUnique({ where: { userId: id }, select: IDENTITY_COLS });
       if (!before) {
@@ -139,11 +157,19 @@ export class ScimService {
   async listGroups(ctx: ScimCtx, startIndex: number, count: number, baseUrl: string) {
     return this.prisma.withTenant(ctx.tenantId, async (tx) => {
       const [teams, total] = await Promise.all([
-        tx.team.findMany({ orderBy: { teamId: 'asc' }, skip: Math.max(0, startIndex - 1), take: count }),
+        tx.team.findMany({
+          orderBy: { teamId: 'asc' },
+          skip: Math.max(0, startIndex - 1),
+          take: count,
+        }),
         tx.team.count(),
       ]);
       const shaped = await Promise.all(teams.map((t) => this.shapeGroup(tx, t)));
-      return listResponse(shaped.map((g) => toScimGroup(g, baseUrl)), total, startIndex);
+      return listResponse(
+        shaped.map((g) => toScimGroup(g, baseUrl)),
+        total,
+        startIndex,
+      );
     });
   }
 
@@ -166,7 +192,11 @@ export class ScimService {
       let team;
       try {
         team = await tx.team.create({
-          data: { tenantId: ctx.tenantId, name: displayName, externalId: (body.externalId as string) ?? null },
+          data: {
+            tenantId: ctx.tenantId,
+            name: displayName,
+            externalId: (body.externalId as string) ?? null,
+          },
         });
       } catch (e) {
         throw this.conflictOr(e, 'Group already exists');
@@ -190,7 +220,9 @@ export class ScimService {
       if (body.externalId !== undefined) {
         data.externalId = body.externalId;
       }
-      const after = Object.keys(data).length ? await tx.team.update({ where: { teamId: id }, data }) : before;
+      const after = Object.keys(data).length
+        ? await tx.team.update({ where: { teamId: id }, data })
+        : before;
       // PUT replaces membership wholesale.
       await this.replaceMembers(tx, ctx, id, memberIdsFromGroup(body));
       await this.audit(tx, ctx, 'update', `team:${id}`, before, after);
@@ -241,7 +273,10 @@ export class ScimService {
 
   // ---- helpers ----
 
-  private async shapeGroup(tx: Prisma.TransactionClient, team: { teamId: string; name: string; externalId: string | null }): Promise<GroupShape> {
+  private async shapeGroup(
+    tx: Prisma.TransactionClient,
+    team: { teamId: string; name: string; externalId: string | null },
+  ): Promise<GroupShape> {
     const members = await tx.identity.findMany({
       where: { teamId: team.teamId },
       select: { userId: true, email: true },
@@ -249,19 +284,37 @@ export class ScimService {
     return { teamId: team.teamId, name: team.name, externalId: team.externalId, members };
   }
 
-  private async setMembers(tx: Prisma.TransactionClient, _ctx: ScimCtx, teamId: string, userIds: string[]) {
+  private async setMembers(
+    tx: Prisma.TransactionClient,
+    _ctx: ScimCtx,
+    teamId: string,
+    userIds: string[],
+  ) {
     if (userIds.length) {
       await tx.identity.updateMany({ where: { userId: { in: userIds } }, data: { teamId } });
     }
   }
 
-  private async removeMembers(tx: Prisma.TransactionClient, _ctx: ScimCtx, teamId: string, userIds: string[]) {
+  private async removeMembers(
+    tx: Prisma.TransactionClient,
+    _ctx: ScimCtx,
+    teamId: string,
+    userIds: string[],
+  ) {
     if (userIds.length) {
-      await tx.identity.updateMany({ where: { userId: { in: userIds }, teamId }, data: { teamId: null } });
+      await tx.identity.updateMany({
+        where: { userId: { in: userIds }, teamId },
+        data: { teamId: null },
+      });
     }
   }
 
-  private async replaceMembers(tx: Prisma.TransactionClient, ctx: ScimCtx, teamId: string, userIds: string[]) {
+  private async replaceMembers(
+    tx: Prisma.TransactionClient,
+    ctx: ScimCtx,
+    teamId: string,
+    userIds: string[],
+  ) {
     // Detach everyone currently on the team, then attach the new set.
     await tx.identity.updateMany({ where: { teamId }, data: { teamId: null } });
     await this.setMembers(tx, ctx, teamId, userIds);

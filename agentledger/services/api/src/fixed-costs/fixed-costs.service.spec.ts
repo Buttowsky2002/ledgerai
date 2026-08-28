@@ -6,17 +6,27 @@ import { FixedCostsService } from './fixed-costs.service';
 const principal: Principal = { tenantId: 'tenant-1', userId: 'u1', role: 'admin' };
 
 function harness() {
-  const insertRows = jest.fn<Promise<void>, [string, Record<string, unknown>[]]>(async () => undefined);
-  const queryScoped = jest.fn<Promise<Record<string, unknown>[]>, [string, Record<string, unknown>?]>(
-    async () => [],
+  const insertRows = jest.fn<Promise<void>, [string, Record<string, unknown>[]]>(
+    async () => undefined,
   );
+  const queryScoped = jest.fn<
+    Promise<Record<string, unknown>[]>,
+    [string, Record<string, unknown>?]
+  >(async () => []);
   const command = jest.fn<Promise<void>, [string, Record<string, unknown>?]>(async () => undefined);
-  const auditCreate = jest.fn<Promise<object>, [{ data: Record<string, unknown> }]>(async () => ({}));
+  const auditCreate = jest.fn<Promise<object>, [{ data: Record<string, unknown> }]>(
+    async () => ({}),
+  );
   const tx = { auditLog: { create: auditCreate } };
   const prisma = {
     withTenant: jest.fn(async (_t: string, fn: (t: typeof tx) => unknown) => fn(tx)),
   } as unknown as PrismaService;
-  const ch = { insertRows, queryScoped, command, query: jest.fn(async () => []) } as unknown as ClickHouseService;
+  const ch = {
+    insertRows,
+    queryScoped,
+    command,
+    query: jest.fn(async () => []),
+  } as unknown as ClickHouseService;
   return { svc: new FixedCostsService(ch, prisma), insertRows, queryScoped, command, auditCreate };
 }
 
@@ -86,7 +96,9 @@ describe('FixedCostsService.totalCostOfAi', () => {
         { period_month: '2026-06-01', cost_usd: 1380 },
         { period_month: '2026-06-01', cost_usd: 1350 },
       ]);
-    const rows = await runWithTenant(principal, () => svc.totalCostOfAi('2026-06-09', '2026-06-10'));
+    const rows = await runWithTenant(principal, () =>
+      svc.totalCostOfAi('2026-06-09', '2026-06-10'),
+    );
     expect(rows[0]?.fixed_cost_usd).toBe(182);
     expect(rows[0]?.monthly_fixed_cost_usd).toBe(2730);
   });
@@ -105,7 +117,9 @@ describe('FixedCostsService.monthlySummary', () => {
         last_imported_at: '2026-06-01',
       },
     ]);
-    const rows = await runWithTenant(principal, () => svc.monthlySummary('2026-06-09', '2026-06-10'));
+    const rows = await runWithTenant(principal, () =>
+      svc.monthlySummary('2026-06-09', '2026-06-10'),
+    );
     expect(rows[0]).toMatchObject({
       monthly_cost_usd: 1380,
       cost_usd: 92,

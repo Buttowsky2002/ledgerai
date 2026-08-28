@@ -39,12 +39,14 @@ const STUDIO_PROFILE: DesignPartnerProfile = {
   roiRates: [],
 };
 
-function harness(opts: {
-  existingAgent?: boolean;
-  stampedCount?: number;
-  vRoiCount?: number;
-  edgeCount?: number;
-} = {}) {
+function harness(
+  opts: {
+    existingAgent?: boolean;
+    stampedCount?: number;
+    vRoiCount?: number;
+    edgeCount?: number;
+  } = {},
+) {
   const agentFindFirst = jest.fn(async () => (opts.existingAgent ? { agentId: 'a1' } : null));
   const agentCreate = jest.fn(async () => ({ agentId: 'new' }));
   const executeRaw = jest.fn(async () => 0);
@@ -121,8 +123,10 @@ function harness(opts: {
   };
 }
 
-const run = (svc: DesignPartnerOnboardingService, dto: Parameters<DesignPartnerOnboardingService['onboard']>[0]) =>
-  runWithTenant(principal, () => svc.onboard(dto));
+const run = (
+  svc: DesignPartnerOnboardingService,
+  dto: Parameters<DesignPartnerOnboardingService['onboard']>[0],
+) => runWithTenant(principal, () => svc.onboard(dto));
 
 describe('DesignPartnerOnboardingService', () => {
   afterEach(() => {

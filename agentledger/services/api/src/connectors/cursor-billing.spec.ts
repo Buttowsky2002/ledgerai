@@ -36,7 +36,9 @@ describe('classifyCursorBillingKind', () => {
 
   it('prefers Included kind over isChargeable true (subscription pool)', () => {
     expect(classifyCursorBillingKind('Included in Business', true)).toBe('included');
-    expect(classifyCursorBillingKind('USAGE_EVENT_KIND_INCLUDED_IN_BUSINESS', true)).toBe('included');
+    expect(classifyCursorBillingKind('USAGE_EVENT_KIND_INCLUDED_IN_BUSINESS', true)).toBe(
+      'included',
+    );
   });
 
   it('maps errored kinds', () => {

@@ -1,5 +1,8 @@
 import { COPILOT_ANALYTICS_PROVIDER } from '../github-copilot/github-copilot-analytics.service';
-import { mergeCopilotSupplement, mergeProviderCostsSupplement } from './executive-report-supplemental';
+import {
+  mergeCopilotSupplement,
+  mergeProviderCostsSupplement,
+} from './executive-report-supplemental';
 
 describe('executive-report-supplemental', () => {
   it('adds provider_costs platforms missing from spend_daily', () => {
@@ -22,7 +25,14 @@ describe('executive-report-supplemental', () => {
         estimatedValueUsd: 0,
         totalCalls: 50,
         daily: [{ day: '2026-06-01', cost_usd: 1250 }],
-        modelMix: [{ provider: COPILOT_ANALYTICS_PROVIDER, model: 'copilot-business', cost_usd: 1250, calls: 50 }],
+        modelMix: [
+          {
+            provider: COPILOT_ANALYTICS_PROVIDER,
+            model: 'copilot-business',
+            cost_usd: 1250,
+            calls: 50,
+          },
+        ],
         platform: { platform: 'GitHub Copilot', cost_usd: 1250, calls: 50 },
       },
     );

@@ -11,7 +11,11 @@ describe('GitHubCopilotClient token validation', () => {
       }
       return { ok: false, status: 404, json: async () => ({ message: 'not found' }) };
     });
-    const client = new GitHubCopilotClient({ token: 'ghp_test', orgSlug: 'acme', fetchFn: fetchFn as never });
+    const client = new GitHubCopilotClient({
+      token: 'ghp_test',
+      orgSlug: 'acme',
+      fetchFn: fetchFn as never,
+    });
     const result = await client.validateToken();
     expect(result.ok).toBe(true);
     expect(result.orgName).toBe('Acme Corp');
@@ -29,7 +33,11 @@ describe('GitHubCopilotClient token validation', () => {
         headers: { get: () => null },
       };
     });
-    const client = new GitHubCopilotClient({ token: 'ghp_bad', orgSlug: 'acme', fetchFn: fetchFn as never });
+    const client = new GitHubCopilotClient({
+      token: 'ghp_bad',
+      orgSlug: 'acme',
+      fetchFn: fetchFn as never,
+    });
     await expect(client.validateToken()).rejects.toMatchObject({
       status: 403,
       code: 'forbidden',
@@ -56,7 +64,11 @@ describe('GitHubCopilotClient seats import', () => {
       }
       return { ok: true, status: 200, json: async () => ({ seats: [] }) };
     });
-    const client = new GitHubCopilotClient({ token: 'ghp_test', orgSlug: 'acme', fetchFn: fetchFn as never });
+    const client = new GitHubCopilotClient({
+      token: 'ghp_test',
+      orgSlug: 'acme',
+      fetchFn: fetchFn as never,
+    });
     const seats = await client.fetchAllSeats();
     expect(page).toBe(1);
     expect(seats).toHaveLength(1);
@@ -81,7 +93,11 @@ describe('GitHubCopilotClient metrics reports', () => {
       }
       return { ok: false, status: 404, json: async () => ({}) };
     });
-    const client = new GitHubCopilotClient({ token: 'ghp_test', orgSlug: 'acme', fetchFn: fetchFn as never });
+    const client = new GitHubCopilotClient({
+      token: 'ghp_test',
+      orgSlug: 'acme',
+      fetchFn: fetchFn as never,
+    });
     const rows = await client.fetchUsers1DayUsage('2024-06-01');
     expect(rows).toHaveLength(1);
     expect(rows[0].githubLogin).toBe('alice');
@@ -91,11 +107,19 @@ describe('GitHubCopilotClient metrics reports', () => {
   it('throws on expired signed URL', async () => {
     const fetchFn = jest.fn(async (url: string) => {
       if (url.includes('users-28-day')) {
-        return { ok: true, status: 200, json: async () => ({ download_url: 'https://expired.example/r' }) };
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ download_url: 'https://expired.example/r' }),
+        };
       }
       return { ok: false, status: 403, text: async () => '', headers: { get: () => null } };
     });
-    const client = new GitHubCopilotClient({ token: 'ghp_test', orgSlug: 'acme', fetchFn: fetchFn as never });
+    const client = new GitHubCopilotClient({
+      token: 'ghp_test',
+      orgSlug: 'acme',
+      fetchFn: fetchFn as never,
+    });
     await expect(client.fetchUsers28DayUsage()).rejects.toBeInstanceOf(GitHubCopilotApiError);
   });
 });
@@ -112,7 +136,11 @@ describe('GitHubCopilotClient team mapping', () => {
       }
       return { ok: true, status: 200, json: async () => [] };
     });
-    const client = new GitHubCopilotClient({ token: 'ghp_test', orgSlug: 'acme', fetchFn: fetchFn as never });
+    const client = new GitHubCopilotClient({
+      token: 'ghp_test',
+      orgSlug: 'acme',
+      fetchFn: fetchFn as never,
+    });
     const members = await client.fetchTeamMembers('eng');
     expect(members).toEqual([{ id: 1, login: 'alice' }]);
   });

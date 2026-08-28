@@ -9,7 +9,11 @@ const ERROR_SCHEMA = 'urn:ietf:params:scim:api:messages:2.0:Error';
 const PATCH_SCHEMA = 'urn:ietf:params:scim:api:messages:2.0:PatchOp';
 
 /** A SCIM Error object (RFC 7644 §3.12). status is a string per the spec. */
-export function scimError(status: number, detail: string, scimType?: string): Record<string, unknown> {
+export function scimError(
+  status: number,
+  detail: string,
+  scimType?: string,
+): Record<string, unknown> {
   return {
     schemas: [ERROR_SCHEMA],
     status: String(status),

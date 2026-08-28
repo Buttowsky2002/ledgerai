@@ -59,9 +59,7 @@ describe('parseAdoConfig', () => {
 
 describe('ADO outcome ids', () => {
   it('builds stable PR and work-item ids', () => {
-    expect(adoPrOutcomeId('org', 'proj', 'repo', 42)).toBe(
-      'azure_devops:org/proj/repo#42',
-    );
+    expect(adoPrOutcomeId('org', 'proj', 'repo', 42)).toBe('azure_devops:org/proj/repo#42');
     expect(adoWorkItemOutcomeId('org', 'proj', 1001)).toBe('azure_devops:org/proj#1001');
   });
 });

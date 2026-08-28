@@ -127,7 +127,12 @@ export class AuthController {
    * client that asked for JSON gets the access token in the body instead — the
    * cookies are set either way so the dashboard BFF works without parsing JSON.
    */
-  private completeLogin(req: Request, res: Response, accessToken: string, refreshToken: string): void {
+  private completeLogin(
+    req: Request,
+    res: Response,
+    accessToken: string,
+    refreshToken: string,
+  ): void {
     res.cookie(ACCESS_COOKIE, accessToken, cookieOpts(accessCookieMaxAgeMs()));
     res.cookie(REFRESH_COOKIE, refreshToken, cookieOpts(REFRESH_COOKIE_MAX_AGE_MS));
     if (wantsJsonResponse(req)) {
@@ -163,11 +168,15 @@ export class AuthController {
     if (tx.provider !== provider) {
       throw new BadRequestException('provider mismatch');
     }
-    const { email } = await this.oidc.handleCallback(provider, req.query as Record<string, string>, {
-      state: tx.state,
-      nonce: tx.nonce,
-      codeVerifier: tx.codeVerifier,
-    });
+    const { email } = await this.oidc.handleCallback(
+      provider,
+      req.query as Record<string, string>,
+      {
+        state: tx.state,
+        nonce: tx.nonce,
+        codeVerifier: tx.codeVerifier,
+      },
+    );
     const { accessToken, refreshToken } = await this.auth.loginByEmail(email);
     res.clearCookie(OIDC_TX_COOKIE, oidcTxCookieOpts());
     this.completeLogin(req, res, accessToken, refreshToken);
@@ -224,7 +233,12 @@ export class AuthController {
       throw new BadRequestException('IdP no longer configured');
     }
     const { email, sub } = await this.oidc.handleTenantCallback(
-      { idpId: idp.idp_id, issuer: idp.issuer, clientId: idp.client_id, clientSecretRef: idp.client_secret_ref },
+      {
+        idpId: idp.idp_id,
+        issuer: idp.issuer,
+        clientId: idp.client_id,
+        clientSecretRef: idp.client_secret_ref,
+      },
       req.query as Record<string, string>,
       { state: tx.state, nonce: tx.nonce, codeVerifier: tx.codeVerifier },
     );

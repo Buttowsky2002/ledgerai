@@ -31,7 +31,9 @@ export interface TeamRoiForFindings {
 const MS_DAY = 86_400_000;
 
 function daysSince(d: Date | null | undefined, now: Date): number {
-  if (!d) {return Infinity;}
+  if (!d) {
+    return Infinity;
+  }
   return (now.getTime() - d.getTime()) / MS_DAY;
 }
 
@@ -48,9 +50,7 @@ export function generateCopilotFindings(args: {
   const findings: CopilotFinding[] = [];
   const seatPrice = args.assumptions.seatPriceUsd ?? DEFAULT_SEAT_PRICE_USD;
 
-  const inactive14 = args.seats.filter(
-    (s) => s.isActive && daysSince(s.lastActivityAt, now) >= 14,
-  );
+  const inactive14 = args.seats.filter((s) => s.isActive && daysSince(s.lastActivityAt, now) >= 14);
   if (inactive14.length > 0) {
     const waste = inactive14.length * seatPrice;
     findings.push({
@@ -64,9 +64,7 @@ export function generateCopilotFindings(args: {
     });
   }
 
-  const inactive30 = args.seats.filter(
-    (s) => s.isActive && daysSince(s.lastActivityAt, now) >= 30,
-  );
+  const inactive30 = args.seats.filter((s) => s.isActive && daysSince(s.lastActivityAt, now) >= 30);
   if (inactive30.length > 0) {
     const waste = inactive30.length * seatPrice;
     findings.push({
@@ -220,9 +218,9 @@ export function generateMemberSpendFindings(args: {
     });
   }
 
-  for (const m of args.members.filter(
-    (x) => x.roiPercentage != null && x.roiPercentage >= highRoiThreshold,
-  ).slice(0, 5)) {
+  for (const m of args.members
+    .filter((x) => x.roiPercentage != null && x.roiPercentage >= highRoiThreshold)
+    .slice(0, 5)) {
     findings.push({
       id: `high-roi-${m.githubLogin}`,
       severity: 'info',
@@ -235,7 +233,9 @@ export function generateMemberSpendFindings(args: {
   const creditSorted = [...args.members].sort((a, b) => b.aiCreditsUsed - a.aiCreditsUsed);
   const topCreditCutoff = Math.max(1, Math.ceil(creditSorted.length * 0.2));
   for (const m of creditSorted.slice(0, topCreditCutoff)) {
-    if (m.aiCreditsUsed <= 0) {continue;}
+    if (m.aiCreditsUsed <= 0) {
+      continue;
+    }
     findings.push({
       id: `high-credit-${m.githubLogin}`,
       severity: 'info',
@@ -254,7 +254,9 @@ export function generateMemberSpendFindings(args: {
     teamInactive.set(team, cur);
   }
   for (const [team, info] of teamInactive) {
-    if (info.count < 1) {continue;}
+    if (info.count < 1) {
+      continue;
+    }
     findings.push({
       id: `team-waste-${team}`,
       severity: 'warning',
@@ -266,7 +268,9 @@ export function generateMemberSpendFindings(args: {
     });
   }
 
-  const inactiveLogins = new Set(args.members.filter((m) => m.utilizationStatus === 'inactive').map((m) => m.githubLogin));
+  const inactiveLogins = new Set(
+    args.members.filter((m) => m.utilizationStatus === 'inactive').map((m) => m.githubLogin),
+  );
   if (inactiveLogins.size >= 2) {
     findings.push({
       id: 'reallocation-opportunity',

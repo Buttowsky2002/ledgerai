@@ -20,7 +20,9 @@ jest.mock('../reports/identity-resolver', () => {
   };
 });
 
-const mockedLoadIdentityLookups = loadIdentityLookups as jest.MockedFunction<typeof loadIdentityLookups>;
+const mockedLoadIdentityLookups = loadIdentityLookups as jest.MockedFunction<
+  typeof loadIdentityLookups
+>;
 
 function emptyCopilotMemberSpend(): CopilotMemberSpendService {
   return {
@@ -86,8 +88,22 @@ describe('AnalyticsService.meteredSpend', () => {
     const queryScoped = jest.fn(async (sql: string) => {
       if (sql.includes('toDate(ts) AS day')) {
         return [
-          { day: '2026-07-01', cost_usd: 100, calls: 10, tokens: 1000, blocked_calls: 0, error_calls: 0 },
-          { day: '2026-07-02', cost_usd: 50, calls: 5, tokens: 500, blocked_calls: 0, error_calls: 0 },
+          {
+            day: '2026-07-01',
+            cost_usd: 100,
+            calls: 10,
+            tokens: 1000,
+            blocked_calls: 0,
+            error_calls: 0,
+          },
+          {
+            day: '2026-07-02',
+            cost_usd: 50,
+            calls: 5,
+            tokens: 500,
+            blocked_calls: 0,
+            error_calls: 0,
+          },
         ];
       }
       return [];
@@ -211,9 +227,17 @@ describe('AnalyticsService.sourceReconciliation', () => {
       },
     ]);
     const ch = { queryScoped } as unknown as ClickHouseService;
-    const svc = new AnalyticsService(ch, {} as PrismaService, {} as LariService, {
-      getSpendSummary: jest.fn(async () => null),
-    } as unknown as CopilotAnalyticsService, emptyCopilotMemberSpend(), emptyCursorAnalytics() as never, emptyCursorProductivity() as never);
+    const svc = new AnalyticsService(
+      ch,
+      {} as PrismaService,
+      {} as LariService,
+      {
+        getSpendSummary: jest.fn(async () => null),
+      } as unknown as CopilotAnalyticsService,
+      emptyCopilotMemberSpend(),
+      emptyCursorAnalytics() as never,
+      emptyCursorProductivity() as never,
+    );
     const result = await svc.sourceReconciliation('2026-03-01', '2026-04-30');
     expect(result.summary.portalTotalUsd).toBeCloseTo(17.5);
     expect(result.summary.apiTotalUsd).toBeCloseTo(13);
@@ -229,15 +253,42 @@ describe('AnalyticsService.users', () => {
 
   beforeEach(() => {
     mockedLoadIdentityLookups.mockResolvedValue({
-      byId: new Map([[uuidAlice, { displayName: 'Alice Smith', email: 'alice@acme.test', teamName: 'Eng', criticalityTier: 'standard' }]]),
-      byEmail: new Map([['dev@company.com', { displayName: 'Dev User', email: 'dev@company.com', teamName: 'Eng', criticalityTier: 'standard' }]]),
-      byAlias: new Map([['cursor-user-99', { displayName: 'Cursor Dev', email: null, teamName: 'Eng', criticalityTier: 'standard' }]]),
+      byId: new Map([
+        [
+          uuidAlice,
+          {
+            displayName: 'Alice Smith',
+            email: 'alice@acme.test',
+            teamName: 'Eng',
+            criticalityTier: 'standard',
+          },
+        ],
+      ]),
+      byEmail: new Map([
+        [
+          'dev@company.com',
+          {
+            displayName: 'Dev User',
+            email: 'dev@company.com',
+            teamName: 'Eng',
+            criticalityTier: 'standard',
+          },
+        ],
+      ]),
+      byAlias: new Map([
+        [
+          'cursor-user-99',
+          { displayName: 'Cursor Dev', email: null, teamName: 'Eng', criticalityTier: 'standard' },
+        ],
+      ]),
     });
   });
 
   function usersHarness() {
     const queryScoped = jest.fn(async (sql: string, params?: Record<string, unknown>) => {
-      if (params?.userId === 'missing-user') {return [];}
+      if (params?.userId === 'missing-user') {
+        return [];
+      }
       if (sql.includes('user_id, platform, model, spend_usd')) {
         return [
           {
@@ -289,16 +340,28 @@ describe('AnalyticsService.users', () => {
       return [];
     });
     const ch = { queryScoped } as unknown as ClickHouseService;
-    const svc = new AnalyticsService(ch, {} as PrismaService, {} as LariService, {
-      getSpendSummary: jest.fn(async () => null),
-    } as unknown as CopilotAnalyticsService, emptyCopilotMemberSpend(), emptyCursorAnalytics() as never, emptyCursorProductivity() as never);
+    const svc = new AnalyticsService(
+      ch,
+      {} as PrismaService,
+      {} as LariService,
+      {
+        getSpendSummary: jest.fn(async () => null),
+      } as unknown as CopilotAnalyticsService,
+      emptyCopilotMemberSpend(),
+      emptyCursorAnalytics() as never,
+      emptyCursorProductivity() as never,
+    );
     return { svc, queryScoped };
   }
 
   it('merges totals with model breakdown and resolves identities', async () => {
     const { svc } = usersHarness();
     const result = await svc.users('2026-06-01', '2026-06-30');
-    expect(result.users.map((u) => u.user_id)).toEqual([uuidAlice, 'cursor-user-99', 'orphan-handle']);
+    expect(result.users.map((u) => u.user_id)).toEqual([
+      uuidAlice,
+      'cursor-user-99',
+      'orphan-handle',
+    ]);
     const alice = result.users[0];
     expect(alice).toMatchObject({
       display_name: 'Alice Smith',
@@ -325,31 +388,79 @@ describe('AnalyticsService.users', () => {
 
   it('merges spend rows that resolve to the same email identity', async () => {
     const queryScoped = jest.fn(async (sql: string, params?: Record<string, unknown>) => {
-      if (params?.userId) {return [];}
+      if (params?.userId) {
+        return [];
+      }
       if (sql.includes('user_id, platform, model, spend_usd')) {
         return [
-          { user_id: 'demo-user-0', platform: 'openai', model: 'gpt-4o', spend_usd: 10, calls: 2, portal_import_usd: 0, connector_usd: 10 },
-          { user_id: 'alice.chen@acme.test', platform: 'openai', model: 'gpt-4o', spend_usd: 5, calls: 1, portal_import_usd: 0, connector_usd: 5 },
+          {
+            user_id: 'demo-user-0',
+            platform: 'openai',
+            model: 'gpt-4o',
+            spend_usd: 10,
+            calls: 2,
+            portal_import_usd: 0,
+            connector_usd: 10,
+          },
+          {
+            user_id: 'alice.chen@acme.test',
+            platform: 'openai',
+            model: 'gpt-4o',
+            spend_usd: 5,
+            calls: 1,
+            portal_import_usd: 0,
+            connector_usd: 5,
+          },
         ];
       }
       return [
         { key: 'demo-user-0', cost_usd: 10, calls: 2, portal_import_usd: 0, connector_usd: 10 },
-        { key: 'alice.chen@acme.test', cost_usd: 5, calls: 1, portal_import_usd: 0, connector_usd: 5 },
+        {
+          key: 'alice.chen@acme.test',
+          cost_usd: 5,
+          calls: 1,
+          portal_import_usd: 0,
+          connector_usd: 5,
+        },
       ];
     });
     mockedLoadIdentityLookups.mockResolvedValueOnce({
       byId: new Map(),
       byEmail: new Map([
-        ['alice.chen@acme.test', { displayName: 'Alice Chen', email: 'alice.chen@acme.test', teamName: 'Eng', criticalityTier: 'standard' }],
+        [
+          'alice.chen@acme.test',
+          {
+            displayName: 'Alice Chen',
+            email: 'alice.chen@acme.test',
+            teamName: 'Eng',
+            criticalityTier: 'standard',
+          },
+        ],
       ]),
       byAlias: new Map([
-        ['demo-user-0', { displayName: 'Alice Chen', email: 'alice.chen@acme.test', teamName: 'Eng', criticalityTier: 'standard' }],
+        [
+          'demo-user-0',
+          {
+            displayName: 'Alice Chen',
+            email: 'alice.chen@acme.test',
+            teamName: 'Eng',
+            criticalityTier: 'standard',
+          },
+        ],
       ]),
     });
     const ch = { queryScoped } as unknown as ClickHouseService;
-    const svc = new AnalyticsService(ch, {} as PrismaService, {} as LariService, {
-      getSpendSummary: jest.fn(async () => null),
-    } as unknown as CopilotAnalyticsService, emptyCopilotMemberSpend(), emptyCursorAnalytics() as never, emptyCursorProductivity() as never);
+    const svc = new AnalyticsService(
+      ch,
+      {} as PrismaService,
+      {} as LariService,
+      {
+        getSpendSummary: jest.fn(async () => null),
+      } as unknown as CopilotAnalyticsService,
+      emptyCopilotMemberSpend(),
+      emptyCursorAnalytics() as never,
+      emptyCursorProductivity() as never,
+    );
     const result = await svc.users('2026-06-01', '2026-06-30');
     expect(result.users).toHaveLength(1);
     expect(result.users[0]).toMatchObject({
@@ -369,21 +480,49 @@ describe('AnalyticsService.users', () => {
 
     mockedLoadIdentityLookups.mockResolvedValueOnce({
       byId: new Map(),
-      byEmail: new Map([['dev@company.com', { displayName: 'Dev User', email: 'dev@company.com', teamName: 'Platform', criticalityTier: 'standard' }]]),
-      byAlias: new Map([['cursor-user-99', { displayName: 'Cursor Dev', email: 'dev@company.com', teamName: 'Platform', criticalityTier: 'standard' }]]),
+      byEmail: new Map([
+        [
+          'dev@company.com',
+          {
+            displayName: 'Dev User',
+            email: 'dev@company.com',
+            teamName: 'Platform',
+            criticalityTier: 'standard',
+          },
+        ],
+      ]),
+      byAlias: new Map([
+        [
+          'cursor-user-99',
+          {
+            displayName: 'Cursor Dev',
+            email: 'dev@company.com',
+            teamName: 'Platform',
+            criticalityTier: 'standard',
+          },
+        ],
+      ]),
     });
     const byEmail = await svc.users('2026-06-01', '2026-06-30', 'dev@company');
     expect(byEmail.users.some((u) => u.user_id === 'cursor-user-99')).toBe(true);
 
     const byTeam = await svc.users('2026-06-01', '2026-06-30', 'eng');
-    expect(byTeam.users.every((u) => u.team.toLowerCase().includes('eng') || u.display_name.toLowerCase().includes('eng'))).toBe(true);
+    expect(
+      byTeam.users.every(
+        (u) => u.team.toLowerCase().includes('eng') || u.display_name.toLowerCase().includes('eng'),
+      ),
+    ).toBe(true);
   });
 
   it('merges GitHub Copilot members with token spend users', async () => {
     const queryScoped = jest.fn(async (sql: string) => {
-      if (sql.includes('user_id, platform, model, spend_usd')) {return [];}
+      if (sql.includes('user_id, platform, model, spend_usd')) {
+        return [];
+      }
       if (sql.includes('key, cost_usd, calls, portal_import_usd')) {
-        return [{ key: 'cursor-user-99', cost_usd: 8, calls: 2, portal_import_usd: 0, connector_usd: 8 }];
+        return [
+          { key: 'cursor-user-99', cost_usd: 8, calls: 2, portal_import_usd: 0, connector_usd: 8 },
+        ];
       }
       return [];
     });
@@ -437,14 +576,42 @@ describe('AnalyticsService.users', () => {
     const queryScoped = jest.fn(async (sql: string) => {
       if (sql.includes('user_id, platform, model, spend_usd')) {
         return [
-          { user_id: 'dev@company.com', platform: 'openai', model: 'gpt-4o', spend_usd: 10, calls: 2, portal_import_usd: 0, connector_usd: 10 },
-          { user_id: 'brandon@example.com', platform: 'cursor', model: 'claude-opus', spend_usd: 170.12, calls: 90, portal_import_usd: 0, connector_usd: 170.12 },
+          {
+            user_id: 'dev@company.com',
+            platform: 'openai',
+            model: 'gpt-4o',
+            spend_usd: 10,
+            calls: 2,
+            portal_import_usd: 0,
+            connector_usd: 10,
+          },
+          {
+            user_id: 'brandon@example.com',
+            platform: 'cursor',
+            model: 'claude-opus',
+            spend_usd: 170.12,
+            calls: 90,
+            portal_import_usd: 0,
+            connector_usd: 170.12,
+          },
         ];
       }
       if (sql.includes('key, cost_usd, calls, portal_import_usd')) {
         return [
-          { key: 'dev@company.com', cost_usd: 10, calls: 2, portal_import_usd: 0, connector_usd: 10 },
-          { key: 'brandon@example.com', cost_usd: 170.12, calls: 90, portal_import_usd: 0, connector_usd: 170.12 },
+          {
+            key: 'dev@company.com',
+            cost_usd: 10,
+            calls: 2,
+            portal_import_usd: 0,
+            connector_usd: 10,
+          },
+          {
+            key: 'brandon@example.com',
+            cost_usd: 170.12,
+            calls: 90,
+            portal_import_usd: 0,
+            connector_usd: 170.12,
+          },
         ];
       }
       return [];
@@ -465,9 +632,7 @@ describe('AnalyticsService.users', () => {
     expect(cursorUser?.total_spend_usd).toBe(170.12);
     expect(cursorUser?.vendor_spend?.cursor?.overage_usd).toBe(170.12);
     expect(cursorUser?.model_breakdown).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ platform: 'cursor', spend_usd: 170.12 }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ platform: 'cursor', spend_usd: 170.12 })]),
     );
   });
 
@@ -487,7 +652,15 @@ describe('AnalyticsService.users', () => {
         ];
       }
       if (sql.includes('key, cost_usd, calls, portal_import_usd')) {
-        return [{ key: 'dev@company.com', cost_usd: 10, calls: 2, portal_import_usd: 0, connector_usd: 10 }];
+        return [
+          {
+            key: 'dev@company.com',
+            cost_usd: 10,
+            calls: 2,
+            portal_import_usd: 0,
+            connector_usd: 10,
+          },
+        ];
       }
       return [];
     });
@@ -544,10 +717,23 @@ describe('AnalyticsService.users', () => {
     mockedLoadIdentityLookups.mockResolvedValue({
       byId: new Map(),
       byEmail: new Map([
-        ['dev@company.com', { displayName: 'Dev User', email: 'dev@company.com', teamName: 'Eng', criticalityTier: 'standard' }],
+        [
+          'dev@company.com',
+          {
+            displayName: 'Dev User',
+            email: 'dev@company.com',
+            teamName: 'Eng',
+            criticalityTier: 'standard',
+          },
+        ],
         [
           'included-only@example.com',
-          { displayName: 'Included Only', email: 'included-only@example.com', teamName: 'Eng', criticalityTier: 'standard' },
+          {
+            displayName: 'Included Only',
+            email: 'included-only@example.com',
+            teamName: 'Eng',
+            criticalityTier: 'standard',
+          },
         ],
       ]),
       byAlias: new Map(),
@@ -603,7 +789,15 @@ describe('AnalyticsService.users', () => {
         ];
       }
       if (sql.includes('key, cost_usd, calls, portal_import_usd')) {
-        return [{ key: 'carl.miller@studiodesigner.com', cost_usd: 0, calls: 153, portal_import_usd: 0, connector_usd: 0 }];
+        return [
+          {
+            key: 'carl.miller@studiodesigner.com',
+            cost_usd: 0,
+            calls: 153,
+            portal_import_usd: 0,
+            connector_usd: 0,
+          },
+        ];
       }
       return [];
     });
@@ -678,7 +872,9 @@ describe('AnalyticsService.cursorSpend', () => {
 
   it('computes seat license from fixed costs × active members', async () => {
     const queryScoped = jest.fn(async (sql: string) => {
-      if (sql.includes('count(DISTINCT user_id)')) {return [{ members: 11 }];}
+      if (sql.includes('count(DISTINCT user_id)')) {
+        return [{ members: 11 }];
+      }
       if (sql.includes('agentledger.fixed_costs')) {
         return [{ period_month: '2026-06-01', cost_usd: 600, seats: 15, unit_cost_usd: 40 }];
       }
@@ -708,8 +904,12 @@ describe('AnalyticsService.cursorSpend', () => {
 
   it('still returns active members when seat license query fails', async () => {
     const queryScoped = jest.fn(async (sql: string) => {
-      if (sql.includes('count(DISTINCT user_id)')) {return [{ members: 11 }];}
-      if (sql.includes('agentledger.fixed_costs')) {throw new Error('ILLEGAL_AGGREGATION');}
+      if (sql.includes('count(DISTINCT user_id)')) {
+        return [{ members: 11 }];
+      }
+      if (sql.includes('agentledger.fixed_costs')) {
+        throw new Error('ILLEGAL_AGGREGATION');
+      }
       return [];
     });
     const ch = { queryScoped } as unknown as ClickHouseService;

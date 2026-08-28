@@ -70,7 +70,11 @@ describe('parseAnthropicPortalCsv', () => {
       'openai',
     );
     expect(result.stats.parsed).toBe(1);
-    expect(result.rows[0]).toMatchObject({ provider: 'openai', user_id: 'alice@co.com', cost_usd: 3.25 });
+    expect(result.rows[0]).toMatchObject({
+      provider: 'openai',
+      user_id: 'alice@co.com',
+      cost_usd: 3.25,
+    });
   });
 
   it('converts cost from cents when mapping says cents', () => {
@@ -102,7 +106,8 @@ describe('parseAnthropicPortalCsv', () => {
       'brandon@studiodesigner.com,113a8758-3d89-4023-83fe-7090c5c5164e,Cowork,claude-opus-4-7,19.18,user_0138PnqLyRqLRtQEqXCqEpQM',
       '(org service usage),(org service),(other),,0.0,',
     ].join('\n');
-    const fileName = 'spend-report-fb01cd94-335a-4e06-80cd-af774ef7f65e-2026-03-26-to-2026-06-24.csv';
+    const fileName =
+      'spend-report-fb01cd94-335a-4e06-80cd-af774ef7f65e-2026-03-26-to-2026-06-24.csv';
     const result = parseAnthropicPortalCsv(csv, undefined, fileName);
     expect(result.format.format).toBe('anthropic_spend_report');
     expect(result.provider).toBe('anthropic');
@@ -117,7 +122,11 @@ describe('parseAnthropicPortalCsv', () => {
 
   it('rejects Cursor analytics CSV as non-billable', () => {
     const csv = ['Date,Agent Lines Total Lines Suggested', '2026-05-27,48'].join('\n');
-    const result = parseAnthropicPortalCsv(csv, undefined, 'Analytics_Team_2026-05-27_2026-06-25.csv');
+    const result = parseAnthropicPortalCsv(
+      csv,
+      undefined,
+      'Analytics_Team_2026-05-27_2026-06-25.csv',
+    );
     expect(result.format.billable).toBe(false);
     expect(result.rows).toHaveLength(0);
   });
@@ -132,7 +141,15 @@ describe('parseAnthropicPortalCsv', () => {
     const b = parseAnthropicPortalCsv(withBlank);
     expect(a.rows[0]?.idempotency_key).toBe(b.rows[0]?.idempotency_key);
     expect(a.rows[0]?.idempotency_key).toBe(
-      portalRowIdempotencyKey('anthropic', '2026-03-01', 'jane@example.com', 'claude-sonnet-4', 12.5, 100000, 5000),
+      portalRowIdempotencyKey(
+        'anthropic',
+        '2026-03-01',
+        'jane@example.com',
+        'claude-sonnet-4',
+        12.5,
+        100000,
+        5000,
+      ),
     );
     expect(a.rows[0]).toMatchObject({ cost_source: 'portal_billing', source: 'portal_import' });
   });

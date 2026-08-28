@@ -85,11 +85,17 @@ function incompleteSyncError(errors: SyncRecordError[]): Error & { code: string 
 
 /** True when cost_report returned day buckets but every results[] array is empty. */
 function anthropicCostBucketsEmpty(raw: unknown): boolean {
-  if (!raw || typeof raw !== 'object') {return false;}
+  if (!raw || typeof raw !== 'object') {
+    return false;
+  }
   const data = (raw as { data?: unknown }).data;
-  if (!Array.isArray(data) || data.length === 0) {return false;}
+  if (!Array.isArray(data) || data.length === 0) {
+    return false;
+  }
   return data.every((bucket) => {
-    if (!bucket || typeof bucket !== 'object') {return true;}
+    if (!bucket || typeof bucket !== 'object') {
+      return true;
+    }
     const results = (bucket as { results?: unknown }).results;
     return !Array.isArray(results) || results.length === 0;
   });
@@ -155,9 +161,13 @@ export class ConnectorsService {
   }
 
   private resolveStoredDefinition(cfg: Record<string, unknown>): ConnectorDefinition | undefined {
-    if (!cfg?.definition) {return undefined;}
+    if (!cfg?.definition) {
+      return undefined;
+    }
     const def = { ...(cfg.definition as ConnectorDefinition) };
-    if (cfg.baseUrl) {def.baseUrl = String(cfg.baseUrl);}
+    if (cfg.baseUrl) {
+      def.baseUrl = String(cfg.baseUrl);
+    }
     const endpointPath = cfg.endpointPath as string | undefined;
     if (endpointPath && def.endpoints?.[0]) {
       def.endpoints = [{ ...def.endpoints[0], path: endpointPath }];
@@ -298,12 +308,16 @@ export class ConnectorsService {
       return this.mergeBuiltinDefinition(row.kind, cfg);
     }
     const fromConfig = this.resolveStoredDefinition(cfg);
-    if (fromConfig) {return fromConfig;}
+    if (fromConfig) {
+      return fromConfig;
+    }
     throw new BadRequestException('connector has no definition');
   }
 
   private parseCredentials(secret: string | undefined, authType?: string): ApiCredentials {
-    if (!secret) {return {};}
+    if (!secret) {
+      return {};
+    }
     const trimmed = secret.trim();
     if (authType === 'basic_auth') {
       if (!trimmed.includes(':')) {
@@ -316,7 +330,9 @@ export class ConnectorsService {
       const [name, ...rest] = trimmed.split('=');
       return { customHeader: { name, value: rest.join('=') } };
     }
-    if (authType === 'bearer_token') {return { bearerToken: trimmed };}
+    if (authType === 'bearer_token') {
+      return { bearerToken: trimmed };
+    }
     return { apiKey: trimmed };
   }
 
@@ -327,7 +343,9 @@ export class ConnectorsService {
     inlineSecret?: string,
   ): Promise<string | undefined> {
     const stored = inlineSecret ?? (await this.secrets.resolveSecret(row.secretRef));
-    if (stored?.trim()) {return stored.trim();}
+    if (stored?.trim()) {
+      return stored.trim();
+    }
     if (
       (definition.provider === 'anthropic' || row.kind === 'anthropic-usage') &&
       process.env.ANTHROPIC_ADMIN_API_KEY?.trim()
@@ -387,14 +405,18 @@ export class ConnectorsService {
     const row = await this.prisma.withTenant(getTenantId(), (tx) =>
       tx.connector.findUnique({ where: { connectorId: id } }),
     );
-    if (!row) {throw new NotFoundException('connector not found');}
+    if (!row) {
+      throw new NotFoundException('connector not found');
+    }
     const safe = omitSecretRef(row);
     return safe;
   }
 
   async create(dto: CreateConnectorDto) {
     const tenantId = getTenantId();
-    if (!tenantId) {throw new BadRequestException('no tenant in context');}
+    if (!tenantId) {
+      throw new BadRequestException('no tenant in context');
+    }
 
     let definitionId = dto.connectorDefinitionId;
     let definition: ConnectorDefinition | undefined;
@@ -473,13 +495,17 @@ export class ConnectorsService {
       const existing = await this.prisma.withTenant(tenantId!, (tx) =>
         tx.connector.findUnique({ where: { connectorId: id } }),
       );
-      if (existing?.secretRef) {await this.secrets.deleteSecret(existing.secretRef);}
+      if (existing?.secretRef) {
+        await this.secrets.deleteSecret(existing.secretRef);
+      }
       secretRef = await this.secrets.storeSecret(dto.authSecret.trim());
     }
 
     return this.prisma.withTenant(tenantId!, async (tx) => {
       const before = await tx.connector.findUnique({ where: { connectorId: id } });
-      if (!before) {throw new NotFoundException('connector not found');}
+      if (!before) {
+        throw new NotFoundException('connector not found');
+      }
 
       const updated = await tx.connector.update({
         where: { connectorId: id },
@@ -515,8 +541,12 @@ export class ConnectorsService {
   async delete(id: string) {
     return this.prisma.withTenant(getTenantId(), async (tx) => {
       const before = await tx.connector.findUnique({ where: { connectorId: id } });
-      if (!before) {throw new NotFoundException('connector not found');}
-      if (before.secretRef) {await this.secrets.deleteSecret(before.secretRef);}
+      if (!before) {
+        throw new NotFoundException('connector not found');
+      }
+      if (before.secretRef) {
+        await this.secrets.deleteSecret(before.secretRef);
+      }
       await tx.connector.delete({ where: { connectorId: id } });
       await recordAudit(tx, { action: 'delete', object: `connector:${id}`, before, after: null });
       return { deleted: true };
@@ -537,7 +567,9 @@ export class ConnectorsService {
     const row = await this.prisma.withTenant(getTenantId(), (tx) =>
       tx.connector.findUnique({ where: { connectorId: id } }),
     );
-    if (!row) {throw new NotFoundException('connector not found');}
+    if (!row) {
+      throw new NotFoundException('connector not found');
+    }
 
     // ADO uses WIQL/PRs — not the generic REST preview engine.
     if (row.kind === AZURE_DEVOPS_PRESET_ID) {
@@ -670,13 +702,17 @@ export class ConnectorsService {
     const row = await this.prisma.withTenant(tenantId!, (tx) =>
       tx.connector.findUnique({ where: { connectorId: id } }),
     );
-    if (!row) {throw new NotFoundException('connector not found');}
+    if (!row) {
+      throw new NotFoundException('connector not found');
+    }
     if (row.kind === 'github-copilot-business') {
       throw new BadRequestException(
         'GitHub Copilot Business uses the dedicated Copilot sync API. Open Overview → GitHub Copilot Business → Sync now, or POST /v1/github-copilot/connections/:connectionId/sync.',
       );
     }
-    if (!row.enabled) {throw new BadRequestException('connector is disabled');}
+    if (!row.enabled) {
+      throw new BadRequestException('connector is disabled');
+    }
 
     if (row.status === 'syncing' && row.lastSyncStartedAt) {
       const elapsed = Date.now() - row.lastSyncStartedAt.getTime();
@@ -813,7 +849,9 @@ export class ConnectorsService {
         requestCount += fetched.requestCount;
         allRecords = allRecords.concat(fetched.records);
         allErrors = allErrors.concat(fetched.errors);
-        if (fetched.entities.length > 0) {allEntities = fetched.entities;}
+        if (fetched.entities.length > 0) {
+          allEntities = fetched.entities;
+        }
         stepsCompleted = fetched.stepsCompleted;
         capabilities = fetched.capabilities;
         usersDetected = fetched.usersDetected;
@@ -835,7 +873,9 @@ export class ConnectorsService {
 
         if (definition.provider !== 'cursor') {
           const importRows = fetched.records.map(toImportRow);
-          if (!importRows.length) {continue;}
+          if (!importRows.length) {
+            continue;
+          }
           const chunkSummary = await this.importService.importEvents({
             events: importRows as unknown as Record<string, unknown>[],
           });

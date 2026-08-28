@@ -6,7 +6,16 @@ export interface ChartSize {
   height: number;
 }
 
-const COLORS = ['#2563eb', '#7c3aed', '#059669', '#d97706', '#dc2626', '#0891b2', '#4f46e5', '#be185d'];
+const COLORS = [
+  '#2563eb',
+  '#7c3aed',
+  '#059669',
+  '#d97706',
+  '#dc2626',
+  '#0891b2',
+  '#4f46e5',
+  '#be185d',
+];
 
 function maxVal(values: number[]): number {
   return values.length ? Math.max(...values, 0) : 0;
@@ -17,7 +26,9 @@ export function alignPriorTrend(
   current: { day: string; costUsd: number }[],
   prior: { day: string; costUsd: number }[],
 ): { costUsd: number }[] {
-  if (current.length === 0) {return [];}
+  if (current.length === 0) {
+    return [];
+  }
   const priorSorted = [...prior].sort((a, b) => a.day.localeCompare(b.day));
   return current.map((_, i) => ({ costUsd: priorSorted[i]?.costUsd ?? 0 }));
 }
@@ -39,7 +50,9 @@ export function spendTrendSvg(
   const toY = (v: number) => pad.t + plotH - (v / maxY) * plotH;
 
   const line = (pts: { costUsd: number }[], opacity: number, dash?: string) => {
-    if (pts.length === 0) {return '';}
+    if (pts.length === 0) {
+      return '';
+    }
     const d = pts
       .map((p, i) => `${i === 0 ? 'M' : 'L'} ${toX(i).toFixed(1)} ${toY(p.costUsd).toFixed(1)}`)
       .join(' ');

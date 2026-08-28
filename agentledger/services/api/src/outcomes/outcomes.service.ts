@@ -92,7 +92,9 @@ export class OutcomesService {
       throw new BadRequestException('no tenant in context');
     }
     const outcomeId = `out_${randomUUID().replace(/-/g, '')}`;
-    const occurredAt = dto.occurredAt ? new Date(dto.occurredAt).toISOString() : new Date().toISOString();
+    const occurredAt = dto.occurredAt
+      ? new Date(dto.occurredAt).toISOString()
+      : new Date().toISOString();
     const row = {
       outcome_id: outcomeId,
       tenant_id: tenantId,

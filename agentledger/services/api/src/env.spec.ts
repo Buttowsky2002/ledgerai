@@ -17,8 +17,11 @@ describe('required secrets (connector encryption)', () => {
 
   afterEach(() => {
     for (const k of KEYS) {
-      if (saved[k] === undefined) {delete process.env[k];}
-      else {process.env[k] = saved[k];}
+      if (saved[k] === undefined) {
+        delete process.env[k];
+      } else {
+        process.env[k] = saved[k];
+      }
     }
   });
 
@@ -86,7 +89,9 @@ describe('resolvePgDsn', () => {
   it('prefers BADGERIQ_PG_DSN when set', () => {
     process.env.BADGERIQ_PG_DSN = 'postgresql://explicit:dsn@host/db';
     process.env.DB_HOST = '/cloudsql/ignored';
-    expect(resolvePgDsn()).toBe('postgresql://explicit:dsn@host/db?connection_limit=20&pool_timeout=20');
+    expect(resolvePgDsn()).toBe(
+      'postgresql://explicit:dsn@host/db?connection_limit=20&pool_timeout=20',
+    );
   });
 
   it('does not override connection_limit when already present in BADGERIQ_PG_DSN', () => {

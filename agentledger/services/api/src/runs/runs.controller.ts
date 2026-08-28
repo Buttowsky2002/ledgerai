@@ -6,7 +6,8 @@ import { RunsService } from './runs.service';
 export class RunsController {
   constructor(private readonly runs: RunsService) {}
 
-  @Roles('viewer') @Get(':id')
+  @Roles('viewer')
+  @Get(':id')
   get(@Param('id') id: string) {
     return this.runs.get(id);
   }

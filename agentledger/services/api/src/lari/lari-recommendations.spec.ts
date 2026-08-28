@@ -191,8 +191,7 @@ describe('LARI recommendations — model substitution', () => {
     expect(rec.relatedEntity).toEqual({ type: 'model', id: 'openai/gpt-4o' });
     expect(rec.action).toContain('Run an offline eval of openai/gpt-4o-mini');
 
-    const projected =
-      (inputTokens * 0.15 + outputTokens * 0.6) / 1_000_000;
+    const projected = (inputTokens * 0.15 + outputTokens * 0.6) / 1_000_000;
     const periodSavings = costUsd - projected;
     expect(rec.estimatedImpactUsd).toBe(Math.round((periodSavings + Number.EPSILON) * 100) / 100);
     expect(rec.estimatedSavingsUsd).toBe(

@@ -312,8 +312,12 @@ export const RECONCILED_COST_BASIS_MONTHLY_SQL = `
 `;
 
 function num(v: unknown): number {
-  if (typeof v === 'number' && Number.isFinite(v)) {return v;}
-  if (v === undefined || v === null || v === '') {return 0;}
+  if (typeof v === 'number' && Number.isFinite(v)) {
+    return v;
+  }
+  if (v === undefined || v === null || v === '') {
+    return 0;
+  }
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 }
@@ -330,20 +334,34 @@ export function isNonMeteredCostSource(costSource: string | undefined): boolean 
 /** Compute billable metered USD stamped on connector/gateway import rows. */
 export function computeMeteredCostUsd(metrics: Record<string, unknown>): number {
   const costSource = String(metrics.cost_source ?? '').trim();
-  if (isNonMeteredCostSource(costSource)) {return 0;}
+  if (isNonMeteredCostSource(costSource)) {
+    return 0;
+  }
 
   const operationName = String(metrics.operation_name ?? '');
-  if (operationName === 'cursor:included' || operationName === 'cursor:errored') {return 0;}
-  if (operationName === 'cursor:on_demand') {return round6(num(metrics.cost_usd));}
+  if (operationName === 'cursor:included' || operationName === 'cursor:errored') {
+    return 0;
+  }
+  if (operationName === 'cursor:on_demand') {
+    return round6(num(metrics.cost_usd));
+  }
 
   const provider = String(metrics.provider ?? '').toLowerCase();
-  if ((POSTGRES_METERED_PROVIDERS as readonly string[]).includes(provider)) {return 0;}
+  if ((POSTGRES_METERED_PROVIDERS as readonly string[]).includes(provider)) {
+    return 0;
+  }
 
   if (provider === 'cursor') {
     const kind = String(metrics.billing_kind ?? metrics.product ?? '').toLowerCase();
-    if (kind.includes('included') || kind.includes('error')) {return 0;}
-    if (kind.includes('on-demand') || kind.includes('usage-based')) {return round6(num(metrics.cost_usd));}
-    if (!operationName.startsWith('cursor:')) {return 0;}
+    if (kind.includes('included') || kind.includes('error')) {
+      return 0;
+    }
+    if (kind.includes('on-demand') || kind.includes('usage-based')) {
+      return round6(num(metrics.cost_usd));
+    }
+    if (!operationName.startsWith('cursor:')) {
+      return 0;
+    }
   }
 
   return round6(num(metrics.cost_usd));

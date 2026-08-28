@@ -23,8 +23,14 @@ export type ChParam = string | number;
  *   - `ping`        connectivity check for /ready
  */
 export abstract class AnalyticsStore {
-  abstract query<T = Record<string, unknown>>(sql: string, params?: Record<string, ChParam>): Promise<T[]>;
-  abstract queryScoped<T = Record<string, unknown>>(sql: string, params?: Record<string, ChParam>): Promise<T[]>;
+  abstract query<T = Record<string, unknown>>(
+    sql: string,
+    params?: Record<string, ChParam>,
+  ): Promise<T[]>;
+  abstract queryScoped<T = Record<string, unknown>>(
+    sql: string,
+    params?: Record<string, ChParam>,
+  ): Promise<T[]>;
   abstract command(sql: string, params?: Record<string, ChParam>): Promise<void>;
   abstract insertRows(table: string, rows: Record<string, unknown>[]): Promise<void>;
   abstract ping(): Promise<void>;
@@ -35,6 +41,8 @@ export type AnalyticsBackend = 'clickhouse' | 'postgres';
 /** Which analytics backend this deployment uses (default: clickhouse). */
 export function analyticsBackend(): AnalyticsBackend {
   const raw = (process.env.BADGERIQ_ANALYTICS_BACKEND ?? '').trim().toLowerCase();
-  if (raw === 'postgres' || raw === 'postgresql' || raw === 'pg') {return 'postgres';}
+  if (raw === 'postgres' || raw === 'postgresql' || raw === 'pg') {
+    return 'postgres';
+  }
   return 'clickhouse';
 }

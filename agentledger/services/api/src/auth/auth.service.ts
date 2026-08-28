@@ -40,7 +40,9 @@ export class AuthService {
     private readonly jwt: JwtService,
   ) {}
 
-  async loginByEmail(email: string): Promise<{ accessToken: string; refreshToken: string; claims: AccessClaims }> {
+  async loginByEmail(
+    email: string,
+  ): Promise<{ accessToken: string; refreshToken: string; claims: AccessClaims }> {
     // Parameterised ($1) — never string-concatenated (rule 4).
     const rows = await this.prisma.$queryRaw<IdentityRow[]>`
       SELECT user_id, tenant_id, api_role FROM auth_lookup_identity(${email})`;
@@ -196,7 +198,12 @@ export class AuthService {
   // Audit the JIT provisioning (rule 10). There is no request principal at login,
   // so the row is written inside an explicit tenant-bound transaction (sets
   // app.tenant_id → RLS WITH CHECK passes) with the IdP as the actor.
-  private async auditProvision(tenantId: string, userId: string, email: string, source: string): Promise<void> {
+  private async auditProvision(
+    tenantId: string,
+    userId: string,
+    email: string,
+    source: string,
+  ): Promise<void> {
     await this.prisma.withTenant(tenantId, (tx) =>
       tx.auditLog.create({
         data: {

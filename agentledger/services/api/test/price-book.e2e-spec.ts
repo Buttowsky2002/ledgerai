@@ -25,7 +25,9 @@ describe('Price book (global, admin-write)', () => {
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+    );
     await app.init();
     prisma = app.get(PrismaService);
     jwt = app.get(JwtService);
@@ -52,13 +54,21 @@ describe('Price book (global, admin-write)', () => {
   });
 
   it('viewer can read, cannot write', async () => {
-    expect((await request(app.getHttpServer()).get('/v1/price-book').set(bearer(viewer))).status).toBe(200);
-    const res = await request(app.getHttpServer()).post('/v1/price-book').set(bearer(viewer)).send(price());
+    expect(
+      (await request(app.getHttpServer()).get('/v1/price-book').set(bearer(viewer))).status,
+    ).toBe(200);
+    const res = await request(app.getHttpServer())
+      .post('/v1/price-book')
+      .set(bearer(viewer))
+      .send(price());
     expect(res.status).toBe(403);
   });
 
   it('admin can create/update/delete a global price row', async () => {
-    const created = await request(app.getHttpServer()).post('/v1/price-book').set(bearer(admin)).send(price());
+    const created = await request(app.getHttpServer())
+      .post('/v1/price-book')
+      .set(bearer(admin))
+      .send(price());
     expect(created.status).toBe(201);
     const id = created.body.priceId;
     expect(id).toBeDefined();
@@ -69,7 +79,9 @@ describe('Price book (global, admin-write)', () => {
       .send({ usdPerMillion: 3.0 });
     expect(upd.status).toBe(200);
 
-    const del = await request(app.getHttpServer()).delete(`/v1/price-book/${id}`).set(bearer(admin));
+    const del = await request(app.getHttpServer())
+      .delete(`/v1/price-book/${id}`)
+      .set(bearer(admin));
     expect(del.status).toBe(200);
   });
 });

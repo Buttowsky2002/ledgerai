@@ -37,12 +37,19 @@ describe('SCIM 2.0 provisioning', () => {
     prisma = app.get(PrismaService);
     jwt = app.get(JwtService);
 
-    await prisma.withTenant(tenantA, (tx) => tx.tenant.create({ data: { tenantId: tenantA, name: 'Tenant A' } }));
-    await prisma.withTenant(tenantB, (tx) => tx.tenant.create({ data: { tenantId: tenantB, name: 'Tenant B' } }));
+    await prisma.withTenant(tenantA, (tx) =>
+      tx.tenant.create({ data: { tenantId: tenantA, name: 'Tenant A' } }),
+    );
+    await prisma.withTenant(tenantB, (tx) =>
+      tx.tenant.create({ data: { tenantId: tenantB, name: 'Tenant B' } }),
+    );
 
     // An admin issues a SCIM token for tenant A through the control-plane API.
     const adminA = await jwt.mintAccess({ userId: randomUUID(), tenantId: tenantA, role: 'admin' });
-    const issued = await scim().post('/v1/scim-tokens').set(bearer(adminA)).send({ name: 'Okta prod' });
+    const issued = await scim()
+      .post('/v1/scim-tokens')
+      .set(bearer(adminA))
+      .send({ name: 'Okta prod' });
     expect(issued.status).toBe(201);
     expect(issued.body.scimToken.tokenHash).toBeUndefined(); // never leaked
     scimToken = issued.body.token;
@@ -81,10 +88,16 @@ describe('SCIM 2.0 provisioning', () => {
         active: true,
       });
     expect(res.status).toBe(201);
-    expect(res.body).toMatchObject({ userName: 'alice@acme.com', externalId: 'okta-alice', active: true });
+    expect(res.body).toMatchObject({
+      userName: 'alice@acme.com',
+      externalId: 'okta-alice',
+      active: true,
+    });
     userId = res.body.id;
 
-    const row = await prisma.withTenant(tenantA, (tx) => tx.identity.findUnique({ where: { userId } }));
+    const row = await prisma.withTenant(tenantA, (tx) =>
+      tx.identity.findUnique({ where: { userId } }),
+    );
     expect(row).toMatchObject({ source: 'scim', externalId: 'okta-alice', active: true });
   });
 
@@ -119,7 +132,9 @@ describe('SCIM 2.0 provisioning', () => {
     expect(res.status).toBe(200);
     expect(res.body.active).toBe(false);
     // active=false is exactly what D1's login path refuses (auth_lookup_identity filters active).
-    const row = await prisma.withTenant(tenantA, (tx) => tx.identity.findUnique({ where: { userId } }));
+    const row = await prisma.withTenant(tenantA, (tx) =>
+      tx.identity.findUnique({ where: { userId } }),
+    );
     expect(row?.active).toBe(false);
   });
 
@@ -146,13 +161,17 @@ describe('SCIM 2.0 provisioning', () => {
     expect(res.body.displayName).toBe('Engineering');
     expect(res.body.members.map((m: { value: string }) => m.value)).toContain(userId);
 
-    const row = await prisma.withTenant(tenantA, (tx) => tx.identity.findUnique({ where: { userId } }));
+    const row = await prisma.withTenant(tenantA, (tx) =>
+      tx.identity.findUnique({ where: { userId } }),
+    );
     expect(row?.teamId).toBe(res.body.id); // membership set the primary team
   });
 
   it('isolates tenants: A token cannot read B users (404)', async () => {
     const bUser = await prisma.withTenant(tenantB, (tx) =>
-      tx.identity.create({ data: { tenantId: tenantB, email: 'bob@tenant-b.com', source: 'scim' } }),
+      tx.identity.create({
+        data: { tenantId: tenantB, email: 'bob@tenant-b.com', source: 'scim' },
+      }),
     );
     const res = await scim().get(`/scim/v2/Users/${bUser.userId}`).set(bearer(scimToken));
     expect(res.status).toBe(404); // RLS hides it; SCIM reports not-found

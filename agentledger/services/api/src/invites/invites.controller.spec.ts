@@ -28,7 +28,10 @@ describe('InvitesController', () => {
   });
 
   it('admin create returns inviteId + link from the service', async () => {
-    invites.create.mockResolvedValue({ inviteId: 'inv-1', link: 'https://app/invite/accept?token=abc' });
+    invites.create.mockResolvedValue({
+      inviteId: 'inv-1',
+      link: 'https://app/invite/accept?token=abc',
+    });
     await expect(controller.create({ email: 'a@b.com', apiRole: 'viewer' })).resolves.toEqual({
       inviteId: 'inv-1',
       link: 'https://app/invite/accept?token=abc',

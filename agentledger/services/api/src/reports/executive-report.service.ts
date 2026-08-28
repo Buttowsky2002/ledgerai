@@ -11,7 +11,10 @@ import {
   periodDeltaPct,
   priorWindow,
 } from './executive-report.should-render';
-import { mergeCopilotSupplement, mergeProviderCostsSupplement } from './executive-report-supplemental';
+import {
+  mergeCopilotSupplement,
+  mergeProviderCostsSupplement,
+} from './executive-report-supplemental';
 import type {
   DailySpendRow,
   ExecutiveReportData,
@@ -48,7 +51,11 @@ export class ExecutiveReportService {
     private readonly copilotAnalytics: CopilotAnalyticsService,
     private readonly cfoView: LariCfoViewService,
   ) {}
-  async build(from?: string, to?: string, requestedTenantId?: string): Promise<ExecutiveReportData> {
+  async build(
+    from?: string,
+    to?: string,
+    requestedTenantId?: string,
+  ): Promise<ExecutiveReportData> {
     const tenantId = getTenantId();
     if (!tenantId) {
       throw new BadRequestException('no tenant in context');
@@ -104,10 +111,12 @@ export class ExecutiveReportService {
     current = copilotMerged.current;
     mergedProviders = copilotMerged.providers;
     mergedModels = copilotMerged.models;
-    mergedSpendTrend = copilotMerged.spendTrend;    const flags = (tenantRow?.complianceFlags ?? {}) as Record<string, unknown>;
+    mergedSpendTrend = copilotMerged.spendTrend;
+    const flags = (tenantRow?.complianceFlags ?? {}) as Record<string, unknown>;
     const attributionLive = flags.attribution_mode === 'live' || flags.attribution_live === true;
 
-    const priorSpend = priorTotals;    const totalTokens = current.inputTokens + current.outputTokens;
+    const priorSpend = priorTotals;
+    const totalTokens = current.inputTokens + current.outputTokens;
     const pctChangeVsPrior = periodDeltaPct(current.costUsd, priorSpend.costUsd);
     const costPer1kTokens = totalTokens > 0 ? usd((current.costUsd / totalTokens) * 1000) : null;
 
@@ -181,7 +190,10 @@ export class ExecutiveReportService {
   }
 
   /** CFO fully-loaded projection; soft-fails so metered export still works. */
-  private async fetchProjection(from: string, to: string): Promise<ExecutiveReportProjection | null> {
+  private async fetchProjection(
+    from: string,
+    to: string,
+  ): Promise<ExecutiveReportProjection | null> {
     try {
       const view = await this.cfoView.getCfoView(
         from,
@@ -325,7 +337,12 @@ export class ExecutiveReportService {
   }
 
   private async fetchModels(params: Record<string, ChParam>): Promise<ModelSpendRow[]> {
-    const rows = await this.ch.queryScoped<{ provider: string; model: string; cost_usd: unknown; calls: unknown }>(
+    const rows = await this.ch.queryScoped<{
+      provider: string;
+      model: string;
+      cost_usd: unknown;
+      calls: unknown;
+    }>(
       `SELECT provider,
               if(response_model != '', response_model, request_model) AS model,
               sum(${METERED_COST}) AS cost_usd,
@@ -347,7 +364,11 @@ export class ExecutiveReportService {
   }
 
   private async fetchRisk(params: Record<string, ChParam>): Promise<RiskRollupRow[]> {
-    const rows = await this.ch.queryScoped<{ dlp_action: string; risk_severity: string; events: unknown }>(
+    const rows = await this.ch.queryScoped<{
+      dlp_action: string;
+      risk_severity: string;
+      events: unknown;
+    }>(
       `SELECT dlp_action, risk_severity, sum(events) AS events
        FROM risk_daily
        WHERE tenant_id = {tenant:String} AND day BETWEEN {from:Date} AND {to:Date}
@@ -372,7 +393,9 @@ export class ExecutiveReportService {
     return n(rows[0]?.blocked_events);
   }
 
-  private async fetchValueMetrics(params: Record<string, ChParam>): Promise<Omit<ValueMetrics, 'lari'>> {
+  private async fetchValueMetrics(
+    params: Record<string, ChParam>,
+  ): Promise<Omit<ValueMetrics, 'lari'>> {
     const rows = await this.ch.queryScoped<Record<string, unknown>>(
       `SELECT count() AS outcomes,
               sum(value_usd) AS business_value_usd,

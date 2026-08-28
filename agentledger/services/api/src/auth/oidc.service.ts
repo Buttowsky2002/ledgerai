@@ -1,6 +1,11 @@
 import { BadRequestException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { Client, Issuer, generators } from 'openid-client';
-import { OidcProviderConfig, loadOidcProviders, resolveSecret, ssoRedirectUri } from './oidc.config';
+import {
+  OidcProviderConfig,
+  loadOidcProviders,
+  resolveSecret,
+  ssoRedirectUri,
+} from './oidc.config';
 
 export interface AuthRequest {
   url: string;

@@ -36,7 +36,10 @@ const MIXED_DISCLAIMER =
 export class CopilotMemberSpendService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getMemberSpend(tenantId: string, query: MemberSpendQuery): Promise<CopilotMemberSpendResponse> {
+  async getMemberSpend(
+    tenantId: string,
+    query: MemberSpendQuery,
+  ): Promise<CopilotMemberSpendResponse> {
     const connections = await this.prisma.withTenant(tenantId, (tx) =>
       tx.aiProviderConnection.findMany({ where: { tenantId, provider: COPILOT_PROVIDER } }),
     );
@@ -77,9 +80,15 @@ export class CopilotMemberSpendService {
               ...(query.utilizationStatus ? { utilizationStatus: query.utilizationStatus } : {}),
             },
           }),
-          tx.githubCopilotSeat.findMany({ where: { tenantId, connectionId: { in: connectionIds } } }),
-          tx.githubCopilotMember.findMany({ where: { tenantId, connectionId: { in: connectionIds } } }),
-          tx.githubCopilotMemberTeam.findMany({ where: { tenantId, connectionId: { in: connectionIds } } }),
+          tx.githubCopilotSeat.findMany({
+            where: { tenantId, connectionId: { in: connectionIds } },
+          }),
+          tx.githubCopilotMember.findMany({
+            where: { tenantId, connectionId: { in: connectionIds } },
+          }),
+          tx.githubCopilotMemberTeam.findMany({
+            where: { tenantId, connectionId: { in: connectionIds } },
+          }),
           tx.githubCopilotUsageDaily.findMany({
             where: {
               tenantId,
@@ -143,7 +152,10 @@ export class CopilotMemberSpendService {
         estimatedValueCreated: round2(agg.estimatedValueCreated),
         roiPercentage:
           agg.totalAllocatedCost > 0
-            ? round2(((agg.estimatedValueCreated - agg.totalAllocatedCost) / agg.totalAllocatedCost) * 100)
+            ? round2(
+                ((agg.estimatedValueCreated - agg.totalAllocatedCost) / agg.totalAllocatedCost) *
+                  100,
+              )
             : null,
         utilizationStatus: agg.utilizationStatus,
         isEstimated: agg.costSource !== 'billing_api',
@@ -261,7 +273,9 @@ function aggregateSpendByMember(
       estimatedHoursSaved: 0,
       estimatedValueCreated: 0,
       utilizationStatus: r.utilizationStatus,
-      costSource: (r.costSource === 'billing_api' ? 'billing_api' : 'estimate') as Agg['costSource'],
+      costSource: (r.costSource === 'billing_api'
+        ? 'billing_api'
+        : 'estimate') as Agg['costSource'],
       billedNetUsd: 0,
       billedGrossUsd: 0,
     };
@@ -295,8 +309,12 @@ function buildSummary(
 ): CopilotMemberSpendSummary {
   const now = Date.now();
   const activeSeats = seats.filter((s) => {
-    if (!s.isActive) {return false;}
-    if (!s.lastActivityAt) {return false;}
+    if (!s.isActive) {
+      return false;
+    }
+    if (!s.lastActivityAt) {
+      return false;
+    }
     return (now - s.lastActivityAt.getTime()) / 86_400_000 <= 28;
   }).length;
   const inactiveSeats = seats.filter((s) => s.isActive).length - activeSeats;
@@ -306,7 +324,9 @@ function buildSummary(
     .filter((m) => m.utilizationStatus === 'inactive')
     .reduce((s, m) => s + m.seatCost, 0);
 
-  const activeMembers = members.filter((m) => m.utilizationStatus === 'active' || m.utilizationStatus === 'high_usage');
+  const activeMembers = members.filter(
+    (m) => m.utilizationStatus === 'active' || m.utilizationStatus === 'high_usage',
+  );
   const engagedMembers = members.filter((m) => m.linesAccepted + m.chatTurns > 0);
 
   const highestSpend = members[0]
@@ -315,11 +335,17 @@ function buildSummary(
 
   const withRoi = members.filter((m) => m.roiPercentage != null);
   const highestRoi = withRoi.reduce(
-    (best, m) => (!best || (m.roiPercentage ?? -Infinity) > (best.roiPct ?? -Infinity) ? { login: m.githubLogin, roiPct: m.roiPercentage! } : best),
+    (best, m) =>
+      !best || (m.roiPercentage ?? -Infinity) > (best.roiPct ?? -Infinity)
+        ? { login: m.githubLogin, roiPct: m.roiPercentage! }
+        : best,
     null as { login: string; roiPct: number } | null,
   );
   const lowestRoi = withRoi.reduce(
-    (worst, m) => (!worst || (m.roiPercentage ?? Infinity) < (worst.roiPct ?? Infinity) ? { login: m.githubLogin, roiPct: m.roiPercentage! } : worst),
+    (worst, m) =>
+      !worst || (m.roiPercentage ?? Infinity) < (worst.roiPct ?? Infinity)
+        ? { login: m.githubLogin, roiPct: m.roiPercentage! }
+        : worst,
     null as { login: string; roiPct: number } | null,
   );
 
@@ -342,8 +368,19 @@ function buildSummary(
 
 function buildCharts(
   members: CopilotMemberSpendRow[],
-  spendRows: { usageDate: Date; githubLogin: string; totalAllocatedCost: unknown; estimatedValueCreated: unknown }[],
-  usageDetail: { githubLogin: string; model: string; linesAccepted: number; chatTurns: number; usageDate: Date }[],
+  spendRows: {
+    usageDate: Date;
+    githubLogin: string;
+    totalAllocatedCost: unknown;
+    estimatedValueCreated: unknown;
+  }[],
+  usageDetail: {
+    githubLogin: string;
+    model: string;
+    linesAccepted: number;
+    chatTurns: number;
+    usageDate: Date;
+  }[],
 ): CopilotMemberSpendCharts {
   const top = members.slice(0, 15);
   const teamSpend = new Map<string, number>();
@@ -354,7 +391,9 @@ function buildCharts(
 
   const modelMixMap = new Map<string, number>();
   for (const u of usageDetail) {
-    if (!u.githubLogin || !u.model) {continue;}
+    if (!u.githubLogin || !u.model) {
+      continue;
+    }
     const key = `${u.githubLogin}|${u.model}`;
     modelMixMap.set(key, (modelMixMap.get(key) ?? 0) + u.linesAccepted + u.chatTurns);
   }
@@ -405,9 +444,15 @@ function buildCharts(
 function resolveSeatStatus(
   seat: { isActive: boolean; pendingCancellationDate?: Date | null } | undefined,
 ): CopilotMemberSpendRow['seatStatus'] {
-  if (!seat) {return 'no_seat';}
-  if (seat.pendingCancellationDate) {return 'pending_cancel';}
-  if (!seat.isActive) {return 'inactive';}
+  if (!seat) {
+    return 'no_seat';
+  }
+  if (seat.pendingCancellationDate) {
+    return 'pending_cancel';
+  }
+  if (!seat.isActive) {
+    return 'inactive';
+  }
   return 'active';
 }
 
@@ -421,9 +466,7 @@ function resolveDateRange(query: MemberSpendQuery): { from: string; to: string }
     };
   }
   const to = query.to ?? new Date().toISOString().slice(0, 10);
-  const from =
-    query.from ??
-    new Date(Date.now() - 28 * 86_400_000).toISOString().slice(0, 10);
+  const from = query.from ?? new Date(Date.now() - 28 * 86_400_000).toISOString().slice(0, 10);
   return { from, to };
 }
 

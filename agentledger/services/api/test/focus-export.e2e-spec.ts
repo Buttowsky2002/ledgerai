@@ -9,7 +9,9 @@ import { FOCUS_COLUMNS } from '../src/analytics/focus.mapper';
 const CH = process.env.AGENTLEDGER_CLICKHOUSE_URL ?? 'http://localhost:8123';
 
 async function insertCH(table: string, rows: object[]): Promise<void> {
-  const body = `INSERT INTO agentledger.${table} FORMAT JSONEachRow\n` + rows.map((r) => JSON.stringify(r)).join('\n');
+  const body =
+    `INSERT INTO agentledger.${table} FORMAT JSONEachRow\n` +
+    rows.map((r) => JSON.stringify(r)).join('\n');
   const res = await fetch(`${CH}/`, { method: 'POST', body });
   if (!res.ok) {
     throw new Error(`CH insert ${table} failed: ${res.status} ${await res.text()}`);
@@ -41,16 +43,62 @@ describe('FOCUS 1.2 export', () => {
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+    );
     await app.init();
     jwt = app.get(JwtService);
 
     // Tenant A: two gpt-4o calls same day/app → one spend_daily row, cost 1.0+2.0.
     // Tenant B: a claude call (must never appear in A's export).
     await insertCH('llm_calls', [
-      { call_id: `fa1-${tenantA}`, ts: '2026-06-10 10:00:00', tenant_id: tenantA, team_id: 'eng', app_id: appA, virtual_key_id: 'vk', provider: 'openai', response_model: 'gpt-4o', input_tokens: 100, output_tokens: 50, cache_read_tokens: 10, cost_usd: 1.0, status: 'ok', dlp_action: 'allow' },
-      { call_id: `fa2-${tenantA}`, ts: '2026-06-10 11:00:00', tenant_id: tenantA, team_id: 'eng', app_id: appA, virtual_key_id: 'vk', provider: 'openai', response_model: 'gpt-4o', input_tokens: 200, output_tokens: 80, cache_read_tokens: 20, cost_usd: 2.0, status: 'ok', dlp_action: 'allow' },
-      { call_id: `fb1-${tenantB}`, ts: '2026-06-10 10:00:00', tenant_id: tenantB, team_id: 'sales', app_id: appB, virtual_key_id: 'vk', provider: 'anthropic', response_model: 'claude-3-5-sonnet', input_tokens: 300, output_tokens: 90, cost_usd: 5.0, status: 'ok', dlp_action: 'allow' },
+      {
+        call_id: `fa1-${tenantA}`,
+        ts: '2026-06-10 10:00:00',
+        tenant_id: tenantA,
+        team_id: 'eng',
+        app_id: appA,
+        virtual_key_id: 'vk',
+        provider: 'openai',
+        response_model: 'gpt-4o',
+        input_tokens: 100,
+        output_tokens: 50,
+        cache_read_tokens: 10,
+        cost_usd: 1.0,
+        status: 'ok',
+        dlp_action: 'allow',
+      },
+      {
+        call_id: `fa2-${tenantA}`,
+        ts: '2026-06-10 11:00:00',
+        tenant_id: tenantA,
+        team_id: 'eng',
+        app_id: appA,
+        virtual_key_id: 'vk',
+        provider: 'openai',
+        response_model: 'gpt-4o',
+        input_tokens: 200,
+        output_tokens: 80,
+        cache_read_tokens: 20,
+        cost_usd: 2.0,
+        status: 'ok',
+        dlp_action: 'allow',
+      },
+      {
+        call_id: `fb1-${tenantB}`,
+        ts: '2026-06-10 10:00:00',
+        tenant_id: tenantB,
+        team_id: 'sales',
+        app_id: appB,
+        virtual_key_id: 'vk',
+        provider: 'anthropic',
+        response_model: 'claude-3-5-sonnet',
+        input_tokens: 300,
+        output_tokens: 90,
+        cost_usd: 5.0,
+        status: 'ok',
+        dlp_action: 'allow',
+      },
     ]);
   });
 
@@ -58,7 +106,8 @@ describe('FOCUS 1.2 export', () => {
     await app.close();
   });
 
-  const tok = (tenant: string, role = 'viewer') => jwt.mintAccess({ userId: randomUUID(), tenantId: tenant, role });
+  const tok = (tenant: string, role = 'viewer') =>
+    jwt.mintAccess({ userId: randomUUID(), tenantId: tenant, role });
   const bearer = (t: string) => ({ Authorization: `Bearer ${t}` });
 
   it('rejects unauthenticated (401)', async () => {
@@ -77,19 +126,31 @@ describe('FOCUS 1.2 export', () => {
     expect(aRows.length).toBeGreaterThanOrEqual(1);
     const row = aRows[0];
     // FOCUS base + extension columns present
-    for (const col of ['BilledCost', 'EffectiveCost', 'ServiceName', 'ProviderName', 'x_ai_model', 'x_ai_input_tokens']) {
+    for (const col of [
+      'BilledCost',
+      'EffectiveCost',
+      'ServiceName',
+      'ProviderName',
+      'x_ai_model',
+      'x_ai_input_tokens',
+    ]) {
       expect(row).toHaveProperty(col);
     }
     expect(row.ProviderName).toBe('openai');
     expect(row.x_ai_model).toBe('gpt-4o');
     expect(row.BillingAccountId).toBe(tenantA);
     // cost of the day's gpt-4o rows summed = 3.0
-    const total = aRows.reduce((s: number, r: { BilledCost: number }) => s + Number(r.BilledCost), 0);
+    const total = aRows.reduce(
+      (s: number, r: { BilledCost: number }) => s + Number(r.BilledCost),
+      0,
+    );
     expect(total).toBeCloseTo(3.0, 5);
 
     // Tenant isolation: A's export never contains B's app or claude.
     expect(res.body.some((r: { ResourceId: string }) => r.ResourceId === appB)).toBe(false);
-    expect(res.body.some((r: { x_ai_model: string }) => r.x_ai_model === 'claude-3-5-sonnet')).toBe(false);
+    expect(res.body.some((r: { x_ai_model: string }) => r.x_ai_model === 'claude-3-5-sonnet')).toBe(
+      false,
+    );
   });
 
   it('exports CSV with the canonical header and attachment headers', async () => {

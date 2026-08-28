@@ -1,4 +1,8 @@
-import { buildBudgetSuggestions, buildSpendNarrative, spendDriverRecs } from './lari-spend-narrative';
+import {
+  buildBudgetSuggestions,
+  buildSpendNarrative,
+  spendDriverRecs,
+} from './lari-spend-narrative';
 
 describe('Spend narrative engine', () => {
   it('explains model concentration', () => {

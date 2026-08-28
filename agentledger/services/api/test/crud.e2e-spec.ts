@@ -31,14 +31,20 @@ describe('CRUD + audit + RBAC (teams)', () => {
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+    );
     await app.init();
     prisma = app.get(PrismaService);
     jwt = app.get(JwtService);
 
     // Teams FK → tenants, so the tenant rows must exist first.
-    await prisma.withTenant(tenantA, (tx) => tx.tenant.create({ data: { tenantId: tenantA, name: 'A' } }));
-    await prisma.withTenant(tenantB, (tx) => tx.tenant.create({ data: { tenantId: tenantB, name: 'B' } }));
+    await prisma.withTenant(tenantA, (tx) =>
+      tx.tenant.create({ data: { tenantId: tenantA, name: 'A' } }),
+    );
+    await prisma.withTenant(tenantB, (tx) =>
+      tx.tenant.create({ data: { tenantId: tenantB, name: 'B' } }),
+    );
 
     adminA = await jwt.mintAccess({ userId: randomUUID(), tenantId: tenantA, role: 'admin' });
     viewerA = await jwt.mintAccess({ userId: randomUUID(), tenantId: tenantA, role: 'viewer' });
@@ -59,7 +65,9 @@ describe('CRUD + audit + RBAC (teams)', () => {
   const auth = (t: string) => ({ Authorization: `Bearer ${t}` });
 
   it('viewer can read (200), but cannot write (403)', async () => {
-    expect((await request(app.getHttpServer()).get('/v1/teams').set(auth(viewerA))).status).toBe(200);
+    expect((await request(app.getHttpServer()).get('/v1/teams').set(auth(viewerA))).status).toBe(
+      200,
+    );
     const create = await request(app.getHttpServer())
       .post('/v1/teams')
       .set(auth(viewerA))
@@ -107,7 +115,10 @@ describe('CRUD + audit + RBAC (teams)', () => {
       tx.auditLog.findMany({ where: { object: `team:${id}`, action: 'update' } }),
     );
     expect(audits.length).toBe(1);
-    const detail = audits[0].detail as { before: { costCenter: string }; after: { costCenter: string } };
+    const detail = audits[0].detail as {
+      before: { costCenter: string };
+      after: { costCenter: string };
+    };
     expect(detail.before.costCenter).toBe('CC-old');
     expect(detail.after.costCenter).toBe('CC-new');
   });
@@ -119,10 +130,19 @@ describe('CRUD + audit + RBAC (teams)', () => {
       .send({ name: `xt-${tenantA.slice(0, 6)}` });
     const id = created.body.teamId;
     // Tenant B admin cannot see tenant A's team.
-    expect((await request(app.getHttpServer()).get(`/v1/teams/${id}`).set(auth(adminB))).status).toBe(404);
     expect(
-      (await request(app.getHttpServer()).patch(`/v1/teams/${id}`).set(auth(adminB)).send({ name: 'hijack' })).status,
+      (await request(app.getHttpServer()).get(`/v1/teams/${id}`).set(auth(adminB))).status,
     ).toBe(404);
-    expect((await request(app.getHttpServer()).delete(`/v1/teams/${id}`).set(auth(adminB))).status).toBe(404);
+    expect(
+      (
+        await request(app.getHttpServer())
+          .patch(`/v1/teams/${id}`)
+          .set(auth(adminB))
+          .send({ name: 'hijack' })
+      ).status,
+    ).toBe(404);
+    expect(
+      (await request(app.getHttpServer()).delete(`/v1/teams/${id}`).set(auth(adminB))).status,
+    ).toBe(404);
   });
 });

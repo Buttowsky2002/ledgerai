@@ -40,40 +40,47 @@ export class AgentsController {
     this.crud = new CrudService(prisma, { model: 'agent', idField: 'agentId', object: 'agent' });
   }
 
-  @Roles('viewer') @Get()
+  @Roles('viewer')
+  @Get()
   list(@Query('limit') limit?: string, @Query('offset') offset?: string) {
     return this.crud.list(parsePagination(limit, offset));
   }
 
   // Per-agent finance-grade ROI (cost → outcome economics). Declared before
   // ':id' is irrelevant for distinct sub-paths, but ':id/roi' is a separate route.
-  @Roles('viewer') @Get(':id/roi')
+  @Roles('viewer')
+  @Get(':id/roi')
   roi(@Param('id') id: string, @Query('from') from?: string, @Query('to') to?: string) {
     return this.agentRoi.agentRoi(id, from, to);
   }
 
   // LARI — risk-adjusted incremental ROI with confidence + recommendation + ledger.
-  @Roles('viewer') @Get(':id/lari')
+  @Roles('viewer')
+  @Get(':id/lari')
   lariRoi(@Param('id') id: string, @Query('from') from?: string, @Query('to') to?: string) {
     return this.lari.computeForAgent(id, from, to);
   }
 
-  @Roles('viewer') @Get(':id')
+  @Roles('viewer')
+  @Get(':id')
   get(@Param('id') id: string) {
     return this.crud.get(id);
   }
 
-  @Roles('admin') @Post()
+  @Roles('admin')
+  @Post()
   create(@Body() dto: CreateAgentDto) {
     return this.crud.create({ ...dto });
   }
 
-  @Roles('admin') @Patch(':id')
+  @Roles('admin')
+  @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateAgentDto) {
     return this.crud.update(id, { ...dto });
   }
 
-  @Roles('admin') @Delete(':id')
+  @Roles('admin')
+  @Delete(':id')
   remove(@Param('id') id: string) {
     return this.crud.remove(id);
   }

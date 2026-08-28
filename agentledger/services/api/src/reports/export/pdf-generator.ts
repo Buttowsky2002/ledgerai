@@ -16,13 +16,7 @@ import {
   shouldRenderSummary,
   shouldRenderUserSpend,
 } from '../executive-report.should-render';
-import {
-  formatInt,
-  formatPctShare,
-  formatTokens,
-  formatUsd,
-  formatUsdExact,
-} from '../formatters';
+import { formatInt, formatPctShare, formatTokens, formatUsd, formatUsdExact } from '../formatters';
 import { costBasisLabel } from '../platform-breakdown';
 
 const BRAND = '#1e293b';
@@ -57,7 +51,9 @@ type TableColumn<T> = {
 };
 
 function platformLabel(provider: string): string {
-  if (provider === 'github_copilot') {return 'GitHub Copilot';}
+  if (provider === 'github_copilot') {
+    return 'GitHub Copilot';
+  }
   return provider;
 }
 
@@ -66,11 +62,21 @@ function dateRangeLabel(from: string, to: string, days: number): string {
 }
 
 function forecastHorizonLabel(days: number): string {
-  if (days === 365) {return '1 year';}
-  if (days === 180) {return '6 months';}
-  if (days === 90) {return '90 days';}
-  if (days === 30) {return '30 days';}
-  if (days === 7) {return '1 week';}
+  if (days === 365) {
+    return '1 year';
+  }
+  if (days === 180) {
+    return '6 months';
+  }
+  if (days === 90) {
+    return '90 days';
+  }
+  if (days === 30) {
+    return '30 days';
+  }
+  if (days === 7) {
+    return '1 week';
+  }
   return `${days} days`;
 }
 
@@ -79,15 +85,22 @@ function contentBottomY(doc: PdfDoc): number {
 }
 
 function truncateToWidth(doc: PdfDoc, text: string, maxWidth: number): string {
-  if (!text) {return '';}
-  if (doc.widthOfString(text) <= maxWidth) {return text;}
+  if (!text) {
+    return '';
+  }
+  if (doc.widthOfString(text) <= maxWidth) {
+    return text;
+  }
   const ell = '…';
   let lo = 0;
   let hi = text.length;
   while (lo < hi) {
     const mid = Math.ceil((lo + hi) / 2);
-    if (doc.widthOfString(text.slice(0, mid) + ell) <= maxWidth) {lo = mid;}
-    else {hi = mid - 1;}
+    if (doc.widthOfString(text.slice(0, mid) + ell) <= maxWidth) {
+      lo = mid;
+    } else {
+      hi = mid - 1;
+    }
   }
   return lo > 0 ? text.slice(0, lo) + ell : ell;
 }
@@ -138,7 +151,9 @@ function ensureSpace(ctx: LayoutCtx, needed: number): void {
 type KpiTile = { label: string; value: string };
 
 function drawKpiBand(ctx: LayoutCtx, tiles: KpiTile[]): void {
-  if (tiles.length === 0) {return;}
+  if (tiles.length === 0) {
+    return;
+  }
   const { doc } = ctx;
   const startY = doc.y;
   const gap = 8;
@@ -146,12 +161,18 @@ function drawKpiBand(ctx: LayoutCtx, tiles: KpiTile[]): void {
   tiles.forEach((tile, i) => {
     const x = ctx.marginX + i * (tileW + gap);
     doc.roundedRect(x, startY, tileW, 52, 4).fillAndStroke('#f8fafc', '#e2e8f0');
-    doc.fillColor(MUTED).fontSize(7).text(tile.label, x + 6, startY + 6, { width: tileW - 12, lineBreak: false });
+    doc
+      .fillColor(MUTED)
+      .fontSize(7)
+      .text(tile.label, x + 6, startY + 6, { width: tileW - 12, lineBreak: false });
     const valueSize = tile.value.length > 22 ? 8 : 11;
-    doc.fillColor(BRAND).fontSize(valueSize).text(tile.value, x + 6, startY + 20, {
-      width: tileW - 12,
-      lineGap: 1,
-    });
+    doc
+      .fillColor(BRAND)
+      .fontSize(valueSize)
+      .text(tile.value, x + 6, startY + 20, {
+        width: tileW - 12,
+        lineGap: 1,
+      });
   });
   doc.y = startY + 60;
 }
@@ -163,7 +184,8 @@ function drawTableHeader<T>(ctx: LayoutCtx, columns: TableColumn<T>[], y: number
   doc.fillColor(MUTED).fontSize(7).font('Helvetica-Bold');
   let x = ctx.marginX + 4;
   for (const col of columns) {
-    const label = col.align === 'right' ? truncateToWidth(doc, col.header, col.width - 8) : col.header;
+    const label =
+      col.align === 'right' ? truncateToWidth(doc, col.header, col.width - 8) : col.header;
     doc.text(label, x, y, { width: col.width - 8, align: col.align, lineBreak: false });
     x += col.width;
   }
@@ -171,7 +193,13 @@ function drawTableHeader<T>(ctx: LayoutCtx, columns: TableColumn<T>[], y: number
   doc.font('Helvetica');
 }
 
-function drawTableRow<T>(ctx: LayoutCtx, columns: TableColumn<T>[], row: T, y: number, zebra: boolean): void {
+function drawTableRow<T>(
+  ctx: LayoutCtx,
+  columns: TableColumn<T>[],
+  row: T,
+  y: number,
+  zebra: boolean,
+): void {
   const { doc } = ctx;
   if (zebra) {
     doc.save();
@@ -180,7 +208,10 @@ function drawTableRow<T>(ctx: LayoutCtx, columns: TableColumn<T>[], row: T, y: n
   }
   doc.save();
   doc.strokeColor(ROW_LINE).lineWidth(0.5);
-  doc.moveTo(ctx.marginX, y + ROW_H - 2).lineTo(ctx.marginX + ctx.contentW, y + ROW_H - 2).stroke();
+  doc
+    .moveTo(ctx.marginX, y + ROW_H - 2)
+    .lineTo(ctx.marginX + ctx.contentW, y + ROW_H - 2)
+    .stroke();
   doc.restore();
 
   doc.fillColor('#334155').fontSize(7);
@@ -200,7 +231,9 @@ function drawTable<T>(
   rows: T[],
   minRowsOnPage = 2,
 ): void {
-  if (rows.length === 0) {return;}
+  if (rows.length === 0) {
+    return;
+  }
   const { doc } = ctx;
   const tableBlock = HEADER_H + 4 + ROW_H * Math.min(rows.length, minRowsOnPage) + 20;
   ensureSpace(ctx, tableBlock);
@@ -310,10 +343,15 @@ const modelColumns = (ctx: LayoutCtx): TableColumn<ModelSpendTableRow>[] => [
 
 function drawPlatformSection(ctx: LayoutCtx, platforms: PlatformBreakdownRow[]): void {
   const { doc } = ctx;
-  if (platforms.length === 0) {return;}
+  if (platforms.length === 0) {
+    return;
+  }
 
   ensureSpace(ctx, 24);
-  doc.fillColor(BRAND).fontSize(11).text('Platform Breakdown', ctx.marginX, doc.y, { lineBreak: false });
+  doc
+    .fillColor(BRAND)
+    .fontSize(11)
+    .text('Platform Breakdown', ctx.marginX, doc.y, { lineBreak: false });
   doc.y += 14;
 
   for (const platform of platforms) {
@@ -326,14 +364,21 @@ function drawPlatformSection(ctx: LayoutCtx, platforms: PlatformBreakdownRow[]):
     );
     doc.fillColor(BRAND).fontSize(8).font('Helvetica-Bold');
     doc.text(platformLabelText, ctx.marginX, doc.y, { continued: true, lineBreak: false });
-    doc.font('Helvetica').fillColor('#334155').text(`  ${formatUsdExact(platform.costUsd)}`, { continued: false });
+    doc
+      .font('Helvetica')
+      .fillColor('#334155')
+      .text(`  ${formatUsdExact(platform.costUsd)}`, { continued: false });
     doc.y += 12;
 
     doc.fontSize(7).fillColor(MUTED);
     for (const model of platform.models) {
       ensureSpace(ctx, 12);
       const modelLabel = truncateToWidth(doc, model.model, ctx.contentW * 0.5);
-      doc.text(`    ${modelLabel}`, ctx.marginX + 8, doc.y, { continued: true, lineBreak: false, width: ctx.contentW * 0.55 });
+      doc.text(`    ${modelLabel}`, ctx.marginX + 8, doc.y, {
+        continued: true,
+        lineBreak: false,
+        width: ctx.contentW * 0.55,
+      });
       doc.fillColor('#64748b').text(`  ${formatUsdExact(model.costUsd)}`, { continued: false });
       doc.fillColor(MUTED);
       doc.y += 11;
@@ -341,7 +386,9 @@ function drawPlatformSection(ctx: LayoutCtx, platforms: PlatformBreakdownRow[]):
     if (platform.remainderUsd !== 0) {
       ensureSpace(ctx, 12);
       doc.text('    rounding/other', ctx.marginX + 8, doc.y, { continued: true, lineBreak: false });
-      doc.fillColor('#64748b').text(`  ${formatUsdExact(platform.remainderUsd)}`, { continued: false });
+      doc
+        .fillColor('#64748b')
+        .text(`  ${formatUsdExact(platform.remainderUsd)}`, { continued: false });
       doc.fillColor(MUTED);
       doc.y += 11;
     }
@@ -350,11 +397,16 @@ function drawPlatformSection(ctx: LayoutCtx, platforms: PlatformBreakdownRow[]):
 }
 
 function drawSpendTrendSparkline(ctx: LayoutCtx, rows: DailySpendRow[], periodTotal: number): void {
-  if (!shouldRenderSpendTrend(rows)) {return;}
+  if (!shouldRenderSpendTrend(rows)) {
+    return;
+  }
   const { doc } = ctx;
   ensureSpace(ctx, SPARKLINE_H + 36);
 
-  doc.fillColor(BRAND).fontSize(11).text('Spend over period', ctx.marginX, doc.y, { lineBreak: false });
+  doc
+    .fillColor(BRAND)
+    .fontSize(11)
+    .text('Spend over period', ctx.marginX, doc.y, { lineBreak: false });
   doc.y += 14;
   doc
     .fontSize(8)
@@ -388,7 +440,10 @@ function drawProjectionSection(ctx: LayoutCtx, projection: ExecutiveReportProjec
   const { doc } = ctx;
   ensureSpace(ctx, 110);
 
-  doc.fillColor(BRAND).fontSize(11).text('Projected spend (CFO)', ctx.marginX, doc.y, { lineBreak: false });
+  doc
+    .fillColor(BRAND)
+    .fontSize(11)
+    .text('Projected spend (CFO)', ctx.marginX, doc.y, { lineBreak: false });
   doc.y += 14;
 
   const horizon = forecastHorizonLabel(projection.forecastDays);
@@ -433,7 +488,9 @@ function drawProjectionSection(ctx: LayoutCtx, projection: ExecutiveReportProjec
   ];
   doc.fontSize(8).fillColor(MUTED);
   for (const [label, amount] of stackLines) {
-    if (amount <= 0) {continue;}
+    if (amount <= 0) {
+      continue;
+    }
     ensureSpace(ctx, 12);
     doc.text(`  ${label}: ${formatUsdExact(amount)}`, ctx.marginX, doc.y, { width: ctx.contentW });
     doc.moveDown(0.12);
@@ -452,12 +509,12 @@ function drawTitleBlock(doc: PdfDoc, data: ExecutiveReportData): void {
   doc.y = 72;
   const titleY = doc.y;
   doc.fontSize(14).text(data.tenantName, 48, titleY, { lineBreak: false });
-  doc.fontSize(10).fillColor(MUTED).text(
-    dateRangeLabel(data.window.from, data.window.to, data.window.days),
-    48,
-    titleY + 18,
-    { lineBreak: false },
-  );
+  doc
+    .fontSize(10)
+    .fillColor(MUTED)
+    .text(dateRangeLabel(data.window.from, data.window.to, data.window.days), 48, titleY + 18, {
+      lineBreak: false,
+    });
   doc.y = titleY + 36;
 }
 
@@ -491,8 +548,11 @@ export function generateExecutivePdf(data: ExecutiveReportData): Promise<Buffer>
     ) {
       tiles.push({ label: 'Cost / 1K tokens', value: formatUsdExact(data.costPer1kTokens) });
     }
-    const change = formatPeriodChange(data.prior.costUsd, data.current.costUsd, data.pctChangeVsPrior, (n) =>
-      `${n > 0 ? '+' : ''}${n.toFixed(1)}%`,
+    const change = formatPeriodChange(
+      data.prior.costUsd,
+      data.current.costUsd,
+      data.pctChangeVsPrior,
+      (n) => `${n > 0 ? '+' : ''}${n.toFixed(1)}%`,
     );
     if (change) {
       tiles.push({ label: 'Vs prior period', value: change });
@@ -533,28 +593,44 @@ export function generateExecutivePdf(data: ExecutiveReportData): Promise<Buffer>
 
   if (shouldRenderCacheCallout(data.current.cachedTokens)) {
     ensureSpace(ctx, 20);
-    doc.fontSize(8).fillColor('#059669').text(
-      `Cache reads: ${formatTokens(data.current.cachedTokens)} tokens.`,
-      ctx.marginX,
-      doc.y,
-      { width: ctx.contentW, lineBreak: false },
-    );
+    doc
+      .fontSize(8)
+      .fillColor('#059669')
+      .text(`Cache reads: ${formatTokens(data.current.cachedTokens)} tokens.`, ctx.marginX, doc.y, {
+        width: ctx.contentW,
+        lineBreak: false,
+      });
     doc.moveDown(0.3);
   }
 
   if (shouldRenderRisk(data.blockedEvents, data.risk)) {
     ensureSpace(ctx, 60);
-    doc.fillColor('#dc2626').fontSize(11).text('Risk Callout', ctx.marginX, doc.y, { lineBreak: false });
+    doc
+      .fillColor('#dc2626')
+      .fontSize(11)
+      .text('Risk Callout', ctx.marginX, doc.y, { lineBreak: false });
     doc.y += 14;
     doc.fontSize(9).fillColor('#334155');
-    doc.text(`${formatInt(data.blockedEvents)} DLP-blocked events in this period.`, ctx.marginX, doc.y, {
-      width: ctx.contentW,
-    });
-    doc.moveDown(0.2);
-    for (const row of data.risk.filter((r) => r.events > 0 && r.dlpAction !== 'allow').slice(0, 5)) {
-      doc.text(`- ${row.dlpAction} (${row.riskSeverity || 'unspecified'}): ${formatInt(row.events)}`, ctx.marginX, doc.y, {
+    doc.text(
+      `${formatInt(data.blockedEvents)} DLP-blocked events in this period.`,
+      ctx.marginX,
+      doc.y,
+      {
         width: ctx.contentW,
-      });
+      },
+    );
+    doc.moveDown(0.2);
+    for (const row of data.risk
+      .filter((r) => r.events > 0 && r.dlpAction !== 'allow')
+      .slice(0, 5)) {
+      doc.text(
+        `- ${row.dlpAction} (${row.riskSeverity || 'unspecified'}): ${formatInt(row.events)}`,
+        ctx.marginX,
+        doc.y,
+        {
+          width: ctx.contentW,
+        },
+      );
       doc.moveDown(0.15);
     }
   }

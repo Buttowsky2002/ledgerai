@@ -46,14 +46,14 @@ import { DesignPartnerModule } from './design-partner/design-partner.module';
       pinoHttp: {
         autoLogging: true,
         // Never log secrets/credentials (security rule 6 + conventions).
-        redact: [
-          'req.headers.authorization',
-          'req.headers.cookie',
-          'req.headers["x-tenant-id"]',
-        ],
+        redact: ['req.headers.authorization', 'req.headers.cookie', 'req.headers["x-tenant-id"]'],
         customLogLevel: (_req, res, err) => {
-          if (err || res.statusCode >= 500) {return 'error';}
-          if (res.statusCode >= 400) {return 'warn';}
+          if (err || res.statusCode >= 500) {
+            return 'error';
+          }
+          if (res.statusCode >= 400) {
+            return 'warn';
+          }
           return 'info';
         },
       },

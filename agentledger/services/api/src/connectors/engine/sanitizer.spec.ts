@@ -2,7 +2,10 @@ import { sanitizeForPreview, safeErrorMessage, stripBlockedFields } from './sani
 
 describe('sanitizer', () => {
   it('redacts secret fields in preview', () => {
-    const out = sanitizeForPreview({ api_key: 'sk-secret', model: 'gpt-4o' }) as Record<string, unknown>;
+    const out = sanitizeForPreview({ api_key: 'sk-secret', model: 'gpt-4o' }) as Record<
+      string,
+      unknown
+    >;
     expect(out.api_key).toBe('[redacted]');
     expect(out.model).toBe('gpt-4o');
   });

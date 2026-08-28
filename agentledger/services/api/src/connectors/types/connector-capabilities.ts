@@ -120,15 +120,23 @@ export function resolveCapabilities(
   presetId: string | undefined,
   definitionCapabilities?: ConnectorCapabilities,
 ): ConnectorCapabilities {
-  if (definitionCapabilities) {return definitionCapabilities;}
-  if (presetId && PRESET_CAPABILITIES[presetId]) {return PRESET_CAPABILITIES[presetId];}
+  if (definitionCapabilities) {
+    return definitionCapabilities;
+  }
+  if (presetId && PRESET_CAPABILITIES[presetId]) {
+    return PRESET_CAPABILITIES[presetId];
+  }
   return DEFAULT_CAPABILITIES;
 }
 
 export function attributionWarning(capabilities: ConnectorCapabilities): string | undefined {
   // Outcome-only connectors have no spend stream — don't show spend-attribution copy.
-  if (!capabilities.supportsUsage && !capabilities.supportsBilling) {return undefined;}
-  if (capabilities.supportsUserLevelCost) {return undefined;}
+  if (!capabilities.supportsUsage && !capabilities.supportsBilling) {
+    return undefined;
+  }
+  if (capabilities.supportsUserLevelCost) {
+    return undefined;
+  }
   return (
     'This provider does not expose direct user-level cost data. BadgerIQ is attributing spend ' +
     'using project, workspace, or API key mappings.'

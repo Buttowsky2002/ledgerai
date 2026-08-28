@@ -20,7 +20,10 @@ import {
 describe('executive-report.should-render', () => {
   describe('priorWindow', () => {
     it('returns an equal-length window immediately before from', () => {
-      expect(priorWindow('2026-06-10', '2026-06-16')).toEqual({ from: '2026-06-03', to: '2026-06-09' });
+      expect(priorWindow('2026-06-10', '2026-06-16')).toEqual({
+        from: '2026-06-03',
+        to: '2026-06-09',
+      });
       expect(daysBetweenInclusive('2026-06-03', '2026-06-09')).toBe(7);
       expect(daysBetweenInclusive('2026-06-10', '2026-06-16')).toBe(7);
     });
@@ -92,7 +95,9 @@ describe('executive-report.should-render', () => {
     });
 
     it('labels single provider without chart', () => {
-      expect(shouldRenderSingleProviderLabel([{ provider: 'openai', costUsd: 5, calls: 1 }])).toBe(true);
+      expect(shouldRenderSingleProviderLabel([{ provider: 'openai', costUsd: 5, calls: 1 }])).toBe(
+        true,
+      );
       expect(shouldRenderSingleProviderLabel([])).toBe(false);
     });
 
@@ -114,9 +119,13 @@ describe('executive-report.should-render', () => {
 
     it('omits risk section when no blocked/DLP events', () => {
       expect(shouldRenderRisk(0, [])).toBe(false);
-      expect(shouldRenderRisk(0, [{ dlpAction: 'allow', riskSeverity: 'low', events: 5 }])).toBe(false);
+      expect(shouldRenderRisk(0, [{ dlpAction: 'allow', riskSeverity: 'low', events: 5 }])).toBe(
+        false,
+      );
       expect(shouldRenderRisk(1, [])).toBe(true);
-      expect(shouldRenderRisk(0, [{ dlpAction: 'block', riskSeverity: 'high', events: 2 }])).toBe(true);
+      expect(shouldRenderRisk(0, [{ dlpAction: 'block', riskSeverity: 'high', events: 2 }])).toBe(
+        true,
+      );
     });
 
     it('renders CFO projection only when projected spend is positive', () => {

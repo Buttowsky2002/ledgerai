@@ -35,7 +35,9 @@ export class HealthController {
     try {
       await this.store.ping();
     } catch {
-      throw new ServiceUnavailableException({ status: `analytics store (${analyticsBackend()}) unreachable` });
+      throw new ServiceUnavailableException({
+        status: `analytics store (${analyticsBackend()}) unreachable`,
+      });
     }
     return { status: 'ready', analyticsBackend: analyticsBackend() };
   }

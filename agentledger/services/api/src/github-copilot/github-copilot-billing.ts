@@ -3,12 +3,13 @@ import type { MemberDailySpendInput, MemberDailySpendResult } from './github-cop
 import { calculateMemberDailySpend, dailySeatCost } from './github-copilot-member-spend';
 
 /** UTC calendar months touched by a day lookback ending today. */
-export function monthsInLookback(days: number, end = new Date()): { year: number; month: number }[] {
+export function monthsInLookback(
+  days: number,
+  end = new Date(),
+): { year: number; month: number }[] {
   const seen = new Map<string, { year: number; month: number }>();
   for (let d = 0; d < days; d++) {
-    const dt = new Date(
-      Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate() - d),
-    );
+    const dt = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate() - d));
     const year = dt.getUTCFullYear();
     const month = dt.getUTCMonth() + 1;
     seen.set(`${year}-${month}`, { year, month });
@@ -31,7 +32,9 @@ export type BillingDailyAggregate = {
 };
 
 /** Roll billing lines up to one row per (user, day). */
-export function aggregateBillingByUserDay(lines: CopilotBillingLineRow[]): Map<string, BillingDailyAggregate> {
+export function aggregateBillingByUserDay(
+  lines: CopilotBillingLineRow[],
+): Map<string, BillingDailyAggregate> {
   const out = new Map<string, BillingDailyAggregate>();
   for (const line of lines) {
     const key = `${line.usageDate}|${line.githubLogin.toLowerCase()}`;

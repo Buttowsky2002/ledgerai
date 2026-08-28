@@ -27,7 +27,8 @@ class UpdateTenantDto {
 export class TenantController {
   constructor(private readonly prisma: PrismaService) {}
 
-  @Roles('viewer') @Get()
+  @Roles('viewer')
+  @Get()
   async current() {
     const row = await this.prisma.withTenant(getTenantId(), (tx) => tx.tenant.findFirst());
     if (!row) {
@@ -36,7 +37,8 @@ export class TenantController {
     return row;
   }
 
-  @Roles('admin') @Patch()
+  @Roles('admin')
+  @Patch()
   async update(@Body() dto: UpdateTenantDto) {
     return this.prisma.withTenant(getTenantId(), async (tx) => {
       const before = await tx.tenant.findFirst();

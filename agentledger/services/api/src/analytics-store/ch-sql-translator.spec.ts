@@ -42,12 +42,16 @@ describe('ch-sql-translator', () => {
 
   it('translates date functions', () => {
     expect(translateFunctions('SELECT toDate(ts) AS day')).toContain('(ts)::date AS day');
-    expect(translateFunctions('toStartOfMonth(o.ts)')).toBe("(date_trunc('month', (o.ts)::timestamp))::date");
+    expect(translateFunctions('toStartOfMonth(o.ts)')).toBe(
+      "(date_trunc('month', (o.ts)::timestamp))::date",
+    );
     expect(translateFunctions('toStartOfHour(ts)')).toBe("date_trunc('hour', (ts)::timestamp)");
   });
 
   it('translates uniqExact to count distinct', () => {
-    expect(translateFunctions('uniqExact(user_id) AS members')).toBe('count(DISTINCT user_id) AS members');
+    expect(translateFunctions('uniqExact(user_id) AS members')).toBe(
+      'count(DISTINCT user_id) AS members',
+    );
   });
 
   it('translates count()/countIf/sumIf/argMax', () => {
@@ -64,14 +68,16 @@ describe('ch-sql-translator', () => {
   });
 
   it('translates nested if() to CASE, including the metered-cost expression', () => {
-    expect(translateFunctions("if(a > 0, b, c)")).toBe('(CASE WHEN a > 0 THEN b ELSE c END)');
+    expect(translateFunctions('if(a > 0, b, c)')).toBe('(CASE WHEN a > 0 THEN b ELSE c END)');
 
     const translated = translateFunctions(`sum(${EFFECTIVE_METERED_COST_USD})`);
     expect(translated).not.toMatch(/\bif\s*\(/i);
     expect(translated).toContain('CASE WHEN');
     expect(translated).toContain('ELSE');
     // Balanced output — every CASE has its END.
-    expect((translated.match(/CASE WHEN/g) ?? []).length).toBe((translated.match(/\bEND\b/g) ?? []).length);
+    expect((translated.match(/CASE WHEN/g) ?? []).length).toBe(
+      (translated.match(/\bEND\b/g) ?? []).length,
+    );
   });
 
   it('translates positionCaseInsensitive to strpos(lower(...))', () => {
@@ -135,7 +141,9 @@ describe('ch-sql-translator', () => {
     expect(sql).not.toMatch(/\bHAVING\b/i);
     expect(sql).toContain('count(*) AS calls');
     expect(sql).toContain("FILTER (WHERE operation_name = 'cursor:included') AS usage_value_usd");
-    expect(sql).toContain('CASE WHEN llm_calls.usage_value_usd > 0 THEN llm_calls.usage_value_usd ELSE llm_calls.cost_usd END');
+    expect(sql).toContain(
+      'CASE WHEN llm_calls.usage_value_usd > 0 THEN llm_calls.usage_value_usd ELSE llm_calls.cost_usd END',
+    );
   });
 
   it('translates executive-report HAVING with aggregate, not SELECT alias (Postgres-safe)', () => {

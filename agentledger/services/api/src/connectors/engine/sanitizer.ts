@@ -29,10 +29,16 @@ const ALLOWLIST_HEADERS = new Set([
 
 /** Redact secrets from arbitrary JSON for safe logging/preview. */
 export function sanitizeForPreview(value: unknown, depth = 0): unknown {
-  if (depth > 12) {return '[truncated]';}
-  if (value === null || value === undefined) {return value;}
+  if (depth > 12) {
+    return '[truncated]';
+  }
+  if (value === null || value === undefined) {
+    return value;
+  }
   if (typeof value === 'string') {
-    if (value.length > 500) {return `${value.slice(0, 200)}…[truncated]`;}
+    if (value.length > 500) {
+      return `${value.slice(0, 200)}…[truncated]`;
+    }
     return value;
   }
   if (Array.isArray(value)) {
@@ -60,7 +66,9 @@ export function sanitizeHeaders(headers: Record<string, string>): Record<string,
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(headers)) {
     const lower = k.toLowerCase();
-    if (!ALLOWLIST_HEADERS.has(lower)) {continue;}
+    if (!ALLOWLIST_HEADERS.has(lower)) {
+      continue;
+    }
     out[k] = SECRET_PATTERNS.some((p) => p.test(lower)) ? '[redacted]' : v;
   }
   return out;
@@ -70,7 +78,9 @@ export function sanitizeHeaders(headers: Record<string, string>): Record<string,
 export function stripBlockedFields(obj: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(obj)) {
-    if (BLOCKED_CONTENT_FIELDS.includes(k.toLowerCase())) {continue;}
+    if (BLOCKED_CONTENT_FIELDS.includes(k.toLowerCase())) {
+      continue;
+    }
     if (v !== null && typeof v === 'object' && !Array.isArray(v)) {
       out[k] = stripBlockedFields(v as Record<string, unknown>);
     } else {

@@ -98,7 +98,12 @@ export class CrudService {
         where: { [this.cfg.idField]: id },
         data,
       });
-      await recordAudit(tx, { action: 'update', object: `${this.cfg.object}:${id}`, before, after });
+      await recordAudit(tx, {
+        action: 'update',
+        object: `${this.cfg.object}:${id}`,
+        before,
+        after,
+      });
       return after;
     });
   }
@@ -115,7 +120,12 @@ export class CrudService {
         throw new NotFoundException(`${this.cfg.object} not found`);
       }
       await this.delegate(tx).delete({ where: { [this.cfg.idField]: id } });
-      await recordAudit(tx, { action: 'delete', object: `${this.cfg.object}:${id}`, before, after: null });
+      await recordAudit(tx, {
+        action: 'delete',
+        object: `${this.cfg.object}:${id}`,
+        before,
+        after: null,
+      });
       return { deleted: true };
     });
   }

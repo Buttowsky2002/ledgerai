@@ -44,9 +44,7 @@ describe('RolesGuard (admin ⊇ analyst ⊇ viewer)', () => {
   it('forbids a lower role', () => {
     const guard = guardWithRequired(['analyst']);
     expect(() =>
-      runWithTenant({ tenantId: 't', userId: 'u', role: 'viewer' }, () =>
-        guard.canActivate(ctx()),
-      ),
+      runWithTenant({ tenantId: 't', userId: 'u', role: 'viewer' }, () => guard.canActivate(ctx())),
     ).toThrow(ForbiddenException);
   });
 

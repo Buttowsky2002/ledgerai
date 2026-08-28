@@ -52,9 +52,15 @@ function pct(part: number, whole: number): number {
 }
 
 function trendFromChange(changePct: number | null): SpendTrend {
-  if (changePct === null) {return 'insufficient';}
-  if (changePct >= 10) {return 'up';}
-  if (changePct <= -10) {return 'down';}
+  if (changePct === null) {
+    return 'insufficient';
+  }
+  if (changePct >= 10) {
+    return 'up';
+  }
+  if (changePct <= -10) {
+    return 'down';
+  }
   return 'flat';
 }
 
@@ -69,7 +75,9 @@ export function buildSpendNarrative(input: SpendNarrativeInput): ProductSpendAna
       : null;
   const periodChangePct =
     input.priorTotalSpendUsd !== undefined && input.priorTotalSpendUsd > 0
-      ? Math.round(((input.totalSpendUsd - input.priorTotalSpendUsd) / input.priorTotalSpendUsd) * 100)
+      ? Math.round(
+          ((input.totalSpendUsd - input.priorTotalSpendUsd) / input.priorTotalSpendUsd) * 100,
+        )
       : null;
 
   if (periodChangePct !== null && Math.abs(periodChangePct) >= 10) {
@@ -90,7 +98,9 @@ export function buildSpendNarrative(input: SpendNarrativeInput): ProductSpendAna
     }
 
     if (input.priorModelUsage && productModels.length >= 1) {
-      const priorModels = input.priorModelUsage.filter((m) => normalizeProvider(m.provider) === key);
+      const priorModels = input.priorModelUsage.filter(
+        (m) => normalizeProvider(m.provider) === key,
+      );
       const priorTop = priorModels.sort((a, b) => b.costUsd - a.costUsd)[0];
       const currentTop = top;
       if (
@@ -165,7 +175,9 @@ export function buildSpendNarrative(input: SpendNarrativeInput): ProductSpendAna
   }
 
   if (parts.length === 0) {
-    parts.push(`$${usd(input.totalSpendUsd)} total spend in range with no dominant driver identified.`);
+    parts.push(
+      `$${usd(input.totalSpendUsd)} total spend in range with no dominant driver identified.`,
+    );
   }
 
   return {
@@ -215,12 +227,16 @@ export function buildBudgetSuggestions(input: BudgetSuggestionsInput): BudgetSug
   let tenantRecommended = 0;
 
   for (const p of input.products) {
-    if (p.recommendedBudgetUsd === null || p.monthlyRunRateUsd <= 0) {continue;}
+    if (p.recommendedBudgetUsd === null || p.monthlyRunRateUsd <= 0) {
+      continue;
+    }
     tenantRunRate += p.monthlyRunRateUsd;
     tenantRecommended += p.recommendedBudgetUsd;
 
     const delta = p.monthlyRunRateUsd - p.recommendedBudgetUsd;
-    if (Math.abs(delta) < p.monthlyRunRateUsd * 0.05) {continue;}
+    if (Math.abs(delta) < p.monthlyRunRateUsd * 0.05) {
+      continue;
+    }
 
     suggestions.push({
       scope: 'product',
@@ -259,7 +275,9 @@ export function buildBudgetSuggestions(input: BudgetSuggestionsInput): BudgetSug
 
   for (const agent of input.agents ?? []) {
     const monthlyCost = usd(agent.costUsd * factor);
-    if (monthlyCost <= 0) {continue;}
+    if (monthlyCost <= 0) {
+      continue;
+    }
 
     let recommended: number;
     let rationale: string;
@@ -278,7 +296,9 @@ export function buildBudgetSuggestions(input: BudgetSuggestionsInput): BudgetSug
     }
 
     const delta = monthlyCost - recommended;
-    if (Math.abs(delta) < monthlyCost * 0.05) {continue;}
+    if (Math.abs(delta) < monthlyCost * 0.05) {
+      continue;
+    }
 
     suggestions.push({
       scope: 'agent',
@@ -308,12 +328,16 @@ export function spendDriverRecs(
   const recs: import('./lari-recommendations.types').LariActionableRecommendation[] = [];
 
   for (const p of products) {
-    if (p.totalSpendUsd < 50) {continue;}
+    if (p.totalSpendUsd < 50) {
+      continue;
+    }
 
     const isSpike = p.spendTrend === 'up' && (p.periodChangePct ?? 0) >= 25;
     const needsOutcome = p.connectOutcomesPrompt;
 
-    if (!isSpike && !needsOutcome) {continue;}
+    if (!isSpike && !needsOutcome) {
+      continue;
+    }
 
     const id = isSpike
       ? `spend-driver-spike-${normalizeProvider(p.product)}`
@@ -323,9 +347,7 @@ export function spendDriverRecs(
       id,
       priority: isSpike ? 'high' : 'medium',
       category: 'spend_driver',
-      title: isSpike
-        ? `Spend spike on ${p.product}`
-        : `Missing outcome data for ${p.product}`,
+      title: isSpike ? `Spend spike on ${p.product}` : `Missing outcome data for ${p.product}`,
       message: p.spendNarrative,
       action: isSpike
         ? 'Review top drivers and model selection; set a budget alert at recommended cap.'

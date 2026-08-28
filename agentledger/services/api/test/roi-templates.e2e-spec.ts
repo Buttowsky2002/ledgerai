@@ -39,14 +39,20 @@ describe('ROI templates CRUD (api)', () => {
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+    );
     await app.init();
     prisma = app.get(PrismaService);
     jwt = app.get(JwtService);
 
     // roi_templates.tenant_id FK → tenants, so the tenant rows must exist first.
-    await prisma.withTenant(tenantA, (tx) => tx.tenant.create({ data: { tenantId: tenantA, name: 'A' } }));
-    await prisma.withTenant(tenantB, (tx) => tx.tenant.create({ data: { tenantId: tenantB, name: 'B' } }));
+    await prisma.withTenant(tenantA, (tx) =>
+      tx.tenant.create({ data: { tenantId: tenantA, name: 'A' } }),
+    );
+    await prisma.withTenant(tenantB, (tx) =>
+      tx.tenant.create({ data: { tenantId: tenantB, name: 'B' } }),
+    );
 
     adminA = await jwt.mintAccess({ userId: randomUUID(), tenantId: tenantA, role: 'admin' });
     viewerA = await jwt.mintAccess({ userId: randomUUID(), tenantId: tenantA, role: 'viewer' });
@@ -67,7 +73,9 @@ describe('ROI templates CRUD (api)', () => {
   const auth = (t: string) => ({ Authorization: `Bearer ${t}` });
 
   it('viewer can read (200), but cannot write (403)', async () => {
-    expect((await request(app.getHttpServer()).get('/v1/roi-templates').set(auth(viewerA))).status).toBe(200);
+    expect(
+      (await request(app.getHttpServer()).get('/v1/roi-templates').set(auth(viewerA))).status,
+    ).toBe(200);
     const create = await request(app.getHttpServer())
       .post('/v1/roi-templates')
       .set(auth(viewerA))
@@ -105,7 +113,10 @@ describe('ROI templates CRUD (api)', () => {
     const res = await request(app.getHttpServer())
       .post('/v1/roi-templates')
       .set(auth(adminA))
-      .send({ ...validTemplate(), valueFormula: { hourly_rate: 'not-a-number', baseline_minutes: 30 } });
+      .send({
+        ...validTemplate(),
+        valueFormula: { hourly_rate: 'not-a-number', baseline_minutes: 30 },
+      });
     expect(res.status).toBe(400);
   });
 
@@ -148,10 +159,20 @@ describe('ROI templates CRUD (api)', () => {
       .set(auth(adminA))
       .send(validTemplate());
     const id = created.body.templateId;
-    expect((await request(app.getHttpServer()).get(`/v1/roi-templates/${id}`).set(auth(adminB))).status).toBe(404);
     expect(
-      (await request(app.getHttpServer()).patch(`/v1/roi-templates/${id}`).set(auth(adminB)).send({ name: 'hijack' })).status,
+      (await request(app.getHttpServer()).get(`/v1/roi-templates/${id}`).set(auth(adminB))).status,
     ).toBe(404);
-    expect((await request(app.getHttpServer()).delete(`/v1/roi-templates/${id}`).set(auth(adminB))).status).toBe(404);
+    expect(
+      (
+        await request(app.getHttpServer())
+          .patch(`/v1/roi-templates/${id}`)
+          .set(auth(adminB))
+          .send({ name: 'hijack' })
+      ).status,
+    ).toBe(404);
+    expect(
+      (await request(app.getHttpServer()).delete(`/v1/roi-templates/${id}`).set(auth(adminB)))
+        .status,
+    ).toBe(404);
   });
 });

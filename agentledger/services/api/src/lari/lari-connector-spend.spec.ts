@@ -2,10 +2,7 @@ import {
   COPILOT_ANALYTICS_PLATFORM,
   type CopilotSpendSummary,
 } from '../github-copilot/github-copilot-analytics.service';
-import {
-  mergeProviderSpendRows,
-  supplementalConnectorSpend,
-} from './lari-connector-spend';
+import { mergeProviderSpendRows, supplementalConnectorSpend } from './lari-connector-spend';
 
 describe('lari-connector-spend', () => {
   it('merges copilot connector spend into provider rollups', () => {

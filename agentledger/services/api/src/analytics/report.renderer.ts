@@ -65,7 +65,9 @@ export function renderMarkdown(r: PilotReport): string {
   L.push(`## Spend  _(source: ${r.spend.source})_`);
   L.push(`- **Total cost:** ${usd(r.spend.totalCostUsd)} across ${int(r.spend.calls)} calls`);
   L.push(`- **Tokens:** ${int(r.spend.inputTokens)} in / ${int(r.spend.outputTokens)} out`);
-  L.push(`- **Blocked / errored calls:** ${int(r.spend.blockedCalls)} / ${int(r.spend.errorCalls)}`);
+  L.push(
+    `- **Blocked / errored calls:** ${int(r.spend.blockedCalls)} / ${int(r.spend.errorCalls)}`,
+  );
   if (r.spend.byProvider.length) {
     L.push('');
     L.push('| Provider | Cost | Calls |');
@@ -88,21 +90,35 @@ export function renderMarkdown(r: PilotReport): string {
   }
   L.push('');
 
-  L.push(`## Unit economics  _(source: ${r.unitEconomics.source}, confidence ≥ ${r.unitEconomics.minConfidence})_`);
+  L.push(
+    `## Unit economics  _(source: ${r.unitEconomics.source}, confidence ≥ ${r.unitEconomics.minConfidence})_`,
+  );
   L.push(`- **Outcomes:** ${int(r.unitEconomics.outcomes)}`);
-  L.push(`- **AI cost:** ${usd(r.unitEconomics.aiCostUsd)} · **Business value:** ${usd(r.unitEconomics.businessValueUsd)}`);
-  L.push(`- **Cost per outcome:** ${usd(r.unitEconomics.costPerOutcome)} · **Net value:** ${usd(r.unitEconomics.netValueUsd)}`);
+  L.push(
+    `- **AI cost:** ${usd(r.unitEconomics.aiCostUsd)} · **Business value:** ${usd(r.unitEconomics.businessValueUsd)}`,
+  );
+  L.push(
+    `- **Cost per outcome:** ${usd(r.unitEconomics.costPerOutcome)} · **Net value:** ${usd(r.unitEconomics.netValueUsd)}`,
+  );
   L.push(`- **Avg attribution confidence:** ${pct(r.unitEconomics.avgConfidence)}`);
   L.push('');
 
-  L.push(`## Risk-adjusted ROI  _(source: ${r.roi.source}, headline confidence ≥ ${r.roi.minConfidence})_`);
-  L.push(`- **Value:** ${usd(r.roi.valueUsd)} · **Fully-loaded cost:** ${usd(r.roi.fullyLoadedCostUsd)}`);
-  L.push(`- **Expected ROI:** ${usd(r.roi.expectedRoiUsd)} · **Risk-adjusted ROI:** ${usd(r.roi.riskAdjustedRoiUsd)}`);
+  L.push(
+    `## Risk-adjusted ROI  _(source: ${r.roi.source}, headline confidence ≥ ${r.roi.minConfidence})_`,
+  );
+  L.push(
+    `- **Value:** ${usd(r.roi.valueUsd)} · **Fully-loaded cost:** ${usd(r.roi.fullyLoadedCostUsd)}`,
+  );
+  L.push(
+    `- **Expected ROI:** ${usd(r.roi.expectedRoiUsd)} · **Risk-adjusted ROI:** ${usd(r.roi.riskAdjustedRoiUsd)}`,
+  );
   L.push(`- **ROI range:** ${usd(r.roi.roiLowUsd)} – ${usd(r.roi.roiHighUsd)}`);
   L.push('');
 
   L.push(`## Governance posture  _(source: ${r.governance.source})_`);
-  L.push(`- **DLP blocks:** ${int(r.governance.dlpBlockEvents)} · **High-severity risk events:** ${int(r.governance.highSeverityEvents)}`);
+  L.push(
+    `- **DLP blocks:** ${int(r.governance.dlpBlockEvents)} · **High-severity risk events:** ${int(r.governance.highSeverityEvents)}`,
+  );
   if (r.governance.bySeverity.length) {
     L.push('');
     L.push('| Severity | Events |');

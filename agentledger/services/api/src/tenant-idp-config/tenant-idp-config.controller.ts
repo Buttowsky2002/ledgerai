@@ -44,22 +44,26 @@ export class TenantIdpConfigController {
     });
   }
 
-  @Roles('admin') @Get()
+  @Roles('admin')
+  @Get()
   list(@Query('limit') limit?: string, @Query('offset') offset?: string) {
     return this.crud.list(parsePagination(limit, offset));
   }
 
-  @Roles('admin') @Get(':id')
+  @Roles('admin')
+  @Get(':id')
   get(@Param('id') id: string) {
     return this.crud.get(id);
   }
 
-  @Roles('admin') @Post()
+  @Roles('admin')
+  @Post()
   create(@Body() dto: CreateTenantIdpDto) {
     return this.crud.create({ ...dto, emailDomains: normalizeDomains(dto.emailDomains) });
   }
 
-  @Roles('admin') @Patch(':id')
+  @Roles('admin')
+  @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateTenantIdpDto) {
     const data: Record<string, unknown> = { ...dto };
     if (dto.emailDomains) {
@@ -68,7 +72,8 @@ export class TenantIdpConfigController {
     return this.crud.update(id, data);
   }
 
-  @Roles('admin') @Delete(':id')
+  @Roles('admin')
+  @Delete(':id')
   remove(@Param('id') id: string) {
     return this.crud.remove(id);
   }

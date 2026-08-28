@@ -56,7 +56,9 @@ export function finalizeConnectorRecords(
   let unmappedRecords = 0;
   const finalized = records.map((rec) => {
     const { record, unmapped } = finalizeConnectorRecord(rec, definition, mappings, entities);
-    if (unmapped) {unmappedRecords++;}
+    if (unmapped) {
+      unmappedRecords++;
+    }
     return record;
   });
   return { records: finalized, unmappedRecords };

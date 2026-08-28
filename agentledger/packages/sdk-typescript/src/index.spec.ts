@@ -14,7 +14,9 @@ function mockFetch(opts: { status?: number; reject?: boolean } = {}): {
       headers: (init?.headers as Record<string, string>) ?? {},
       body: String(init?.body ?? ''),
     });
-    if (opts.reject) {throw new Error('network down');}
+    if (opts.reject) {
+      throw new Error('network down');
+    }
     return new Response(null, { status: opts.status ?? 202 });
   });
   return { fetch: fn as unknown as typeof fetch, calls };
@@ -42,9 +44,20 @@ describe('LedgerAI SDK', () => {
     const ledger = base(fetch);
 
     await ledger.run({ agentId: 'support-bot' }, async (run) => {
-      await run.llmCall({ provider: 'openai', model: 'gpt-4o', inputTokens: 100, outputTokens: 50, costUsd: 0.0012 });
+      await run.llmCall({
+        provider: 'openai',
+        model: 'gpt-4o',
+        inputTokens: 100,
+        outputTokens: 50,
+        costUsd: 0.0012,
+      });
       await run.toolCall({ tool: 'search_kb' });
-      await run.outcome({ type: 'ticket_resolved', sourceSystem: 'zendesk', valueUsd: 18.5, attributionConfidence: 0.9 });
+      await run.outcome({
+        type: 'ticket_resolved',
+        sourceSystem: 'zendesk',
+        valueUsd: 18.5,
+        attributionConfidence: 0.9,
+      });
     });
     await ledger.flush();
 
@@ -68,7 +81,12 @@ describe('LedgerAI SDK', () => {
       source: 'sdk',
     });
     expect(String(llm.call_id)).toMatch(/^call_/);
-    expect(evs[3]).toMatchObject({ kind: 'agent_run', status: 'completed', llm_calls: 1, tool_calls: 1 });
+    expect(evs[3]).toMatchObject({
+      kind: 'agent_run',
+      status: 'completed',
+      llm_calls: 1,
+      tool_calls: 1,
+    });
 
     await ledger.shutdown();
   });
@@ -110,7 +128,13 @@ describe('LedgerAI SDK', () => {
   it('flushes remaining events on shutdown', async () => {
     const { fetch, calls } = mockFetch();
     const ledger = base(fetch);
-    ledger.outcome({ type: 'pr_merged', sourceSystem: 'github', valueUsd: 250, agentId: 'a', runId: 'r' });
+    ledger.outcome({
+      type: 'pr_merged',
+      sourceSystem: 'github',
+      valueUsd: 250,
+      agentId: 'a',
+      runId: 'r',
+    });
     expect(calls).toHaveLength(0); // nothing sent yet
     await ledger.shutdown();
     expect(calls).toHaveLength(1);
@@ -121,7 +145,12 @@ describe('LedgerAI SDK', () => {
     // Default: content keys are stripped.
     const off = mockFetch();
     const a = base(off.fetch);
-    a.trackAction({ action: 'summarize', agentId: 'a', runId: 'r', attributes: { prompt: 'SECRET PROMPT', content: 'SECRET', tool_version: 2 } });
+    a.trackAction({
+      action: 'summarize',
+      agentId: 'a',
+      runId: 'r',
+      attributes: { prompt: 'SECRET PROMPT', content: 'SECRET', tool_version: 2 },
+    });
     await a.flush();
     expect(off.calls[0].body).not.toContain('SECRET');
     const ev = JSON.parse(lines(off.calls[0].body)[0]);
@@ -133,7 +162,12 @@ describe('LedgerAI SDK', () => {
     // Explicit opt-in: content is included.
     const on = mockFetch();
     const b = base(on.fetch, { contentCapture: true });
-    b.trackAction({ action: 'summarize', agentId: 'a', runId: 'r', attributes: { prompt: 'SECRET PROMPT' } });
+    b.trackAction({
+      action: 'summarize',
+      agentId: 'a',
+      runId: 'r',
+      attributes: { prompt: 'SECRET PROMPT' },
+    });
     await b.flush();
     expect(on.calls[0].body).toContain('SECRET PROMPT');
     await b.shutdown();

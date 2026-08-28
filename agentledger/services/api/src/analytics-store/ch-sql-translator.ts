@@ -63,13 +63,18 @@ function matchParen(sql: string, openIdx: number): number {
     // Skip string literals so parens inside quotes don't affect depth.
     if (c === "'") {
       i++;
-      while (i < sql.length && sql[i] !== "'") {i++;}
+      while (i < sql.length && sql[i] !== "'") {
+        i++;
+      }
       continue;
     }
-    if (c === '(') {depth++;}
-    else if (c === ')') {
+    if (c === '(') {
+      depth++;
+    } else if (c === ')') {
       depth--;
-      if (depth === 0) {return i;}
+      if (depth === 0) {
+        return i;
+      }
     }
   }
   throw new Error('ch-sql-translator: unbalanced parentheses');
@@ -84,12 +89,16 @@ function splitArgs(inner: string): string[] {
     const c = inner[i];
     if (c === "'") {
       i++;
-      while (i < inner.length && inner[i] !== "'") {i++;}
+      while (i < inner.length && inner[i] !== "'") {
+        i++;
+      }
       continue;
     }
-    if (c === '(') {depth++;}
-    else if (c === ')') {depth--;}
-    else if (c === ',' && depth === 0) {
+    if (c === '(') {
+      depth++;
+    } else if (c === ')') {
+      depth--;
+    } else if (c === ',' && depth === 0) {
       args.push(inner.slice(start, i).trim());
       start = i + 1;
     }
@@ -107,7 +116,9 @@ function rewriteCalls(sql: string, fn: string, build: (args: string[]) => string
   const re = new RegExp(`\\b${fn}\\s*\\(`, 'i');
   for (;;) {
     const m = re.exec(sql);
-    if (!m) {return sql;}
+    if (!m) {
+      return sql;
+    }
     const openIdx = m.index + m[0].length - 1;
     const closeIdx = matchParen(sql, openIdx);
     const inner = sql.slice(openIdx + 1, closeIdx);
@@ -123,14 +134,26 @@ export function translateFunctions(sql: string): string {
   sql = sql.replace(/\bnow64\s*\(\s*\d*\s*\)/gi, 'now()');
 
   sql = rewriteCalls(sql, 'toDate', ([x]) => `(${x})::date`);
-  sql = rewriteCalls(sql, 'toStartOfMonth', ([x]) => `(date_trunc('month', (${x})::timestamp))::date`);
-  sql = rewriteCalls(sql, 'toStartOfWeek', ([x]) => `(date_trunc('week', (${x})::timestamp))::date`);
+  sql = rewriteCalls(
+    sql,
+    'toStartOfMonth',
+    ([x]) => `(date_trunc('month', (${x})::timestamp))::date`,
+  );
+  sql = rewriteCalls(
+    sql,
+    'toStartOfWeek',
+    ([x]) => `(date_trunc('week', (${x})::timestamp))::date`,
+  );
   sql = rewriteCalls(sql, 'toStartOfDay', ([x]) => `date_trunc('day', (${x})::timestamp)`);
   sql = rewriteCalls(sql, 'toStartOfHour', ([x]) => `date_trunc('hour', (${x})::timestamp)`);
   sql = rewriteCalls(sql, 'countIf', ([cond]) => `count(*) FILTER (WHERE ${cond})`);
   sql = rewriteCalls(sql, 'uniqExact', ([x]) => `count(DISTINCT ${x})`);
   sql = rewriteCalls(sql, 'sumIf', ([x, cond]) => `sum(${x}) FILTER (WHERE ${cond})`);
-  sql = rewriteCalls(sql, 'argMax', ([a, b]) => `(array_agg(${a} ORDER BY ${b} DESC NULLS LAST))[1]`);
+  sql = rewriteCalls(
+    sql,
+    'argMax',
+    ([a, b]) => `(array_agg(${a} ORDER BY ${b} DESC NULLS LAST))[1]`,
+  );
   // ClickHouse positionCaseInsensitive(haystack, needle) → 1-based index or 0.
   sql = rewriteCalls(
     sql,
@@ -163,18 +186,21 @@ function translateStatement(sql: string): string {
  */
 export function bindParams(sql: string, params: Record<string, ChParam>): TranslatedQuery {
   const names: string[] = [];
-  const out = sql.replace(/\{\s*(\w+)\s*:\s*(\w+)(?:\(\d+\))?\s*\}/g, (_m, name: string, type: string) => {
-    const cast = TYPE_CASTS[type];
-    if (cast === undefined) {
-      throw new Error(`ch-sql-translator: unsupported param type ${type} for {${name}:${type}}`);
-    }
-    let idx = names.indexOf(name);
-    if (idx === -1) {
-      names.push(name);
-      idx = names.length - 1;
-    }
-    return `$${idx + 1}${cast}`;
-  });
+  const out = sql.replace(
+    /\{\s*(\w+)\s*:\s*(\w+)(?:\(\d+\))?\s*\}/g,
+    (_m, name: string, type: string) => {
+      const cast = TYPE_CASTS[type];
+      if (cast === undefined) {
+        throw new Error(`ch-sql-translator: unsupported param type ${type} for {${name}:${type}}`);
+      }
+      let idx = names.indexOf(name);
+      if (idx === -1) {
+        names.push(name);
+        idx = names.length - 1;
+      }
+      return `$${idx + 1}${cast}`;
+    },
+  );
   const values = names.map((nm) => {
     const v = params[nm];
     if (v === undefined) {

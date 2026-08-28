@@ -49,7 +49,11 @@ export class AzureDevOpsOutcomesService {
       this.logger.warn(`ADO sync skipped repos: ${skippedRepos.join(', ')}`);
     }
     if (rows.length === 0) {
-      return { recordsFetched: 0, recordsImported: 0, warnings: warnings.length ? warnings : undefined };
+      return {
+        recordsFetched: 0,
+        recordsImported: 0,
+        warnings: warnings.length ? warnings : undefined,
+      };
     }
 
     const summary = await this.importService.importEvents({

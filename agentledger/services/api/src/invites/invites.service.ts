@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { createHash, randomBytes } from 'node:crypto';
 import { env } from '../env';
 import { PrismaService } from '../prisma/prisma.service';
@@ -41,8 +37,10 @@ export class InvitesService {
     const { raw, hash } = generateInviteToken();
     const email = dto.email.toLowerCase();
 
-    const existing = await this.prisma.withTenant(tenantId, (tx) =>
-      tx.$queryRaw<{ count: number }[]>`
+    const existing = await this.prisma.withTenant(
+      tenantId,
+      (tx) =>
+        tx.$queryRaw<{ count: number }[]>`
         SELECT COUNT(*)::int AS count FROM invites
         WHERE tenant_id = ${tenantId}::uuid
           AND email = ${email}
@@ -55,8 +53,10 @@ export class InvitesService {
       );
     }
 
-    const rows = await this.prisma.withTenant(tenantId, (tx) =>
-      tx.$queryRaw<{ invite_id: string }[]>`
+    const rows = await this.prisma.withTenant(
+      tenantId,
+      (tx) =>
+        tx.$queryRaw<{ invite_id: string }[]>`
         INSERT INTO invites (tenant_id, email, api_role, token_hash, invited_by)
         VALUES (
           ${tenantId}::uuid,
@@ -74,10 +74,14 @@ export class InvitesService {
   /** Admin: list all invites for the tenant (most recent first). */
   async list(): Promise<unknown[]> {
     const tenantId = getTenantId();
-    if (!tenantId) {throw new BadRequestException('no tenant context');}
+    if (!tenantId) {
+      throw new BadRequestException('no tenant context');
+    }
 
-    return this.prisma.withTenant(tenantId, (tx) =>
-      tx.$queryRaw`
+    return this.prisma.withTenant(
+      tenantId,
+      (tx) =>
+        tx.$queryRaw`
         SELECT i.invite_id AS "inviteId",
                i.email,
                i.api_role AS "apiRole",
@@ -97,17 +101,23 @@ export class InvitesService {
   /** Admin: revoke a pending invite. */
   async revoke(inviteId: string): Promise<void> {
     const tenantId = getTenantId();
-    if (!tenantId) {throw new BadRequestException('no tenant context');}
+    if (!tenantId) {
+      throw new BadRequestException('no tenant context');
+    }
 
-    const result = await this.prisma.withTenant(tenantId, (tx) =>
-      tx.$executeRaw`
+    const result = await this.prisma.withTenant(
+      tenantId,
+      (tx) =>
+        tx.$executeRaw`
         UPDATE invites
            SET status = 'revoked'
          WHERE invite_id = ${inviteId}::uuid
            AND tenant_id = ${tenantId}::uuid
            AND status    = 'pending'`,
     );
-    if (result === 0) {throw new NotFoundException('invite not found or not pending');}
+    if (result === 0) {
+      throw new NotFoundException('invite not found or not pending');
+    }
   }
 
   /**
@@ -120,7 +130,9 @@ export class InvitesService {
     apiRole: string;
     expiresAt: Date;
   }> {
-    if (!rawToken || rawToken.length < 40) {throw new BadRequestException('invalid token');}
+    if (!rawToken || rawToken.length < 40) {
+      throw new BadRequestException('invalid token');
+    }
 
     const rows = await this.prisma.$queryRaw<
       { invite_id: string; email: string; api_role: string; expires_at: Date }[]
@@ -145,7 +157,9 @@ export class InvitesService {
     rawToken: string,
     displayName: string | undefined,
   ): Promise<{ email: string; tenantId: string }> {
-    if (!rawToken || rawToken.length < 40) {throw new BadRequestException('invalid token');}
+    if (!rawToken || rawToken.length < 40) {
+      throw new BadRequestException('invalid token');
+    }
 
     const name = (displayName ?? '').trim() || null;
 
@@ -163,7 +177,9 @@ export class InvitesService {
         tenantId: rows[0].tenant_id,
       };
     } catch (err) {
-      if (err instanceof BadRequestException) {throw err;}
+      if (err instanceof BadRequestException) {
+        throw err;
+      }
       // Postgres RAISE EXCEPTION from invite_accept surfaces as a Prisma error.
       // Prefer the DB message when it is our known invite failure; otherwise keep
       // a safe generic (do not leak internal SQL / schema details to the client).
@@ -171,7 +187,9 @@ export class InvitesService {
       if (/invalid or expired invite token/i.test(msg)) {
         throw new BadRequestException('invalid or expired invite token');
       }
-      throw new BadRequestException('invite accept failed — please try again or request a new invite');
+      throw new BadRequestException(
+        'invite accept failed — please try again or request a new invite',
+      );
     }
   }
 }

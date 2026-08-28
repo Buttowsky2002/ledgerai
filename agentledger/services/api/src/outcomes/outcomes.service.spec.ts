@@ -6,11 +6,16 @@ import { OutcomesService } from './outcomes.service';
 const principal: Principal = { tenantId: 'tenant-1', userId: 'u1', role: 'analyst' };
 
 function harness() {
-  const insertRows = jest.fn<Promise<void>, [string, Record<string, unknown>[]]>(async () => undefined);
-  const queryScoped = jest.fn<Promise<Record<string, unknown>[]>, [string, Record<string, unknown>?]>(
-    async () => [],
+  const insertRows = jest.fn<Promise<void>, [string, Record<string, unknown>[]]>(
+    async () => undefined,
   );
-  const auditCreate = jest.fn<Promise<object>, [{ data: Record<string, unknown> }]>(async () => ({}));
+  const queryScoped = jest.fn<
+    Promise<Record<string, unknown>[]>,
+    [string, Record<string, unknown>?]
+  >(async () => []);
+  const auditCreate = jest.fn<Promise<object>, [{ data: Record<string, unknown> }]>(
+    async () => ({}),
+  );
   const tx = { auditLog: { create: auditCreate } };
   const prisma = {
     withTenant: jest.fn(async (_t: string, fn: (t: typeof tx) => unknown) => fn(tx)),
@@ -76,7 +81,9 @@ describe('OutcomesService.create', () => {
   it('writes ClickHouse before the audit (so a write failure is never silently audited)', async () => {
     const { svc, insertRows, auditCreate } = harness();
     await runWithTenant(principal, () => svc.create({ outcomeType: 'lead', valueUsd: 1 }));
-    expect(insertRows.mock.invocationCallOrder[0]).toBeLessThan(auditCreate.mock.invocationCallOrder[0]);
+    expect(insertRows.mock.invocationCallOrder[0]).toBeLessThan(
+      auditCreate.mock.invocationCallOrder[0],
+    );
   });
 
   it('throws when there is no tenant in context', async () => {

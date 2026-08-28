@@ -1,7 +1,10 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ChParam } from '../clickhouse/clickhouse.service';
 import { AnalyticsStore } from '../analytics-store/analytics-store';
-import { CopilotAnalyticsService, CopilotSpendSummary } from '../github-copilot/github-copilot-analytics.service';
+import {
+  CopilotAnalyticsService,
+  CopilotSpendSummary,
+} from '../github-copilot/github-copilot-analytics.service';
 import { CursorAnalyticsService, CursorSpendSummary } from '../connectors/cursor-analytics.service';
 import { CursorProductivityService } from '../connectors/cursor-productivity.service';
 import { CopilotMemberSpendService } from '../github-copilot/github-copilot-member-spend.service';
@@ -24,19 +27,26 @@ export interface AgentEconomicsRow {
 import { FocusRow, SpendDailyRow, toFocusRow } from './focus.mapper';
 import { PilotReport } from './report.renderer';
 import { computeSpendTrend } from './spend-trend';
-import { EFFECTIVE_METERED_COST_USD, LLM_CALLS_METERED_SCOPE, RECONCILED_USER_DAILY_SPEND_SQL, RECONCILED_USER_DAY_SPEND_SQL, RECONCILED_USER_MODEL_BREAKDOWN_SQL } from '../connectors/metered-cost';
+import {
+  EFFECTIVE_METERED_COST_USD,
+  LLM_CALLS_METERED_SCOPE,
+  RECONCILED_USER_DAILY_SPEND_SQL,
+  RECONCILED_USER_DAY_SPEND_SQL,
+  RECONCILED_USER_MODEL_BREAKDOWN_SQL,
+} from '../connectors/metered-cost';
 import {
   computeCursorSeatLicenseFromFixedCosts,
   computeCursorSeatLicenseFromPlans,
 } from './cursor-seat-license';
-import { loadIdentityLookups, resolveUserDirectoryIdentity, isEmailLike } from '../reports/identity-resolver';
+import {
+  loadIdentityLookups,
+  resolveUserDirectoryIdentity,
+  isEmailLike,
+} from '../reports/identity-resolver';
 import type { UserDirectoryIdentity } from '../reports/identity-resolver';
 import { modelFamilyLabel } from './model-family';
 import { prorateMonthlyCost } from '../fixed-costs/fixed-cost-prorate';
-import {
-  previousCalendarMonth,
-  vendorSeatChanges,
-} from './seat-price-delta';
+import { previousCalendarMonth, vendorSeatChanges } from './seat-price-delta';
 import {
   buildOrgVendorBilling,
   buildUserVendorSpend,
@@ -222,8 +232,14 @@ export class AnalyticsService {
   }
 
   /** Optional team filter: returns the SQL fragment and stamps the param. */
-  private teamFilter(team: string | undefined, params: Record<string, ChParam>, col = 'team_id'): string {
-    if (!team) {return '';}
+  private teamFilter(
+    team: string | undefined,
+    params: Record<string, ChParam>,
+    col = 'team_id',
+  ): string {
+    if (!team) {
+      return '';
+    }
     params.team = team;
     return `AND ${col} = {team:String}`;
   }
@@ -263,22 +279,25 @@ export class AnalyticsService {
     const latest_day = iso(new Date());
 
     const spendRow = await this.ch
-      .queryScoped<{ earliest: string | null }>(
-        `SELECT min(day) AS earliest FROM spend_daily WHERE tenant_id = {tenant:String}`,
-        { tenant: tenantId },
-      )
+      .queryScoped<{
+        earliest: string | null;
+      }>(`SELECT min(day) AS earliest FROM spend_daily WHERE tenant_id = {tenant:String}`, {
+        tenant: tenantId,
+      })
       .then((rows) => rows[0]);
     const byUserRow = await this.ch
-      .queryScoped<{ earliest: string | null }>(
-        `SELECT min(day) AS earliest FROM spend_daily_by_user WHERE tenant_id = {tenant:String}`,
-        { tenant: tenantId },
-      )
+      .queryScoped<{
+        earliest: string | null;
+      }>(`SELECT min(day) AS earliest FROM spend_daily_by_user WHERE tenant_id = {tenant:String}`, {
+        tenant: tenantId,
+      })
       .then((rows) => rows[0]);
     const llmRow = await this.ch
-      .queryScoped<{ earliest: string | null }>(
-        `SELECT min(toDate(ts)) AS earliest FROM llm_calls WHERE tenant_id = {tenant:String}`,
-        { tenant: tenantId },
-      )
+      .queryScoped<{
+        earliest: string | null;
+      }>(`SELECT min(toDate(ts)) AS earliest FROM llm_calls WHERE tenant_id = {tenant:String}`, {
+        tenant: tenantId,
+      })
       .then((rows) => rows[0]);
     const { syncMin, connectionMin } = await this.prisma.withTenant(tenantId, async (tx) => {
       const [syncMin, connectionMin] = await Promise.all([
@@ -292,11 +311,21 @@ export class AnalyticsService {
     });
 
     const candidates: string[] = [];
-    if (spendRow?.earliest) {candidates.push(String(spendRow.earliest).slice(0, 10));}
-    if (byUserRow?.earliest) {candidates.push(String(byUserRow.earliest).slice(0, 10));}
-    if (llmRow?.earliest) {candidates.push(String(llmRow.earliest).slice(0, 10));}
-    if (syncMin._min.startedAt) {candidates.push(iso(syncMin._min.startedAt));}
-    if (connectionMin._min.createdAt) {candidates.push(iso(connectionMin._min.createdAt));}
+    if (spendRow?.earliest) {
+      candidates.push(String(spendRow.earliest).slice(0, 10));
+    }
+    if (byUserRow?.earliest) {
+      candidates.push(String(byUserRow.earliest).slice(0, 10));
+    }
+    if (llmRow?.earliest) {
+      candidates.push(String(llmRow.earliest).slice(0, 10));
+    }
+    if (syncMin._min.startedAt) {
+      candidates.push(iso(syncMin._min.startedAt));
+    }
+    if (connectionMin._min.createdAt) {
+      candidates.push(iso(connectionMin._min.createdAt));
+    }
 
     const fallbackFrom = iso(new Date(Date.now() - 90 * 86400000));
     const earliest_day = candidates.length > 0 ? candidates.sort()[0]! : fallbackFrom;
@@ -318,11 +347,17 @@ export class AnalyticsService {
     r: Range,
     team?: string,
   ): Promise<T[]> {
-    if (team) {return chRows;}
+    if (team) {
+      return chRows;
+    }
     const tenantId = getTenantId();
-    if (!tenantId) {return chRows;}
+    if (!tenantId) {
+      return chRows;
+    }
     const copilot = await this.copilotAnalytics.getSpendSummary(tenantId, r.from, r.to);
-    if (!copilot || copilot.totalCostUsd <= 0) {return chRows;}
+    if (!copilot || copilot.totalCostUsd <= 0) {
+      return chRows;
+    }
 
     const dayMap = new Map<string, T>();
     for (const row of chRows) {
@@ -350,9 +385,13 @@ export class AnalyticsService {
   async cursorSpend(from?: string, to?: string): Promise<CursorSpendSummary | null> {
     const r = this.range(from, to);
     const tenantId = getTenantId();
-    if (!tenantId) {return Promise.resolve(null);}
+    if (!tenantId) {
+      return Promise.resolve(null);
+    }
     const summary = await this.cursorAnalytics.getSpendSummary(tenantId, r.from, r.to);
-    if (!summary) {return null;}
+    if (!summary) {
+      return null;
+    }
 
     let seat: {
       seatLicenseUsd: number;
@@ -402,7 +441,9 @@ export class AnalyticsService {
   ): Promise<Partial<CursorSpendSummary>> {
     try {
       const productivity = await this.cursorProductivity.getProductivitySummary(tenantId, from, to);
-      if (!productivity) {return {};}
+      if (!productivity) {
+        return {};
+      }
       return {
         linesAccepted: productivity.linesAccepted,
         linesAdded: productivity.linesAdded,
@@ -470,14 +511,16 @@ export class AnalyticsService {
       return { ...fromFixed, seatSource: 'fixed_costs' };
     }
 
-    const plans = await this.prisma.withTenant(tenantId, (tx) =>
-      tx.$queryRaw<
-        {
-          seats_purchased: number;
-          monthly_price_per_user: number | string;
-          contract_monthly_cost: number | string;
-        }[]
-      >`
+    const plans = await this.prisma.withTenant(
+      tenantId,
+      (tx) =>
+        tx.$queryRaw<
+          {
+            seats_purchased: number;
+            monthly_price_per_user: number | string;
+            contract_monthly_cost: number | string;
+          }[]
+        >`
         SELECT seats_purchased, monthly_price_per_user, contract_monthly_cost
         FROM ai_subscription_plans
         WHERE lower(provider) = 'cursor'
@@ -518,9 +561,13 @@ export class AnalyticsService {
     r: Range,
   ) {
     const tenantId = getTenantId();
-    if (!tenantId) {return chRows;}
+    if (!tenantId) {
+      return chRows;
+    }
     const copilot = await this.copilotAnalytics.getSpendSummary(tenantId, r.from, r.to);
-    if (!copilot || copilot.totalCostUsd <= 0) {return chRows;}
+    if (!copilot || copilot.totalCostUsd <= 0) {
+      return chRows;
+    }
 
     const rows = chRows.map((row) => ({
       platform: String(row.platform),
@@ -542,9 +589,13 @@ export class AnalyticsService {
     r: Range,
   ) {
     const tenantId = getTenantId();
-    if (!tenantId) {return chRows;}
+    if (!tenantId) {
+      return chRows;
+    }
     const copilot = await this.copilotAnalytics.getSpendSummary(tenantId, r.from, r.to);
-    if (!copilot || copilot.totalCostUsd <= 0) {return chRows;}
+    if (!copilot || copilot.totalCostUsd <= 0) {
+      return chRows;
+    }
 
     const rows = chRows.map((row) => ({
       provider: String(row.provider),
@@ -598,8 +649,16 @@ export class AnalyticsService {
   private async userAllocationWithTrend(r: Range) {
     const tenantId = getTenantId();
     const params = r as Record<string, ChParam>;
-    const [totals, daily, codingTotals, codingDaily, tokenTotals, copilotPack, cursorPack, cursorDaily] =
-      await Promise.all([
+    const [
+      totals,
+      daily,
+      codingTotals,
+      codingDaily,
+      tokenTotals,
+      copilotPack,
+      cursorPack,
+      cursorDaily,
+    ] = await Promise.all([
       this.ch.queryScoped<{
         key: string;
         cost_usd: unknown;
@@ -765,16 +824,11 @@ export class AnalyticsService {
       // Included usage value is display-only — never add to cost_usd / metered_usd.
       // Metered call rollups exclude included events; add included_calls so totals
       // reflect all Cursor activity without double-counting on-demand.
-      const includedCalls = Number(
-        (row as { included_calls?: number }).included_calls ?? 0,
-      );
+      const includedCalls = Number((row as { included_calls?: number }).included_calls ?? 0);
       const cursorTokens = Number((row as { tokens?: number }).tokens ?? 0);
       totalsMap.set(key, {
         ...cur,
-        calls:
-          cur.calls > 0
-            ? cur.calls + includedCalls
-            : row.calls,
+        calls: cur.calls > 0 ? cur.calls + includedCalls : row.calls,
         // Prefer llm_calls token sum; fall back to Cursor activity tokens for
         // included-only users who may already be covered by tokenTotals.
         tokens: cur.tokens > 0 ? cur.tokens : cursorTokens,
@@ -785,7 +839,9 @@ export class AnalyticsService {
 
     const dailyByUser = new Map<string, Map<string, number>>();
     const addDaily = (userId: string, day: string, cost: number) => {
-      if (cost <= 0) {return;}
+      if (cost <= 0) {
+        return;
+      }
       const uid = String(userId);
       const dayKey = day.slice(0, 10);
       const perUser = dailyByUser.get(uid) ?? new Map<string, number>();
@@ -817,9 +873,7 @@ export class AnalyticsService {
       .map(([key, agg]) => {
         const dayMap = dailyByUser.get(key);
         const trend = computeSpendTrend(
-          dayMap
-            ? [...dayMap.entries()].map(([day, cost_usd]) => ({ day, cost_usd }))
-            : [],
+          dayMap ? [...dayMap.entries()].map(([day, cost_usd]) => ({ day, cost_usd })) : [],
         );
         return {
           key,
@@ -839,9 +893,7 @@ export class AnalyticsService {
       })
       .sort(
         (a, b) =>
-          b.cost_usd +
-          b.cursor_included_usd -
-          (a.cost_usd + a.cursor_included_usd) ||
+          b.cost_usd + b.cursor_included_usd - (a.cost_usd + a.cursor_included_usd) ||
           b.cursor_on_demand_usd - a.cursor_on_demand_usd,
       );
   }
@@ -918,7 +970,13 @@ export class AnalyticsService {
   // cost_per_outcome ratio stays correct. FINAL collapses the attribution
   // matcher's re-inserted rows (same approach as agentDetail's agent_runs FINAL).
   // minConfidence defaults to 0 (include all, incl. unattributed outcomes).
-  unitEconomics(from?: string, to?: string, outcomeType?: string, minConfidence = 0, team?: string) {
+  unitEconomics(
+    from?: string,
+    to?: string,
+    outcomeType?: string,
+    minConfidence = 0,
+    team?: string,
+  ) {
     const r = this.range(from, to, 365);
     const filter = outcomeType ? 'AND o.outcome_type = {otype:String}' : '';
     const params: Record<string, ChParam> = { ...r, minconf: minConfidence };
@@ -1291,9 +1349,13 @@ export class AnalyticsService {
       apiTotalUsd += d.apiCostUsd;
       const hasPortal = d.portalCostUsd > 0;
       const hasApi = d.apiCostUsd > 0;
-      if (hasPortal && hasApi) {overlapDays++;}
-      else if (hasPortal) {portalOnlyDays++;}
-      else if (hasApi) {apiOnlyDays++;}
+      if (hasPortal && hasApi) {
+        overlapDays++;
+      } else if (hasPortal) {
+        portalOnlyDays++;
+      } else if (hasApi) {
+        apiOnlyDays++;
+      }
     }
 
     return {
@@ -1311,26 +1373,24 @@ export class AnalyticsService {
     if (!tenantId) {
       throw new BadRequestException('no tenant in context');
     }
-    const [{ totals: chTotals, breakdown: chBreakdown, tokensByUserVendor }, copilotPack, cursorPack, orgBilling] =
-      await Promise.all([
-        this.fetchUserSpendFromCh(r),
-        this.fetchCopilotUserSpend(tenantId, r),
-        this.fetchCursorUserActivity(tenantId, r),
-        this.vendorBilling(from, to),
-      ]);
+    const [
+      { totals: chTotals, breakdown: chBreakdown, tokensByUserVendor },
+      copilotPack,
+      cursorPack,
+      orgBilling,
+    ] = await Promise.all([
+      this.fetchUserSpendFromCh(r),
+      this.fetchCopilotUserSpend(tenantId, r),
+      this.fetchCursorUserActivity(tenantId, r),
+      this.vendorBilling(from, to),
+    ]);
     const { totals, breakdown } = this.mergeCursorActivityIntoUserSpend(
       [...chTotals, ...copilotPack.totals],
       [...chBreakdown, ...copilotPack.breakdown],
       cursorPack,
     );
     const cursorSeatByUser = await this.cursorSeatUsdByUser(tenantId, r, cursorPack.totals);
-    let users = await this.assembleUserDirectory(
-      tenantId,
-      totals,
-      breakdown,
-      q,
-      copilotPack.hints,
-    );
+    let users = await this.assembleUserDirectory(tenantId, totals, breakdown, q, copilotPack.hints);
     users = this.enrichUsersWithVendorData(
       users,
       copilotPack.byUser,
@@ -1365,46 +1425,55 @@ export class AnalyticsService {
     }
 
     const seatFrom = previousCalendarMonth(`${r.from.slice(0, 7)}-01`);
-    const [monthlyFixed, seatRows, platformRows, cursorSummary, copilotMembers] = await Promise.all([
-      this.ch.queryScoped<{ vendor: string; cost_usd: unknown; period_month: string }>(
-        `SELECT vendor, cost_usd, period_month
+    const [monthlyFixed, seatRows, platformRows, cursorSummary, copilotMembers] = await Promise.all(
+      [
+        this.ch.queryScoped<{ vendor: string; cost_usd: unknown; period_month: string }>(
+          `SELECT vendor, cost_usd, period_month
          FROM agentledger.v_fixed_cost_monthly
          WHERE tenant_id = {tenant:String}
            AND period_month >= toStartOfMonth(toDate({from:String}))
            AND period_month <= toStartOfMonth(toDate({to:String}))`,
-        { from: r.from, to: r.to },
-      ),
-      this.ch.queryScoped<{
-        period_month: string;
-        vendor: string;
-        seats: unknown;
-        unit_cost_usd: unknown;
-        cost_usd: unknown;
-      }>(
-        `SELECT period_month, vendor, seats, unit_cost_usd, cost_usd
+          { from: r.from, to: r.to },
+        ),
+        this.ch.queryScoped<{
+          period_month: string;
+          vendor: string;
+          seats: unknown;
+          unit_cost_usd: unknown;
+          cost_usd: unknown;
+        }>(
+          `SELECT period_month, vendor, seats, unit_cost_usd, cost_usd
          FROM agentledger.fixed_costs FINAL
          WHERE tenant_id = {tenant:String}
            AND period_month >= toDate({seatFrom:String})
            AND period_month <= toStartOfMonth(toDate({to:String}))
            AND attributable = 0`,
-        { seatFrom, to: r.to },
-      ),
-      this.platformSpend(r.from, r.to),
-      this.cursorSpend(r.from, r.to),
-      this.copilotMemberSpend.getMemberSpend(tenantId, { from: r.from, to: r.to }),
-    ]);
+          { seatFrom, to: r.to },
+        ),
+        this.platformSpend(r.from, r.to),
+        this.cursorSpend(r.from, r.to),
+        this.copilotMemberSpend.getMemberSpend(tenantId, { from: r.from, to: r.to }),
+      ],
+    );
 
     const seatUsdByVendor: Record<string, number> = {};
     for (const row of monthlyFixed) {
       const vendor = String(row.vendor).trim().toLowerCase();
-      const prorated = prorateMonthlyCost(Number(row.cost_usd ?? 0), String(row.period_month), r.from, r.to);
+      const prorated = prorateMonthlyCost(
+        Number(row.cost_usd ?? 0),
+        String(row.period_month),
+        r.from,
+        r.to,
+      );
       seatUsdByVendor[vendor] = (seatUsdByVendor[vendor] ?? 0) + prorated;
     }
 
     const overageUsdByVendor: Record<string, number> = {};
     for (const row of platformRows) {
       const vendor = platformToVendor(String(row.platform));
-      if (vendor === 'github' || vendor === 'cursor') {continue;}
+      if (vendor === 'github' || vendor === 'cursor') {
+        continue;
+      }
       overageUsdByVendor[vendor] = (overageUsdByVendor[vendor] ?? 0) + n(row.cost_usd);
     }
 
@@ -1413,7 +1482,8 @@ export class AnalyticsService {
         seatUsdByVendor.cursor = (seatUsdByVendor.cursor ?? 0) + cursorSummary.seatLicenseUsd;
       }
       if (cursorSummary.meteredOverageUsd > 0) {
-        overageUsdByVendor.cursor = (overageUsdByVendor.cursor ?? 0) + cursorSummary.meteredOverageUsd;
+        overageUsdByVendor.cursor =
+          (overageUsdByVendor.cursor ?? 0) + cursorSummary.meteredOverageUsd;
       }
     }
 
@@ -1424,15 +1494,21 @@ export class AnalyticsService {
         ghSeat += m.seatCost;
         ghOverage += m.allocatedOverageCost;
       }
-      if (ghSeat > 0) {seatUsdByVendor.github = (seatUsdByVendor.github ?? 0) + usd(ghSeat);}
-      if (ghOverage > 0) {overageUsdByVendor.github = (overageUsdByVendor.github ?? 0) + usd(ghOverage);}
+      if (ghSeat > 0) {
+        seatUsdByVendor.github = (seatUsdByVendor.github ?? 0) + usd(ghSeat);
+      }
+      if (ghOverage > 0) {
+        overageUsdByVendor.github = (overageUsdByVendor.github ?? 0) + usd(ghOverage);
+      }
     }
 
     const vendors = buildOrgVendorBilling(seatUsdByVendor, overageUsdByVendor);
     const { latestMonth, changes } = vendorSeatChanges(seatRows, r.from, r.to);
     for (const row of vendors) {
       const change = changes[row.vendor];
-      if (!change) {continue;}
+      if (!change) {
+        continue;
+      }
       row.seats = change.seats;
       row.prior_seats = change.prior_seats;
       row.usd_from_seats = change.usd_from_seats;
@@ -1443,7 +1519,9 @@ export class AnalyticsService {
     // Only count vendors with a prior month and a real seat-count delta.
     const seat_change_usd = usd(
       vendors.reduce((s, v) => {
-        if (v.prior_seats == null || v.seats == null || v.seats === v.prior_seats) {return s;}
+        if (v.prior_seats == null || v.seats == null || v.seats === v.prior_seats) {
+          return s;
+        }
         return s + (v.usd_from_seats ?? 0);
       }, 0),
     );
@@ -1467,12 +1545,15 @@ export class AnalyticsService {
     if (!tenantId) {
       throw new BadRequestException('no tenant in context');
     }
-    const [{ totals: chTotals, breakdown: chBreakdown, tokensByUserVendor }, copilotPack, cursorPack] =
-      await Promise.all([
-        this.fetchUserSpendFromCh(r, userId),
-        this.fetchCopilotUserSpend(tenantId, r, userId),
-        this.fetchCursorUserActivity(tenantId, r, userId),
-      ]);
+    const [
+      { totals: chTotals, breakdown: chBreakdown, tokensByUserVendor },
+      copilotPack,
+      cursorPack,
+    ] = await Promise.all([
+      this.fetchUserSpendFromCh(r, userId),
+      this.fetchCopilotUserSpend(tenantId, r, userId),
+      this.fetchCursorUserActivity(tenantId, r, userId),
+    ]);
     const { totals, breakdown } = this.mergeCursorActivityIntoUserSpend(
       [...chTotals, ...copilotPack.totals],
       [...chBreakdown, ...copilotPack.breakdown],
@@ -1734,15 +1815,24 @@ export class AnalyticsService {
     githubLogin?: string,
   ): Promise<{
     totals: { user_id: string; total_spend_usd: unknown; calls: unknown }[];
-    breakdown: { user_id: string; platform: string; model: string; spend_usd: unknown; calls: unknown }[];
+    breakdown: {
+      user_id: string;
+      platform: string;
+      model: string;
+      spend_usd: unknown;
+      calls: unknown;
+    }[];
     hints: Map<string, CopilotIdentityHint>;
     byUser: Map<string, { seat_usd: number; overage_usd: number; calls: number }>;
   }> {
-    const resp: CopilotMemberSpendResponse = await this.copilotMemberSpend.getMemberSpend(tenantId, {
-      from: r.from,
-      to: r.to,
-      ...(githubLogin ? { user: githubLogin } : {}),
-    });
+    const resp: CopilotMemberSpendResponse = await this.copilotMemberSpend.getMemberSpend(
+      tenantId,
+      {
+        from: r.from,
+        to: r.to,
+        ...(githubLogin ? { user: githubLogin } : {}),
+      },
+    );
     const hints = new Map<string, CopilotIdentityHint>();
     const byUser = new Map<string, { seat_usd: number; overage_usd: number; calls: number }>();
     if (!resp.connected) {
@@ -1750,10 +1840,18 @@ export class AnalyticsService {
     }
 
     const totals: { user_id: string; total_spend_usd: unknown; calls: unknown }[] = [];
-    const breakdown: { user_id: string; platform: string; model: string; spend_usd: unknown; calls: unknown }[] = [];
+    const breakdown: {
+      user_id: string;
+      platform: string;
+      model: string;
+      spend_usd: unknown;
+      calls: unknown;
+    }[] = [];
 
     for (const m of resp.members) {
-      if (m.totalAllocatedCost <= 0) {continue;}
+      if (m.totalAllocatedCost <= 0) {
+        continue;
+      }
       const calls = m.chatTurns + m.linesAccepted + m.prSummaryCount;
       totals.push({
         user_id: m.githubLogin,
@@ -1768,9 +1866,10 @@ export class AnalyticsService {
         calls,
       });
       byUser.set(m.githubLogin, {
-        seat_usd: usd(m.seatCost ?? 0) > 0 || usd(m.allocatedOverageCost ?? 0) > 0
-          ? usd(m.seatCost ?? 0)
-          : usd(m.totalAllocatedCost),
+        seat_usd:
+          usd(m.seatCost ?? 0) > 0 || usd(m.allocatedOverageCost ?? 0) > 0
+            ? usd(m.seatCost ?? 0)
+            : usd(m.totalAllocatedCost),
         overage_usd: usd(m.allocatedOverageCost ?? 0),
         calls,
       });
@@ -1833,7 +1932,9 @@ export class AnalyticsService {
     cursorTotals: { user_id: string }[],
   ): Promise<Map<string, number>> {
     const out = new Map<string, number>();
-    if (cursorTotals.length === 0) {return out;}
+    if (cursorTotals.length === 0) {
+      return out;
+    }
 
     const activeMembers = cursorTotals.length;
     let orgSeatUsd = 0;
@@ -1845,10 +1946,16 @@ export class AnalyticsService {
     }
 
     const seatRows = this.prisma?.withTenant
-      ? await this.prisma.withTenant(tenantId, (tx) =>
-          tx.$queryRaw<
-            { user_id: string | null; email: string | null; monthly_price_per_user: number | string }[]
-          >`
+      ? await this.prisma.withTenant(
+          tenantId,
+          (tx) =>
+            tx.$queryRaw<
+              {
+                user_id: string | null;
+                email: string | null;
+                monthly_price_per_user: number | string;
+              }[]
+            >`
         SELECT s.user_id::text, i.email, p.monthly_price_per_user
         FROM ai_seats s
         JOIN ai_subscription_plans p ON s.plan_id = p.plan_id
@@ -1860,20 +1967,28 @@ export class AnalyticsService {
     const assigned = new Set<string>();
     for (const row of seatRows) {
       const monthly = n(row.monthly_price_per_user);
-      if (monthly <= 0) {continue;}
+      if (monthly <= 0) {
+        continue;
+      }
       const prorated = prorateMonthlyCost(monthly, `${r.from.slice(0, 7)}-01`, r.from, r.to);
       const uid = String(row.user_id);
       out.set(uid, (out.get(uid) ?? 0) + prorated);
       assigned.add(uid);
-      if (row.email) {assigned.add(String(row.email).toLowerCase());}
+      if (row.email) {
+        assigned.add(String(row.email).toLowerCase());
+      }
     }
 
     const perUserFallback =
       orgSeatUsd > 0 && activeMembers > 0 ? usd(orgSeatUsd / activeMembers) : 0;
     for (const row of cursorTotals) {
       const uid = String(row.user_id);
-      if (out.has(uid) || assigned.has(uid.toLowerCase())) {continue;}
-      if (perUserFallback > 0) {out.set(uid, perUserFallback);}
+      if (out.has(uid) || assigned.has(uid.toLowerCase())) {
+        continue;
+      }
+      if (perUserFallback > 0) {
+        out.set(uid, perUserFallback);
+      }
     }
 
     return out;
@@ -1939,7 +2054,9 @@ export class AnalyticsService {
       breakdownByUser.set(uid, list);
     }
     for (const list of breakdownByUser.values()) {
-      list.sort((a, b) => b.spend_usd - a.spend_usd || (b.usage_value_usd ?? 0) - (a.usage_value_usd ?? 0));
+      list.sort(
+        (a, b) => b.spend_usd - a.spend_usd || (b.usage_value_usd ?? 0) - (a.usage_value_usd ?? 0),
+      );
     }
 
     const allUserIds = new Set([...totalsByUser.keys(), ...breakdownByUser.keys()]);
@@ -1974,15 +2091,16 @@ export class AnalyticsService {
 
       const identity = resolveUserDirectoryIdentity(user_id, byId, byEmail, byAlias);
       const hint = copilotHints.get(user_id);
-      const display_name =
-        identity.resolved
-          ? identity.display_name
-          : hint?.displayName?.trim() || identity.display_name;
+      const display_name = identity.resolved
+        ? identity.display_name
+        : hint?.displayName?.trim() || identity.display_name;
       const email = identity.email ?? hint?.email ?? null;
       const team = identity.team || hint?.team || '';
 
       const model_breakdown = breakdownByUser.get(user_id) ?? [];
-      const models = model_breakdown.map((m) => m.model).filter((m, i, arr) => arr.indexOf(m) === i);
+      const models = model_breakdown
+        .map((m) => m.model)
+        .filter((m, i, arr) => arr.indexOf(m) === i);
 
       const entry: UserDirectoryRow = {
         user_id,
@@ -2000,7 +2118,9 @@ export class AnalyticsService {
         models,
         model_breakdown,
       };
-      if (needle && !this.userMatchesQuery(entry, needle)) {continue;}
+      if (needle && !this.userMatchesQuery(entry, needle)) {
+        continue;
+      }
 
       const key = this.canonicalUserKey(user_id, identity);
       const existing = merged.get(key);
@@ -2020,8 +2140,12 @@ export class AnalyticsService {
   }
 
   private canonicalUserKey(user_id: string, identity: UserDirectoryIdentity): string {
-    if (identity.email) {return `email:${identity.email.toLowerCase()}`;}
-    if (isEmailLike(user_id)) {return `email:${user_id.trim().toLowerCase()}`;}
+    if (identity.email) {
+      return `email:${identity.email.toLowerCase()}`;
+    }
+    if (isEmailLike(user_id)) {
+      return `email:${user_id.trim().toLowerCase()}`;
+    }
     return `raw:${user_id.toLowerCase()}`;
   }
 
@@ -2038,7 +2162,9 @@ export class AnalyticsService {
         existing.spend_usd = usd(existing.spend_usd + row.spend_usd);
         existing.calls += row.calls;
         const usage = (existing.usage_value_usd ?? 0) + (row.usage_value_usd ?? 0);
-        if (usage > 0) {existing.usage_value_usd = usd(usage);}
+        if (usage > 0) {
+          existing.usage_value_usd = usd(usage);
+        }
       } else {
         breakdownMap.set(key, { ...row });
       }
@@ -2070,7 +2196,9 @@ export class AnalyticsService {
     a?: Record<string, VendorSpendSlice>,
     b?: Record<string, VendorSpendSlice>,
   ): Record<string, VendorSpendSlice> | undefined {
-    if (!a && !b) {return undefined;}
+    if (!a && !b) {
+      return undefined;
+    }
     const out: Record<string, VendorSpendSlice> = { ...(a ?? {}) };
     for (const [vendor, slice] of Object.entries(b ?? {})) {
       const cur = out[vendor] ?? { seat_usd: 0, overage_usd: 0, total_usd: 0 };
@@ -2087,10 +2215,14 @@ export class AnalyticsService {
     a?: Record<string, VendorUsageSlice>,
     b?: Record<string, VendorUsageSlice>,
   ): Record<string, VendorUsageSlice> | undefined {
-    if (!a && !b) {return undefined;}
+    if (!a && !b) {
+      return undefined;
+    }
     const out: Record<string, VendorUsageSlice> = {};
     for (const src of [a, b]) {
-      if (!src) {continue;}
+      if (!src) {
+        continue;
+      }
       for (const [vendor, slice] of Object.entries(src)) {
         const cur = out[vendor] ?? { calls: 0, tokens: 0, models: [], model_breakdown: [] };
         cur.calls += slice.calls;

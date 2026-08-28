@@ -6,7 +6,10 @@ import {
   calculateMemberDailySpendWithBilling,
   monthsInLookback,
 } from './github-copilot-billing';
-import { calculateMemberDailySpend, calculateMemberDailySpendSeatOnly } from './github-copilot-member-spend';
+import {
+  calculateMemberDailySpend,
+  calculateMemberDailySpendSeatOnly,
+} from './github-copilot-member-spend';
 import { DEFAULT_ROI_ASSUMPTIONS } from './github-copilot.types';
 
 const assumptions = DEFAULT_ROI_ASSUMPTIONS;
@@ -213,6 +216,9 @@ describe('calculateMemberDailySpendSeatOnly', () => {
     );
     const day2 = calculateMemberDailySpendSeatOnly({ ...base, usage: usageDay2 });
 
-    expect(billed.totalAllocatedCost + day2.totalAllocatedCost).toBeCloseTo(5 + 30 / 30 + 30 / 30, 2);
+    expect(billed.totalAllocatedCost + day2.totalAllocatedCost).toBeCloseTo(
+      5 + 30 / 30 + 30 / 30,
+      2,
+    );
   });
 });

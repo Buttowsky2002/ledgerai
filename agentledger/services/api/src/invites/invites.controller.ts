@@ -1,13 +1,4 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  HttpCode,
-  Param,
-  Post,
-  Query,
-} from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { Public, Roles } from '../auth/decorators';
 import { AcceptInviteDto, CreateInviteDto } from './invites.dto';

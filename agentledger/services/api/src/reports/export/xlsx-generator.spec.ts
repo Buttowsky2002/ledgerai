@@ -33,7 +33,9 @@ const baseData = (): ExecutiveReportData => ({
       calls: 10,
     },
   ],
-  modelSpendTable: [{ model: 'gpt-4o', provider: 'openai', costUsd: 80, pctOfTotal: 66.7, calls: 10 }],
+  modelSpendTable: [
+    { model: 'gpt-4o', provider: 'openai', costUsd: 80, pctOfTotal: 66.7, calls: 10 },
+  ],
   providers: [{ provider: 'openai', costUsd: 80, calls: 20 }],
   models: [{ provider: 'openai', model: 'gpt-4o', costUsd: 80, calls: 20 }],
   platformBreakdown: [

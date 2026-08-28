@@ -11,7 +11,10 @@ class CfoViewQueryDto {
   @IsOptional() @IsDateString() endDate?: string;
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0) @Max(1) confidenceThreshold?: number;
   @IsOptional() @IsString() team?: string;
-  @IsOptional() @IsIn(['computed', 'metered', 'reconciled']) costBasis?: 'computed' | 'metered' | 'reconciled';
+  @IsOptional() @IsIn(['computed', 'metered', 'reconciled']) costBasis?:
+    | 'computed'
+    | 'metered'
+    | 'reconciled';
   @IsOptional() @Type(() => Number) @IsNumber() @IsIn([7, 30, 90, 180, 365]) forecastDays?: number;
 }
 

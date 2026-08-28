@@ -71,7 +71,9 @@ describe('import mapRow', () => {
   });
 
   it('rejects an attribution_confidence above 1 (probability feeding ROI)', () => {
-    expect(() => mapRow({ outcome_type: 'lead', attribution_confidence: 5 })).toThrow(/attribution_confidence/i);
+    expect(() => mapRow({ outcome_type: 'lead', attribution_confidence: 5 })).toThrow(
+      /attribution_confidence/i,
+    );
     expect(() => mapRow({ outcome_type: 'lead', attribution_confidence: -0.1 })).toThrow(/>= 0/);
   });
 
@@ -138,7 +140,9 @@ describe('import mapRow', () => {
   });
 
   it('rejects an invalid timestamp', () => {
-    expect(() => mapRow({ model: 'gpt-4o', input_tokens: 1, timestamp: 'not-a-date' })).toThrow(/date\/time/i);
+    expect(() => mapRow({ model: 'gpt-4o', input_tokens: 1, timestamp: 'not-a-date' })).toThrow(
+      /date\/time/i,
+    );
   });
 
   it('stamps metered_cost_usd and excludes price-book estimates', () => {

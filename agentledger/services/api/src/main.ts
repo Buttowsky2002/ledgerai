@@ -21,10 +21,14 @@ function resolvePort(): number {
   const addr = env('BADGERIQ_API_ADDR');
   if (addr) {
     const port = Number(addr.replace(/^.*:/, ''));
-    if (Number.isFinite(port) && port > 0) {return port;}
+    if (Number.isFinite(port) && port > 0) {
+      return port;
+    }
   }
   const platformPort = Number(env('PORT'));
-  if (Number.isFinite(platformPort) && platformPort > 0) {return platformPort;}
+  if (Number.isFinite(platformPort) && platformPort > 0) {
+    return platformPort;
+  }
   return 8094;
 }
 
@@ -97,19 +101,30 @@ async function bootstrap(): Promise<void> {
       app.use('/docs-json', guard);
       SwaggerModule.setup('docs', app, buildOpenApiDocument(app));
       logger.warn(
-        { event: 'docs_enabled_protected', path: '/docs', detail: 'production docs require an LEDGERAI_DOCS_TOKEN bearer' },
+        {
+          event: 'docs_enabled_protected',
+          path: '/docs',
+          detail: 'production docs require an LEDGERAI_DOCS_TOKEN bearer',
+        },
         'Swagger',
       );
       break;
     }
     case 'disabled_no_token':
       logger.error(
-        { event: 'docs_disabled_no_token', detail: 'LEDGERAI_EXPOSE_DOCS=true in production but LEDGERAI_DOCS_TOKEN is unset — docs not exposed' },
+        {
+          event: 'docs_disabled_no_token',
+          detail:
+            'LEDGERAI_EXPOSE_DOCS=true in production but LEDGERAI_DOCS_TOKEN is unset — docs not exposed',
+        },
         'Swagger',
       );
       break;
     case 'disabled':
-      logger.log({ event: 'docs_disabled', detail: 'set LEDGERAI_EXPOSE_DOCS=true to enable' }, 'Swagger');
+      logger.log(
+        { event: 'docs_disabled', detail: 'set LEDGERAI_EXPOSE_DOCS=true to enable' },
+        'Swagger',
+      );
       break;
   }
 

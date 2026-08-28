@@ -1,5 +1,9 @@
 import { buildOneLiner, formatPct, oneLinerHasImmateralPct } from './formatters';
-import { formatPeriodChange, NEW_SPEND_LABEL, periodDeltaPct } from './executive-report.should-render';
+import {
+  formatPeriodChange,
+  NEW_SPEND_LABEL,
+  periodDeltaPct,
+} from './executive-report.should-render';
 
 describe('formatPeriodChange / one-liner', () => {
   it('never shows percent when prior is zero or below $1', () => {

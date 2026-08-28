@@ -29,9 +29,7 @@ describe('buildUserVendorSpend', () => {
 
   it('maps metered anthropic to overage only', () => {
     const spend = buildUserVendorSpend({
-      model_breakdown: [
-        { model: 'claude-3', platform: 'anthropic', spend_usd: 12.5, calls: 3 },
-      ],
+      model_breakdown: [{ model: 'claude-3', platform: 'anthropic', spend_usd: 12.5, calls: 3 }],
       cursor_on_demand_usd: 0,
       cursor_seat_usd: 0,
     });
@@ -40,9 +38,7 @@ describe('buildUserVendorSpend', () => {
 
   it('uses copilot seat and overage without double-counting breakdown', () => {
     const spend = buildUserVendorSpend({
-      model_breakdown: [
-        { model: 'Copilot', platform: 'github_copilot', spend_usd: 25, calls: 10 },
-      ],
+      model_breakdown: [{ model: 'Copilot', platform: 'github_copilot', spend_usd: 25, calls: 10 }],
       cursor_on_demand_usd: 0,
       cursor_seat_usd: 0,
       copilot: { seat_usd: 19, overage_usd: 6 },

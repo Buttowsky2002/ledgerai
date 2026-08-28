@@ -14,8 +14,12 @@ const principal: Principal = { tenantId: 'tenant-1', userId: 'u1', role: 'admin'
  * what the read-only dry-run existence check sees as already imported.
  */
 function harness(opts: { reserveReturns?: string[]; existingForDryRun?: string[] } = {}) {
-  const queryRaw = jest.fn(async () => (opts.reserveReturns ?? []).map((k) => ({ idempotency_key: k })));
-  const findMany = jest.fn(async () => (opts.existingForDryRun ?? []).map((k) => ({ idempotencyKey: k })));
+  const queryRaw = jest.fn(async () =>
+    (opts.reserveReturns ?? []).map((k) => ({ idempotency_key: k })),
+  );
+  const findMany = jest.fn(async () =>
+    (opts.existingForDryRun ?? []).map((k) => ({ idempotencyKey: k })),
+  );
   const auditCreate = jest.fn(async () => ({}));
   const insertRows = jest.fn<Promise<void>, [string, Record<string, unknown>[]]>();
 
@@ -32,14 +36,21 @@ function harness(opts: { reserveReturns?: string[]; existingForDryRun?: string[]
   return { svc: new ImportService(ch, prisma), queryRaw, findMany, auditCreate, insertRows };
 }
 
-const run = (svc: ImportService, dto: ImportEventsDto) => runWithTenant(principal, () => svc.importEvents(dto));
+const run = (svc: ImportService, dto: ImportEventsDto) =>
+  runWithTenant(principal, () => svc.importEvents(dto));
 
 describe('ImportService.importEvents', () => {
   it('imports rows it won, grouping events per table and stamping tenant_id from the principal', async () => {
     const { svc, insertRows, queryRaw, auditCreate } = harness({ reserveReturns: ['k1', 'k2'] });
     const summary = await run(svc, {
       events: [
-        { idempotency_key: 'k1', model: 'gpt-4o', input_tokens: 10, cost_usd: 0.01, tenant_id: 'ATTACKER' },
+        {
+          idempotency_key: 'k1',
+          model: 'gpt-4o',
+          input_tokens: 10,
+          cost_usd: 0.01,
+          tenant_id: 'ATTACKER',
+        },
         { idempotency_key: 'k2', outcome_type: 'merged_pr', outcome_value_usd: 100 },
       ],
     });
@@ -93,7 +104,9 @@ describe('ImportService.importEvents', () => {
   });
 
   it('dry run uses a read-only existence check and writes nothing', async () => {
-    const { svc, insertRows, queryRaw, auditCreate, findMany } = harness({ existingForDryRun: ['k1'] });
+    const { svc, insertRows, queryRaw, auditCreate, findMany } = harness({
+      existingForDryRun: ['k1'],
+    });
     const summary = await run(svc, {
       dryRun: true,
       events: [
@@ -111,15 +124,17 @@ describe('ImportService.importEvents', () => {
   it('reserves keys BEFORE inserting to ClickHouse (rollback-safe ordering)', async () => {
     const { svc, insertRows, queryRaw } = harness({ reserveReturns: ['k1'] });
     await run(svc, { events: [{ idempotency_key: 'k1', model: 'gpt-4o', input_tokens: 1 }] });
-    expect(queryRaw.mock.invocationCallOrder[0]).toBeLessThan(insertRows.mock.invocationCallOrder[0]);
+    expect(queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      insertRows.mock.invocationCallOrder[0],
+    );
   });
 
   it('propagates an analytics insert failure after keys are reserved', async () => {
     const { svc, insertRows, queryRaw } = harness({ reserveReturns: ['k1'] });
     insertRows.mockRejectedValueOnce(new Error('clickhouse 500'));
-    await expect(run(svc, { events: [{ idempotency_key: 'k1', model: 'gpt-4o', input_tokens: 1 }] })).rejects.toThrow(
-      /clickhouse 500/,
-    );
+    await expect(
+      run(svc, { events: [{ idempotency_key: 'k1', model: 'gpt-4o', input_tokens: 1 }] }),
+    ).rejects.toThrow(/clickhouse 500/);
     expect(queryRaw).toHaveBeenCalledTimes(1);
   });
 
@@ -159,6 +174,8 @@ describe('ImportService.importEvents', () => {
 
   it('throws when there is no tenant in context', async () => {
     const { svc } = harness();
-    await expect(svc.importEvents({ events: [{ model: 'gpt-4o', input_tokens: 1 }] })).rejects.toThrow(/no tenant/i);
+    await expect(
+      svc.importEvents({ events: [{ model: 'gpt-4o', input_tokens: 1 }] }),
+    ).rejects.toThrow(/no tenant/i);
   });
 });

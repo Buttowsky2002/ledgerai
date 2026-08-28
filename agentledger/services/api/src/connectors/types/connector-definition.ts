@@ -22,13 +22,7 @@ export type ConnectorAuthType =
   | 'custom_header'
   | 'none';
 
-export type PaginationType =
-  | 'cursor'
-  | 'offset'
-  | 'page'
-  | 'next_url'
-  | 'response_token'
-  | 'none';
+export type PaginationType = 'cursor' | 'offset' | 'page' | 'next_url' | 'response_token' | 'none';
 
 export type DestinationRecordType =
   | 'spend_usage_record'

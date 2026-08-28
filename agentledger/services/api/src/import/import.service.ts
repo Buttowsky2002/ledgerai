@@ -12,20 +12,13 @@ import { ImportEventsDto } from './import.dto';
 
 import { ImportRowError, MappedEvent, mapRow } from './import.mapper';
 
-
-
 export interface ImportRowErrorDetail {
-
   line: number;
 
   message: string;
-
 }
 
-
-
 export interface ImportSummary {
-
   /** Rows in the request. */
 
   received: number;
@@ -59,14 +52,9 @@ export interface ImportSummary {
   /** True when this was a dry run (nothing was written). */
 
   dryRun: boolean;
-
 }
 
-
-
 type Mapped = { key?: string; events: MappedEvent[] };
-
-
 
 /**
 
@@ -103,38 +91,25 @@ type Mapped = { key?: string; events: MappedEvent[] };
  */
 
 @Injectable()
-
 export class ImportService {
-
   private readonly logger = new Logger(ImportService.name);
 
-
-
   constructor(
-
     private readonly ch: AnalyticsStore,
 
     private readonly prisma: PrismaService,
-
   ) {}
 
-
-
   async importEvents(dto: ImportEventsDto): Promise<ImportSummary> {
-
     const tenantId = getTenantId();
 
     if (!tenantId) {
-
       throw new BadRequestException('no tenant in context');
-
     }
 
     const rows = dto.events;
 
     const dryRun = dto.dryRun === true;
-
-
 
     // 1. Map every row up front. Any invalid row fails the entire batch (with the
 
@@ -145,36 +120,22 @@ export class ImportService {
     const errors: ImportRowErrorDetail[] = [];
 
     rows.forEach((raw, i) => {
-
       try {
-
         const m = mapRow(raw);
 
         mapped.push({ key: m.idempotencyKey, events: m.events });
-
       } catch (e) {
-
         if (e instanceof ImportRowError) {
-
           errors.push({ line: i + 1, message: e.message });
-
         } else {
-
           throw e;
-
         }
-
       }
-
     });
 
     if (errors.length > 0) {
-
       throw new BadRequestException({ message: 'import validation failed', errors });
-
     }
-
-
 
     // 2. Collapse keys repeated within this batch (first occurrence wins) so a key
 
@@ -183,22 +144,22 @@ export class ImportService {
     const seen = new Set<string>();
 
     const deduped = mapped.filter((m) => {
+      if (!m.key) {
+        return true;
+      }
 
-      if (!m.key) {return true;}
-
-      if (seen.has(m.key)) {return false;}
+      if (seen.has(m.key)) {
+        return false;
+      }
 
       seen.add(m.key);
 
       return true;
-
     });
 
     const keyless = deduped.filter((m) => !m.key).length;
 
     const keys = deduped.map((m) => m.key).filter((k): k is string => !!k);
-
-
 
     // 3–4. Reserve idempotency keys and stage rows inside a short transaction — do
 
@@ -207,35 +168,25 @@ export class ImportService {
     // own withTenant on the Postgres backend).
 
     const { summary, byTable } = await this.prisma.withTenant(tenantId, async (tx) => {
-
       let wonKeys: Set<string>;
 
       if (dryRun) {
-
         const existing =
-
           keys.length > 0
-
             ? await tx.importIdempotency.findMany({
-
                 where: { idempotencyKey: { in: keys } },
 
                 select: { idempotencyKey: true },
-
               })
-
             : [];
 
         const existingSet = new Set(existing.map((e) => e.idempotencyKey));
 
         wonKeys = new Set(keys.filter((k) => !existingSet.has(k)));
-
       } else if (keys.length > 0) {
-
         const values = Prisma.join(keys.map((k) => Prisma.sql`(${tenantId}::uuid, ${k})`));
 
         const won = await tx.$queryRaw<{ idempotency_key: string }[]>(
-
           Prisma.sql`INSERT INTO import_idempotency (tenant_id, idempotency_key)
 
                      VALUES ${values}
@@ -243,35 +194,25 @@ export class ImportService {
                      ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
 
                      RETURNING idempotency_key`,
-
         );
 
         wonKeys = new Set(won.map((w) => w.idempotency_key));
-
       } else {
-
         wonKeys = new Set();
-
       }
 
       const fresh = deduped.filter((m) => !m.key || wonKeys.has(m.key));
 
-
-
       const byTable = new Map<string, Record<string, unknown>[]>();
 
       for (const m of fresh) {
-
         for (const ev of m.events) {
-
           const list = byTable.get(ev.table) ?? [];
 
           list.push({ ...ev.row, tenant_id: tenantId });
 
           byTable.set(ev.table, list);
-
         }
-
       }
 
       const tableCounts: Record<string, number> = {};
@@ -279,17 +220,12 @@ export class ImportService {
       let eventCount = 0;
 
       for (const [table, list] of byTable) {
-
         tableCounts[table] = list.length;
 
         eventCount += list.length;
-
       }
 
-
-
       const summary: ImportSummary = {
-
         received: rows.length,
 
         imported: fresh.length,
@@ -303,43 +239,26 @@ export class ImportService {
         byTable: tableCounts,
 
         dryRun,
-
       };
 
-
-
       return { summary, byTable };
-
     });
 
-
-
     if (dryRun) {
-
       return summary;
-
     }
-
-
 
     // 5. Bulk-insert each table's rows after the reservation transaction commits.
 
     for (const [table, list] of byTable) {
-
       await this.ch.insertRows(table, list);
-
     }
-
-
 
     // 6. Audit the data ingestion (rule 10).
 
     await this.prisma.withTenant(tenantId, (tx) =>
-
       tx.auditLog.create({
-
         data: {
-
           tenantId,
 
           actor: getPrincipal()?.userId ?? 'system',
@@ -349,7 +268,6 @@ export class ImportService {
           object: 'import:events',
 
           detail: {
-
             received: summary.received,
 
             imported: summary.imported,
@@ -361,59 +279,57 @@ export class ImportService {
             events: summary.events,
 
             byTable: summary.byTable,
-
           },
-
         },
-
       }),
-
     );
 
-
-
     this.logger.log(
-
-      { event: 'import_events', tenantId, ...summary.byTable, imported: summary.imported, skipped: summary.skipped, keyless },
+      {
+        event: 'import_events',
+        tenantId,
+        ...summary.byTable,
+        imported: summary.imported,
+        skipped: summary.skipped,
+        keyless,
+      },
 
       'import',
-
     );
 
     return summary;
-
   }
-
-
 
   /** Release idempotency keys for a connector so a re-sync can replace stale rows. */
 
   async releaseConnectorImportKeys(connectorId: string): Promise<void> {
-
     const tenantId = getTenantId();
 
-    if (!tenantId) {throw new BadRequestException('no tenant in context');}
+    if (!tenantId) {
+      throw new BadRequestException('no tenant in context');
+    }
 
     const prefix = `conn_${connectorId}_`;
 
-    await this.prisma.withTenant(tenantId, (tx) =>
-
-      tx.$executeRaw`
+    await this.prisma.withTenant(
+      tenantId,
+      (tx) =>
+        tx.$executeRaw`
 
         DELETE FROM import_idempotency
 
         WHERE tenant_id = ${tenantId}::uuid
 
           AND idempotency_key LIKE ${`${prefix}%`}`,
-
     );
-
   }
 
   /** Drop portal CSV rows in a date window before a fresh billing import. */
   async purgePortalImportWindow(provider: string, from: string, to: string): Promise<void> {
     const tenantId = getTenantId();
-    if (!tenantId) {throw new BadRequestException('no tenant in context');}
+    if (!tenantId) {
+      throw new BadRequestException('no tenant in context');
+    }
     await this.ch.command(
       `ALTER TABLE agentledger.llm_calls DELETE
        WHERE tenant_id = {tenant:String}
@@ -425,10 +341,16 @@ export class ImportService {
   }
 
   /** Remove all rows from one portal import run and release their idempotency keys. */
-  async deletePortalImportRun(importRunId: string): Promise<{ rowsDeleted: number; keysReleased: number }> {
+  async deletePortalImportRun(
+    importRunId: string,
+  ): Promise<{ rowsDeleted: number; keysReleased: number }> {
     const tenantId = getTenantId();
-    if (!tenantId) {throw new BadRequestException('no tenant in context');}
-    if (!importRunId?.trim()) {throw new BadRequestException('import_run_id is required');}
+    if (!tenantId) {
+      throw new BadRequestException('no tenant in context');
+    }
+    if (!importRunId?.trim()) {
+      throw new BadRequestException('import_run_id is required');
+    }
 
     const [{ c: rowsDeleted }] = await this.ch.queryScoped<{ c: number }>(
       `SELECT count() AS c
@@ -466,16 +388,17 @@ export class ImportService {
   /** Allow specific import keys to be re-written (e.g. corrected billing CSV). */
   async releaseImportKeys(keys: string[]): Promise<void> {
     const tenantId = getTenantId();
-    if (!tenantId) {throw new BadRequestException('no tenant in context');}
+    if (!tenantId) {
+      throw new BadRequestException('no tenant in context');
+    }
     const unique = [...new Set(keys.filter(Boolean))];
-    if (unique.length === 0) {return;}
+    if (unique.length === 0) {
+      return;
+    }
     await this.prisma.withTenant(tenantId, (tx) =>
       tx.importIdempotency.deleteMany({
         where: { tenantId, idempotencyKey: { in: unique } },
       }),
     );
   }
-
 }
-
-
