@@ -11,7 +11,7 @@ import type {
 export function daysBetweenInclusive(from: string, to: string): number {
   const a = Date.parse(`${from}T00:00:00Z`);
   const b = Date.parse(`${to}T00:00:00Z`);
-  if (!Number.isFinite(a) || !Number.isFinite(b)) return 0;
+  if (!Number.isFinite(a) || !Number.isFinite(b)) {return 0;}
   return Math.max(0, Math.floor((b - a) / 86_400_000) + 1);
 }
 
@@ -47,7 +47,7 @@ export function priorMaterialityThreshold(currentCost: number): number {
 
 /** Period-over-period percent change; null when prior is below materiality threshold. */
 export function periodDeltaPct(current: number, prior: number): number | null {
-  if (prior < priorMaterialityThreshold(current)) return null;
+  if (prior < priorMaterialityThreshold(current)) {return null;}
   return round2(((current - prior) / prior) * 100);
 }
 
@@ -62,16 +62,16 @@ export function formatPeriodChange(
   pctChange: number | null,
   formatPctFn: (n: number) => string,
 ): string | null {
-  if (currentCost <= 0) return null;
-  if (priorCost < priorMaterialityThreshold(currentCost)) return NEW_SPEND_LABEL;
-  if (pctChange !== null && shouldRenderPctChange(priorCost, currentCost)) return formatPctFn(pctChange);
+  if (currentCost <= 0) {return null;}
+  if (priorCost < priorMaterialityThreshold(currentCost)) {return NEW_SPEND_LABEL;}
+  if (pctChange !== null && shouldRenderPctChange(priorCost, currentCost)) {return formatPctFn(pctChange);}
   return null;
 }
 
 /** @deprecated use formatPeriodChange */
 export function periodChangeDisplay(priorCost: number, currentCost: number): string | null {
-  if (currentCost <= 0) return null;
-  if (priorCost < priorMaterialityThreshold(currentCost)) return NEW_SPEND_LABEL;
+  if (currentCost <= 0) {return null;}
+  if (priorCost < priorMaterialityThreshold(currentCost)) {return NEW_SPEND_LABEL;}
   return null;
 }
 
@@ -119,7 +119,7 @@ export function shouldRenderCacheCallout(cachedTokens: number): boolean {
 }
 
 export function shouldRenderRisk(blockedEvents: number, rows: RiskRollupRow[]): boolean {
-  if (blockedEvents > 0) return true;
+  if (blockedEvents > 0) {return true;}
   return rows.some((r) => r.dlpAction !== 'allow' && r.events > 0);
 }
 
@@ -132,8 +132,8 @@ export function shouldRenderProjection(
 /** Top 15 users plus optional "All others" rollup. */
 export function rollupUserSpend(rows: UserSpendRow[], topN = 15): UserSpendRow[] {
   const sorted = [...rows].filter((r) => r.costUsd > 0).sort((a, b) => b.costUsd - a.costUsd);
-  if (sorted.length === 0) return [];
-  if (sorted.length <= topN) return sorted;
+  if (sorted.length === 0) {return [];}
+  if (sorted.length <= topN) {return sorted;}
   const top = sorted.slice(0, topN);
   const rest = sorted.slice(topN);
   const others: UserSpendRow = {

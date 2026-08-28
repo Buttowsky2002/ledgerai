@@ -14,7 +14,7 @@ export function chartFontPath(): string {
     join(__dirname, '..', '..', '..', 'assets', 'fonts', 'DejaVuSans.ttf'),
   ];
   for (const p of candidates) {
-    if (existsSync(p)) return p;
+    if (existsSync(p)) {return p;}
   }
   throw new Error(
     `Chart font DejaVuSans.ttf not found (searched: ${candidates.join('; ')}). Rebuild the API (npm run build) or rebuild the Docker image.`,

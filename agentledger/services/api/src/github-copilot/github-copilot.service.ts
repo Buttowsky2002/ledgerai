@@ -57,7 +57,7 @@ export class GitHubCopilotService {
     const row = await this.prisma.withTenant(tenantId, (tx) =>
       tx.aiProviderConnection.findUnique({ where: { connectionId } }),
     );
-    if (!row) throw new NotFoundException('connection not found');
+    if (!row) {throw new NotFoundException('connection not found');}
     const connector = await this.prisma.withTenant(tenantId, (tx) =>
       tx.connector.findUnique({ where: { connectorId: row.connectorId } }),
     );
@@ -67,8 +67,8 @@ export class GitHubCopilotService {
   async createConnection(dto: CreateCopilotConnectionDto): Promise<CopilotConnectionStatus> {
     const tenantId = this.requireTenant();
     const orgSlug = dto.orgSlug.trim().toLowerCase();
-    if (!orgSlug) throw new BadRequestException('orgSlug is required');
-    if (!dto.githubToken?.trim()) throw new BadRequestException('githubToken is required');
+    if (!orgSlug) {throw new BadRequestException('orgSlug is required');}
+    if (!dto.githubToken?.trim()) {throw new BadRequestException('githubToken is required');}
 
     const client = new GitHubCopilotClient({ token: dto.githubToken.trim(), orgSlug });
     try {
@@ -142,7 +142,7 @@ export class GitHubCopilotService {
     const existing = await this.prisma.withTenant(tenantId, (tx) =>
       tx.aiProviderConnection.findUnique({ where: { connectionId } }),
     );
-    if (!existing) throw new NotFoundException('connection not found');
+    if (!existing) {throw new NotFoundException('connection not found');}
 
     const merged = mergeRoiAssumptions({
       ...(existing.roiAssumptions as Partial<CopilotRoiAssumptions>),
@@ -162,7 +162,7 @@ export class GitHubCopilotService {
   }
 
   async testToken(token: string, orgSlug: string): Promise<{ ok: boolean; orgName?: string; hint?: string }> {
-    if (!token?.trim()) throw new BadRequestException('token is required');
+    if (!token?.trim()) {throw new BadRequestException('token is required');}
     const client = new GitHubCopilotClient({ token: token.trim(), orgSlug: orgSlug.trim().toLowerCase() });
     try {
       const result = await client.validateToken();
@@ -226,8 +226,8 @@ export class GitHubCopilotService {
     );
 
     const activeSeats = seats.filter((s) => {
-      if (!s.isActive) return false;
-      if (!s.lastActivityAt) return false;
+      if (!s.isActive) {return false;}
+      if (!s.lastActivityAt) {return false;}
       return (Date.now() - s.lastActivityAt.getTime()) / 86_400_000 <= 28;
     }).length;
     const inactiveSeats = seats.filter((s) => s.isActive).length - activeSeats;
@@ -273,7 +273,7 @@ export class GitHubCopilotService {
     const charts = this.buildCharts(seats, usage, roiRows);
     const userUsageMap = new Map<string, { aiCreditsUsed: number; linesAccepted: number; acceptancesCount: number; teamSlug: string }>();
     for (const u of usage) {
-      if (!u.githubLogin) continue;
+      if (!u.githubLogin) {continue;}
       const cur = userUsageMap.get(u.githubLogin) ?? {
         aiCreditsUsed: 0,
         linesAccepted: 0,
@@ -377,10 +377,10 @@ export class GitHubCopilotService {
       { bucket: 'Inactive 30d+', seats: 0, wasteUsd: 0 },
     ];
     for (const s of seats) {
-      if (!s.isActive) continue;
+      if (!s.isActive) {continue;}
       const cost = Number(s.monthlySeatCost);
       const days = s.lastActivityAt ? (now - s.lastActivityAt.getTime()) / 86_400_000 : Infinity;
-      if (days <= 14) seatWaste[0].seats += 1;
+      if (days <= 14) {seatWaste[0].seats += 1;}
       else if (days < 30) {
         seatWaste[1].seats += 1;
         seatWaste[1].wasteUsd += cost;
@@ -455,7 +455,7 @@ export class GitHubCopilotService {
 
   private requireTenant(): string {
     const tenantId = getTenantId();
-    if (!tenantId) throw new BadRequestException('no tenant in context');
+    if (!tenantId) {throw new BadRequestException('no tenant in context');}
     return tenantId;
   }
 }

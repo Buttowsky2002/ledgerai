@@ -33,7 +33,7 @@ export function modelFamilyLabel(platform: string, model: string): string {
   const p = platform.trim().toLowerCase();
   const m = model.trim().toLowerCase();
   for (const rule of FAMILY_RULES) {
-    if (rule.test(p, m)) return rule.label;
+    if (rule.test(p, m)) {return rule.label;}
   }
   if (p) {
     return p

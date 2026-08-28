@@ -57,7 +57,7 @@ export class CopilotAnalyticsService {
         select: { connectionId: true, roiAssumptions: true },
       }),
     );
-    if (connections.length === 0) return null;
+    if (connections.length === 0) {return null;}
 
     const connectionIds = connections.map((c) => c.connectionId);
     const assumptions = mergeRoiAssumptions(
@@ -250,7 +250,7 @@ export class CopilotAnalyticsService {
         select: { connectionId: true },
       }),
     );
-    if (connections.length === 0) return [];
+    if (connections.length === 0) {return [];}
 
     const connectionIds = connections.map((c) => c.connectionId);
     const start = new Date(`${from}T00:00:00.000Z`);
@@ -296,7 +296,7 @@ export class CopilotAnalyticsService {
       const byLogin = new Map<string, { cost: number; calls: number; modelWeights: Map<string, number> }>();
       for (const row of memberSpend) {
         const login = row.githubLogin?.trim();
-        if (!login) continue;
+        if (!login) {continue;}
         const acc = byLogin.get(login) ?? { cost: 0, calls: 0, modelWeights: new Map() };
         acc.cost += Number(row.totalAllocatedCost);
         acc.calls += row.linesAccepted + row.chatTurns + row.prSummaryCount;
@@ -304,7 +304,7 @@ export class CopilotAnalyticsService {
       }
       for (const row of usage) {
         const login = row.githubLogin?.trim();
-        if (!login) continue;
+        if (!login) {continue;}
         const acc = byLogin.get(login) ?? { cost: 0, calls: 0, modelWeights: new Map() };
         const model = row.model?.trim() || row.feature?.trim() || 'copilot-business';
         const weight = row.linesAccepted + row.chatTurns + row.acceptancesCount + row.prSummaryCount;
@@ -332,13 +332,13 @@ export class CopilotAnalyticsService {
     }
 
     const summary = await this.getSpendSummary(tenantId, from, to);
-    if (!summary || summary.totalCostUsd <= 0) return [];
+    if (!summary || summary.totalCostUsd <= 0) {return [];}
 
     type Acc = { weight: number; calls: number; modelWeights: Map<string, number> };
     const byUser = new Map<string, Acc>();
     for (const row of usage) {
       const login = row.githubLogin?.trim();
-      if (!login) continue;
+      if (!login) {continue;}
       const weight = row.linesAccepted + row.chatTurns + row.acceptancesCount + row.prSummaryCount;
       const calls = row.acceptancesCount + row.chatTurns + row.prSummaryCount;
       const model = row.model?.trim() || row.feature?.trim() || 'copilot-business';

@@ -14,7 +14,7 @@ interface PriceEntry {
 let entries: PriceEntry[] = [];
 
 function loadPriceBook(): PriceEntry[] {
-  if (entries.length) return entries;
+  if (entries.length) {return entries;}
   const candidates = [
     join(__dirname, '../../pricing/pricebook.json'),
     join(__dirname, '../../../../pricing/pricebook.json'),
@@ -37,11 +37,11 @@ function rate(provider: string, model: string, tokenType: string, at: Date): num
   let bestLen = -1;
   let found: number | undefined;
   for (const e of book) {
-    if (e.provider !== provider || e.token_type !== tokenType) continue;
-    if (!model.startsWith(e.model)) continue;
+    if (e.provider !== provider || e.token_type !== tokenType) {continue;}
+    if (!model.startsWith(e.model)) {continue;}
     const start = new Date(e.effective_start);
-    if (at < start) continue;
-    if (e.effective_end && at > new Date(e.effective_end)) continue;
+    if (at < start) {continue;}
+    if (e.effective_end && at > new Date(e.effective_end)) {continue;}
     if (e.model.length > bestLen) {
       bestLen = e.model.length;
       found = e.usd_per_million;
@@ -51,8 +51,8 @@ function rate(provider: string, model: string, tokenType: string, at: Date): num
 }
 
 function num(v: unknown): number {
-  if (typeof v === 'number' && Number.isFinite(v)) return v;
-  if (v === undefined || v === null || v === '') return 0;
+  if (typeof v === 'number' && Number.isFinite(v)) {return v;}
+  if (v === undefined || v === null || v === '') {return 0;}
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 }
@@ -63,14 +63,14 @@ export function estimateCostFromTokens(metrics: NormalizedUsageMetrics): number 
   const model = String(metrics.model ?? metrics.product ?? '').split(',')[0].trim();
   const inputTokens = num(metrics.input_tokens);
   const outputTokens = num(metrics.output_tokens);
-  if (!provider || !model || (inputTokens === 0 && outputTokens === 0)) return 0;
+  if (!provider || !model || (inputTokens === 0 && outputTokens === 0)) {return 0;}
 
   const at = metrics.ts ? new Date(String(metrics.ts)) : new Date();
   let total = 0;
   const inRate = rate(provider, model, 'input', at);
   const outRate = rate(provider, model, 'output', at);
-  if (inRate !== undefined) total += (inputTokens * inRate) / 1_000_000;
-  if (outRate !== undefined) total += (outputTokens * outRate) / 1_000_000;
+  if (inRate !== undefined) {total += (inputTokens * inRate) / 1_000_000;}
+  if (outRate !== undefined) {total += (outputTokens * outRate) / 1_000_000;}
   return Math.round(total * 1_000_000) / 1_000_000;
 }
 

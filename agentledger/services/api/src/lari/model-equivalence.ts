@@ -35,7 +35,7 @@ export function modelFamily(provider: string, model: string): string {
   const p = provider.trim().toLowerCase();
   const m = model.trim().toLowerCase();
   for (const rule of FAMILY_RULES) {
-    if (rule.test(p, m)) return rule.label;
+    if (rule.test(p, m)) {return rule.label;}
   }
   if (p) {
     return p
@@ -74,9 +74,9 @@ export function resolveModelRate(
   let bestLen = -1;
   let found: ModelRate | undefined;
   for (const rate of priceBook) {
-    if (rate.provider.trim().toLowerCase() !== p) continue;
+    if (rate.provider.trim().toLowerCase() !== p) {continue;}
     const prefix = rate.model.trim().toLowerCase();
-    if (!m.startsWith(prefix)) continue;
+    if (!m.startsWith(prefix)) {continue;}
     if (prefix.length > bestLen) {
       bestLen = prefix.length;
       found = rate;
@@ -92,7 +92,7 @@ export function substitutionCandidates(
   priceBook: ModelRate[],
 ): ModelRate[] {
   const incumbentRate = resolveModelRate(incumbent.provider, incumbent.model, priceBook);
-  if (!incumbentRate) return [];
+  if (!incumbentRate) {return [];}
 
   const family = modelFamily(incumbent.provider, incumbent.model);
   const incumbentBlended = blendedRate(incumbentRate, inputShare);
@@ -100,8 +100,8 @@ export function substitutionCandidates(
 
   return priceBook
     .filter((candidate) => {
-      if (modelKey(candidate.provider, candidate.model) === incumbentKey) return false;
-      if (modelFamily(candidate.provider, candidate.model) !== family) return false;
+      if (modelKey(candidate.provider, candidate.model) === incumbentKey) {return false;}
+      if (modelFamily(candidate.provider, candidate.model) !== family) {return false;}
       return blendedRate(candidate, inputShare) < incumbentBlended;
     })
     .sort(

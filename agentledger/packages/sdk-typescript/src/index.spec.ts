@@ -14,7 +14,7 @@ function mockFetch(opts: { status?: number; reject?: boolean } = {}): {
       headers: (init?.headers as Record<string, string>) ?? {},
       body: String(init?.body ?? ''),
     });
-    if (opts.reject) throw new Error('network down');
+    if (opts.reject) {throw new Error('network down');}
     return new Response(null, { status: opts.status ?? 202 });
   });
   return { fetch: fn as unknown as typeof fetch, calls };

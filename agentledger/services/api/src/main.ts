@@ -21,10 +21,10 @@ function resolvePort(): number {
   const addr = env('BADGERIQ_API_ADDR');
   if (addr) {
     const port = Number(addr.replace(/^.*:/, ''));
-    if (Number.isFinite(port) && port > 0) return port;
+    if (Number.isFinite(port) && port > 0) {return port;}
   }
   const platformPort = Number(env('PORT'));
-  if (Number.isFinite(platformPort) && platformPort > 0) return platformPort;
+  if (Number.isFinite(platformPort) && platformPort > 0) {return platformPort;}
   return 8094;
 }
 

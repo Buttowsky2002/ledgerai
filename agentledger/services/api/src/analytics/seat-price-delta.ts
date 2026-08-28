@@ -56,10 +56,10 @@ export function previousCalendarMonth(periodMonth: string): string {
 /** Per-seat unit: stored unit_cost_usd, else cost / seats (enterprise contracts). */
 export function resolveUnitCost(snapshot: SeatSnapshot): number {
   const unit = n(snapshot.unitCostUsd);
-  if (unit > 0) return unit;
+  if (unit > 0) {return unit;}
   const seats = n(snapshot.seats);
   const cost = n(snapshot.costUsd);
-  if (seats > 0 && cost > 0) return cost / seats;
+  if (seats > 0 && cost > 0) {return cost / seats;}
   return 0;
 }
 
@@ -103,7 +103,7 @@ export function seatPriceDelta(current: SeatSnapshot, prior: SeatSnapshot | null
 }
 
 function snapshotForRows(rows: FixedCostSeatRow[]): SeatSnapshot | null {
-  if (rows.length === 0) return null;
+  if (rows.length === 0) {return null;}
   const seats = rows.reduce((s, r) => s + n(r.seats), 0);
   const costUsd = round2(rows.reduce((s, r) => s + n(r.cost_usd), 0));
   const units = rows
@@ -148,18 +148,18 @@ export function vendorSeatChanges(
       const m = monthStart(String(r.period_month));
       return m >= rangeStart && m <= rangeEnd;
     });
-    if (inRange.length === 0) continue;
+    if (inRange.length === 0) {continue;}
     const vendorLatest = inRange.reduce((max, r) => {
       const m = monthStart(String(r.period_month));
       return m > max ? m : max;
     }, monthStart(String(inRange[0].period_month)));
-    if (!latestMonth || vendorLatest > latestMonth) latestMonth = vendorLatest;
+    if (!latestMonth || vendorLatest > latestMonth) {latestMonth = vendorLatest;}
 
     const priorMonth = previousCalendarMonth(vendorLatest);
     const current = snapshotForRows(
       vendorRows.filter((r) => monthStart(String(r.period_month)) === vendorLatest),
     );
-    if (!current) continue;
+    if (!current) {continue;}
     const prior = snapshotForRows(
       vendorRows.filter((r) => monthStart(String(r.period_month)) === priorMonth),
     );

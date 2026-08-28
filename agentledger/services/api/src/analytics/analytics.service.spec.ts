@@ -237,7 +237,7 @@ describe('AnalyticsService.users', () => {
 
   function usersHarness() {
     const queryScoped = jest.fn(async (sql: string, params?: Record<string, unknown>) => {
-      if (params?.userId === 'missing-user') return [];
+      if (params?.userId === 'missing-user') {return [];}
       if (sql.includes('user_id, platform, model, spend_usd')) {
         return [
           {
@@ -325,7 +325,7 @@ describe('AnalyticsService.users', () => {
 
   it('merges spend rows that resolve to the same email identity', async () => {
     const queryScoped = jest.fn(async (sql: string, params?: Record<string, unknown>) => {
-      if (params?.userId) return [];
+      if (params?.userId) {return [];}
       if (sql.includes('user_id, platform, model, spend_usd')) {
         return [
           { user_id: 'demo-user-0', platform: 'openai', model: 'gpt-4o', spend_usd: 10, calls: 2, portal_import_usd: 0, connector_usd: 10 },
@@ -381,7 +381,7 @@ describe('AnalyticsService.users', () => {
 
   it('merges GitHub Copilot members with token spend users', async () => {
     const queryScoped = jest.fn(async (sql: string) => {
-      if (sql.includes('user_id, platform, model, spend_usd')) return [];
+      if (sql.includes('user_id, platform, model, spend_usd')) {return [];}
       if (sql.includes('key, cost_usd, calls, portal_import_usd')) {
         return [{ key: 'cursor-user-99', cost_usd: 8, calls: 2, portal_import_usd: 0, connector_usd: 8 }];
       }
@@ -678,7 +678,7 @@ describe('AnalyticsService.cursorSpend', () => {
 
   it('computes seat license from fixed costs × active members', async () => {
     const queryScoped = jest.fn(async (sql: string) => {
-      if (sql.includes('count(DISTINCT user_id)')) return [{ members: 11 }];
+      if (sql.includes('count(DISTINCT user_id)')) {return [{ members: 11 }];}
       if (sql.includes('agentledger.fixed_costs')) {
         return [{ period_month: '2026-06-01', cost_usd: 600, seats: 15, unit_cost_usd: 40 }];
       }
@@ -708,8 +708,8 @@ describe('AnalyticsService.cursorSpend', () => {
 
   it('still returns active members when seat license query fails', async () => {
     const queryScoped = jest.fn(async (sql: string) => {
-      if (sql.includes('count(DISTINCT user_id)')) return [{ members: 11 }];
-      if (sql.includes('agentledger.fixed_costs')) throw new Error('ILLEGAL_AGGREGATION');
+      if (sql.includes('count(DISTINCT user_id)')) {return [{ members: 11 }];}
+      if (sql.includes('agentledger.fixed_costs')) {throw new Error('ILLEGAL_AGGREGATION');}
       return [];
     });
     const ch = { queryScoped } as unknown as ClickHouseService;

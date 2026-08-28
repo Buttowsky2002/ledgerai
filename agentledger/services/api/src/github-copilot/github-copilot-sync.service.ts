@@ -146,7 +146,7 @@ export class GitHubCopilotSyncService {
           const daily = await client.fetchUsers1DayUsage(dayStr);
           usageRows.push(...daily);
         } catch (err) {
-          if (err instanceof GitHubCopilotApiError && err.status === 404) continue;
+          if (err instanceof GitHubCopilotApiError && err.status === 404) {continue;}
           this.logger.warn(`users-1-day sync skipped for ${dayStr}: ${safeMsg(err)}`);
         }
       }
@@ -333,7 +333,7 @@ export class GitHubCopilotSyncService {
     let count = 0;
     await this.prisma.withTenant(tenantId, async (tx) => {
       for (const s of seats) {
-        if (!s.githubUserId || !s.githubLogin) continue;
+        if (!s.githubUserId || !s.githubLogin) {continue;}
         await tx.githubCopilotSeat.upsert({
           where: {
             tenantId_connectionId_githubUserId: {
@@ -505,7 +505,7 @@ export class GitHubCopilotSyncService {
       cur.assigned += 1;
       if (s.isActive && s.lastActivityAt) {
         const days = (Date.now() - s.lastActivityAt.getTime()) / 86_400_000;
-        if (days <= 28) cur.active += 1;
+        if (days <= 28) {cur.active += 1;}
       }
       teamSeatCounts.set(team, cur);
     }
@@ -773,7 +773,7 @@ export class GitHubCopilotSyncService {
 
     const usageByLoginDay = new Map<string, MemberDailyUsage>();
     for (const u of usage) {
-      if (!u.githubLogin) continue;
+      if (!u.githubLogin) {continue;}
       const day = u.usageDate.toISOString().slice(0, 10);
       const teamSlug = primaryTeamByLogin.get(u.githubLogin) ?? u.teamSlug ?? '';
       const key = `${day}|${u.githubLogin}`;
@@ -812,7 +812,7 @@ export class GitHubCopilotSyncService {
 
     for (const day of allDays) {
       for (const s of seats) {
-        if (!s.isActive) continue;
+        if (!s.isActive) {continue;}
         const key = `${day}|${s.githubLogin}`;
         if (!usageByLoginDay.has(key)) {
           usageByLoginDay.set(key, {

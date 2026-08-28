@@ -184,9 +184,9 @@ export class ImportService {
 
     const deduped = mapped.filter((m) => {
 
-      if (!m.key) return true;
+      if (!m.key) {return true;}
 
-      if (seen.has(m.key)) return false;
+      if (seen.has(m.key)) {return false;}
 
       seen.add(m.key);
 
@@ -392,7 +392,7 @@ export class ImportService {
 
     const tenantId = getTenantId();
 
-    if (!tenantId) throw new BadRequestException('no tenant in context');
+    if (!tenantId) {throw new BadRequestException('no tenant in context');}
 
     const prefix = `conn_${connectorId}_`;
 
@@ -413,7 +413,7 @@ export class ImportService {
   /** Drop portal CSV rows in a date window before a fresh billing import. */
   async purgePortalImportWindow(provider: string, from: string, to: string): Promise<void> {
     const tenantId = getTenantId();
-    if (!tenantId) throw new BadRequestException('no tenant in context');
+    if (!tenantId) {throw new BadRequestException('no tenant in context');}
     await this.ch.command(
       `ALTER TABLE agentledger.llm_calls DELETE
        WHERE tenant_id = {tenant:String}
@@ -427,8 +427,8 @@ export class ImportService {
   /** Remove all rows from one portal import run and release their idempotency keys. */
   async deletePortalImportRun(importRunId: string): Promise<{ rowsDeleted: number; keysReleased: number }> {
     const tenantId = getTenantId();
-    if (!tenantId) throw new BadRequestException('no tenant in context');
-    if (!importRunId?.trim()) throw new BadRequestException('import_run_id is required');
+    if (!tenantId) {throw new BadRequestException('no tenant in context');}
+    if (!importRunId?.trim()) {throw new BadRequestException('import_run_id is required');}
 
     const [{ c: rowsDeleted }] = await this.ch.queryScoped<{ c: number }>(
       `SELECT count() AS c
@@ -466,9 +466,9 @@ export class ImportService {
   /** Allow specific import keys to be re-written (e.g. corrected billing CSV). */
   async releaseImportKeys(keys: string[]): Promise<void> {
     const tenantId = getTenantId();
-    if (!tenantId) throw new BadRequestException('no tenant in context');
+    if (!tenantId) {throw new BadRequestException('no tenant in context');}
     const unique = [...new Set(keys.filter(Boolean))];
-    if (unique.length === 0) return;
+    if (unique.length === 0) {return;}
     await this.prisma.withTenant(tenantId, (tx) =>
       tx.importIdempotency.deleteMany({
         where: { tenantId, idempotencyKey: { in: unique } },

@@ -21,7 +21,7 @@ export function overlapDaysInBillingMonth(periodMonth: string, from: string, to:
   const rangeEnd = parseUtcDate(to);
   const start = rangeStart > monthStart ? rangeStart : monthStart;
   const end = rangeEnd < monthEnd ? rangeEnd : monthEnd;
-  if (end < start) return 0;
+  if (end < start) {return 0;}
   return Math.floor((end.getTime() - start.getTime()) / MS_DAY) + 1;
 }
 
@@ -34,7 +34,7 @@ export function prorateMonthlyCost(
 ): number {
   const dim = daysInBillingMonth(periodMonth);
   const overlap = overlapDaysInBillingMonth(periodMonth, from, to);
-  if (monthlyUsd <= 0 || dim <= 0 || overlap <= 0) return 0;
+  if (monthlyUsd <= 0 || dim <= 0 || overlap <= 0) {return 0;}
   return Math.round(((monthlyUsd * overlap) / dim) * 100) / 100;
 }
 

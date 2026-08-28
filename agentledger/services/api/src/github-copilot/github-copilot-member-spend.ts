@@ -84,7 +84,7 @@ export function allocatedOverageCost(
   totalOrgAiCredits: number,
   totalOrgOverageCost: number,
 ): number {
-  if (totalOrgOverageCost <= 0 || totalOrgAiCredits <= 0 || userAiCredits <= 0) return 0;
+  if (totalOrgOverageCost <= 0 || totalOrgAiCredits <= 0 || userAiCredits <= 0) {return 0;}
   return totalOrgOverageCost * (userAiCredits / totalOrgAiCredits);
 }
 
@@ -131,9 +131,9 @@ export function isInactiveSeat(
   inactiveDaysThreshold: number,
   now: Date,
 ): boolean {
-  if (!seat?.isActive) return false;
-  if (!seat.lastActivityAt && usageInPeriod === 0) return true;
-  if (!seat.lastActivityAt) return usageInPeriod === 0;
+  if (!seat?.isActive) {return false;}
+  if (!seat.lastActivityAt && usageInPeriod === 0) {return true;}
+  if (!seat.lastActivityAt) {return usageInPeriod === 0;}
   const days = (now.getTime() - seat.lastActivityAt.getTime()) / 86_400_000;
   return days >= inactiveDaysThreshold && usageInPeriod === 0;
 }
@@ -144,8 +144,8 @@ export function isLowUsageSeat(
   lowUsageDaysThreshold: number,
   now: Date,
 ): boolean {
-  if (!seat?.isActive || usageInPeriod > 5) return false;
-  if (!seat.lastActivityAt) return true;
+  if (!seat?.isActive || usageInPeriod > 5) {return false;}
+  if (!seat.lastActivityAt) {return true;}
   const days = (now.getTime() - seat.lastActivityAt.getTime()) / 86_400_000;
   return days >= lowUsageDaysThreshold;
 }
@@ -155,7 +155,7 @@ export function isHighUsage(
   score: number,
   peerScores: { githubLogin: string; score: number }[],
 ): boolean {
-  if (peerScores.length < 5) return false;
+  if (peerScores.length < 5) {return false;}
   const sorted = [...peerScores].sort((a, b) => b.score - a.score);
   const cutoffIdx = Math.max(0, Math.floor(sorted.length * 0.2) - 1);
   const threshold = sorted[cutoffIdx]?.score ?? 0;

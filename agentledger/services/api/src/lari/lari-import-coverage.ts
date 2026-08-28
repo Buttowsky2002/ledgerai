@@ -45,7 +45,7 @@ export function enrichProductsWithSources(
 ): ProductWorthEntry[] {
   return products.map((p) => {
     const src = spendBySource.get(normalizeProvider(p.product));
-    if (!src) return p;
+    if (!src) {return p;}
     const total = src.portalImportUsd + src.connectorUsd + src.liveUsd;
     const dominant =
       total <= 0

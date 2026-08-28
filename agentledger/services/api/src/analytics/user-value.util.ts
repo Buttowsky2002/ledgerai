@@ -10,7 +10,7 @@ export function seatMonthlyCost(
   contractMonthlyCost: number,
   seatsPurchased: number,
 ): number {
-  if (monthlyPricePerUser > 0) return usd(monthlyPricePerUser);
+  if (monthlyPricePerUser > 0) {return usd(monthlyPricePerUser);}
   if (seatsPurchased > 0 && contractMonthlyCost > 0) {
     return usd(contractMonthlyCost / seatsPurchased);
   }
@@ -36,8 +36,8 @@ export function computeUserStatus(
   utilizationScore: number,
   hasSeat: boolean,
 ): UserUtilizationStatus {
-  if (calls === 0 && sessions === 0) return 'inactive';
-  if (hasSeat && utilizationScore < 30) return 'low_use';
-  if (utilizationScore < 20) return 'low_use';
+  if (calls === 0 && sessions === 0) {return 'inactive';}
+  if (hasSeat && utilizationScore < 30) {return 'low_use';}
+  if (utilizationScore < 20) {return 'low_use';}
   return 'active';
 }

@@ -4,8 +4,8 @@
  */
 
 function num(v: unknown): number {
-  if (typeof v === 'number' && Number.isFinite(v)) return v;
-  if (v === undefined || v === null || v === '') return 0;
+  if (typeof v === 'number' && Number.isFinite(v)) {return v;}
+  if (v === undefined || v === null || v === '') {return 0;}
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 }
@@ -15,9 +15,9 @@ export type CursorAiSource = 'tab' | 'composer' | 'mixed' | 'none';
 export function classifyCursorAiSource(tabLines: number, composerLines: number): CursorAiSource {
   const tab = tabLines > 0;
   const composer = composerLines > 0;
-  if (tab && composer) return 'mixed';
-  if (tab) return 'tab';
-  if (composer) return 'composer';
+  if (tab && composer) {return 'mixed';}
+  if (tab) {return 'tab';}
+  if (composer) {return 'composer';}
   return 'none';
 }
 
@@ -25,8 +25,8 @@ export function classifyCursorAiSource(tabLines: number, composerLines: number):
 export function enrichCursorCommitAttribution(
   metrics: Record<string, unknown>,
 ): Record<string, unknown> {
-  if (String(metrics.provider ?? '').toLowerCase() !== 'cursor') return metrics;
-  if (!metrics.commit_hash && !metrics.commitHash) return metrics;
+  if (String(metrics.provider ?? '').toLowerCase() !== 'cursor') {return metrics;}
+  if (!metrics.commit_hash && !metrics.commitHash) {return metrics;}
 
   const tabAdded = num(metrics.tab_lines_added ?? metrics.tabLinesAdded);
   const tabDeleted = num(metrics.tab_lines_deleted ?? metrics.tabLinesDeleted);

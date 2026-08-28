@@ -9,7 +9,7 @@ const ENV_PREFIXES = ['BADGERIQ_', 'LEDGERAI_', 'AGENTLEDGER_'] as const;
 
 function envSuffix(name: string): string | null {
   for (const prefix of ENV_PREFIXES) {
-    if (name.startsWith(prefix)) return name.slice(prefix.length);
+    if (name.startsWith(prefix)) {return name.slice(prefix.length);}
   }
   return null;
 }
@@ -20,10 +20,10 @@ export function env(name: string): string | undefined {
     return direct;
   }
   const suffix = envSuffix(name);
-  if (!suffix) return direct;
+  if (!suffix) {return direct;}
   for (const prefix of ENV_PREFIXES) {
     const key = prefix + suffix;
-    if (key === name) continue;
+    if (key === name) {continue;}
     const val = process.env[key];
     if (val !== undefined && val !== '') {
       return val;
@@ -34,7 +34,7 @@ export function env(name: string): string | undefined {
 
 /** Append Prisma pool sizing unless the DSN already sets connection_limit. */
 export function appendPrismaPoolParams(dsn: string): string {
-  if (/connection_limit=/i.test(dsn)) return dsn;
+  if (/connection_limit=/i.test(dsn)) {return dsn;}
   const limit = env('BADGERIQ_PG_CONNECTION_LIMIT') ?? '20';
   const timeout = env('BADGERIQ_PG_POOL_TIMEOUT') ?? '20';
   const sep = dsn.includes('?') ? '&' : '?';
@@ -54,11 +54,11 @@ export function appendPrismaPoolParams(dsn: string): string {
  */
 export function resolvePgDsn(): string | undefined {
   const explicit = env('BADGERIQ_PG_DSN');
-  if (explicit) return appendPrismaPoolParams(explicit);
+  if (explicit) {return appendPrismaPoolParams(explicit);}
 
   const host = process.env.DB_HOST?.trim();
   const name = process.env.DB_NAME?.trim();
-  if (!host || !name) return undefined;
+  if (!host || !name) {return undefined;}
 
   const user = encodeURIComponent((process.env.DB_USER ?? 'postgres').trim());
   const password = encodeURIComponent((process.env.DB_PASSWORD ?? '').trim());

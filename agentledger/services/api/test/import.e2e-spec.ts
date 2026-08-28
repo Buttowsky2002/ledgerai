@@ -11,7 +11,7 @@ const CH = process.env.AGENTLEDGER_CLICKHOUSE_URL ?? 'http://localhost:8123';
 /** Direct ClickHouse read (bypasses the API) to verify what the import wrote. */
 async function chCount(sql: string): Promise<number> {
   const res = await fetch(`${CH}/?default_format=JSON`, { method: 'POST', body: sql });
-  if (!res.ok) throw new Error(`CH query failed: ${res.status} ${await res.text()}`);
+  if (!res.ok) {throw new Error(`CH query failed: ${res.status} ${await res.text()}`);}
   const json = (await res.json()) as { data?: { c: string }[] };
   return Number(json.data?.[0]?.c ?? 0);
 }

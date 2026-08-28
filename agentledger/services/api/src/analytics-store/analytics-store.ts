@@ -35,6 +35,6 @@ export type AnalyticsBackend = 'clickhouse' | 'postgres';
 /** Which analytics backend this deployment uses (default: clickhouse). */
 export function analyticsBackend(): AnalyticsBackend {
   const raw = (process.env.BADGERIQ_ANALYTICS_BACKEND ?? '').trim().toLowerCase();
-  if (raw === 'postgres' || raw === 'postgresql' || raw === 'pg') return 'postgres';
+  if (raw === 'postgres' || raw === 'postgresql' || raw === 'pg') {return 'postgres';}
   return 'clickhouse';
 }

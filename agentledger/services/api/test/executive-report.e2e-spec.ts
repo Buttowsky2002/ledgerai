@@ -25,9 +25,9 @@ async function insertCH(table: string, rows: object[]): Promise<void> {
 }
 
 function asBuffer(body: unknown): Buffer {
-  if (Buffer.isBuffer(body)) return body;
-  if (body instanceof Uint8Array) return Buffer.from(body);
-  if (typeof body === 'string') return Buffer.from(body, 'binary');
+  if (Buffer.isBuffer(body)) {return body;}
+  if (body instanceof Uint8Array) {return Buffer.from(body);}
+  if (typeof body === 'string') {return Buffer.from(body, 'binary');}
   if (body && typeof body === 'object' && 'type' in body && 'data' in body) {
     return Buffer.from((body as { data: number[] }).data);
   }

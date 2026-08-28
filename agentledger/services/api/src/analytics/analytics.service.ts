@@ -223,7 +223,7 @@ export class AnalyticsService {
 
   /** Optional team filter: returns the SQL fragment and stamps the param. */
   private teamFilter(team: string | undefined, params: Record<string, ChParam>, col = 'team_id'): string {
-    if (!team) return '';
+    if (!team) {return '';}
     params.team = team;
     return `AND ${col} = {team:String}`;
   }
@@ -292,11 +292,11 @@ export class AnalyticsService {
     });
 
     const candidates: string[] = [];
-    if (spendRow?.earliest) candidates.push(String(spendRow.earliest).slice(0, 10));
-    if (byUserRow?.earliest) candidates.push(String(byUserRow.earliest).slice(0, 10));
-    if (llmRow?.earliest) candidates.push(String(llmRow.earliest).slice(0, 10));
-    if (syncMin._min.startedAt) candidates.push(iso(syncMin._min.startedAt));
-    if (connectionMin._min.createdAt) candidates.push(iso(connectionMin._min.createdAt));
+    if (spendRow?.earliest) {candidates.push(String(spendRow.earliest).slice(0, 10));}
+    if (byUserRow?.earliest) {candidates.push(String(byUserRow.earliest).slice(0, 10));}
+    if (llmRow?.earliest) {candidates.push(String(llmRow.earliest).slice(0, 10));}
+    if (syncMin._min.startedAt) {candidates.push(iso(syncMin._min.startedAt));}
+    if (connectionMin._min.createdAt) {candidates.push(iso(connectionMin._min.createdAt));}
 
     const fallbackFrom = iso(new Date(Date.now() - 90 * 86400000));
     const earliest_day = candidates.length > 0 ? candidates.sort()[0]! : fallbackFrom;
@@ -318,11 +318,11 @@ export class AnalyticsService {
     r: Range,
     team?: string,
   ): Promise<T[]> {
-    if (team) return chRows;
+    if (team) {return chRows;}
     const tenantId = getTenantId();
-    if (!tenantId) return chRows;
+    if (!tenantId) {return chRows;}
     const copilot = await this.copilotAnalytics.getSpendSummary(tenantId, r.from, r.to);
-    if (!copilot || copilot.totalCostUsd <= 0) return chRows;
+    if (!copilot || copilot.totalCostUsd <= 0) {return chRows;}
 
     const dayMap = new Map<string, T>();
     for (const row of chRows) {
@@ -350,9 +350,9 @@ export class AnalyticsService {
   async cursorSpend(from?: string, to?: string): Promise<CursorSpendSummary | null> {
     const r = this.range(from, to);
     const tenantId = getTenantId();
-    if (!tenantId) return Promise.resolve(null);
+    if (!tenantId) {return Promise.resolve(null);}
     const summary = await this.cursorAnalytics.getSpendSummary(tenantId, r.from, r.to);
-    if (!summary) return null;
+    if (!summary) {return null;}
 
     let seat: {
       seatLicenseUsd: number;
@@ -402,7 +402,7 @@ export class AnalyticsService {
   ): Promise<Partial<CursorSpendSummary>> {
     try {
       const productivity = await this.cursorProductivity.getProductivitySummary(tenantId, from, to);
-      if (!productivity) return {};
+      if (!productivity) {return {};}
       return {
         linesAccepted: productivity.linesAccepted,
         linesAdded: productivity.linesAdded,
@@ -518,9 +518,9 @@ export class AnalyticsService {
     r: Range,
   ) {
     const tenantId = getTenantId();
-    if (!tenantId) return chRows;
+    if (!tenantId) {return chRows;}
     const copilot = await this.copilotAnalytics.getSpendSummary(tenantId, r.from, r.to);
-    if (!copilot || copilot.totalCostUsd <= 0) return chRows;
+    if (!copilot || copilot.totalCostUsd <= 0) {return chRows;}
 
     const rows = chRows.map((row) => ({
       platform: String(row.platform),
@@ -542,9 +542,9 @@ export class AnalyticsService {
     r: Range,
   ) {
     const tenantId = getTenantId();
-    if (!tenantId) return chRows;
+    if (!tenantId) {return chRows;}
     const copilot = await this.copilotAnalytics.getSpendSummary(tenantId, r.from, r.to);
-    if (!copilot || copilot.totalCostUsd <= 0) return chRows;
+    if (!copilot || copilot.totalCostUsd <= 0) {return chRows;}
 
     const rows = chRows.map((row) => ({
       provider: String(row.provider),
@@ -785,7 +785,7 @@ export class AnalyticsService {
 
     const dailyByUser = new Map<string, Map<string, number>>();
     const addDaily = (userId: string, day: string, cost: number) => {
-      if (cost <= 0) return;
+      if (cost <= 0) {return;}
       const uid = String(userId);
       const dayKey = day.slice(0, 10);
       const perUser = dailyByUser.get(uid) ?? new Map<string, number>();
@@ -1291,9 +1291,9 @@ export class AnalyticsService {
       apiTotalUsd += d.apiCostUsd;
       const hasPortal = d.portalCostUsd > 0;
       const hasApi = d.apiCostUsd > 0;
-      if (hasPortal && hasApi) overlapDays++;
-      else if (hasPortal) portalOnlyDays++;
-      else if (hasApi) apiOnlyDays++;
+      if (hasPortal && hasApi) {overlapDays++;}
+      else if (hasPortal) {portalOnlyDays++;}
+      else if (hasApi) {apiOnlyDays++;}
     }
 
     return {
@@ -1404,7 +1404,7 @@ export class AnalyticsService {
     const overageUsdByVendor: Record<string, number> = {};
     for (const row of platformRows) {
       const vendor = platformToVendor(String(row.platform));
-      if (vendor === 'github' || vendor === 'cursor') continue;
+      if (vendor === 'github' || vendor === 'cursor') {continue;}
       overageUsdByVendor[vendor] = (overageUsdByVendor[vendor] ?? 0) + n(row.cost_usd);
     }
 
@@ -1424,15 +1424,15 @@ export class AnalyticsService {
         ghSeat += m.seatCost;
         ghOverage += m.allocatedOverageCost;
       }
-      if (ghSeat > 0) seatUsdByVendor.github = (seatUsdByVendor.github ?? 0) + usd(ghSeat);
-      if (ghOverage > 0) overageUsdByVendor.github = (overageUsdByVendor.github ?? 0) + usd(ghOverage);
+      if (ghSeat > 0) {seatUsdByVendor.github = (seatUsdByVendor.github ?? 0) + usd(ghSeat);}
+      if (ghOverage > 0) {overageUsdByVendor.github = (overageUsdByVendor.github ?? 0) + usd(ghOverage);}
     }
 
     const vendors = buildOrgVendorBilling(seatUsdByVendor, overageUsdByVendor);
     const { latestMonth, changes } = vendorSeatChanges(seatRows, r.from, r.to);
     for (const row of vendors) {
       const change = changes[row.vendor];
-      if (!change) continue;
+      if (!change) {continue;}
       row.seats = change.seats;
       row.prior_seats = change.prior_seats;
       row.usd_from_seats = change.usd_from_seats;
@@ -1443,7 +1443,7 @@ export class AnalyticsService {
     // Only count vendors with a prior month and a real seat-count delta.
     const seat_change_usd = usd(
       vendors.reduce((s, v) => {
-        if (v.prior_seats == null || v.seats == null || v.seats === v.prior_seats) return s;
+        if (v.prior_seats == null || v.seats == null || v.seats === v.prior_seats) {return s;}
         return s + (v.usd_from_seats ?? 0);
       }, 0),
     );
@@ -1753,7 +1753,7 @@ export class AnalyticsService {
     const breakdown: { user_id: string; platform: string; model: string; spend_usd: unknown; calls: unknown }[] = [];
 
     for (const m of resp.members) {
-      if (m.totalAllocatedCost <= 0) continue;
+      if (m.totalAllocatedCost <= 0) {continue;}
       const calls = m.chatTurns + m.linesAccepted + m.prSummaryCount;
       totals.push({
         user_id: m.githubLogin,
@@ -1833,7 +1833,7 @@ export class AnalyticsService {
     cursorTotals: { user_id: string }[],
   ): Promise<Map<string, number>> {
     const out = new Map<string, number>();
-    if (cursorTotals.length === 0) return out;
+    if (cursorTotals.length === 0) {return out;}
 
     const activeMembers = cursorTotals.length;
     let orgSeatUsd = 0;
@@ -1860,20 +1860,20 @@ export class AnalyticsService {
     const assigned = new Set<string>();
     for (const row of seatRows) {
       const monthly = n(row.monthly_price_per_user);
-      if (monthly <= 0) continue;
+      if (monthly <= 0) {continue;}
       const prorated = prorateMonthlyCost(monthly, `${r.from.slice(0, 7)}-01`, r.from, r.to);
       const uid = String(row.user_id);
       out.set(uid, (out.get(uid) ?? 0) + prorated);
       assigned.add(uid);
-      if (row.email) assigned.add(String(row.email).toLowerCase());
+      if (row.email) {assigned.add(String(row.email).toLowerCase());}
     }
 
     const perUserFallback =
       orgSeatUsd > 0 && activeMembers > 0 ? usd(orgSeatUsd / activeMembers) : 0;
     for (const row of cursorTotals) {
       const uid = String(row.user_id);
-      if (out.has(uid) || assigned.has(uid.toLowerCase())) continue;
-      if (perUserFallback > 0) out.set(uid, perUserFallback);
+      if (out.has(uid) || assigned.has(uid.toLowerCase())) {continue;}
+      if (perUserFallback > 0) {out.set(uid, perUserFallback);}
     }
 
     return out;
@@ -2000,7 +2000,7 @@ export class AnalyticsService {
         models,
         model_breakdown,
       };
-      if (needle && !this.userMatchesQuery(entry, needle)) continue;
+      if (needle && !this.userMatchesQuery(entry, needle)) {continue;}
 
       const key = this.canonicalUserKey(user_id, identity);
       const existing = merged.get(key);
@@ -2020,8 +2020,8 @@ export class AnalyticsService {
   }
 
   private canonicalUserKey(user_id: string, identity: UserDirectoryIdentity): string {
-    if (identity.email) return `email:${identity.email.toLowerCase()}`;
-    if (isEmailLike(user_id)) return `email:${user_id.trim().toLowerCase()}`;
+    if (identity.email) {return `email:${identity.email.toLowerCase()}`;}
+    if (isEmailLike(user_id)) {return `email:${user_id.trim().toLowerCase()}`;}
     return `raw:${user_id.toLowerCase()}`;
   }
 
@@ -2038,7 +2038,7 @@ export class AnalyticsService {
         existing.spend_usd = usd(existing.spend_usd + row.spend_usd);
         existing.calls += row.calls;
         const usage = (existing.usage_value_usd ?? 0) + (row.usage_value_usd ?? 0);
-        if (usage > 0) existing.usage_value_usd = usd(usage);
+        if (usage > 0) {existing.usage_value_usd = usd(usage);}
       } else {
         breakdownMap.set(key, { ...row });
       }
@@ -2070,7 +2070,7 @@ export class AnalyticsService {
     a?: Record<string, VendorSpendSlice>,
     b?: Record<string, VendorSpendSlice>,
   ): Record<string, VendorSpendSlice> | undefined {
-    if (!a && !b) return undefined;
+    if (!a && !b) {return undefined;}
     const out: Record<string, VendorSpendSlice> = { ...(a ?? {}) };
     for (const [vendor, slice] of Object.entries(b ?? {})) {
       const cur = out[vendor] ?? { seat_usd: 0, overage_usd: 0, total_usd: 0 };
@@ -2087,10 +2087,10 @@ export class AnalyticsService {
     a?: Record<string, VendorUsageSlice>,
     b?: Record<string, VendorUsageSlice>,
   ): Record<string, VendorUsageSlice> | undefined {
-    if (!a && !b) return undefined;
+    if (!a && !b) {return undefined;}
     const out: Record<string, VendorUsageSlice> = {};
     for (const src of [a, b]) {
-      if (!src) continue;
+      if (!src) {continue;}
       for (const [vendor, slice] of Object.entries(src)) {
         const cur = out[vendor] ?? { calls: 0, tokens: 0, models: [], model_breakdown: [] };
         cur.calls += slice.calls;

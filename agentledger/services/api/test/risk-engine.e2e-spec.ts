@@ -11,11 +11,11 @@ const CH = process.env.AGENTLEDGER_CLICKHOUSE_URL ?? 'http://localhost:8123';
 async function insertCH(table: string, rows: object[]): Promise<void> {
   const body = `INSERT INTO agentledger.${table} FORMAT JSONEachRow\n` + rows.map((r) => JSON.stringify(r)).join('\n');
   const res = await fetch(`${CH}/`, { method: 'POST', body });
-  if (!res.ok) throw new Error(`CH insert ${table} failed: ${res.status} ${await res.text()}`);
+  if (!res.ok) {throw new Error(`CH insert ${table} failed: ${res.status} ${await res.text()}`);}
 }
 async function queryCH(sql: string): Promise<string> {
   const res = await fetch(`${CH}/?default_format=TabSeparated`, { method: 'POST', body: sql });
-  if (!res.ok) throw new Error(`CH query failed: ${res.status} ${await res.text()}`);
+  if (!res.ok) {throw new Error(`CH query failed: ${res.status} ${await res.text()}`);}
   return (await res.text()).trim();
 }
 

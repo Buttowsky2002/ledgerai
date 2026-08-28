@@ -31,7 +31,7 @@ export interface TeamRoiForFindings {
 const MS_DAY = 86_400_000;
 
 function daysSince(d: Date | null | undefined, now: Date): number {
-  if (!d) return Infinity;
+  if (!d) {return Infinity;}
   return (now.getTime() - d.getTime()) / MS_DAY;
 }
 
@@ -235,7 +235,7 @@ export function generateMemberSpendFindings(args: {
   const creditSorted = [...args.members].sort((a, b) => b.aiCreditsUsed - a.aiCreditsUsed);
   const topCreditCutoff = Math.max(1, Math.ceil(creditSorted.length * 0.2));
   for (const m of creditSorted.slice(0, topCreditCutoff)) {
-    if (m.aiCreditsUsed <= 0) continue;
+    if (m.aiCreditsUsed <= 0) {continue;}
     findings.push({
       id: `high-credit-${m.githubLogin}`,
       severity: 'info',
@@ -254,7 +254,7 @@ export function generateMemberSpendFindings(args: {
     teamInactive.set(team, cur);
   }
   for (const [team, info] of teamInactive) {
-    if (info.count < 1) continue;
+    if (info.count < 1) {continue;}
     findings.push({
       id: `team-waste-${team}`,
       severity: 'warning',

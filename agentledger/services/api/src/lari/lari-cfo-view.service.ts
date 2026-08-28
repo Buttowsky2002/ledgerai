@@ -808,9 +808,9 @@ export class LariCfoViewService {
 
   private usageCostForBasis(basis: CostBasisMode, totals: CostBasisTotals): number {
 
-    if (basis === 'computed') return n(totals.computed_cost_usd);
+    if (basis === 'computed') {return n(totals.computed_cost_usd);}
 
-    if (basis === 'metered') return n(totals.metered_cost_usd);
+    if (basis === 'metered') {return n(totals.metered_cost_usd);}
 
     return n(totals.effective_cost_usd);
 
@@ -820,9 +820,9 @@ export class LariCfoViewService {
 
   private monthlyUsageForBasis(basis: CostBasisMode, row: CostBasisMonthlyRow): number {
 
-    if (basis === 'computed') return n(row.computed_cost_usd);
+    if (basis === 'computed') {return n(row.computed_cost_usd);}
 
-    if (basis === 'metered') return n(row.metered_cost_usd);
+    if (basis === 'metered') {return n(row.metered_cost_usd);}
 
     return n(row.effective_cost_usd);
 
@@ -1131,7 +1131,7 @@ export class LariCfoViewService {
 
     );
 
-    if (plans.length === 0) return 0;
+    if (plans.length === 0) {return 0;}
 
 
 

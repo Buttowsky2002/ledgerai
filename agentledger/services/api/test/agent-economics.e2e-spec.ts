@@ -15,7 +15,7 @@ async function chInsert(table: string, rows: object[]): Promise<void> {
     method: 'POST',
     body,
   });
-  if (!res.ok) throw new Error(`CH insert failed: ${res.status} ${await res.text()}`);
+  if (!res.ok) {throw new Error(`CH insert failed: ${res.status} ${await res.text()}`);}
 }
 
 /**

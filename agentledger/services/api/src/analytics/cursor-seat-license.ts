@@ -16,10 +16,10 @@ export function resolveCursorSeatUnitCost(row: {
   unit_cost_usd: number;
 }): number {
   const unit = Number(row.unit_cost_usd) || 0;
-  if (unit > 0) return unit;
+  if (unit > 0) {return unit;}
   const seats = Number(row.seats) || 0;
   const cost = Number(row.cost_usd) || 0;
-  if (seats > 0 && cost > 0) return cost / seats;
+  if (seats > 0 && cost > 0) {return cost / seats;}
   return 0;
 }
 
@@ -66,7 +66,7 @@ export function computeCursorSeatLicenseFromFixedCosts(
   let total = 0;
   for (const row of sorted) {
     const unit = resolveCursorSeatUnitCost(row);
-    if (unit <= 0) continue;
+    if (unit <= 0) {continue;}
     total += prorateMonthlyCost(unit * activeMembers, String(row.period_month), from, to);
   }
 
@@ -92,7 +92,7 @@ export function computeCursorSeatLicenseFromPlans(
   const planSeats = plans.reduce((s, p) => s + n(p.seats_purchased), 0);
   const monthlyTotal = plans.reduce((s, p) => {
     const contract = n(p.contract_monthly_cost);
-    if (contract > 0) return s + contract;
+    if (contract > 0) {return s + contract;}
     return s + n(p.monthly_price_per_user) * n(p.seats_purchased);
   }, 0);
   const unit = planSeats > 0 ? monthlyTotal / planSeats : n(plans[0]?.monthly_price_per_user);

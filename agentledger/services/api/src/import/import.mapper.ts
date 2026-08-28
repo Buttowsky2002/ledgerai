@@ -29,32 +29,32 @@ export interface MappedRow {
 const RISK_SEVERITIES = ['low', 'medium', 'high', 'critical'];
 
 function str(v: unknown, field: string): string | undefined {
-  if (v === undefined || v === null || v === '') return undefined;
-  if (typeof v === 'string') return v;
-  if (typeof v === 'number') return String(v);
+  if (v === undefined || v === null || v === '') {return undefined;}
+  if (typeof v === 'string') {return v;}
+  if (typeof v === 'number') {return String(v);}
   throw new ImportRowError(`field "${field}" must be a string`);
 }
 
 function num(v: unknown, field: string): number | undefined {
-  if (v === undefined || v === null || v === '') return undefined;
+  if (v === undefined || v === null || v === '') {return undefined;}
   const n = typeof v === 'number' ? v : Number(v);
-  if (!Number.isFinite(n)) throw new ImportRowError(`field "${field}" must be a number`);
-  if (n < 0) throw new ImportRowError(`field "${field}" must be >= 0`);
+  if (!Number.isFinite(n)) {throw new ImportRowError(`field "${field}" must be a number`);}
+  if (n < 0) {throw new ImportRowError(`field "${field}" must be >= 0`);}
   return n;
 }
 
 /** An attribution confidence in [0,1]; defaults to 1 when absent. */
 function confidence(v: unknown): number {
   const c = num(v, 'attribution_confidence');
-  if (c === undefined) return 1;
-  if (c > 1) throw new ImportRowError(`field "attribution_confidence" must be between 0 and 1`);
+  if (c === undefined) {return 1;}
+  if (c > 1) {throw new ImportRowError(`field "attribution_confidence" must be between 0 and 1`);}
   return c;
 }
 
 function isoTs(v: unknown): string {
-  if (v === undefined || v === null || v === '') return new Date().toISOString();
+  if (v === undefined || v === null || v === '') {return new Date().toISOString();}
   const d = new Date(typeof v === 'number' ? v : String(v));
-  if (Number.isNaN(d.getTime())) throw new ImportRowError(`field "timestamp" is not a valid date/time`);
+  if (Number.isNaN(d.getTime())) {throw new ImportRowError(`field "timestamp" is not a valid date/time`);}
   return d.toISOString();
 }
 
@@ -74,7 +74,7 @@ const CODING_AGENT_ALIASES: Record<string, string> = {
 function codingAgentProvider(provider: string | undefined, toolName: string): string | undefined {
   const probe = `${provider ?? ''} ${toolName}`.toLowerCase();
   for (const [alias, canonical] of Object.entries(CODING_AGENT_ALIASES)) {
-    if (probe.includes(alias)) return canonical;
+    if (probe.includes(alias)) {return canonical;}
   }
   return undefined;
 }

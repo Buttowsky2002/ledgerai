@@ -207,7 +207,7 @@ export class LariRecommendationsService {
           top = provider;
         }
       }
-      if (top) topProviderByAgent.set(agentId, top);
+      if (top) {topProviderByAgent.set(agentId, top);}
     }
 
     const rows: AgentEconomicsHighlight[] = [];
@@ -294,7 +294,7 @@ export class LariRecommendationsService {
         where: { tenantId, provider: COPILOT_PROVIDER },
         select: { connectionId: true },
       });
-      if (conns.length === 0) return { connections: conns, seats: [] as { lastActivityAt: Date | null }[] };
+      if (conns.length === 0) {return { connections: conns, seats: [] as { lastActivityAt: Date | null }[] };}
       const connectionIds = conns.map((c) => c.connectionId);
       const seatRows = await tx.githubCopilotSeat.findMany({
         where: { tenantId, connectionId: { in: connectionIds }, isActive: true },
@@ -302,12 +302,12 @@ export class LariRecommendationsService {
       });
       return { connections: conns, seats: seatRows };
     });
-    if (connections.connections.length === 0) return { count: 0, seatPrice: 19 };
+    if (connections.connections.length === 0) {return { count: 0, seatPrice: 19 };}
 
     const seats = connections.seats;
     const now = Date.now();
     const inactive = seats.filter((s) => {
-      if (!s.lastActivityAt) return true;
+      if (!s.lastActivityAt) {return true;}
       return (now - s.lastActivityAt.getTime()) / MS_DAY >= 14;
     });
     return { count: inactive.length, seatPrice: 19 };
@@ -323,7 +323,7 @@ export class LariRecommendationsService {
         where: { tenantId, provider: COPILOT_PROVIDER },
         select: { connectionId: true },
       });
-      if (connections.length === 0) return [];
+      if (connections.length === 0) {return [];}
       const connectionIds = connections.map((c) => c.connectionId);
       return tx.githubCopilotRoiDaily.findMany({
         where: {
@@ -342,11 +342,11 @@ export class LariRecommendationsService {
         },
       });
     });
-    if (rows.length === 0) return undefined;
+    if (rows.length === 0) {return undefined;}
 
     const totalValue = rows.reduce((s, row) => s + n(row.estimatedValue), 0);
     const totalCost = rows.reduce((s, row) => s + n(row.totalCopilotCost), 0);
-    if (totalCost <= 0) return n(rows[0]?.roiPercentage) || undefined;
+    if (totalCost <= 0) {return n(rows[0]?.roiPercentage) || undefined;}
     return Math.round(((totalValue - totalCost) / totalCost) * 10000) / 100;
   }
 
@@ -375,8 +375,8 @@ export class LariRecommendationsService {
         model: row.modelPrefix,
       };
       const rate = n(row.usdPerMillion);
-      if (row.tokenType === 'input') entry.inputUsdPerM = rate;
-      if (row.tokenType === 'output') entry.outputUsdPerM = rate;
+      if (row.tokenType === 'input') {entry.inputUsdPerM = rate;}
+      if (row.tokenType === 'output') {entry.outputUsdPerM = rate;}
       byModel.set(key, entry);
     }
 

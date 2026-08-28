@@ -3,7 +3,7 @@ import sharp from 'sharp';
 /** Rasterize inline SVG to PNG for pdfkit embedding. */
 export async function svgToPng(svg: string, width?: number): Promise<Buffer> {
   let pipeline = sharp(Buffer.from(svg), { density: 144 });
-  if (width) pipeline = pipeline.resize({ width: Math.round(width), withoutEnlargement: false });
+  if (width) {pipeline = pipeline.resize({ width: Math.round(width), withoutEnlargement: false });}
   return pipeline.png().toBuffer();
 }
 
@@ -13,7 +13,7 @@ export function pdfPageCount(pdf: Buffer): number {
   const footerMatches = text.match(/Page \d+ of (\d+)/g);
   if (footerMatches?.length) {
     const last = footerMatches[footerMatches.length - 1].match(/of (\d+)/);
-    if (last) return Number(last[1]);
+    if (last) {return Number(last[1]);}
   }
   const pageObjs = text.match(/\/Type\s*\/Page\b/g);
   return pageObjs?.length ?? 0;

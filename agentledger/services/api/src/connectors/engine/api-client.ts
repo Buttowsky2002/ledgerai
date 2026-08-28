@@ -23,7 +23,7 @@ function appendEndpointQuery(
     ...overrides,
   };
   for (const [k, v] of Object.entries(scalar)) {
-    if (v !== '') params.append(k, v);
+    if (v !== '') {params.append(k, v);}
   }
   const arrays = {
     ...(definition.queryParamArrays ?? {}),
@@ -38,16 +38,16 @@ function appendEndpointQuery(
 
 /** Extract a human-readable message from common provider error JSON shapes. */
 export function extractProviderErrorMessage(body: unknown): string {
-  if (body === null || body === undefined) return '';
-  if (typeof body === 'string') return body;
-  if (typeof body !== 'object') return String(body);
+  if (body === null || body === undefined) {return '';}
+  if (typeof body === 'string') {return body;}
+  if (typeof body !== 'object') {return String(body);}
 
   const obj = body as Record<string, unknown>;
-  if (typeof obj.message === 'string') return obj.message;
-  if (typeof obj.detail === 'string') return obj.detail;
+  if (typeof obj.message === 'string') {return obj.message;}
+  if (typeof obj.detail === 'string') {return obj.detail;}
 
   const error = obj.error;
-  if (typeof error === 'string') return error;
+  if (typeof error === 'string') {return error;}
   if (error && typeof error === 'object') {
     const err = error as Record<string, unknown>;
     if (typeof err.message === 'string') {
@@ -145,15 +145,15 @@ function classifyError(status: number, body: unknown): ConnectorError {
 }
 
 async function applyRateLimit(cfg: RateLimitConfig | undefined, providerKey: string): Promise<void> {
-  if (!cfg) return;
+  if (!cfg) {return;}
   const minInterval =
     cfg.requestsPerSecond ? 1000 / cfg.requestsPerSecond
     : cfg.requestsPerMinute ? 60_000 / cfg.requestsPerMinute
     : 0;
-  if (minInterval <= 0) return;
+  if (minInterval <= 0) {return;}
   const lastAt = lastRequestAtByProvider.get(providerKey) ?? lastRequestAt;
   const elapsed = Date.now() - lastAt;
-  if (elapsed < minInterval) await sleep(minInterval - elapsed);
+  if (elapsed < minInterval) {await sleep(minInterval - elapsed);}
   const now = Date.now();
   lastRequestAt = now;
   lastRequestAtByProvider.set(providerKey, now);
@@ -167,11 +167,11 @@ export function resetRateLimitClock(): void {
 
 function parseRetryAfterMs(headers: Record<string, string>): number {
   const raw = headers['retry-after'];
-  if (!raw) return 0;
+  if (!raw) {return 0;}
   const seconds = Number(raw);
-  if (Number.isFinite(seconds) && seconds > 0) return seconds * 1000;
+  if (Number.isFinite(seconds) && seconds > 0) {return seconds * 1000;}
   const when = Date.parse(raw);
-  if (!Number.isNaN(when)) return Math.max(0, when - Date.now());
+  if (!Number.isNaN(when)) {return Math.max(0, when - Date.now());}
   return 0;
 }
 

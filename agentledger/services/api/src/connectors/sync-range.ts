@@ -17,7 +17,7 @@ function utcDayStart(d: Date): Date {
 
 function parseDay(iso: string, label: string): Date {
   const d = utcDayStart(new Date(`${iso}T00:00:00.000Z`));
-  if (Number.isNaN(d.getTime())) throw new BadRequestException(`${label} is not a valid date`);
+  if (Number.isNaN(d.getTime())) {throw new BadRequestException(`${label} is not a valid date`);}
   return d;
 }
 
@@ -99,7 +99,7 @@ export function resolveSyncChunks(
       Math.max(syncStart.getTime(), chunkEnd.getTime() - (maxDaysPerRequest - 1) * MS_PER_DAY),
     );
     chunks.unshift({ syncStart: chunkStart, syncEnd: chunkEnd });
-    if (chunkStart.getTime() <= syncStart.getTime()) break;
+    if (chunkStart.getTime() <= syncStart.getTime()) {break;}
     chunkEnd = new Date(chunkStart.getTime() - MS_PER_DAY);
   }
 

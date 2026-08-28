@@ -270,7 +270,7 @@ export class LariService {
     let top: RiskSeverity = 'none';
     for (const row of rows) {
       const s = (['low', 'medium', 'high', 'critical'].includes(row.severity) ? row.severity : 'none') as RiskSeverity;
-      if (SEVERITY_RANK[s] > SEVERITY_RANK[top]) top = s;
+      if (SEVERITY_RANK[s] > SEVERITY_RANK[top]) {top = s;}
     }
     return top;
   }

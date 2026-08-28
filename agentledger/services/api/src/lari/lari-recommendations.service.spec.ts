@@ -28,7 +28,7 @@ describe('LariRecommendationsService', () => {
     if (sql.includes('reconciled_input_tokens')) {
       return [];
     }
-    if (sql.includes('priceBook')) return [];
+    if (sql.includes('priceBook')) {return [];}
     return [];
   });
 

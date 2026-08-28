@@ -97,7 +97,7 @@ export async function runSyncOrchestrator(input: SyncOrchestratorInput): Promise
   };
 
   for (const aux of auxiliaryConfigs) {
-    if (!stepEnabled[aux.step]) continue;
+    if (!stepEnabled[aux.step]) {continue;}
     const { entities: fetched, requestCount } = await fetchAuxiliaryEntities(ctx, aux);
     entities.push(...fetched);
     auxiliaryRequestCount += requestCount;

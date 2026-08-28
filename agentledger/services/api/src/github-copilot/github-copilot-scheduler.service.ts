@@ -38,12 +38,12 @@ export class GitHubCopilotSchedulerService implements OnModuleInit, OnModuleDest
   }
 
   onModuleDestroy(): void {
-    if (this.initialHandle) clearTimeout(this.initialHandle);
-    if (this.intervalHandle) clearInterval(this.intervalHandle);
+    if (this.initialHandle) {clearTimeout(this.initialHandle);}
+    if (this.intervalHandle) {clearInterval(this.intervalHandle);}
   }
 
   async runScheduledSync(): Promise<void> {
-    if (this.running) return;
+    if (this.running) {return;}
     this.running = true;
     try {
       const rows = await this.prisma.$queryRaw<ScheduledConnection[]>`
@@ -80,7 +80,7 @@ function schedulerEnabled(): boolean {
 
 function schedulerIntervalMs(): number {
   const raw = env('BADGERIQ_COPILOT_SCHEDULER_INTERVAL_MS');
-  if (!raw) return DEFAULT_INTERVAL_MS;
+  if (!raw) {return DEFAULT_INTERVAL_MS;}
   const n = Number.parseInt(raw, 10);
   return Number.isFinite(n) && n >= 60_000 ? n : DEFAULT_INTERVAL_MS;
 }

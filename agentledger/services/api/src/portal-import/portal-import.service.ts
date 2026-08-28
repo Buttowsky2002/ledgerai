@@ -190,7 +190,7 @@ export class PortalImportService {
 
   ): PortalPreviewResult {
 
-    if (!csvText?.trim()) throw new BadRequestException('csv body is empty');
+    if (!csvText?.trim()) {throw new BadRequestException('csv body is empty');}
 
     const parsed = parseAnthropicPortalCsv(csvText, opts?.mapping, opts?.fileName, opts?.provider);
 
@@ -278,9 +278,9 @@ export class PortalImportService {
 
     const tenantId = getTenantId();
 
-    if (!tenantId) throw new BadRequestException('no tenant in context');
+    if (!tenantId) {throw new BadRequestException('no tenant in context');}
 
-    if (!files.length) throw new BadRequestException('no files provided');
+    if (!files.length) {throw new BadRequestException('no files provided');}
 
 
 
@@ -455,12 +455,12 @@ export class PortalImportService {
 
         const uid = String(row.user_id ?? '');
 
-        if (uid && uid !== 'Unassigned') allUsers.add(uid);
+        if (uid && uid !== 'Unassigned') {allUsers.add(uid);}
 
       }
 
-      if (parsed.stats.minDay && (!globalMin || parsed.stats.minDay < globalMin)) globalMin = parsed.stats.minDay;
-      if (parsed.stats.maxDay && (!globalMax || parsed.stats.maxDay > globalMax)) globalMax = parsed.stats.maxDay;
+      if (parsed.stats.minDay && (!globalMin || parsed.stats.minDay < globalMin)) {globalMin = parsed.stats.minDay;}
+      if (parsed.stats.maxDay && (!globalMax || parsed.stats.maxDay > globalMax)) {globalMax = parsed.stats.maxDay;}
       if (parsed.provider) {
         providersUsed.add(parsed.provider);
         if (parsed.stats.minDay && parsed.stats.maxDay) {
@@ -468,8 +468,8 @@ export class PortalImportService {
           if (!existing) {
             purgeByProvider.set(parsed.provider, { min: parsed.stats.minDay, max: parsed.stats.maxDay });
           } else {
-            if (parsed.stats.minDay < existing.min) existing.min = parsed.stats.minDay;
-            if (parsed.stats.maxDay > existing.max) existing.max = parsed.stats.maxDay;
+            if (parsed.stats.minDay < existing.min) {existing.min = parsed.stats.minDay;}
+            if (parsed.stats.maxDay > existing.max) {existing.max = parsed.stats.maxDay;}
           }
         }
       }
@@ -728,7 +728,7 @@ export class PortalImportService {
 
   async listImportRuns(limit = 50): Promise<{ runs: PortalImportRunItem[] }> {
     const tenantId = getTenantId();
-    if (!tenantId) throw new BadRequestException('no tenant in context');
+    if (!tenantId) {throw new BadRequestException('no tenant in context');}
     const cap = Math.min(Math.max(limit, 1), 100);
 
     const tracked = await this.prisma.withTenant(tenantId, (tx) =>
@@ -832,16 +832,16 @@ export class PortalImportService {
 
   async deleteImportRun(runId: string): Promise<PortalImportRunDeleteResult> {
     const tenantId = getTenantId();
-    if (!tenantId) throw new BadRequestException('no tenant in context');
-    if (!runId?.trim()) throw new BadRequestException('run id is required');
+    if (!tenantId) {throw new BadRequestException('no tenant in context');}
+    if (!runId?.trim()) {throw new BadRequestException('run id is required');}
 
     if (runId.startsWith('audit:')) {
       const auditId = Number(runId.slice('audit:'.length));
-      if (!Number.isFinite(auditId)) throw new BadRequestException('invalid legacy run id');
+      if (!Number.isFinite(auditId)) {throw new BadRequestException('invalid legacy run id');}
       const audit = await this.prisma.withTenant(tenantId, (tx) =>
         tx.auditLog.findFirst({ where: { id: BigInt(auditId) } }),
       );
-      if (!audit) throw new NotFoundException('import run not found');
+      if (!audit) {throw new NotFoundException('import run not found');}
       const detail = (audit.detail ?? {}) as Record<string, unknown>;
       const from = typeof detail.from === 'string' ? detail.from.slice(0, 10) : null;
       const to = typeof detail.to === 'string' ? detail.to.slice(0, 10) : null;
@@ -854,7 +854,7 @@ export class PortalImportService {
         throw new BadRequestException('legacy import run is missing date range or provider metadata');
       }
       for (const provider of providers) {
-        if (provider === 'mixed') continue;
+        if (provider === 'mixed') {continue;}
         await this.importService.purgePortalImportWindow(provider, from, to);
       }
       await this.prisma.withTenant(tenantId, (tx) =>
@@ -874,7 +874,7 @@ export class PortalImportService {
     const run = await this.prisma.withTenant(tenantId, (tx) =>
       tx.portalImportRun.findFirst({ where: { importRunId: runId, status: 'active' } }),
     );
-    if (!run) throw new NotFoundException('import run not found');
+    if (!run) {throw new NotFoundException('import run not found');}
 
     const { rowsDeleted, keysReleased } = await this.importService.deletePortalImportRun(runId);
 
@@ -917,7 +917,7 @@ export class PortalImportService {
 
   ): Promise<void> {
 
-    if (!portalImportThrough) return;
+    if (!portalImportThrough) {return;}
 
 
 
@@ -925,7 +925,7 @@ export class PortalImportService {
 
       const row = await tx.connector.findUnique({ where: { connectorId } });
 
-      if (!row) throw new NotFoundException('connector not found');
+      if (!row) {throw new NotFoundException('connector not found');}
 
 
 

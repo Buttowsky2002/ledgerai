@@ -74,7 +74,7 @@ export class InvitesService {
   /** Admin: list all invites for the tenant (most recent first). */
   async list(): Promise<unknown[]> {
     const tenantId = getTenantId();
-    if (!tenantId) throw new BadRequestException('no tenant context');
+    if (!tenantId) {throw new BadRequestException('no tenant context');}
 
     return this.prisma.withTenant(tenantId, (tx) =>
       tx.$queryRaw`
@@ -97,7 +97,7 @@ export class InvitesService {
   /** Admin: revoke a pending invite. */
   async revoke(inviteId: string): Promise<void> {
     const tenantId = getTenantId();
-    if (!tenantId) throw new BadRequestException('no tenant context');
+    if (!tenantId) {throw new BadRequestException('no tenant context');}
 
     const result = await this.prisma.withTenant(tenantId, (tx) =>
       tx.$executeRaw`
@@ -107,7 +107,7 @@ export class InvitesService {
            AND tenant_id = ${tenantId}::uuid
            AND status    = 'pending'`,
     );
-    if (result === 0) throw new NotFoundException('invite not found or not pending');
+    if (result === 0) {throw new NotFoundException('invite not found or not pending');}
   }
 
   /**
@@ -120,7 +120,7 @@ export class InvitesService {
     apiRole: string;
     expiresAt: Date;
   }> {
-    if (!rawToken || rawToken.length < 40) throw new BadRequestException('invalid token');
+    if (!rawToken || rawToken.length < 40) {throw new BadRequestException('invalid token');}
 
     const rows = await this.prisma.$queryRaw<
       { invite_id: string; email: string; api_role: string; expires_at: Date }[]
@@ -145,7 +145,7 @@ export class InvitesService {
     rawToken: string,
     displayName: string | undefined,
   ): Promise<{ email: string; tenantId: string }> {
-    if (!rawToken || rawToken.length < 40) throw new BadRequestException('invalid token');
+    if (!rawToken || rawToken.length < 40) {throw new BadRequestException('invalid token');}
 
     const name = (displayName ?? '').trim() || null;
 
@@ -163,7 +163,7 @@ export class InvitesService {
         tenantId: rows[0].tenant_id,
       };
     } catch (err) {
-      if (err instanceof BadRequestException) throw err;
+      if (err instanceof BadRequestException) {throw err;}
       // Postgres RAISE EXCEPTION from invite_accept surfaces as a Prisma error.
       // Prefer the DB message when it is our known invite failure; otherwise keep
       // a safe generic (do not leak internal SQL / schema details to the client).

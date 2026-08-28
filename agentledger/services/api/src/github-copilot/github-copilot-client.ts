@@ -71,13 +71,13 @@ function permissionHint(status: number, path: string): string | undefined {
 }
 
 function parseDate(value: unknown): Date | undefined {
-  if (!value || typeof value !== 'string') return undefined;
+  if (!value || typeof value !== 'string') {return undefined;}
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? undefined : d;
 }
 
 function parseDateOnly(value: unknown): Date | undefined {
-  if (!value || typeof value !== 'string') return undefined;
+  if (!value || typeof value !== 'string') {return undefined;}
   const d = new Date(`${value}T00:00:00.000Z`);
   return Number.isNaN(d.getTime()) ? undefined : d;
 }
@@ -92,23 +92,23 @@ function str(value: unknown, fallback = ''): string {
 }
 
 function nestedLogin(obj: unknown): string {
-  if (!obj || typeof obj !== 'object') return '';
+  if (!obj || typeof obj !== 'object') {return '';}
   const o = obj as Record<string, unknown>;
-  if (typeof o.login === 'string') return o.login;
+  if (typeof o.login === 'string') {return o.login;}
   if (o.assignee && typeof o.assignee === 'object') {
     const a = o.assignee as Record<string, unknown>;
-    if (typeof a.login === 'string') return a.login;
+    if (typeof a.login === 'string') {return a.login;}
   }
   return '';
 }
 
 function nestedId(obj: unknown): number {
-  if (!obj || typeof obj !== 'object') return 0;
+  if (!obj || typeof obj !== 'object') {return 0;}
   const o = obj as Record<string, unknown>;
-  if (typeof o.id === 'number') return o.id;
+  if (typeof o.id === 'number') {return o.id;}
   if (o.assignee && typeof o.assignee === 'object') {
     const a = o.assignee as Record<string, unknown>;
-    if (typeof a.id === 'number') return a.id;
+    if (typeof a.id === 'number') {return a.id;}
   }
   return 0;
 }
@@ -163,13 +163,13 @@ export class GitHubCopilotClient {
         `/orgs/${encodeURIComponent(this.orgSlug)}/copilot/billing/seats?per_page=100&page=${page}`,
       );
       const items = Array.isArray(batch.seats) ? batch.seats : Array.isArray(batch) ? batch : [];
-      if (items.length === 0) break;
+      if (items.length === 0) {break;}
       for (const raw of items) {
         seats.push(this.normalizeSeat(raw));
       }
-      if (items.length < 100) break;
+      if (items.length < 100) {break;}
       page += 1;
-      if (page > 500) break;
+      if (page > 500) {break;}
     }
     return seats;
   }
@@ -182,11 +182,11 @@ export class GitHubCopilotClient {
         'GET',
         `/orgs/${encodeURIComponent(this.orgSlug)}/members?per_page=100&page=${page}`,
       );
-      if (!Array.isArray(batch) || batch.length === 0) break;
+      if (!Array.isArray(batch) || batch.length === 0) {break;}
       for (const m of batch) {
-        if (m.id && m.login) members.push({ id: m.id, login: m.login });
+        if (m.id && m.login) {members.push({ id: m.id, login: m.login });}
       }
-      if (batch.length < 100) break;
+      if (batch.length < 100) {break;}
       page += 1;
     }
     return members;
@@ -200,11 +200,11 @@ export class GitHubCopilotClient {
         'GET',
         `/orgs/${encodeURIComponent(this.orgSlug)}/teams?per_page=100&page=${page}`,
       );
-      if (!Array.isArray(batch) || batch.length === 0) break;
+      if (!Array.isArray(batch) || batch.length === 0) {break;}
       for (const t of batch) {
-        if (t.slug) teams.push({ slug: t.slug, name: t.name ?? t.slug });
+        if (t.slug) {teams.push({ slug: t.slug, name: t.name ?? t.slug });}
       }
-      if (batch.length < 100) break;
+      if (batch.length < 100) {break;}
       page += 1;
     }
     return teams;
@@ -218,11 +218,11 @@ export class GitHubCopilotClient {
         'GET',
         `/orgs/${encodeURIComponent(this.orgSlug)}/teams/${encodeURIComponent(teamSlug)}/members?per_page=100&page=${page}`,
       );
-      if (!Array.isArray(batch) || batch.length === 0) break;
+      if (!Array.isArray(batch) || batch.length === 0) {break;}
       for (const m of batch) {
-        if (m.id && m.login) members.push({ id: m.id, login: m.login });
+        if (m.id && m.login) {members.push({ id: m.id, login: m.login });}
       }
-      if (batch.length < 100) break;
+      if (batch.length < 100) {break;}
       page += 1;
     }
     return members;
@@ -238,7 +238,7 @@ export class GitHubCopilotClient {
         'GET',
         `/orgs/${encodeURIComponent(this.orgSlug)}/members?per_page=100&page=${page}`,
       );
-      if (!Array.isArray(batch) || batch.length === 0) break;
+      if (!Array.isArray(batch) || batch.length === 0) {break;}
       for (const m of batch) {
         if (m.id && m.login) {
           members.push({
@@ -249,7 +249,7 @@ export class GitHubCopilotClient {
           });
         }
       }
-      if (batch.length < 100) break;
+      if (batch.length < 100) {break;}
       page += 1;
     }
     return members;
@@ -284,8 +284,8 @@ export class GitHubCopilotClient {
       year: String(params.year),
       month: String(params.month),
     });
-    if (params.day != null) q.set('day', String(params.day));
-    if (params.user) q.set('user', params.user);
+    if (params.day != null) {q.set('day', String(params.day));}
+    if (params.user) {q.set('user', params.user);}
     const path = `/organizations/${encodeURIComponent(this.orgSlug)}/settings/billing/ai_credit/usage?${q}`;
     const body = await this.request<Record<string, unknown>>('GET', path);
     return this.normalizeAiCreditUsage(body, params.user);
@@ -339,13 +339,13 @@ export class GitHubCopilotClient {
     const items = Array.isArray(body.usageItems) ? body.usageItems : [];
     const rows: CopilotBillingLineRow[] = [];
     for (const raw of items) {
-      if (!raw || typeof raw !== 'object') continue;
+      if (!raw || typeof raw !== 'object') {continue;}
       const item = raw as Record<string, unknown>;
       const itemUser = str(
         item.username ?? item.user ?? item.user_login ?? item.userLogin ?? responseUser,
       );
       const itemDate = str(item.date ?? item.usage_date ?? defaultDate).slice(0, 10);
-      if (!itemUser || !itemDate) continue;
+      if (!itemUser || !itemDate) {continue;}
       rows.push({
         usageDate: itemDate,
         githubLogin: itemUser,
@@ -372,7 +372,7 @@ export class GitHubCopilotClient {
 
   private async fetchMetricsReport(path: string): Promise<CopilotUsageRow[]> {
     const meta = await this.request<Record<string, unknown>>('GET', path);
-    if (!meta || Object.keys(meta).length === 0) return [];
+    if (!meta || Object.keys(meta).length === 0) {return [];}
 
     const defaultDay = str(
       meta.report_end_day ?? meta.report_day ?? meta.report_start_day,
@@ -387,8 +387,8 @@ export class GitHubCopilotClient {
       return rows;
     }
 
-    if (Array.isArray(meta)) return this.normalizeUsageRows(meta, path, defaultDay);
-    if (Array.isArray(meta.data)) return this.normalizeUsageRows(meta.data as unknown[], path, defaultDay);
+    if (Array.isArray(meta)) {return this.normalizeUsageRows(meta, path, defaultDay);}
+    if (Array.isArray(meta.data)) {return this.normalizeUsageRows(meta.data as unknown[], path, defaultDay);}
     return [];
   }
 
@@ -416,15 +416,15 @@ export class GitHubCopilotClient {
       );
     }
     const text = await resp.text();
-    if (!text.trim()) return [];
+    if (!text.trim()) {return [];}
 
     const ndjson = this.parseNdjsonReport(text, sourcePath, defaultDay);
-    if (ndjson.length > 0) return ndjson;
+    if (ndjson.length > 0) {return ndjson;}
 
     if (text.trimStart().startsWith('[') || text.trimStart().startsWith('{')) {
       try {
         const parsed = JSON.parse(text) as unknown;
-        if (Array.isArray(parsed)) return this.normalizeUsageRows(parsed, sourcePath, defaultDay);
+        if (Array.isArray(parsed)) {return this.normalizeUsageRows(parsed, sourcePath, defaultDay);}
         if (parsed && typeof parsed === 'object') {
           const obj = parsed as Record<string, unknown>;
           if (Array.isArray(obj.data)) {
@@ -445,7 +445,7 @@ export class GitHubCopilotClient {
     const rows: CopilotUsageRow[] = [];
     for (const line of text.split(/\r?\n/)) {
       const trimmed = line.trim();
-      if (!trimmed) continue;
+      if (!trimmed) {continue;}
       try {
         const obj = JSON.parse(trimmed) as unknown;
         if (Array.isArray(obj)) {
@@ -454,7 +454,7 @@ export class GitHubCopilotClient {
         }
         if (obj && typeof obj === 'object') {
           const rec = obj as Record<string, unknown>;
-          if (defaultDay && !rec.day && !rec.date) rec.day = defaultDay;
+          if (defaultDay && !rec.day && !rec.date) {rec.day = defaultDay;}
           rows.push(this.normalizeUsageRecord(rec, sourcePath));
         }
       } catch {
@@ -466,7 +466,7 @@ export class GitHubCopilotClient {
 
   private parseCsvReport(csv: string, sourcePath: string): CopilotUsageRow[] {
     const lines = csv.split(/\r?\n/).filter((l) => l.trim());
-    if (lines.length < 2) return [];
+    if (lines.length < 2) {return [];}
     const headers = lines[0].split(',').map((h) => h.trim().toLowerCase().replace(/"/g, ''));
     const rows: CopilotUsageRow[] = [];
     for (let i = 1; i < lines.length; i++) {
@@ -511,7 +511,7 @@ export class GitHubCopilotClient {
       .filter((item) => item && typeof item === 'object')
       .map((item) => {
         const rec = item as Record<string, unknown>;
-        if (defaultDay && !rec.day && !rec.date) rec.day = defaultDay;
+        if (defaultDay && !rec.day && !rec.date) {rec.day = defaultDay;}
         return this.normalizeUsageRecord(rec, sourcePath);
       });
   }
@@ -587,7 +587,7 @@ export class GitHubCopilotClient {
       await sleep((retryAfter + attempt) * 1000);
       return this.request<T>(method, path, attempt + 1);
     }
-    if (resp.status === 204) return {} as T;
+    if (resp.status === 204) {return {} as T;}
     if (!resp.ok) {
       let detail = '';
       try {

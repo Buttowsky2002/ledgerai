@@ -47,7 +47,7 @@ function highestCriticalityTier(...tiers: Array<string | null | undefined>): str
   const normalized = tiers
     .map((tier) => tier?.trim().toLowerCase())
     .filter((tier): tier is string => Boolean(tier && tier in CRITICALITY_DAMPENING));
-  if (normalized.length === 0) return 'standard';
+  if (normalized.length === 0) {return 'standard';}
   return normalized.reduce((highest, tier) =>
     CRITICALITY_DAMPENING[tier]! > CRITICALITY_DAMPENING[highest]! ? tier : highest,
   );
@@ -62,13 +62,13 @@ function criticalityFactor(tier: string): { weight: number; value: number } {
 
 /** Seat utilization in [0,1]. */
 export function utilizationRatio(active: number, purchased: number): number {
-  if (purchased <= 0) return 1;
+  if (purchased <= 0) {return 1;}
   return Math.min(1, Math.max(0, active / purchased));
 }
 
 /** Z-score for the last value in a series; returns 0 when variance is zero. */
 export function zScoreLast(values: number[]): number {
-  if (values.length < 3) return 0;
+  if (values.length < 3) {return 0;}
   const slice = values.slice(0, -1);
   const last = values[values.length - 1]!;
   const mean = slice.reduce((s, v) => s + v, 0) / slice.length;
@@ -80,7 +80,7 @@ export function zScoreLast(values: number[]): number {
 /** Simple OLS slope for evenly spaced points (trend per step). */
 export function linearTrendSlope(values: number[]): number {
   const n = values.length;
-  if (n < 2) return 0;
+  if (n < 2) {return 0;}
   const xMean = (n - 1) / 2;
   const yMean = values.reduce((s, v) => s + v, 0) / n;
   let num = 0;
@@ -94,7 +94,7 @@ export function linearTrendSlope(values: number[]): number {
 
 /** Percentile rank in [0,100] — higher = better efficiency. */
 export function percentileRank(score: number, scores: number[]): number {
-  if (scores.length === 0) return 50;
+  if (scores.length === 0) {return 50;}
   const sorted = [...scores].sort((a, b) => a - b);
   const below = sorted.filter((s) => s < score).length;
   return Math.round((below / sorted.length) * 100);
@@ -103,16 +103,16 @@ export function percentileRank(score: number, scores: number[]): number {
 /** Composite ML urgency score from normalized factors in [0,1]. */
 export function compositeMlScore(factors: { weight: number; value: number }[]): number {
   const totalWeight = factors.reduce((s, f) => s + f.weight, 0);
-  if (totalWeight <= 0) return 0;
+  if (totalWeight <= 0) {return 0;}
   const score =
     factors.reduce((s, f) => s + f.weight * Math.min(1, Math.max(0, f.value)), 0) / totalWeight;
   return Math.round(score * 100);
 }
 
 export function priorityFromScore(score: number): RecommendationPriority {
-  if (score >= 80) return 'critical';
-  if (score >= 60) return 'high';
-  if (score >= 35) return 'medium';
+  if (score >= 80) {return 'critical';}
+  if (score >= 60) {return 'high';}
+  if (score >= 35) {return 'medium';}
   return 'low';
 }
 
@@ -514,10 +514,10 @@ export function modelSubstitutionRecs(
   }> = [];
 
   for (const row of modelUsage) {
-    if (row.costUsd < MIN_MODEL_SPEND_USD) continue;
+    if (row.costUsd < MIN_MODEL_SPEND_USD) {continue;}
 
     const totalTokens = row.inputTokens + row.outputTokens;
-    if (totalTokens <= 0) continue;
+    if (totalTokens <= 0) {continue;}
 
     const inputShare = row.inputTokens / totalTokens;
     const actualBlendedPerM = (row.costUsd / totalTokens) * 1_000_000;
@@ -528,16 +528,16 @@ export function modelSubstitutionRecs(
       inputShare,
       priceBook,
     );
-    if (alts.length === 0) continue;
+    if (alts.length === 0) {continue;}
 
     const best = alts[0]!;
     const projected = projectedCostUsd(best, row.inputTokens, row.outputTokens);
     const periodSavings = row.costUsd - projected;
-    if (periodSavings <= 0) continue;
+    if (periodSavings <= 0) {continue;}
 
     const monthlySavings = periodSavings * factor;
     const savingsFloor = Math.max(MIN_MONTHLY_SAVINGS_USD, monthlyRunRate * MIN_SAVINGS_SHARE);
-    if (monthlySavings < savingsFloor) continue;
+    if (monthlySavings < savingsFloor) {continue;}
 
     const incumbentRate = resolveModelRate(row.provider, row.model, priceBook);
     const incumbentListBlended = incumbentRate ? blendedRate(incumbentRate, inputShare) : 0;
@@ -589,7 +589,7 @@ export function userValueRecs(
 ): LariActionableRecommendation[] {
   const users = input.userUtilization ?? [];
   const mode = input.perUserMode ?? 'team';
-  if (users.length === 0) return [];
+  if (users.length === 0) {return [];}
 
   const recs: LariActionableRecommendation[] = [];
   const inactiveWithSeat = users.filter((u) => u.hasSeat && u.status === 'inactive');
@@ -733,10 +733,10 @@ export function userValueRecs(
   }
 
   for (const u of users) {
-    if (!u.dailyCost || u.dailyCost.length < 7) continue;
+    if (!u.dailyCost || u.dailyCost.length < 7) {continue;}
     const z = zScoreLast(u.dailyCost);
     const callSlope = u.dailyCalls ? linearTrendSlope(u.dailyCalls) : 0;
-    if (z <= 3 || callSlope > 0) continue;
+    if (z <= 3 || callSlope > 0) {continue;}
 
     const tier = highestCriticalityTier(u.criticalityTier);
     const mlScore = compositeMlScore([

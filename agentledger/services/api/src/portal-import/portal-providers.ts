@@ -24,7 +24,7 @@ export function isPortalBillingProvider(value: string): value is PortalBillingPr
 }
 
 export function platformDisplayName(provider: string): string {
-  if (isPortalBillingProvider(provider)) return DISPLAY_NAMES[provider];
+  if (isPortalBillingProvider(provider)) {return DISPLAY_NAMES[provider];}
   return provider;
 }
 
@@ -46,6 +46,6 @@ export function resolvePortalProvider(
   override?: string,
 ): PortalBillingProvider | null {
   const picked = override?.trim().toLowerCase();
-  if (picked && isPortalBillingProvider(picked)) return picked;
+  if (picked && isPortalBillingProvider(picked)) {return picked;}
   return providerForFormat(format);
 }

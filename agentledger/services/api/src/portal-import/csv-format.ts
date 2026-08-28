@@ -27,11 +27,11 @@ function hasHeader(headers: string[], ...candidates: string[]): boolean {
 
 /** Extract YYYY-MM-DD range from common export filenames. */
 export function datesFromFileName(fileName: string | undefined): { from: string | null; to: string | null } {
-  if (!fileName) return { from: null, to: null };
+  if (!fileName) {return { from: null, to: null };}
   const isoRange = fileName.match(/(\d{4}-\d{2}-\d{2})-to-(\d{4}-\d{2}-\d{2})/i);
-  if (isoRange) return { from: isoRange[1], to: isoRange[2] };
+  if (isoRange) {return { from: isoRange[1], to: isoRange[2] };}
   const isoUnderscore = fileName.match(/(\d{4}-\d{2}-\d{2})_(\d{4}-\d{2}-\d{2})/);
-  if (isoUnderscore) return { from: isoUnderscore[1], to: isoUnderscore[2] };
+  if (isoUnderscore) {return { from: isoUnderscore[1], to: isoUnderscore[2] };}
   const usRange = fileName.match(/(\d{4})_(\d{2})_(\d{2})_to_(\d{4})_(\d{2})_(\d{2})/);
   if (usRange) {
     return {

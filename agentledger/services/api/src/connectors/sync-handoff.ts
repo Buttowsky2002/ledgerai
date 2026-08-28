@@ -16,7 +16,7 @@ export function resolveFirstSyncBaseline(
   portalImportThrough: string | null,
   syncEndDay: string,
 ): string {
-  if (portalImportThrough) return dayAfter(portalImportThrough);
+  if (portalImportThrough) {return dayAfter(portalImportThrough);}
   return dayAfter(syncEndDay);
 }
 
@@ -44,13 +44,13 @@ export function resolveConnectorSyncRange(
 
     // Entire requested window ends before API handoff — allow manual re-backfill, skip incremental.
     if (baseline && to < baseline) {
-      if (opts?.incremental) return null;
+      if (opts?.incremental) {return null;}
       return { from: origFrom, to };
     }
 
-    if (baseline && from < baseline) from = baseline;
+    if (baseline && from < baseline) {from = baseline;}
     if (from > to) {
-      if (opts?.incremental) return null;
+      if (opts?.incremental) {return null;}
       return { from: origFrom, to };
     }
     return { from, to };
@@ -58,7 +58,7 @@ export function resolveConnectorSyncRange(
 
   if (baseline) {
     if (baseline > today) {
-      if (opts?.incremental) return null;
+      if (opts?.incremental) {return null;}
       return { from: baseline, to: baseline };
     }
     return { from: baseline, to: today };

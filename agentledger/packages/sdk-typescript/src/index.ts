@@ -156,8 +156,8 @@ export function otelLlmAttributes(c: LlmCallInput): Record<string, string | numb
     'gen_ai.request.model': c.model,
     'gen_ai.operation.name': c.operationName ?? 'chat',
   };
-  if (c.inputTokens != null) a['gen_ai.usage.input_tokens'] = nonNegInt(c.inputTokens);
-  if (c.outputTokens != null) a['gen_ai.usage.output_tokens'] = nonNegInt(c.outputTokens);
+  if (c.inputTokens != null) {a['gen_ai.usage.input_tokens'] = nonNegInt(c.inputTokens);}
+  if (c.outputTokens != null) {a['gen_ai.usage.output_tokens'] = nonNegInt(c.outputTokens);}
   return a;
 }
 
@@ -421,13 +421,13 @@ export class LedgerAI {
 
   /** Await all buffered events to be sent. In fail-closed mode, throws on failure. */
   async flush(): Promise<void> {
-    if (this.buffer.length === 0) return;
+    if (this.buffer.length === 0) {return;}
     const batch = this.buffer.splice(0, this.buffer.length);
     try {
       await this.send(batch);
     } catch (err) {
       this.log(`flush failed: dropped ${batch.length} event(s)`, err);
-      if (!this.failOpen) throw err;
+      if (!this.failOpen) {throw err;}
     }
   }
 
@@ -470,11 +470,11 @@ export class LedgerAI {
   private async send(batch: LedgerEvent[]): Promise<void> {
     const body = batch.map((e) => JSON.stringify(e)).join('\n');
     const headers: Record<string, string> = { 'Content-Type': 'application/x-ndjson' };
-    if (this.apiKey) headers.Authorization = `Bearer ${this.apiKey}`;
+    if (this.apiKey) {headers.Authorization = `Bearer ${this.apiKey}`;}
 
     let lastErr: unknown;
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
-      if (attempt > 0) await delay(Math.min(250, 50 * attempt));
+      if (attempt > 0) {await delay(Math.min(250, 50 * attempt));}
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), this.timeoutMs);
       try {
@@ -484,7 +484,7 @@ export class LedgerAI {
           body,
           signal: controller.signal,
         });
-        if (res.ok) return; // 202 Accepted (or any 2xx)
+        if (res.ok) {return;} // 202 Accepted (or any 2xx)
         if (res.status >= 500 && attempt < this.maxRetries) {
           lastErr = new Error(`ledgerai sink HTTP ${res.status}`);
           continue; // retry server errors
@@ -492,7 +492,7 @@ export class LedgerAI {
         throw new Error(`ledgerai sink HTTP ${res.status}`);
       } catch (err) {
         lastErr = err;
-        if (attempt >= this.maxRetries) break;
+        if (attempt >= this.maxRetries) {break;}
       } finally {
         clearTimeout(timer);
       }
@@ -505,7 +505,7 @@ function stripContent(ev: LedgerEvent): LedgerEvent {
   let copy: LedgerEvent | undefined;
   for (const k of CONTENT_KEYS) {
     if (k in ev) {
-      if (!copy) copy = { ...ev };
+      if (!copy) {copy = { ...ev };}
       delete copy[k];
     }
   }

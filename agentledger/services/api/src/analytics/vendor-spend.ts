@@ -53,7 +53,7 @@ function normalizePlatform(platform: string): string {
 
 export function platformToVendor(platform: string): string {
   const p = normalizePlatform(platform);
-  if (p.includes('copilot')) return 'github';
+  if (p.includes('copilot')) {return 'github';}
   return VENDOR_OVERRIDES[p] ?? p;
 }
 
@@ -66,7 +66,7 @@ const usd = (v: number): number => Math.round((v + Number.EPSILON) * 100) / 100;
 
 function ensureSlice(out: Record<string, VendorSpendSlice>, vendor: string): VendorSpendSlice {
   const key = vendor.trim().toLowerCase() || 'other';
-  if (!out[key]) out[key] = { seat_usd: 0, overage_usd: 0, total_usd: 0 };
+  if (!out[key]) {out[key] = { seat_usd: 0, overage_usd: 0, total_usd: 0 };}
   return out[key];
 }
 
@@ -102,7 +102,7 @@ export function buildUserVendorSpend(input: {
   // Cursor metered rows when on-demand analytics field is unset (legacy CH path).
   if ((out.cursor?.overage_usd ?? 0) <= 0) {
     for (const row of input.model_breakdown) {
-      if (normalizePlatform(row.platform) !== 'cursor') continue;
+      if (normalizePlatform(row.platform) !== 'cursor') {continue;}
       const cur = ensureSlice(out, 'cursor');
       cur.overage_usd += row.spend_usd;
       finalizeSlice(cur);
@@ -111,7 +111,7 @@ export function buildUserVendorSpend(input: {
 
   for (const row of input.model_breakdown) {
     const platform = row.platform;
-    if (isSeatAllocatedPlatform(platform) || normalizePlatform(platform) === 'cursor') continue;
+    if (isSeatAllocatedPlatform(platform) || normalizePlatform(platform) === 'cursor') {continue;}
     const slice = ensureSlice(out, platformToVendor(platform));
     slice.overage_usd += row.spend_usd;
     finalizeSlice(slice);
@@ -183,7 +183,7 @@ export function buildUserVendorUsage(input: {
   }
 
   for (const [vendor, tokens] of Object.entries(input.tokens_by_vendor)) {
-    if (tokens <= 0) continue;
+    if (tokens <= 0) {continue;}
     ensure(vendor).tokens += tokens;
   }
 
@@ -213,7 +213,7 @@ export function buildOrgVendorBilling(
     const seat_usd = usd(seatUsdByVendor[vendor] ?? 0);
     const budget_overage_usd = usd(overageUsdByVendor[vendor] ?? 0);
     const total_usd = usd(seat_usd + budget_overage_usd);
-    if (total_usd <= 0) continue;
+    if (total_usd <= 0) {continue;}
     rows.push({ vendor, seat_usd, budget_overage_usd, total_usd });
   }
   return rows.sort((a, b) => b.total_usd - a.total_usd);

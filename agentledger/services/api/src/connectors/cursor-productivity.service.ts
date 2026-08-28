@@ -56,9 +56,9 @@ export class CursorProductivityService {
         { tenant: tenantId, from, to },
       );
       const row = rows[0];
-      if (!row) return null;
+      if (!row) {return null;}
       const commitCount = Number(row.commit_count ?? 0);
-      if (commitCount <= 0) return null;
+      if (commitCount <= 0) {return null;}
       const linesTotal = Number(row.lines_total ?? 0);
       const linesAi = Number(row.lines_ai ?? 0);
       return {
@@ -110,7 +110,7 @@ export class CursorProductivityService {
       this.getCommitAttributionSummary(tenantId, from, to),
     ]);
 
-    if (rows.length === 0 && !commitAttribution) return null;
+    if (rows.length === 0 && !commitAttribution) {return null;}
 
     let estimatedValueUsd = 0;
     let linesAccepted = 0;
@@ -131,7 +131,7 @@ export class CursorProductivityService {
         composerRequests: Number(row.composer_requests ?? 0),
         chatRequests: Number(row.chat_requests ?? 0),
       });
-      if (roi.estimatedValueUsd <= 0 && roi.linesAccepted <= 0) continue;
+      if (roi.estimatedValueUsd <= 0 && roi.linesAccepted <= 0) {continue;}
       activeUserDays += 1;
       users.add(String(row.user_id));
       estimatedValueUsd += roi.estimatedValueUsd;
@@ -147,7 +147,7 @@ export class CursorProductivityService {
       confidenceSum = activeUserDays * 0.85;
     }
 
-    if (activeUserDays === 0 && !commitAttribution) return null;
+    if (activeUserDays === 0 && !commitAttribution) {return null;}
 
     const disclaimer = commitAttribution
       ? 'Accepted LOC and editor activity come from Cursor Admin daily-usage-data. Committed AI lines and AI share come from Enterprise /analytics/ai-code/commits. Background Agents and Cursor CLI are not tracked by Cursor.'

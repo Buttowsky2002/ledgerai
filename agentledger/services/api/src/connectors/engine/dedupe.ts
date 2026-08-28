@@ -32,7 +32,7 @@ export function computeDedupeHash(
       break;
     case 'custom':
       parts = (config?.fields ?? []).map((f) => String(metrics[f] ?? ''));
-      if (config?.customExpression) parts.push(config.customExpression);
+      if (config?.customExpression) {parts.push(config.customExpression);}
       break;
     default:
       parts = [externalId ?? JSON.stringify(metrics)];

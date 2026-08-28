@@ -37,7 +37,7 @@ export class ConnectorDefinitionsService {
 
   getBuiltin(id: string): ConnectorDefinition {
     const def = this.builtinPresets.get(id);
-    if (!def) throw new NotFoundException(`preset ${id} not found`);
+    if (!def) {throw new NotFoundException(`preset ${id} not found`);}
     return def;
   }
 
@@ -70,18 +70,18 @@ export class ConnectorDefinitionsService {
   }
 
   async get(id: string): Promise<ConnectorDefinition> {
-    if (this.builtinPresets.has(id)) return this.getBuiltin(id);
+    if (this.builtinPresets.has(id)) {return this.getBuiltin(id);}
     const tenantId = getTenantId();
     const row = await this.prisma.withTenant(tenantId!, (tx) =>
       tx.connectorDefinition.findUnique({ where: { definitionId: id } }),
     );
-    if (!row) throw new NotFoundException('connector definition not found');
+    if (!row) {throw new NotFoundException('connector definition not found');}
     return row.definitionJson as unknown as ConnectorDefinition;
   }
 
   async createCustom(definition: ConnectorDefinition): Promise<unknown> {
     const tenantId = getTenantId();
-    if (!tenantId) throw new BadRequestException('no tenant in context');
+    if (!tenantId) {throw new BadRequestException('no tenant in context');}
     if (!definition.name || !definition.baseUrl) {
       throw new BadRequestException('name and baseUrl are required');
     }

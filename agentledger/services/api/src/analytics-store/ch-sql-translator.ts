@@ -63,13 +63,13 @@ function matchParen(sql: string, openIdx: number): number {
     // Skip string literals so parens inside quotes don't affect depth.
     if (c === "'") {
       i++;
-      while (i < sql.length && sql[i] !== "'") i++;
+      while (i < sql.length && sql[i] !== "'") {i++;}
       continue;
     }
-    if (c === '(') depth++;
+    if (c === '(') {depth++;}
     else if (c === ')') {
       depth--;
-      if (depth === 0) return i;
+      if (depth === 0) {return i;}
     }
   }
   throw new Error('ch-sql-translator: unbalanced parentheses');
@@ -84,11 +84,11 @@ function splitArgs(inner: string): string[] {
     const c = inner[i];
     if (c === "'") {
       i++;
-      while (i < inner.length && inner[i] !== "'") i++;
+      while (i < inner.length && inner[i] !== "'") {i++;}
       continue;
     }
-    if (c === '(') depth++;
-    else if (c === ')') depth--;
+    if (c === '(') {depth++;}
+    else if (c === ')') {depth--;}
     else if (c === ',' && depth === 0) {
       args.push(inner.slice(start, i).trim());
       start = i + 1;
@@ -107,7 +107,7 @@ function rewriteCalls(sql: string, fn: string, build: (args: string[]) => string
   const re = new RegExp(`\\b${fn}\\s*\\(`, 'i');
   for (;;) {
     const m = re.exec(sql);
-    if (!m) return sql;
+    if (!m) {return sql;}
     const openIdx = m.index + m[0].length - 1;
     const closeIdx = matchParen(sql, openIdx);
     const inner = sql.slice(openIdx + 1, closeIdx);

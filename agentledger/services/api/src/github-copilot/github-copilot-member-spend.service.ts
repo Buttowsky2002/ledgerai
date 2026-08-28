@@ -295,8 +295,8 @@ function buildSummary(
 ): CopilotMemberSpendSummary {
   const now = Date.now();
   const activeSeats = seats.filter((s) => {
-    if (!s.isActive) return false;
-    if (!s.lastActivityAt) return false;
+    if (!s.isActive) {return false;}
+    if (!s.lastActivityAt) {return false;}
     return (now - s.lastActivityAt.getTime()) / 86_400_000 <= 28;
   }).length;
   const inactiveSeats = seats.filter((s) => s.isActive).length - activeSeats;
@@ -354,7 +354,7 @@ function buildCharts(
 
   const modelMixMap = new Map<string, number>();
   for (const u of usageDetail) {
-    if (!u.githubLogin || !u.model) continue;
+    if (!u.githubLogin || !u.model) {continue;}
     const key = `${u.githubLogin}|${u.model}`;
     modelMixMap.set(key, (modelMixMap.get(key) ?? 0) + u.linesAccepted + u.chatTurns);
   }
@@ -405,9 +405,9 @@ function buildCharts(
 function resolveSeatStatus(
   seat: { isActive: boolean; pendingCancellationDate?: Date | null } | undefined,
 ): CopilotMemberSpendRow['seatStatus'] {
-  if (!seat) return 'no_seat';
-  if (seat.pendingCancellationDate) return 'pending_cancel';
-  if (!seat.isActive) return 'inactive';
+  if (!seat) {return 'no_seat';}
+  if (seat.pendingCancellationDate) {return 'pending_cancel';}
+  if (!seat.isActive) {return 'inactive';}
   return 'active';
 }
 

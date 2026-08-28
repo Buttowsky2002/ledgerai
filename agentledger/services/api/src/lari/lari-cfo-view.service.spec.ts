@@ -79,19 +79,19 @@ function harness(opts?: {
         },
       ];
     }
-    if (isSql(sql, RECONCILED_COST_BASIS_TOTALS_SQL)) return [costBasisTotals];
-    if (isSql(sql, RECONCILED_COST_BASIS_MONTHLY_SQL)) return costBasisMonthly;
+    if (isSql(sql, RECONCILED_COST_BASIS_TOTALS_SQL)) {return [costBasisTotals];}
+    if (isSql(sql, RECONCILED_COST_BASIS_MONTHLY_SQL)) {return costBasisMonthly;}
     if (isSql(sql, RECONCILED_PROVIDER_SPEND_SQL)) {
       return [{ provider: 'cursor', cost_usd: 110, calls: 50 }];
     }
-    if (isSql(sql, RECONCILED_UNMAPPED_SPEND_SQL)) return [{ unmapped_cost: 0 }];
+    if (isSql(sql, RECONCILED_UNMAPPED_SPEND_SQL)) {return [{ unmapped_cost: 0 }];}
 
-    if (/v_cost_basis_daily/.test(sql) && /countIf/.test(sql)) return [costBasisTotals];
-    if (/v_cost_basis_daily/.test(sql) && /toStartOfMonth/.test(sql)) return costBasisMonthly;
-    if (/FROM agentledger\.v_roi/.test(sql) && /outcome_type/.test(sql)) return roiRows;
-    if (/FROM agentledger\.v_roi/.test(sql) && /count\(\)/.test(sql)) return [{ cnt: 10 }];
+    if (/v_cost_basis_daily/.test(sql) && /countIf/.test(sql)) {return [costBasisTotals];}
+    if (/v_cost_basis_daily/.test(sql) && /toStartOfMonth/.test(sql)) {return costBasisMonthly;}
+    if (/FROM agentledger\.v_roi/.test(sql) && /outcome_type/.test(sql)) {return roiRows;}
+    if (/FROM agentledger\.v_roi/.test(sql) && /count\(\)/.test(sql)) {return [{ cnt: 10 }];}
     // Unmapped spend only — do not match other reconciled SQL that embeds 'Unassigned'.
-    if (/unmapped_cost/.test(sql) || /spend_daily_by_user/.test(sql)) return [{ unmapped_cost: 0 }];
+    if (/unmapped_cost/.test(sql) || /spend_daily_by_user/.test(sql)) {return [{ unmapped_cost: 0 }];}
     if (/coding_agent_daily/.test(sql) && /lines_accepted/.test(sql)) {
       return opts?.cursorProductivity
         ? [
@@ -109,7 +109,7 @@ function harness(opts?: {
           ]
         : [];
     }
-    if (/coding_agent_daily/.test(sql)) return [{ cost_usd: 0 }];
+    if (/coding_agent_daily/.test(sql)) {return [{ cost_usd: 0 }];}
     if (/FROM spend_daily/.test(sql) && /GROUP BY provider, model/.test(sql)) {
       return [
         {
@@ -133,8 +133,8 @@ function harness(opts?: {
         },
       ];
     }
-    if (/FROM spend_daily/.test(sql) && /GROUP BY provider ORDER BY/.test(sql)) return [];
-    if (/fixed_costs/.test(sql)) return [{ cost_usd: 0 }];
+    if (/FROM spend_daily/.test(sql) && /GROUP BY provider ORDER BY/.test(sql)) {return [];}
+    if (/fixed_costs/.test(sql)) {return [{ cost_usd: 0 }];}
     return [];
   });
 

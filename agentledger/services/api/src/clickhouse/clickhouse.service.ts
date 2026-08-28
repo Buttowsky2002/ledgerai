@@ -130,7 +130,7 @@ export class ClickHouseService extends AnalyticsStore {
    * timestamps (best_effort). Callers stamp tenant_id from the principal.
    */
   async insertRows(table: string, rows: Record<string, unknown>[]): Promise<void> {
-    if (rows.length === 0) return;
+    if (rows.length === 0) {return;}
     const qs = new URLSearchParams({
       database: this.db,
       date_time_input_format: 'best_effort',

@@ -190,7 +190,7 @@ export class UserValueService {
 
     for (const row of spendRows) {
       const rawUserId = String(row.key);
-      if (!rawUserId || rawUserId === 'Unassigned') continue;
+      if (!rawUserId || rawUserId === 'Unassigned') {continue;}
       const user = ensure(rawUserId);
       user.costUsd += n(row.cost_usd);
       user.calls += n(row.calls);
@@ -198,21 +198,21 @@ export class UserValueService {
 
     for (const row of modelRows) {
       const rawUserId = String(row.user_id);
-      if (!rawUserId || rawUserId === 'Unassigned') continue;
+      if (!rawUserId || rawUserId === 'Unassigned') {continue;}
       const user = ensure(rawUserId);
-      if (row.platform) user.providers.add(String(row.platform));
+      if (row.platform) {user.providers.add(String(row.platform));}
     }
 
     for (const row of codingRows) {
       const user = ensure(String(row.user_id));
       user.codingAgentCostUsd += n(row.cost_usd);
       user.sessions += n(row.sessions);
-      if (row.provider) user.providers.add(String(row.provider));
+      if (row.provider) {user.providers.add(String(row.provider));}
     }
 
     for (const seat of seatRows) {
       const rawId = seat.email ?? seat.userId;
-      if (!rawId) continue;
+      if (!rawId) {continue;}
       const user = ensure(rawId);
       user.hasSeat = true;
       user.seatMonthlyCostUsd = Math.max(
@@ -231,11 +231,11 @@ export class UserValueService {
     if (mode === 'individual') {
       for (const row of dailySpendByUser) {
         const rawUserId = String(row.user_id);
-        if (!rawUserId || rawUserId === 'Unassigned') continue;
+        if (!rawUserId || rawUserId === 'Unassigned') {continue;}
         const user = ensure(rawUserId);
         const day = String(row.day).slice(0, 10);
-        if (!user.dailyCost) user.dailyCost = new Map();
-        if (!user.dailyCalls) user.dailyCalls = new Map();
+        if (!user.dailyCost) {user.dailyCost = new Map();}
+        if (!user.dailyCalls) {user.dailyCalls = new Map();}
         const cost = n(row.cost_usd);
         user.dailyCost.set(day, (user.dailyCost.get(day) ?? 0) + cost);
         user.dailyCalls.set(day, (user.dailyCalls.get(day) ?? 0) + n(row.calls));
@@ -249,8 +249,8 @@ export class UserValueService {
     } else {
       for (const row of dailySpendByUser) {
         const rawUserId = String(row.user_id);
-        if (!rawUserId || rawUserId === 'Unassigned') continue;
-        if (n(row.cost_usd) <= 0) continue;
+        if (!rawUserId || rawUserId === 'Unassigned') {continue;}
+        if (n(row.cost_usd) <= 0) {continue;}
         const key = resolveKey(rawUserId);
         const days = activeDaysByKey.get(key) ?? new Set<string>();
         days.add(String(row.day).slice(0, 10));
@@ -260,7 +260,7 @@ export class UserValueService {
 
     for (const [key, days] of activeDaysByKey) {
       const user = byKey.get(key);
-      if (user) user.activeDays = days.size;
+      if (user) {user.activeDays = days.size;}
     }
 
     return [...byKey.values()].map((row) => {
@@ -331,7 +331,7 @@ export class UserValueService {
     const byProviderMap = new Map<string, { provider: string; inactiveCount: number; reclaimableMonthlyUsd: number }>();
 
     for (const row of rows) {
-      if (!row.hasSeat || row.status !== 'inactive') continue;
+      if (!row.hasSeat || row.status !== 'inactive') {continue;}
       const planKey = row.planId ?? row.seatProvider ?? 'unknown';
       const planEntry = byPlanMap.get(planKey) ?? {
         planId: row.planId ?? planKey,

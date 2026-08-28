@@ -41,12 +41,12 @@ export class ConnectorSchedulerService implements OnModuleInit, OnModuleDestroy 
   }
 
   onModuleDestroy(): void {
-    if (this.initialHandle) clearTimeout(this.initialHandle);
-    if (this.intervalHandle) clearInterval(this.intervalHandle);
+    if (this.initialHandle) {clearTimeout(this.initialHandle);}
+    if (this.intervalHandle) {clearInterval(this.intervalHandle);}
   }
 
   async runScheduledSync(): Promise<void> {
-    if (this.running) return;
+    if (this.running) {return;}
     this.running = true;
     try {
       const rows = await this.prisma.$queryRaw<ScheduledConnector[]>`
@@ -60,12 +60,12 @@ export class ConnectorSchedulerService implements OnModuleInit, OnModuleDestroy 
               const connector = await this.prisma.withTenant(row.tenant_id, (tx) =>
                 tx.connector.findUnique({ where: { connectorId: row.connector_id } }),
               );
-              if (!connector?.enabled) return;
+              if (!connector?.enabled) {return;}
 
               const cfg = (connector.config ?? {}) as Record<string, unknown>;
               const window = incrementalSyncWindow();
               const range = resolveConnectorSyncRange(window, cfg, { incremental: true });
-              if (!range) return;
+              if (!range) {return;}
 
               const result = await this.connectors.sync(row.connector_id, range);
               this.logger.log(
@@ -106,7 +106,7 @@ function schedulerEnabled(): boolean {
 
 function schedulerIntervalMs(): number {
   const raw = env('BADGERIQ_CONNECTOR_SCHEDULER_INTERVAL_MS');
-  if (!raw) return DEFAULT_INTERVAL_MS;
+  if (!raw) {return DEFAULT_INTERVAL_MS;}
   const n = Number.parseInt(raw, 10);
   return Number.isFinite(n) && n >= 60_000 ? n : DEFAULT_INTERVAL_MS; // floor: 1 minute
 }

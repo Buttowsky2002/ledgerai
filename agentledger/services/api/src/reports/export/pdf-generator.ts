@@ -57,7 +57,7 @@ type TableColumn<T> = {
 };
 
 function platformLabel(provider: string): string {
-  if (provider === 'github_copilot') return 'GitHub Copilot';
+  if (provider === 'github_copilot') {return 'GitHub Copilot';}
   return provider;
 }
 
@@ -66,11 +66,11 @@ function dateRangeLabel(from: string, to: string, days: number): string {
 }
 
 function forecastHorizonLabel(days: number): string {
-  if (days === 365) return '1 year';
-  if (days === 180) return '6 months';
-  if (days === 90) return '90 days';
-  if (days === 30) return '30 days';
-  if (days === 7) return '1 week';
+  if (days === 365) {return '1 year';}
+  if (days === 180) {return '6 months';}
+  if (days === 90) {return '90 days';}
+  if (days === 30) {return '30 days';}
+  if (days === 7) {return '1 week';}
   return `${days} days`;
 }
 
@@ -79,15 +79,15 @@ function contentBottomY(doc: PdfDoc): number {
 }
 
 function truncateToWidth(doc: PdfDoc, text: string, maxWidth: number): string {
-  if (!text) return '';
-  if (doc.widthOfString(text) <= maxWidth) return text;
+  if (!text) {return '';}
+  if (doc.widthOfString(text) <= maxWidth) {return text;}
   const ell = '…';
   let lo = 0;
   let hi = text.length;
   while (lo < hi) {
     const mid = Math.ceil((lo + hi) / 2);
-    if (doc.widthOfString(text.slice(0, mid) + ell) <= maxWidth) lo = mid;
-    else hi = mid - 1;
+    if (doc.widthOfString(text.slice(0, mid) + ell) <= maxWidth) {lo = mid;}
+    else {hi = mid - 1;}
   }
   return lo > 0 ? text.slice(0, lo) + ell : ell;
 }
@@ -138,7 +138,7 @@ function ensureSpace(ctx: LayoutCtx, needed: number): void {
 type KpiTile = { label: string; value: string };
 
 function drawKpiBand(ctx: LayoutCtx, tiles: KpiTile[]): void {
-  if (tiles.length === 0) return;
+  if (tiles.length === 0) {return;}
   const { doc } = ctx;
   const startY = doc.y;
   const gap = 8;
@@ -200,7 +200,7 @@ function drawTable<T>(
   rows: T[],
   minRowsOnPage = 2,
 ): void {
-  if (rows.length === 0) return;
+  if (rows.length === 0) {return;}
   const { doc } = ctx;
   const tableBlock = HEADER_H + 4 + ROW_H * Math.min(rows.length, minRowsOnPage) + 20;
   ensureSpace(ctx, tableBlock);
@@ -310,7 +310,7 @@ const modelColumns = (ctx: LayoutCtx): TableColumn<ModelSpendTableRow>[] => [
 
 function drawPlatformSection(ctx: LayoutCtx, platforms: PlatformBreakdownRow[]): void {
   const { doc } = ctx;
-  if (platforms.length === 0) return;
+  if (platforms.length === 0) {return;}
 
   ensureSpace(ctx, 24);
   doc.fillColor(BRAND).fontSize(11).text('Platform Breakdown', ctx.marginX, doc.y, { lineBreak: false });
@@ -350,7 +350,7 @@ function drawPlatformSection(ctx: LayoutCtx, platforms: PlatformBreakdownRow[]):
 }
 
 function drawSpendTrendSparkline(ctx: LayoutCtx, rows: DailySpendRow[], periodTotal: number): void {
-  if (!shouldRenderSpendTrend(rows)) return;
+  if (!shouldRenderSpendTrend(rows)) {return;}
   const { doc } = ctx;
   ensureSpace(ctx, SPARKLINE_H + 36);
 
@@ -433,7 +433,7 @@ function drawProjectionSection(ctx: LayoutCtx, projection: ExecutiveReportProjec
   ];
   doc.fontSize(8).fillColor(MUTED);
   for (const [label, amount] of stackLines) {
-    if (amount <= 0) continue;
+    if (amount <= 0) {continue;}
     ensureSpace(ctx, 12);
     doc.text(`  ${label}: ${formatUsdExact(amount)}`, ctx.marginX, doc.y, { width: ctx.contentW });
     doc.moveDown(0.12);

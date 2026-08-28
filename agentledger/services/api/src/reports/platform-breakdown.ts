@@ -5,9 +5,9 @@ const SUBSCRIPTION_HINTS = ['cursor', 'copilot', 'github_copilot'];
 
 /** Infer subscription vs usage cost basis from provider slug. */
 export function inferCostBasis(provider: string, explicit?: string | null): 'subscription' | 'usage' {
-  if (explicit === 'subscription' || explicit === 'usage') return explicit;
+  if (explicit === 'subscription' || explicit === 'usage') {return explicit;}
   const p = provider.toLowerCase();
-  if (SUBSCRIPTION_HINTS.some((h) => p.includes(h))) return 'subscription';
+  if (SUBSCRIPTION_HINTS.some((h) => p.includes(h))) {return 'subscription';}
   return 'usage';
 }
 

@@ -21,5 +21,9 @@ module.exports = {
     '@typescript-eslint/explicit-function-return-type': 'off',
     '@typescript-eslint/explicit-module-boundary-types': 'off',
     '@typescript-eslint/no-explicit-any': 'warn',
+    // review-nodejs-code standard, ESLint-autofixable: use let/const, and
+    // require braces on every control statement.
+    'no-var': 'error',
+    curly: ['error', 'all'],
   },
 };

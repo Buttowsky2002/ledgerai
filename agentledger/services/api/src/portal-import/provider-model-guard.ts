@@ -42,7 +42,7 @@ function normalizeModel(model: unknown): string {
  */
 export function cursorOnlyModelReason(model: unknown): string | null {
   const m = normalizeModel(model);
-  if (!m) return null;
+  if (!m) {return null;}
   if (CURSOR_EXCLUSIVE_MODELS.some((re) => re.test(m))) {
     return 'sold only by Cursor';
   }
@@ -62,17 +62,17 @@ export function detectProviderModelConflicts(
   limit = 5,
 ): ProviderModelConflict[] {
   const target = normalizeModel(provider);
-  if (!target || target === 'cursor') return [];
+  if (!target || target === 'cursor') {return [];}
 
   const conflicts: ProviderModelConflict[] = [];
   const seen = new Set<string>();
   for (const raw of models) {
     const model = normalizeModel(raw);
-    if (!model || seen.has(model)) continue;
+    if (!model || seen.has(model)) {continue;}
     seen.add(model);
     const reason = cursorOnlyModelReason(model);
-    if (reason) conflicts.push({ model, reason });
-    if (conflicts.length >= limit) break;
+    if (reason) {conflicts.push({ model, reason });}
+    if (conflicts.length >= limit) {break;}
   }
   return conflicts;
 }

@@ -93,7 +93,7 @@ async function adoFetch(
       const body = await res.text().catch(() => '');
       throw new Error(`Azure DevOps ${res.status}: ${body.slice(0, 400)}`);
     }
-    if (res.status === 204) return null;
+    if (res.status === 204) {return null;}
     return res.json();
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
@@ -145,7 +145,7 @@ export async function listProjectRepos(
     `${encodeURIComponent(cfg.project)}/_apis/git/repositories?api-version=${API_VERSION}`;
   const data = (await adoFetch(fetchImpl, creds, url)) as { value?: AdoRepo[] };
   const all = data?.value ?? [];
-  if (cfg.repos.length === 0) return all;
+  if (cfg.repos.length === 0) {return all;}
   const want = new Set(cfg.repos.map((r) => r.toLowerCase()));
   return all.filter((r) => want.has(r.name.toLowerCase()) || want.has(r.id.toLowerCase()));
 }
@@ -182,13 +182,13 @@ export async function fetchMergedPullRequests(
         const url = `${repoScopedPullRequestsUrl(cfg.organization, cfg.project, repo.id)}?${q.toString()}`;
         const data = (await adoFetch(fetchImpl, creds, url)) as { value?: AdoPr[]; count?: number };
         const page = data?.value ?? [];
-        if (page.length === 0) break;
+        if (page.length === 0) {break;}
 
         for (const pr of page) {
           const closed = pr.closedDate ?? pr.creationDate;
-          if (!closed) continue;
+          if (!closed) {continue;}
           const ts = new Date(closed);
-          if (Number.isNaN(ts.getTime()) || ts.getTime() < floor) continue;
+          if (Number.isNaN(ts.getTime()) || ts.getTime() < floor) {continue;}
           const user =
             pr.createdBy?.uniqueName ??
             pr.createdBy?.displayName ??
@@ -207,7 +207,7 @@ export async function fetchMergedPullRequests(
           });
         }
 
-        if (page.length < top) break;
+        if (page.length < top) {break;}
         skip += top;
       }
     } catch (err) {
@@ -246,7 +246,7 @@ export async function fetchClosedWorkItems(
   })) as AdoWiqlResult;
 
   const ids = (wiqlResult.workItems ?? []).map((w) => w.id).filter((id) => id > 0);
-  if (ids.length === 0) return [];
+  if (ids.length === 0) {return [];}
 
   const rows: AdoOutcomeFlatRow[] = [];
   const chunkSize = 200;
@@ -264,10 +264,10 @@ export async function fetchClosedWorkItems(
       const fields = wi.fields ?? {};
       const changed = String(fields['System.ChangedDate'] ?? '');
       const ts = new Date(changed);
-      if (Number.isNaN(ts.getTime())) continue;
+      if (Number.isNaN(ts.getTime())) {continue;}
       const assigned = fields['System.AssignedTo'];
       let user = '';
-      if (typeof assigned === 'string') user = assigned;
+      if (typeof assigned === 'string') {user = assigned;}
       else if (assigned && typeof assigned === 'object') {
         const a = assigned as { uniqueName?: string; displayName?: string };
         user = a.uniqueName ?? a.displayName ?? '';
