@@ -1,0 +1,25 @@
+%% Source of truth: agentledger/deploy/clickhouse/001_events.sql and
+%% agentledger/deploy/clickhouse/005_outcome_graph.sql
+%% Analytics plane. Materialized views read FROM llm_calls (insert-time trigger)
+%% and write TO their target SummingMergeTree table. Views (v_) are read-time
+%% joins. Only objects declared in those two migrations are shown.
+flowchart TD
+    llm_calls["llm_calls (ReplacingMergeTree)"]
+
+    llm_calls -->|"insert trigger"| mv_spend_daily["mv_spend_daily"]
+    mv_spend_daily -->|"TO"| spend_daily["spend_daily (SummingMergeTree)"]
+
+    llm_calls -->|"insert trigger"| mv_spend_hourly_by_key["mv_spend_hourly_by_key"]
+    mv_spend_hourly_by_key -->|"TO"| spend_hourly_by_key["spend_hourly_by_key (SummingMergeTree)"]
+
+    llm_calls -->|"insert trigger (dlp_action != allow)"| mv_risk_daily["mv_risk_daily"]
+    mv_risk_daily -->|"TO"| risk_daily["risk_daily (SummingMergeTree)"]
+
+    agent_runs["agent_runs (ReplacingMergeTree)"]
+    outcomes["outcomes (ReplacingMergeTree)"]
+
+    outcomes -->|"LEFT JOIN"| v_unit_economics["v_unit_economics (VIEW)"]
+    agent_runs -->|"LEFT JOIN"| v_unit_economics
+
+    outcomes -->|"LEFT JOIN (FINAL)"| v_outcome_graph["v_outcome_graph (VIEW)"]
+    agent_runs -->|"LEFT JOIN (FINAL)"| v_outcome_graph

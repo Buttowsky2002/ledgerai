@@ -1,0 +1,46 @@
+%% Source of truth: agentledger/apps/dashboard/app/**/page.tsx (Next.js App Router).
+%% Each leaf is one page.tsx route segment, verbatim (dynamic segments keep their
+%% [param] folder name). Grouping is editorial; every route path below exists.
+flowchart TD
+    root["/ (home)"]
+
+    subgraph exec["Executive views"]
+        cfo["/cfo"]
+        ciso["/ciso"]
+        risk["/risk"]
+    end
+
+    subgraph explore["Explore / detail"]
+        agentDetail["/agents/[agentId]"]
+        users["/users"]
+        userDetail["/users/[userId]"]
+        vendorDetail["/vendors/[vendorId]"]
+        modelMix["/model-mix"]
+        costPerOutcome["/cost-per-outcome"]
+        attribution["/attribution"]
+    end
+
+    subgraph config["Governance / config"]
+        allocation["/allocation"]
+        budgets["/budgets"]
+        roiTemplates["/roi-templates"]
+        settings["/settings"]
+        settingsConnectors["/settings/connectors"]
+    end
+
+    subgraph admin["Admin"]
+        dataCoverage["/admin/data-coverage"]
+        fixedOverhead["/admin/fixed-overhead"]
+        billing["/admin/billing"]
+    end
+
+    subgraph entry["Auth / entry"]
+        login["/login"]
+        inviteAccept["/invite/accept"]
+    end
+
+    root --> exec
+    root --> explore
+    root --> config
+    root --> admin
+    root --> entry

@@ -1,0 +1,78 @@
+%% Source of truth: agentledger/services/api/src/app.module.ts
+%% Every module node below appears verbatim in AppModule's imports[]; the guard
+%% pipeline and AuthMiddleware come from AppModule.providers[] and configure().
+%% The control-plane / outcome-graph / bulk-ingestion / connector-framework
+%% headings are AppModule's own inline comments; the platform, analytics, and
+%% reporting groupings are editorial. No inter-feature-module edges are drawn
+%% (none are declared in app.module.ts).
+flowchart TD
+    Request["HTTP request"] --> AuthMiddleware["AuthMiddleware (forRoutes '*')"]
+    AuthMiddleware --> ThrottlerGuard["ThrottlerGuard (APP_GUARD)"]
+    ThrottlerGuard --> AuthGuard["AuthGuard (APP_GUARD)"]
+    AuthGuard --> RolesGuard["RolesGuard (APP_GUARD)"]
+    RolesGuard --> AppModule
+
+    AppModule["AppModule"] --> infra
+    AppModule --> controlPlane
+    AppModule --> analytics
+    AppModule --> outcomeGraph
+    AppModule --> ingestion
+    AppModule --> connectorsGrp
+    AppModule --> reporting
+
+    subgraph infra["Platform / infra"]
+        LoggerModule
+        ThrottlerModule
+        PrismaModule
+        ClickHouseModule
+        AuthModule
+        HealthModule
+        MetricsModule
+    end
+
+    subgraph controlPlane["Control-plane resources (CRUD + audit; RLS-scoped)"]
+        TeamsModule
+        IdentitiesModule
+        AuditModule
+        InvitesModule
+        AppsModule
+        AgentsModule
+        PoliciesModule
+        BudgetsModule
+        RoiTemplatesModule
+        AgentToolAllowlistModule
+        AgentCredentialsModule
+        TenantIdpConfigModule
+        ScimModule
+        ScimTokensModule
+        AllocationRulesModule
+        VirtualKeysModule
+        PriceBookModule
+        TenantModule
+    end
+
+    subgraph analytics["Analytics"]
+        AnalyticsModule
+        AttributionModule
+    end
+
+    subgraph outcomeGraph["Outcome Graph MVP"]
+        RunsModule
+        OutcomesModule
+    end
+
+    subgraph ingestion["Bulk data ingestion"]
+        ImportModule
+        PortalImportModule
+    end
+
+    subgraph connectorsGrp["Config-driven API connector framework"]
+        ConnectorsModule
+        GitHubCopilotModule
+    end
+
+    subgraph reporting["Reporting / partner"]
+        ReportsModule
+        FixedCostsModule
+        DesignPartnerModule
+    end

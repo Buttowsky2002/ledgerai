@@ -1,0 +1,115 @@
+%% Source of truth: agentledger/deploy/postgres/001_core.sql
+%% Control-plane / transactional schema. Only tables and foreign keys declared
+%% in 001_core.sql are shown; attribute lists are a key-members subset (PK/FK +
+%% a few signal columns), not every column. price_book and audit_log declare no
+%% FK in this migration and stand alone by design.
+erDiagram
+    tenants {
+        uuid tenant_id PK
+        text name
+        text plan
+        int retention_days
+    }
+    teams {
+        uuid team_id PK
+        uuid tenant_id FK
+        uuid parent_team_id FK
+        text name
+    }
+    identities {
+        uuid user_id PK
+        uuid tenant_id FK
+        uuid team_id FK
+        uuid manager_id FK
+        text email
+        text role
+    }
+    apps {
+        uuid app_id PK
+        uuid tenant_id FK
+        uuid owner_user_id FK
+        text app_type
+        text approved_status
+    }
+    agents {
+        uuid agent_id PK
+        uuid tenant_id FK
+        uuid app_id FK
+        uuid owner_user_id FK
+        text runtime_type
+        text risk_posture
+    }
+    virtual_keys {
+        uuid key_id PK
+        uuid tenant_id FK
+        uuid team_id FK
+        uuid user_id FK
+        uuid app_id FK
+        uuid dlp_policy_id FK
+        text key_hash
+    }
+    policies {
+        uuid policy_id PK
+        uuid tenant_id FK
+        text kind
+        text action
+        text fail_mode
+    }
+    price_book {
+        uuid price_id PK
+        text provider
+        text model_prefix
+        text token_type
+        numeric usd_per_million
+    }
+    allocation_rules {
+        uuid rule_id PK
+        uuid tenant_id FK
+        uuid owner_user_id FK
+        text target_type
+    }
+    budgets {
+        uuid budget_id PK
+        uuid tenant_id FK
+        text scope_type
+        numeric amount_usd
+    }
+    connectors {
+        uuid connector_id PK
+        uuid tenant_id FK
+        text kind
+        text status
+    }
+    roi_templates {
+        uuid template_id PK
+        uuid tenant_id FK
+        text outcome_type
+    }
+    audit_log {
+        bigserial id PK
+        uuid tenant_id
+        text actor
+        text action
+    }
+
+    tenants ||--o{ teams : "tenant_id"
+    teams |o--o{ teams : "parent_team_id"
+    tenants ||--o{ identities : "tenant_id"
+    teams |o--o{ identities : "team_id"
+    identities |o--o{ identities : "manager_id"
+    tenants ||--o{ apps : "tenant_id"
+    identities |o--o{ apps : "owner_user_id"
+    tenants ||--o{ agents : "tenant_id"
+    apps |o--o{ agents : "app_id"
+    identities |o--o{ agents : "owner_user_id"
+    tenants ||--o{ virtual_keys : "tenant_id"
+    teams |o--o{ virtual_keys : "team_id"
+    identities |o--o{ virtual_keys : "user_id"
+    apps |o--o{ virtual_keys : "app_id"
+    policies |o--o{ virtual_keys : "dlp_policy_id"
+    tenants ||--o{ policies : "tenant_id"
+    tenants ||--o{ allocation_rules : "tenant_id"
+    identities |o--o{ allocation_rules : "owner_user_id"
+    tenants ||--o{ budgets : "tenant_id"
+    tenants ||--o{ connectors : "tenant_id"
+    tenants |o--o{ roi_templates : "tenant_id"

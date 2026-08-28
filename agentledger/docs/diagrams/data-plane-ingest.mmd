@@ -1,0 +1,12 @@
+%% Source of truth: docker-compose.yml env (AGENTLEDGER_KAFKA_TOPIC=events.raw,
+%% AGENTLEDGER_KAFKA_DLQ_TOPIC=events.dlq, AGENTLEDGER_COLLECTOR_URL,
+%% AGENTLEDGER_CLICKHOUSE_URL) and the compose header comment on the gateway
+%% event sink. Arrows show DATA FLOW direction (producer -> topic -> consumer
+%% -> store), the inverse of the depends_on graph in deploy-topology.mmd.
+flowchart LR
+    litellm_adapter["litellm-adapter"] -->|"POST /v1/events"| collector["collector"]
+    collector -->|"produce events.raw"| redpanda["redpanda (events.raw)"]
+    redpanda -->|"consume events.raw"| ch_insert["ch-insert"]
+    ch_insert -->|"batched insert"| llm_calls["clickhouse: llm_calls"]
+    ch_insert -->|"poison msg"| dlq["redpanda (events.dlq)"]
+    gateway["gateway"] -->|"event sink (direct, dev)"| llm_calls
