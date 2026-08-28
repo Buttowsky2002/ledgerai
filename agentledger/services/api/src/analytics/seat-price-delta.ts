@@ -163,14 +163,27 @@ export function vendorSeatChanges(
     const prior = snapshotForRows(
       vendorRows.filter((r) => monthStart(String(r.period_month)) === priorMonth),
     );
+    // No prior month → not a seat *change* (avoid treating the full bill as a delta).
+    if (!prior) {
+      changes[vendor] = {
+        vendor,
+        seats: current.seats,
+        prior_seats: null,
+        usd_from_seats: 0,
+        usd_from_rate: 0,
+        prior_period_month: null,
+      };
+      continue;
+    }
     const delta = seatPriceDelta(current, prior);
+    const seatsChanged = delta.seatDelta !== 0;
     changes[vendor] = {
       vendor,
       seats: current.seats,
-      prior_seats: prior ? prior.seats : null,
-      usd_from_seats: delta.usdFromSeats,
-      usd_from_rate: delta.usdFromRate,
-      prior_period_month: prior ? priorMonth : null,
+      prior_seats: prior.seats,
+      usd_from_seats: seatsChanged ? delta.usdFromSeats : 0,
+      usd_from_rate: seatsChanged ? 0 : delta.usdFromRate,
+      prior_period_month: priorMonth,
     };
   }
 

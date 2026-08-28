@@ -76,12 +76,24 @@ describe('vendorSeatChanges', () => {
       usd_from_rate: 0,
       prior_period_month: '2026-06-01',
     });
+    // First-time vendor (no prior month) is not a seat *change*.
     expect(changes.openai).toMatchObject({
       seats: 5,
       prior_seats: null,
-      usd_from_seats: 150,
+      usd_from_seats: 0,
       prior_period_month: null,
     });
+  });
+
+  it('reports zero seat-change dollars when only unit price moved', () => {
+    const rateOnly = [
+      { period_month: '2026-06-01', vendor: 'cursor', seats: 10, unit_cost_usd: 40, cost_usd: 400 },
+      { period_month: '2026-07-01', vendor: 'cursor', seats: 10, unit_cost_usd: 50, cost_usd: 500 },
+    ];
+    const { changes } = vendorSeatChanges(rateOnly, '2026-07-01', '2026-07-31');
+    expect(changes.cursor.usd_from_seats).toBe(0);
+    expect(changes.cursor.prior_seats).toBe(10);
+    expect(changes.cursor.seats).toBe(10);
   });
 
   it('uses the latest month overlapping a multi-month range', () => {

@@ -1440,7 +1440,13 @@ export class AnalyticsService {
       row.prior_period_month = change.prior_period_month;
     }
     const total_cost_of_ai = usd(vendors.reduce((s, v) => s + v.total_usd, 0));
-    const seat_change_usd = usd(vendors.reduce((s, v) => s + (v.usd_from_seats ?? 0), 0));
+    // Only count vendors with a prior month and a real seat-count delta.
+    const seat_change_usd = usd(
+      vendors.reduce((s, v) => {
+        if (v.prior_seats == null || v.seats == null || v.seats === v.prior_seats) return s;
+        return s + (v.usd_from_seats ?? 0);
+      }, 0),
+    );
     return {
       from: r.from,
       to: r.to,

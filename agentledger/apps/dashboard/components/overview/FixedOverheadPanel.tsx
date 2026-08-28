@@ -29,28 +29,29 @@ type VendorBillingResponse = {
   seat_change_month?: string | null;
 };
 
-function SeatChangeCell({ row }: { row: OrgVendorRow }) {
-  const fromSeats = row.usd_from_seats ?? 0;
-  const seats = row.seats;
-  const prior = row.prior_seats;
-  const rateOnly = fromSeats === 0 && (row.usd_from_rate ?? 0) !== 0;
-  const unchanged =
-    fromSeats === 0 && (prior == null || prior === seats) && seats != null && !rateOnly;
+/** True when seats moved vs the previous billing month (not a first-time entry). */
+function hasSeatCountChange(row: OrgVendorRow): boolean {
+  return (
+    row.prior_seats != null &&
+    row.seats != null &&
+    row.seats !== row.prior_seats &&
+    (row.usd_from_seats ?? 0) !== 0
+  );
+}
 
-  if (seats == null || unchanged || rateOnly) {
+function SeatChangeCell({ row }: { row: OrgVendorRow }) {
+  if (!hasSeatCountChange(row)) {
     return <span className="text-muted">—</span>;
   }
 
-  const tone = fromSeats > 0 ? 'text-warn' : fromSeats < 0 ? 'text-pos' : 'text-muted';
-  const seatPart =
-    prior != null
-      ? `${prior} → ${seats} (${seats - prior > 0 ? '+' : ''}${seats - prior})`
-      : `${seats} seat${seats === 1 ? '' : 's'}`;
+  const seatDelta = (row.seats as number) - (row.prior_seats as number);
+  const fromSeats = row.usd_from_seats ?? 0;
+  const tone = fromSeats > 0 ? 'text-warn' : 'text-pos';
+  const seatLabel = `${seatDelta > 0 ? '+' : ''}${seatDelta} seat${Math.abs(seatDelta) === 1 ? '' : 's'}`;
 
   return (
     <span className={`num text-xs ${tone}`}>
-      {seatPart}
-      {fromSeats !== 0 ? ` · ${formatSignedUsd(fromSeats)}/mo` : ''}
+      {seatLabel} · {formatSignedUsd(fromSeats)}
     </span>
   );
 }
@@ -72,7 +73,7 @@ export async function FixedOverheadPanel({ from, to }: { from: string; to: strin
   const seatChangeUsd = vendorBilling.seat_change_usd ?? 0;
   const seatChangeMonth = vendorBilling.seat_change_month ?? null;
   const vsLabel =
-    seatChangeMonth && orgVendors.some((v) => v.prior_period_month)
+    seatChangeMonth && orgVendors.some((v) => v.prior_period_month != null && hasSeatCountChange(v))
       ? monthLabel(previousCalendarMonth(seatChangeMonth))
       : null;
 
@@ -108,7 +109,7 @@ export async function FixedOverheadPanel({ from, to }: { from: string; to: strin
           <p className="text-xs text-muted">{subscriptionPct.toFixed(1)}% of total</p>
           {seatChangeUsd !== 0 && (
             <p className={`text-xs ${seatChangeUsd > 0 ? 'text-warn' : 'text-pos'}`}>
-              {formatSignedUsd(seatChangeUsd)}/mo from seat changes
+              {formatSignedUsd(seatChangeUsd)} from seat changes
               {vsLabel ? ` · vs ${vsLabel}` : ''}
             </p>
           )}
@@ -148,7 +149,7 @@ export async function FixedOverheadPanel({ from, to }: { from: string; to: strin
               seatChange:
                 seatChangeUsd !== 0 ? (
                   <span className={`num text-xs ${seatChangeUsd > 0 ? 'text-warn' : 'text-pos'}`}>
-                    {formatSignedUsd(seatChangeUsd)}/mo
+                    {formatSignedUsd(seatChangeUsd)}
                   </span>
                 ) : (
                   <span className="text-muted">—</span>
