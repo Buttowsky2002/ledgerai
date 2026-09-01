@@ -11,18 +11,18 @@ import { combinedAiCost } from '@/lib/combined-ai-cost';
 export type DateRangeParams = { from?: string; to?: string };
 
 function formatApiError(body: Record<string, unknown>, fallback: string): string {
-  if (typeof body.detail === 'string') return body.detail;
+  if (typeof body.detail === 'string') {return body.detail;}
   const msg = body.message;
-  if (typeof msg === 'string') return msg;
-  if (Array.isArray(msg)) return msg.map((e) => (typeof e === 'string' ? e : JSON.stringify(e))).join(' · ');
+  if (typeof msg === 'string') {return msg;}
+  if (Array.isArray(msg)) {return msg.map((e) => (typeof e === 'string' ? e : JSON.stringify(e))).join(' · ');}
   if (msg && typeof msg === 'object' && !Array.isArray(msg)) {
     const nested = msg as Record<string, unknown>;
-    if (typeof nested.message === 'string') return nested.message;
+    if (typeof nested.message === 'string') {return nested.message;}
     if (Array.isArray(nested.message)) {
       return nested.message.map((e) => (typeof e === 'string' ? e : JSON.stringify(e))).join(' · ');
     }
   }
-  if (typeof body.error === 'string' && body.error !== 'create failed') return body.error;
+  if (typeof body.error === 'string' && body.error !== 'create failed') {return body.error;}
   if (typeof body.title === 'string' && typeof body.detail === 'string') {
     return `${body.title}: ${body.detail}`;
   }
@@ -41,8 +41,8 @@ export async function fetchFixedCostRows(
   params?: DateRangeParams,
 ): Promise<{ rows: FixedCostRow[]; error?: string }> {
   const qs = new URLSearchParams();
-  if (params?.from) qs.set('from', params.from);
-  if (params?.to) qs.set('to', params.to);
+  if (params?.from) {qs.set('from', params.from);}
+  if (params?.to) {qs.set('to', params.to);}
   const suffix = qs.toString();
   const res = await fetch(`/api/fixed-costs${suffix ? `?${suffix}` : ''}`, { cache: 'no-store' });
   const body = await parseJson(res);
@@ -54,11 +54,11 @@ export async function fetchFixedCostRows(
 
 export async function fetchFixedCostMonthly(params?: DateRangeParams): Promise<MonthlyFixedRow[]> {
   const qs = new URLSearchParams();
-  if (params?.from) qs.set('from', params.from);
-  if (params?.to) qs.set('to', params.to);
+  if (params?.from) {qs.set('from', params.from);}
+  if (params?.to) {qs.set('to', params.to);}
   const suffix = qs.toString();
   const res = await fetch(`/api/fixed-costs/monthly${suffix ? `?${suffix}` : ''}`, { cache: 'no-store' });
-  if (!res.ok) return [];
+  if (!res.ok) {return [];}
   const data = await res.json();
   return Array.isArray(data) ? (data as MonthlyFixedRow[]) : [];
 }
@@ -67,8 +67,8 @@ export async function fetchTotalCostOfAi(
   params?: DateRangeParams,
 ): Promise<{ rows: TotalCostOfAiRow[]; error?: string }> {
   const qs = new URLSearchParams();
-  if (params?.from) qs.set('from', params.from);
-  if (params?.to) qs.set('to', params.to);
+  if (params?.from) {qs.set('from', params.from);}
+  if (params?.to) {qs.set('to', params.to);}
   const suffix = qs.toString();
   const res = await fetch(`/api/fixed-costs/total-cost-of-ai${suffix ? `?${suffix}` : ''}`, { cache: 'no-store' });
   const body = await parseJson(res);
@@ -146,11 +146,11 @@ export async function deleteFixedCost(
 
 export async function fetchMeteredSpend(params?: DateRangeParams): Promise<number> {
   const qs = new URLSearchParams();
-  if (params?.from) qs.set('from', params.from);
-  if (params?.to) qs.set('to', params.to);
+  if (params?.from) {qs.set('from', params.from);}
+  if (params?.to) {qs.set('to', params.to);}
   const suffix = qs.toString();
   const res = await fetch(`/api/analytics/spend-total${suffix ? `?${suffix}` : ''}`, { cache: 'no-store' });
-  if (!res.ok) return 0;
+  if (!res.ok) {return 0;}
   const body = (await res.json()) as { totalUsd?: number };
   return Number(body.totalUsd ?? 0);
 }

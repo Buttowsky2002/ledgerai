@@ -132,13 +132,13 @@ function defaultRange(): { from: string; to: string } {
 }
 
 function formatApiError(body: Record<string, unknown>, fallback: string): string {
-  if (typeof body.detail === 'string') return body.detail;
+  if (typeof body.detail === 'string') {return body.detail;}
   const msg = body.message;
-  if (typeof msg === 'string') return msg;
+  if (typeof msg === 'string') {return msg;}
   if (msg && typeof msg === 'object' && !Array.isArray(msg)) {
     const nested = msg as Record<string, unknown>;
     const parts: string[] = [];
-    if (typeof nested.message === 'string') parts.push(nested.message);
+    if (typeof nested.message === 'string') {parts.push(nested.message);}
     if (Array.isArray(nested.errors)) {
       parts.push(...nested.errors.map((e) => (typeof e === 'string' ? e : JSON.stringify(e))));
     }
@@ -149,7 +149,7 @@ function formatApiError(body: Record<string, unknown>, fallback: string): string
         }
       }
     }
-    if (parts.length) return parts.join(' · ');
+    if (parts.length) {return parts.join(' · ');}
   }
   return fallback;
 }
@@ -167,10 +167,10 @@ function readHandoff(config?: Record<string, unknown>) {
 function rolesToMapping(roles: Record<string, string>, costUnit: 'usd' | 'cents', reportThroughDay?: string | null): ColumnMapping | null {
   const byRole: Record<string, string> = {};
   for (const [header, role] of Object.entries(roles)) {
-    if (role && role !== 'ignore') byRole[role] = header;
+    if (role && role !== 'ignore') {byRole[role] = header;}
   }
-  if (!byRole.cost) return null;
-  if (!byRole.date && !reportThroughDay) return null;
+  if (!byRole.cost) {return null;}
+  if (!byRole.date && !reportThroughDay) {return null;}
   return {
     ...(byRole.date ? { date: byRole.date } : {}),
     cost: byRole.cost,
@@ -189,10 +189,10 @@ function rolesToMapping(roles: Record<string, string>, costUnit: 'usd' | 'cents'
 
 function mappingToRoles(mapping: ColumnMapping | null, headers: string[]): Record<string, string> {
   const roles: Record<string, string> = {};
-  for (const h of headers) roles[h] = 'ignore';
-  if (!mapping) return roles;
+  for (const h of headers) {roles[h] = 'ignore';}
+  if (!mapping) {return roles;}
   const set = (role: string, header?: string) => {
-    if (header && headers.includes(header)) roles[header] = role;
+    if (header && headers.includes(header)) {roles[header] = role;}
   };
   set('date', mapping.date);
   set('cost', mapping.cost);
@@ -208,9 +208,9 @@ function mappingToRoles(mapping: ColumnMapping | null, headers: string[]): Recor
 }
 
 function dayStatus(portal: number, api: number): { label: string; tone: 'pos' | 'warn' | 'info' | 'neutral' } {
-  if (portal > 0 && api > 0) return { label: 'Overlap risk', tone: 'warn' };
-  if (portal > 0) return { label: 'Portal only', tone: 'info' };
-  if (api > 0) return { label: 'API only', tone: 'pos' };
+  if (portal > 0 && api > 0) {return { label: 'Overlap risk', tone: 'warn' };}
+  if (portal > 0) {return { label: 'Portal only', tone: 'info' };}
+  if (api > 0) {return { label: 'API only', tone: 'pos' };}
   return { label: '—', tone: 'neutral' };
 }
 
@@ -246,7 +246,7 @@ export function BillingImportClient() {
   const loadConnectors = useCallback(async () => {
     const res = await fetch('/api/connectors');
     const body = (await res.json()) as Connector[] | { error?: string };
-    if (!res.ok) return;
+    if (!res.ok) {return;}
     const list = Array.isArray(body) ? body : [];
     setConnectors(list);
   }, []);
@@ -257,7 +257,7 @@ export function BillingImportClient() {
       const qs = new URLSearchParams({ from: rangeFrom, to: rangeTo });
       const res = await fetch(`/api/analytics/source-reconciliation?${qs}`);
       const body = (await res.json()) as Reconciliation | Record<string, unknown>;
-      if (res.ok) setReconciliation(body as Reconciliation);
+      if (res.ok) {setReconciliation(body as Reconciliation);}
     } finally {
       setLoadingRecon(false);
     }
@@ -268,7 +268,7 @@ export function BillingImportClient() {
     try {
       const res = await fetch('/api/portal-import/runs?limit=40');
       const body = (await res.json()) as { runs?: ImportRun[] };
-      if (res.ok) setImportRuns(body.runs ?? []);
+      if (res.ok) {setImportRuns(body.runs ?? []);}
     } finally {
       setLoadingRuns(false);
     }
@@ -298,12 +298,12 @@ export function BillingImportClient() {
       }),
     });
     const body = (await res.json()) as PortalPreview & Record<string, unknown>;
-    if (!res.ok) throw new Error(formatApiError(body, 'Preview failed'));
+    if (!res.ok) {throw new Error(formatApiError(body, 'Preview failed'));}
     return body as PortalPreview;
   }, []);
 
   async function onFilesSelected(fileList: FileList | null) {
-    if (!fileList?.length) return;
+    if (!fileList?.length) {return;}
     setError(null);
     setUploadResult(null);
     setPreviewing(true);
@@ -346,7 +346,7 @@ export function BillingImportClient() {
     roles: Record<string, string>,
     costUnit: 'usd' | 'cents',
   ) {
-    if (!activeFile) return;
+    if (!activeFile) {return;}
     const reportThroughDay =
       activeFile.mapping?.reportThroughDay ?? activeFile.preview?.format?.reportTo ?? null;
     const mapping = rolesToMapping(roles, costUnit, reportThroughDay);
@@ -369,13 +369,13 @@ export function BillingImportClient() {
   }
 
   function updateHeaderRole(header: string, role: string) {
-    if (!activeFile) return;
+    if (!activeFile) {return;}
     const roles = { ...activeFile.headerRoles, [header]: role };
     void refreshActivePreview(roles, activeFile.costUnit);
   }
 
   function applyMappingToAllFiles() {
-    if (!activeFile?.mapping) return;
+    if (!activeFile?.mapping) {return;}
     setStagedFiles((prev) =>
       prev.map((f, i) =>
         i === activeFileIdx
@@ -391,7 +391,7 @@ export function BillingImportClient() {
   }
 
   async function onProviderChange(provider: string) {
-    if (!activeFile) return;
+    if (!activeFile) {return;}
     const updated = { ...activeFile, provider };
     setStagedFiles((prev) => prev.map((f, i) => (i === activeFileIdx ? updated : f)));
     setPreviewing(true);
@@ -460,7 +460,7 @@ export function BillingImportClient() {
     const msg = run.legacy
       ? `Delete all portal import spend for ${label}? This removes every import row in that date window for the listed provider(s) — not just one file.`
       : `Delete imported spend for "${label}"? This removes ${run.rowsImported} rows (${usd(run.totalCostUsd)}) from platform totals.`;
-    if (!window.confirm(msg)) return;
+    if (!window.confirm(msg)) {return;}
 
     setDeletingRunId(run.id);
     setError(null);

@@ -29,7 +29,7 @@ export const dynamic = 'force-dynamic';
 
 function liveRefreshIntervalMs(): number {
   const raw = env('BADGERIQ_DASHBOARD_LIVE_REFRESH_MS');
-  if (!raw) return 30_000;
+  if (!raw) {return 30_000;}
   const n = Number.parseInt(raw, 10);
   return Number.isFinite(n) && n >= 0 ? n : 30_000;
 }

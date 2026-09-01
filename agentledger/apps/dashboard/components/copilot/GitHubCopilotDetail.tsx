@@ -77,7 +77,7 @@ export function GitHubCopilotDetail({
     try {
       const res = await fetchCopilotOverview(from, to);
       setData(res);
-      if (res?.roiAssumptions) setAssumptions(res.roiAssumptions);
+      if (res?.roiAssumptions) {setAssumptions(res.roiAssumptions);}
     } catch {
       setError(true);
     } finally {

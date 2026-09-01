@@ -69,7 +69,7 @@ export function CreatePolicy() {
   async function submit(e: FormEvent) {
     e.preventDefault();
     const ok = await post({ name, kind, action });
-    if (ok) setName('');
+    if (ok) {setName('');}
   }
 
   return (

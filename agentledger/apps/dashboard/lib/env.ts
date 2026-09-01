@@ -9,7 +9,7 @@ const ENV_PREFIXES = ['BADGERIQ_', 'LEDGERAI_', 'AGENTLEDGER_'] as const;
 
 function envSuffix(name: string): string | null {
   for (const prefix of ENV_PREFIXES) {
-    if (name.startsWith(prefix)) return name.slice(prefix.length);
+    if (name.startsWith(prefix)) {return name.slice(prefix.length);}
   }
   return null;
 }
@@ -20,10 +20,10 @@ export function env(name: string): string | undefined {
     return direct;
   }
   const suffix = envSuffix(name);
-  if (!suffix) return direct;
+  if (!suffix) {return direct;}
   for (const prefix of ENV_PREFIXES) {
     const key = prefix + suffix;
-    if (key === name) continue;
+    if (key === name) {continue;}
     const val = process.env[key];
     if (val !== undefined && val !== '') {
       return val;

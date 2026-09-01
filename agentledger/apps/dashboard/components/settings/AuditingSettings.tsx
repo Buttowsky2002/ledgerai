@@ -46,10 +46,10 @@ function actorLabel(row: AuditRow): string {
   if (row.actorDisplayName && row.actorEmail) {
     return `${row.actorDisplayName} (${row.actorEmail})`;
   }
-  if (row.actorEmail) return row.actorEmail;
-  if (row.actorDisplayName) return row.actorDisplayName;
-  if (row.actor.startsWith('sso:')) return row.actor;
-  if (row.actor === 'system' || row.actor === 'unknown') return row.actor;
+  if (row.actorEmail) {return row.actorEmail;}
+  if (row.actorDisplayName) {return row.actorDisplayName;}
+  if (row.actor.startsWith('sso:')) {return row.actor;}
+  if (row.actor === 'system' || row.actor === 'unknown') {return row.actor;}
   return row.actor.length > 12 ? `${row.actor.slice(0, 8)}…` : row.actor;
 }
 
@@ -86,14 +86,14 @@ function summarizeDetail(row: AuditRow): string {
   const before = d.before;
   if (after && typeof after === 'object' && after !== null) {
     const a = after as Record<string, unknown>;
-    if (typeof a.name === 'string') return a.name;
-    if (typeof a.email === 'string') return a.email;
-    if (typeof a.displayName === 'string') return a.displayName;
+    if (typeof a.name === 'string') {return a.name;}
+    if (typeof a.email === 'string') {return a.email;}
+    if (typeof a.displayName === 'string') {return a.displayName;}
   }
   if (before && typeof before === 'object' && before !== null) {
     const b = before as Record<string, unknown>;
-    if (typeof b.name === 'string') return b.name;
-    if (typeof b.email === 'string') return b.email;
+    if (typeof b.name === 'string') {return b.name;}
+    if (typeof b.email === 'string') {return b.email;}
   }
   return '—';
 }
@@ -124,7 +124,7 @@ export function AuditingSettings() {
         from,
         to,
       });
-      if (actionFilter) qs.set('action', actionFilter);
+      if (actionFilter) {qs.set('action', actionFilter);}
       const res = await fetch(`/api/audit?${qs.toString()}`, { cache: 'no-store' });
       if (!res.ok) {
         setError(true);
@@ -143,10 +143,10 @@ export function AuditingSettings() {
     setLoading(true);
     fetchPage(0, false)
       .catch(() => {
-        if (!cancelled) setError(true);
+        if (!cancelled) {setError(true);}
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {setLoading(false);}
       });
     return () => {
       cancelled = true;

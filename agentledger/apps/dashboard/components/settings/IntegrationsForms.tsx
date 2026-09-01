@@ -117,7 +117,7 @@ export function AddIdpForm() {
 
   function commitDomain() {
     const d = domainDraft.trim().toLowerCase().replace(/,$/, '');
-    if (d && !domains.includes(d)) setDomains([...domains, d]);
+    if (d && !domains.includes(d)) {setDomains([...domains, d]);}
     setDomainDraft('');
   }
   function onDomainKey(e: KeyboardEvent<HTMLInputElement>) {
@@ -132,7 +132,7 @@ export function AddIdpForm() {
     // Fold any half-typed domain still in the input into the list before submitting.
     const emailDomains = [...domains];
     const pending = domainDraft.trim().toLowerCase().replace(/,$/, '');
-    if (pending && !emailDomains.includes(pending)) emailDomains.push(pending);
+    if (pending && !emailDomains.includes(pending)) {emailDomains.push(pending);}
     const ok = await post({ issuer, clientId, clientSecretRef, emailDomains, jitEnabled, defaultApiRole });
     if (ok) {
       setIssuer('');

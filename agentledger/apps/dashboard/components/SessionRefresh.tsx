@@ -19,7 +19,7 @@ export function SessionRefresh() {
 
     void refresh();
     const id = window.setInterval(() => {
-      if (!cancelled) void refresh();
+      if (!cancelled) {void refresh();}
     }, REFRESH_INTERVAL_MS);
 
     return () => {

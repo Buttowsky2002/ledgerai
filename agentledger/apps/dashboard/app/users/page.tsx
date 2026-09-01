@@ -51,7 +51,7 @@ export default async function UsersPage({
     ? (searchParams.tab as MemberTab)
     : 'all';
   const qs = new URLSearchParams({ from, to });
-  if (q) qs.set('q', q);
+  if (q) {qs.set('q', q);}
 
   const { ok, data } = await proxyApi(`/v1/analytics/users?${qs.toString()}`);
   const payload = (ok && data && typeof data === 'object' ? data : { users: [], vendors: [] }) as UsersResponse;
@@ -70,8 +70,8 @@ export default async function UsersPage({
 
   const tabHref = (next: MemberTab, keepQ = true) => {
     const params = new URLSearchParams({ from, to });
-    if (next !== 'all') params.set('tab', next);
-    if (keepQ && q) params.set('q', q);
+    if (next !== 'all') {params.set('tab', next);}
+    if (keepQ && q) {params.set('q', q);}
     return `/users?${params.toString()}`;
   };
 

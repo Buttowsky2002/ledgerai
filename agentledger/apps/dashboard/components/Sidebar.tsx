@@ -54,14 +54,14 @@ const ALL_NAV_ITEMS = NAV_GROUPS.flatMap((group) => group.items);
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 function matchesHref(path: string, href: string): boolean {
-  if (href === '/') return path === '/';
-  if (path === href) return true;
+  if (href === '/') {return path === '/';}
+  if (path === href) {return true;}
   return path.startsWith(`${href}/`);
 }
 
 function isNavActive(path: string, href: string): boolean {
   const matches = ALL_NAV_ITEMS.filter((item) => matchesHref(path, item.href));
-  if (matches.length === 0) return false;
+  if (matches.length === 0) {return false;}
   const bestMatch = matches.reduce((best, item) => (item.href.length > best.href.length ? item : best));
   return bestMatch.href === href;
 }
@@ -119,14 +119,14 @@ function SidebarNav() {
 
   const isGroupExpanded = useCallback(
     (label: string) => {
-      if (label === activeGroupLabel) return true;
+      if (label === activeGroupLabel) {return true;}
       return expanded[label] ?? false;
     },
     [activeGroupLabel, expanded],
   );
 
   const toggleGroup = (label: string) => {
-    if (label === activeGroupLabel) return;
+    if (label === activeGroupLabel) {return;}
     setExpanded((prev) => ({ ...prev, [label]: !isGroupExpanded(label) }));
   };
 

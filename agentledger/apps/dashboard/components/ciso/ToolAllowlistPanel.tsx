@@ -43,7 +43,7 @@ export function ToolAllowlistPanel({
 
   async function addEntry(e: FormEvent) {
     e.preventDefault();
-    if (!canManage || !agentId || !toolName.trim()) return;
+    if (!canManage || !agentId || !toolName.trim()) {return;}
     setBusy(true);
     setErr(null);
     const res = await fetch('/api/agent-tool-allowlist', {
@@ -67,7 +67,7 @@ export function ToolAllowlistPanel({
   }
 
   async function removeEntry(allowId: string) {
-    if (!canManage) return;
+    if (!canManage) {return;}
     setBusyId(allowId);
     setErr(null);
     const res = await fetch(`/api/agent-tool-allowlist/${encodeURIComponent(allowId)}`, {

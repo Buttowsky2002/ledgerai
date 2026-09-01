@@ -38,10 +38,10 @@ export function CreateRoiTemplate() {
       hourly_rate: Number(hourlyRate),
       baseline_minutes: Number(baselineMinutes),
     };
-    if (reworkPct !== '') valueFormula.rework_pct = Number(reworkPct);
+    if (reworkPct !== '') {valueFormula.rework_pct = Number(reworkPct);}
 
     const attribution: Record<string, unknown> = { match_on: matchOn };
-    if (windowMinutes !== '') attribution.window_minutes = Number(windowMinutes);
+    if (windowMinutes !== '') {attribution.window_minutes = Number(windowMinutes);}
 
     const res = await fetch('/api/roi-templates', {
       method: 'POST',

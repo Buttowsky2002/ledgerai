@@ -19,9 +19,9 @@ type RoiTemplate = {
 
 function formulaSummary(f: ValueFormula): string {
   const parts: string[] = [];
-  if (f.hourly_rate != null) parts.push(`$${f.hourly_rate}/h`);
-  if (f.baseline_minutes != null) parts.push(`${f.baseline_minutes}m`);
-  if (f.rework_pct != null) parts.push(`${Math.round(f.rework_pct * 100)}% rework`);
+  if (f.hourly_rate != null) {parts.push(`$${f.hourly_rate}/h`);}
+  if (f.baseline_minutes != null) {parts.push(`${f.baseline_minutes}m`);}
+  if (f.rework_pct != null) {parts.push(`${Math.round(f.rework_pct * 100)}% rework`);}
   return parts.join(' · ') || '—';
 }
 

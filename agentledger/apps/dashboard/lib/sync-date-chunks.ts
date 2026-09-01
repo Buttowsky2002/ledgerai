@@ -21,7 +21,7 @@ export function syncDateChunks(
 ): { from: string; to: string }[] {
   const start = parseUtcDay(from);
   const end = parseUtcDay(to);
-  if (start > end) return [];
+  if (start > end) {return [];}
 
   const chunks: { from: string; to: string }[] = [];
   let chunkEnd = end;
@@ -31,7 +31,7 @@ export function syncDateChunks(
       Math.max(start.getTime(), chunkEnd.getTime() - (maxDays - 1) * 86_400_000),
     );
     chunks.unshift({ from: formatUtcDay(chunkStart), to: formatUtcDay(chunkEnd) });
-    if (chunkStart.getTime() <= start.getTime()) break;
+    if (chunkStart.getTime() <= start.getTime()) {break;}
     chunkEnd = new Date(chunkStart.getTime() - 86_400_000);
   }
 

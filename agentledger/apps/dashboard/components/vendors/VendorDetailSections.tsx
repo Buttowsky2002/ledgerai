@@ -192,8 +192,8 @@ export function buildModelTableRows(
   }
 
   for (const m of models) {
-    if (vendorFilter && !providerMatchesVendor(m.provider, vendorFilter)) continue;
-    if (m.provider.toLowerCase() === 'cursor' || cursorByModel.has(m.model)) continue;
+    if (vendorFilter && !providerMatchesVendor(m.provider, vendorFilter)) {continue;}
+    if (m.provider.toLowerCase() === 'cursor' || cursorByModel.has(m.model)) {continue;}
     rows.push({
       model: m.model || '(default)',
       metered_overage: m.cost_usd,

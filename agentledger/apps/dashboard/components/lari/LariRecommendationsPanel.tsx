@@ -108,10 +108,10 @@ export function LariRecommendationsPanel({
         }
       })
       .catch(() => {
-        if (!cancelled) setError(true);
+        if (!cancelled) {setError(true);}
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {setLoading(false);}
       });
     return () => {
       cancelled = true;

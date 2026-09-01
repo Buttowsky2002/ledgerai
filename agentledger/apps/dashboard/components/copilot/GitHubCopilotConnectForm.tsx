@@ -35,7 +35,7 @@ export function GitHubCopilotConnectForm({
   const canConnect = displayName.trim().length > 0 && canTest;
 
   async function handleTest() {
-    if (!canTest) return;
+    if (!canTest) {return;}
     setTesting(true);
     setTestResult(null);
     setError(null);
@@ -49,7 +49,7 @@ export function GitHubCopilotConnectForm({
   }
 
   async function handleConnect() {
-    if (!canConnect) return;
+    if (!canConnect) {return;}
     setConnecting(true);
     setError(null);
     setSuccess(null);

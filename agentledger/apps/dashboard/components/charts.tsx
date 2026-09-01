@@ -139,7 +139,7 @@ export function PieChartClient({
   const renderLabel = showPercent
     ? (props: { name?: string; percent?: number; cx?: number; cy?: number; midAngle?: number; outerRadius?: number }) => {
         const { name, percent, cx = 0, cy = 0, midAngle = 0, outerRadius = 0 } = props;
-        if (!percent || percent < 0.04) return null;
+        if (!percent || percent < 0.04) {return null;}
         const RAD = Math.PI / 180;
         const radius = outerRadius + 18;
         const x = cx + radius * Math.cos(-midAngle * RAD);

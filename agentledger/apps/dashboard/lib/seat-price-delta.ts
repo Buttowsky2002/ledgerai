@@ -27,10 +27,10 @@ function n(v: unknown): number {
 /** Per-seat unit: stored unit_cost_usd, else cost / seats (enterprise contracts). */
 export function resolveUnitCost(snapshot: SeatSnapshot): number {
   const unit = n(snapshot.unitCostUsd);
-  if (unit > 0) return unit;
+  if (unit > 0) {return unit;}
   const seats = n(snapshot.seats);
   const cost = n(snapshot.costUsd);
-  if (seats > 0 && cost > 0) return cost / seats;
+  if (seats > 0 && cost > 0) {return cost / seats;}
   return 0;
 }
 
@@ -78,8 +78,8 @@ export function formatSignedUsd(amount: number): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
-  if (amount > 0) return `+$${formatted}`;
-  if (amount < 0) return `-$${formatted}`;
+  if (amount > 0) {return `+$${formatted}`;}
+  if (amount < 0) {return `-$${formatted}`;}
   return `$${formatted}`;
 }
 
@@ -112,6 +112,6 @@ export function previousCalendarMonth(periodMonth: string): string {
 
 export function monthLabel(periodMonth: string): string {
   const d = new Date(`${monthStart(periodMonth)}T00:00:00.000Z`);
-  if (Number.isNaN(d.getTime())) return periodMonth.slice(0, 7);
+  if (Number.isNaN(d.getTime())) {return periodMonth.slice(0, 7);}
   return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
 }

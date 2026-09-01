@@ -79,8 +79,8 @@ export async function FixedOverheadPanel({ from, to }: { from: string; to: strin
 
   const pieData = orgVendors.flatMap((v) => {
     const slices = [];
-    if (v.seat_usd > 0) slices.push({ label: `${vendorLabel(v.vendor)} seats`, cost_usd: v.seat_usd });
-    if (v.budget_overage_usd > 0) slices.push({ label: `${vendorLabel(v.vendor)} overage`, cost_usd: v.budget_overage_usd });
+    if (v.seat_usd > 0) {slices.push({ label: `${vendorLabel(v.vendor)} seats`, cost_usd: v.seat_usd });}
+    if (v.budget_overage_usd > 0) {slices.push({ label: `${vendorLabel(v.vendor)} overage`, cost_usd: v.budget_overage_usd });}
     return slices;
   });
 

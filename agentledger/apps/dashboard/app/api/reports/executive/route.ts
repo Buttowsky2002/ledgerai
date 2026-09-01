@@ -21,6 +21,6 @@ export async function GET(req: NextRequest) {
   const headers = new Headers();
   headers.set('Content-Type', res.headers.get('content-type') ?? 'application/octet-stream');
   const cd = res.headers.get('content-disposition');
-  if (cd) headers.set('Content-Disposition', cd);
+  if (cd) {headers.set('Content-Disposition', cd);}
   return new NextResponse(body, { status: 200, headers });
 }

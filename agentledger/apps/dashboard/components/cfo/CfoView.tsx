@@ -196,10 +196,10 @@ export function CfoView({
         }
       })
       .catch(() => {
-        if (!cancelled) setError(true);
+        if (!cancelled) {setError(true);}
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {setLoading(false);}
       });
     return () => {
       cancelled = true;
@@ -211,10 +211,10 @@ export function CfoView({
     setUtilLoading(true);
     fetchUserValue({ from, to })
       .then((res) => {
-        if (!cancelled) setUserValue(res);
+        if (!cancelled) {setUserValue(res);}
       })
       .finally(() => {
-        if (!cancelled) setUtilLoading(false);
+        if (!cancelled) {setUtilLoading(false);}
       });
     return () => {
       cancelled = true;

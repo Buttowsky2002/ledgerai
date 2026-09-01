@@ -16,7 +16,7 @@ export function OverviewLiveRefresh({ intervalMs = DEFAULT_INTERVAL_MS }: Props)
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
   useEffect(() => {
-    if (intervalMs <= 0) return;
+    if (intervalMs <= 0) {return;}
     setLastRefresh(new Date());
     const id = window.setInterval(() => {
       router.refresh();
@@ -28,12 +28,12 @@ export function OverviewLiveRefresh({ intervalMs = DEFAULT_INTERVAL_MS }: Props)
   // Tick the "Xs ago" label between refreshes.
   const [, setTick] = useState(0);
   useEffect(() => {
-    if (intervalMs <= 0) return;
+    if (intervalMs <= 0) {return;}
     const id = window.setInterval(() => setTick((t) => t + 1), 1000);
     return () => window.clearInterval(id);
   }, [intervalMs]);
 
-  if (intervalMs <= 0) return null;
+  if (intervalMs <= 0) {return null;}
 
   const ago =
     lastRefresh == null

@@ -144,16 +144,16 @@ function presetFormFields(presetId: string, presets: Preset[]) {
 }
 
 function formatApiError(body: Record<string, unknown>, fallback: string): string {
-  if (typeof body.detail === 'string') return body.detail;
-  if (typeof body.message === 'string') return body.message;
+  if (typeof body.detail === 'string') {return body.detail;}
+  if (typeof body.message === 'string') {return body.message;}
   if (body.message && typeof body.message === 'object' && !Array.isArray(body.message)) {
     const nested = body.message as Record<string, unknown>;
-    if (typeof nested.message === 'string') return nested.message;
+    if (typeof nested.message === 'string') {return nested.message;}
   }
   if (Array.isArray(body.message)) {
     return body.message.map((m) => (typeof m === 'string' ? m : JSON.stringify(m))).join('; ');
   }
-  if (typeof body.error === 'string') return body.error;
+  if (typeof body.error === 'string') {return body.error;}
   return fallback;
 }
 
@@ -275,7 +275,7 @@ export function ConnectorsClient() {
   useEffect(() => {
     const update = () => setCooldownSec(Math.max(0, Math.ceil((cooldownUntil - Date.now()) / 1000)));
     update();
-    if (cooldownUntil <= Date.now()) return;
+    if (cooldownUntil <= Date.now()) {return;}
     const timer = window.setInterval(update, 1000);
     return () => window.clearInterval(timer);
   }, [cooldownUntil]);
@@ -350,7 +350,7 @@ export function ConnectorsClient() {
   };
 
   const addMapping = async (connectorId: string) => {
-    if (!mappingForm.providerKey || !mappingForm.targetUserId) return;
+    if (!mappingForm.providerKey || !mappingForm.targetUserId) {return;}
     setError(null);
     const res = await fetch(`/api/connectors/${connectorId}/attribution-mappings`, {
       method: 'POST',
@@ -371,7 +371,7 @@ export function ConnectorsClient() {
   };
 
   const deleteConnector = async (id: string, name: string) => {
-    if (!window.confirm(`Delete connector "${name}"? This cannot be undone.`)) return;
+    if (!window.confirm(`Delete connector "${name}"? This cannot be undone.`)) {return;}
     setDeleting(id);
     setError(null);
     const res = await fetch(`/api/connectors/${id}`, { method: 'DELETE' });
@@ -517,9 +517,9 @@ export function ConnectorsClient() {
   };
 
   const statusTone = (s: string) => {
-    if (s === 'healthy' || s === 'connected') return 'text-pos';
-    if (s === 'auth_failed' || s === 'validation_failed') return 'text-neg';
-    if (s === 'syncing' || s === 'rate_limited') return 'text-warn';
+    if (s === 'healthy' || s === 'connected') {return 'text-pos';}
+    if (s === 'auth_failed' || s === 'validation_failed') {return 'text-neg';}
+    if (s === 'syncing' || s === 'rate_limited') {return 'text-warn';}
     return 'text-muted';
   };
 

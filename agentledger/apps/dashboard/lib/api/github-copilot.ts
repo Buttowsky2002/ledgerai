@@ -8,7 +8,7 @@ import type {
 
 async function parseJson<T>(res: Response): Promise<T | null> {
   const text = await res.text();
-  if (!text) return null;
+  if (!text) {return null;}
   try {
     return JSON.parse(text) as T;
   } catch {
@@ -19,13 +19,13 @@ async function parseJson<T>(res: Response): Promise<T | null> {
 function extractApiError(data: unknown, status: number): string {
   if (data && typeof data === 'object') {
     const body = data as Record<string, unknown>;
-    if (typeof body.errorMessage === 'string') return body.errorMessage;
-    if (typeof body.message === 'string') return body.message;
-    if (typeof body.error === 'string') return body.error;
+    if (typeof body.errorMessage === 'string') {return body.errorMessage;}
+    if (typeof body.message === 'string') {return body.message;}
+    if (typeof body.error === 'string') {return body.error;}
     if (body.message && typeof body.message === 'object') {
       const nested = body.message as Record<string, unknown>;
-      if (typeof nested.message === 'string') return nested.message;
-      if (typeof nested.hint === 'string') return nested.hint;
+      if (typeof nested.message === 'string') {return nested.message;}
+      if (typeof nested.hint === 'string') {return nested.hint;}
     }
   }
   return `Request failed (${status})`;
@@ -104,12 +104,12 @@ export async function fetchCopilotMemberSpend(params: {
   language?: string;
 }): Promise<CopilotMemberSpendResponse | null> {
   const qs = new URLSearchParams({ from: params.from, to: params.to });
-  if (params.month) qs.set('month', params.month);
-  if (params.user) qs.set('user', params.user);
-  if (params.utilizationStatus) qs.set('utilizationStatus', params.utilizationStatus);
-  if (params.model) qs.set('model', params.model);
-  if (params.editor) qs.set('editor', params.editor);
-  if (params.language) qs.set('language', params.language);
+  if (params.month) {qs.set('month', params.month);}
+  if (params.user) {qs.set('user', params.user);}
+  if (params.utilizationStatus) {qs.set('utilizationStatus', params.utilizationStatus);}
+  if (params.model) {qs.set('model', params.model);}
+  if (params.editor) {qs.set('editor', params.editor);}
+  if (params.language) {qs.set('language', params.language);}
   const res = await fetch(`/api/github-copilot/member-spend?${qs}`);
   return parseJson<CopilotMemberSpendResponse>(res);
 }

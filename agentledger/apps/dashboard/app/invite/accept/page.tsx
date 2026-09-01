@@ -57,7 +57,7 @@ function AcceptInviteForm() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (state !== 'ready') return;
+    if (state !== 'ready') {return;}
     setState('submitting');
     setError(null);
 

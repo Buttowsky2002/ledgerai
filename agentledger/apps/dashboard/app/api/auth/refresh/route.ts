@@ -7,7 +7,7 @@ function cookieOptsFromRaw(raw: string): { name: string; value: string; options:
   const parts = raw.split(';').map((s) => s.trim());
   const pair = parts[0];
   const eq = pair.indexOf('=');
-  if (eq <= 0) return null;
+  if (eq <= 0) {return null;}
   const name = pair.slice(0, eq);
   const value = pair.slice(eq + 1);
   const options: Record<string, unknown> = { httpOnly: true, path: '/' };
@@ -32,7 +32,7 @@ function applyApiSetCookies(res: NextResponse, apiRes: Response): void {
     typeof apiRes.headers.getSetCookie === 'function' ? apiRes.headers.getSetCookie() : [];
   for (const raw of setCookies) {
     const parsed = cookieOptsFromRaw(raw);
-    if (!parsed) continue;
+    if (!parsed) {continue;}
     res.cookies.set(parsed.name, parsed.value, parsed.options as Parameters<typeof res.cookies.set>[2]);
   }
 }

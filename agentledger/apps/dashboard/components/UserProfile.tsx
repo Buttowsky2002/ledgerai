@@ -24,12 +24,12 @@ export function UserProfile() {
     fetch('/api/auth/me')
       .then((r) => (r.ok ? r.json() : null))
       .then((data: Me | null) => {
-        if (data?.userId) setMe(data);
+        if (data?.userId) {setMe(data);}
       })
       .catch(() => null);
   }, []);
 
-  if (!me) return null;
+  if (!me) {return null;}
 
   const label = me.displayName ?? me.email ?? 'You';
   const initials = label

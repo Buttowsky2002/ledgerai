@@ -39,7 +39,7 @@ export function isSeatAllocatedPlatform(platform: string): boolean {
 /** Resolve the `fixed_costs.vendor` id that corresponds to a platform slug. */
 export function fixedCostVendorForPlatform(platform: string): string {
   const p = normalize(platform);
-  if (p.includes('copilot')) return 'github';
+  if (p.includes('copilot')) {return 'github';}
   return VENDOR_OVERRIDES[p] ?? p;
 }
 
@@ -51,7 +51,7 @@ export function seatUsdByVendor(
   for (const row of rows) {
     const vendor = String(row.vendor ?? '').trim().toLowerCase() || 'other';
     const usd = Number(row.cost_usd ?? 0);
-    if (!Number.isFinite(usd) || usd === 0) continue;
+    if (!Number.isFinite(usd) || usd === 0) {continue;}
     out[vendor] = (out[vendor] ?? 0) + usd;
   }
   return out;

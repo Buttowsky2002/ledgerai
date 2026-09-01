@@ -41,19 +41,19 @@ export function vendorLabel(vendor: string): string {
 }
 
 export function costTypeForTier(tier: PlanTier): FixedCostType {
-  if (tier === 'enterprise') return 'subscription';
-  if (tier === 'free') return 'seat_license';
+  if (tier === 'enterprise') {return 'subscription';}
+  if (tier === 'free') {return 'seat_license';}
   return 'seat_license';
 }
 
 export function lineItemFor(vendor: FixedCostVendor, tier: PlanTier, customName?: string): string {
-  if (vendor === 'other' && customName?.trim()) return customName.trim();
+  if (vendor === 'other' && customName?.trim()) {return customName.trim();}
   const product = AI_VENDORS.find((v) => v.id === vendor)?.product ?? vendor;
   return `${product} ${PLAN_TIER_LABELS[tier]}`;
 }
 
 export function defaultUnitUsd(vendor: FixedCostVendor, tier: PlanTier): number | null {
-  if (tier === 'free') return 0;
+  if (tier === 'free') {return 0;}
   const row = DEFAULT_UNIT_USD[vendor];
   const v = row?.[tier];
   return v === undefined ? null : v;
@@ -70,8 +70,8 @@ export function parseStoredPlan(
   if (li.includes('enterprise') || costType === 'subscription') {
     return { vendor: v, tier: 'enterprise' };
   }
-  if (li.includes('free')) return { vendor: v, tier: 'free' };
-  if (li.includes('team')) return { vendor: v, tier: 'team' };
+  if (li.includes('free')) {return { vendor: v, tier: 'free' };}
+  if (li.includes('team')) {return { vendor: v, tier: 'team' };}
   return { vendor: v, tier: costType === 'subscription' ? 'enterprise' : 'team' };
 }
 

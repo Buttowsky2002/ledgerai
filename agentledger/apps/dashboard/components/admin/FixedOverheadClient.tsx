@@ -49,7 +49,7 @@ function monthInputValue(periodMonth: string): string {
 }
 
 function periodMonthFromInput(monthValue: string): string {
-  if (!monthValue) return '';
+  if (!monthValue) {return '';}
   return `${monthValue}-01`;
 }
 
@@ -64,7 +64,7 @@ function snapshotFromForm(seats: string, unitCostUsd: string, costUsd: string): 
   const s = seats === '' ? 0 : Number(seats);
   const u = unitCostUsd === '' ? 0 : Number(unitCostUsd);
   const c = costUsd === '' ? 0 : Number(costUsd);
-  if (!Number.isFinite(s) || !Number.isFinite(u) || !Number.isFinite(c)) return null;
+  if (!Number.isFinite(s) || !Number.isFinite(u) || !Number.isFinite(c)) {return null;}
   return { seats: s, unitCostUsd: u, costUsd: c };
 }
 
@@ -127,10 +127,10 @@ export function FixedOverheadClient() {
 
   const liveDelta = useMemo(() => {
     const current = snapshotFromForm(seats, unitCostUsd, costUsd);
-    if (!current) return null;
-    if (current.seats === 0 && current.costUsd === 0) return null;
+    if (!current) {return null;}
+    if (current.seats === 0 && current.costUsd === 0) {return null;}
     const delta = seatPriceDelta(current, baseline);
-    if (delta.seatDelta === 0 && delta.usdDelta === 0) return null;
+    if (delta.seatDelta === 0 && delta.usdDelta === 0) {return null;}
     return delta;
   }, [seats, unitCostUsd, costUsd, baseline]);
 
@@ -146,7 +146,7 @@ export function FixedOverheadClient() {
       setRows(list.rows);
       setImpact(combinedAiCost(metered, totals.rows));
       const loadErr = list.error ?? totals.error;
-      if (loadErr) setError(loadErr);
+      if (loadErr) {setError(loadErr);}
     } finally {
       setLoading(false);
     }
@@ -157,7 +157,7 @@ export function FixedOverheadClient() {
   }, [load]);
 
   useEffect(() => {
-    if (costManual) return;
+    if (costManual) {return;}
     const s = Number(seats);
     const u = Number(unitCostUsd);
     if (seats !== '' && unitCostUsd !== '' && Number.isFinite(s) && Number.isFinite(u) && s >= 0 && u >= 0) {
@@ -166,11 +166,11 @@ export function FixedOverheadClient() {
   }, [seats, unitCostUsd, costManual]);
 
   useEffect(() => {
-    if (editKey) return;
+    if (editKey) {return;}
     const def = defaultUnitUsd(vendor, planTier);
     if (def !== null) {
       setUnitCostUsd(String(def));
-      if (planTier === 'free') setCostUsd('0');
+      if (planTier === 'free') {setCostUsd('0');}
     } else {
       setUnitCostUsd('');
     }
@@ -207,7 +207,7 @@ export function FixedOverheadClient() {
     setUnitCostUsd(row.unit_cost_usd > 0 ? String(row.unit_cost_usd) : '');
     setCostUsd(String(row.cost_usd));
     setCostManual(true);
-    if (parsed.vendor === 'other') setCustomLineItem(row.line_item || '');
+    if (parsed.vendor === 'other') {setCustomLineItem(row.line_item || '');}
     setNote(row.note || '');
     setError(null);
     setSuccess(null);
@@ -300,7 +300,7 @@ export function FixedOverheadClient() {
 
   async function onDelete(row: FixedCostRow) {
     const label = `${String(row.period_month).slice(0, 7)} · ${row.line_item || vendorLabel(row.vendor)}`;
-    if (!window.confirm(`Delete fixed overhead entry?\n\n${label}`)) return;
+    if (!window.confirm(`Delete fixed overhead entry?\n\n${label}`)) {return;}
 
     setError(null);
     setSuccess(null);

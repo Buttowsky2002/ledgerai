@@ -10,12 +10,12 @@ export function encodeRange(r: { from: string; to: string }): string {
 }
 
 export function decodeRange(raw: string | undefined): { from: string; to: string } | null {
-  if (!raw) return null;
+  if (!raw) {return null;}
   const idx = raw.indexOf('_');
-  if (idx <= 0 || idx >= raw.length - 1) return null;
+  if (idx <= 0 || idx >= raw.length - 1) {return null;}
   const from = raw.slice(0, idx);
   const to = raw.slice(idx + 1);
-  if (!ISO_DATE.test(from) || !ISO_DATE.test(to) || from > to) return null;
+  if (!ISO_DATE.test(from) || !ISO_DATE.test(to) || from > to) {return null;}
   return { from, to };
 }
 
@@ -53,9 +53,9 @@ export function resolveRangeWithCookie(
   defaultDays = 90,
 ): { from: string; to: string } {
   const fromUrl = validSearchParams(searchParams);
-  if (fromUrl) return fromUrl;
+  if (fromUrl) {return fromUrl;}
   const fromCookie = decodeRange(cookieRaw);
-  if (fromCookie) return fromCookie;
+  if (fromCookie) {return fromCookie;}
   return parseRange({}, defaultDays);
 }
 
@@ -70,7 +70,7 @@ export function rangeHref(
   params.set('to', to);
   if (extra) {
     for (const [k, v] of Object.entries(extra)) {
-      if (v) params.set(k, v);
+      if (v) {params.set(k, v);}
     }
   }
   return `${basePath}?${params.toString()}`;
@@ -102,7 +102,7 @@ export function allTimeHref(basePath: string, extra?: Record<string, string | un
   const params = new URLSearchParams({ range: 'all' });
   if (extra) {
     for (const [k, v] of Object.entries(extra)) {
-      if (v) params.set(k, v);
+      if (v) {params.set(k, v);}
     }
   }
   const qs = params.toString();

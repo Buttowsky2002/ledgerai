@@ -58,14 +58,14 @@ export function DateRangePicker({
   }, [open, from, to, isAllTime]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {return;}
     const onDoc = (e: MouseEvent) => {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
         setOpen(false);
       }
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
+      if (e.key === 'Escape') {setOpen(false);}
     };
     document.addEventListener('mousedown', onDoc);
     document.addEventListener('keydown', onKey);
@@ -77,7 +77,7 @@ export function DateRangePicker({
 
   const commit = (href: string, cookie?: { from: string; to: string }) => {
     setOpen(false);
-    if (cookie) writeRangeCookie(cookie);
+    if (cookie) {writeRangeCookie(cookie);}
     startNavigation(() => {
       router.push(href);
       router.refresh();
@@ -98,7 +98,7 @@ export function DateRangePicker({
   };
 
   const apply = () => {
-    if (!draftFrom || !draftTo || draftFrom > draftTo) return;
+    if (!draftFrom || !draftTo || draftFrom > draftTo) {return;}
     if (draftAllTime) {
       commit(allTimeHref(basePath, extraParams));
       return;

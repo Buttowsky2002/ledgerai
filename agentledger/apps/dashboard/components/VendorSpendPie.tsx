@@ -8,13 +8,13 @@ type Slice = { label: string; value: number; color: string };
 
 function buildSlices(seat: number, overage: number): Slice[] {
   const slices: Slice[] = [];
-  if (seat > 0) slices.push({ label: 'Seat', value: seat, color: COLORS[0] });
-  if (overage > 0) slices.push({ label: 'Overage', value: overage, color: COLORS[1] });
+  if (seat > 0) {slices.push({ label: 'Seat', value: seat, color: COLORS[0] });}
+  if (overage > 0) {slices.push({ label: 'Overage', value: overage, color: COLORS[1] });}
   return slices;
 }
 
 function conicGradient(slices: Slice[], total: number): string {
-  if (total <= 0 || slices.length === 0) return 'conic-gradient(#374151 0deg 360deg)';
+  if (total <= 0 || slices.length === 0) {return 'conic-gradient(#374151 0deg 360deg)';}
   let deg = 0;
   const stops: string[] = [];
   for (const s of slices) {

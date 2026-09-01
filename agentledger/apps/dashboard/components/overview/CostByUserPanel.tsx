@@ -57,7 +57,7 @@ function SpendTrendCell({
 }
 
 function readCookieRange(): string | undefined {
-  if (typeof document === 'undefined') return undefined;
+  if (typeof document === 'undefined') {return undefined;}
   const match = document.cookie.match(new RegExp(`(?:^|; )${RANGE_COOKIE}=([^;]*)`));
   return match ? decodeURIComponent(match[1]) : undefined;
 }
@@ -65,7 +65,7 @@ function readCookieRange(): string | undefined {
 function resolveClientRange(searchParams: URLSearchParams): { from: string; to: string } {
   const fromUrl = searchParams.get('from');
   const toUrl = searchParams.get('to');
-  if (fromUrl && toUrl) return { from: fromUrl.slice(0, 10), to: toUrl.slice(0, 10) };
+  if (fromUrl && toUrl) {return { from: fromUrl.slice(0, 10), to: toUrl.slice(0, 10) };}
   return resolveRangeWithCookie(
     { from: fromUrl ?? undefined, to: toUrl ?? undefined },
     readCookieRange(),
@@ -97,10 +97,10 @@ export function CostByUserPanel({
     fetch(`/api/analytics/user-allocation?${qs.toString()}`, { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : []))
       .then((data) => {
-        if (!cancelled) setRows(Array.isArray(data) ? data : []);
+        if (!cancelled) {setRows(Array.isArray(data) ? data : []);}
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {setLoading(false);}
       });
     return () => {
       cancelled = true;

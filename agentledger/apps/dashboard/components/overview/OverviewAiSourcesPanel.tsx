@@ -51,8 +51,8 @@ export function OverviewAiSourcesPanel({
 
   function setView(next: 'users' | 'models') {
     const params = new URLSearchParams(searchParams.toString());
-    if (next === 'models') params.set('aiView', 'models');
-    else params.delete('aiView');
+    if (next === 'models') {params.set('aiView', 'models');}
+    else {params.delete('aiView');}
     router.push(`/?${params.toString()}`, { scroll: false });
   }
 
