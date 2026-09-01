@@ -14,190 +14,21 @@ import {
   syncBatchCount,
   syncDateChunks,
 } from '../../lib/sync-date-chunks';
-
-type Connector = {
-  connectorId: string;
-  displayName: string;
-  provider: string;
-  category: string;
-  status: string;
-  enabled: boolean;
-  lastSyncAt: string | null;
-  lastSuccessAt: string | null;
-  lastErrorMessageSafe?: string | null;
-  syncStatus?: {
-    lastSyncAt: string | null;
-    lastSyncStatus: string;
-    recordsImported: number;
-    usersDetected: number;
-    unmappedRecords: number;
-    spendSyncedUsd: number;
-    errorMessage?: string | null;
-  };
-  capabilities?: {
-    supportsUserLevelCost: boolean;
-  };
-  attributionWarning?: string;
-};
-
-type Preset = {
-  definitionId?: string;
-  name: string;
-  provider: string;
-  category: string;
-  builtIn?: boolean;
-  definitionJson?: {
-    baseUrl?: string;
-    authType?: string;
-    category?: string;
-    endpoints?: { path?: string; method?: string }[];
-  };
-};
-
-type PreviewResult = {
-  ok: boolean;
-  warning?: string;
-  rawResponse: unknown;
-  normalizedPreview: Record<string, unknown>[];
-  suggestedMappings: { source: string; target: string; confidence: number }[];
-  errors: { recordRef: string; code: string; message: string }[];
-};
-
-const CATEGORIES = [
-  'provider_spend',
-  'ai_usage',
-  'coding_tool',
-  'gateway_logs',
-  'observability',
-  'cloud_cost',
-  'outcome_system',
-  'risk_security',
-  'custom',
-] as const;
-
-const AUTH_TYPES = [
-  'api_key_header',
-  'bearer_token',
-  'basic_auth',
-  'custom_header',
-  'none',
-] as const;
-
-const COPILOT_PRESET = 'github-copilot-business';
-const ADO_PRESET = 'azure-devops-outcomes';
-const LOCKED_PRESETS = new Set([
-  'anthropic-usage',
-  'openai-usage',
-  'cursor-usage',
-  COPILOT_PRESET,
+import type { Connector, Preset, PreviewResult } from '../../types/connectors';
+import {
   ADO_PRESET,
-]);
-
-function isCopilotConnector(c: Connector): boolean {
-  return c.provider === 'github_copilot_business' || c.category === 'license_usage_roi';
-}
-
-const PRESET_DEFAULTS: Record<
-  string,
-  { baseUrl: string; authType: string; endpointPath: string; category: string }
-> = {
-  'anthropic-usage': {
-    baseUrl: 'https://api.anthropic.com',
-    authType: 'api_key_header',
-    endpointPath: '/v1/organizations/cost_report',
-    category: 'provider_spend',
-  },
-  'openai-usage': {
-    baseUrl: 'https://api.openai.com',
-    authType: 'bearer_token',
-    endpointPath: '/v1/organization/costs',
-    category: 'provider_spend',
-  },
-  'cursor-usage': {
-    baseUrl: 'https://api.cursor.com',
-    authType: 'basic_auth',
-    endpointPath: '/teams/filtered-usage-events',
-    category: 'coding_tool',
-  },
-  'github-copilot-business': {
-    baseUrl: 'https://api.github.com',
-    authType: 'bearer_token',
-    endpointPath: '/orgs/{org}/copilot/billing',
-    category: 'license_usage_roi',
-  },
-  'azure-devops-outcomes': {
-    baseUrl: 'https://dev.azure.com',
-    authType: 'basic_auth',
-    endpointPath: '/',
-    category: 'outcome_system',
-  },
-};
-
-function presetFormFields(presetId: string, presets: Preset[]) {
-  const preset = presets.find((p) => (p.definitionId ?? p.name) === presetId);
-  const def = preset?.definitionJson;
-  if (def) {
-    return {
-      presetId,
-      category: def.category ?? preset?.category ?? 'provider_spend',
-      baseUrl: def.baseUrl ?? 'https://api.example.com',
-      authType: def.authType ?? 'api_key_header',
-      endpointPath: def.endpoints?.[0]?.path ?? '/v1/spend',
-    };
-  }
-  const fallback = PRESET_DEFAULTS[presetId];
-  return fallback ? { presetId, ...fallback } : { presetId };
-}
-
-function formatApiError(body: Record<string, unknown>, fallback: string): string {
-  if (typeof body.detail === 'string') {
-    return body.detail;
-  }
-  if (typeof body.message === 'string') {
-    return body.message;
-  }
-  if (body.message && typeof body.message === 'object' && !Array.isArray(body.message)) {
-    const nested = body.message as Record<string, unknown>;
-    if (typeof nested.message === 'string') {
-      return nested.message;
-    }
-  }
-  if (Array.isArray(body.message)) {
-    return body.message.map((m) => (typeof m === 'string' ? m : JSON.stringify(m))).join('; ');
-  }
-  if (typeof body.error === 'string') {
-    return body.error;
-  }
-  return fallback;
-}
-
-function isoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
-
-function defaultConnectorRange(): { from: string; to: string } {
-  const to = new Date();
-  const from = new Date(to);
-  from.setUTCDate(from.getUTCDate() - 89);
-  return { from: isoDate(from), to: isoDate(to) };
-}
-
-function ProgressBar({ progress, label }: { progress: number; label: string }) {
-  return (
-    <div className="mt-3">
-      <div className="mb-1 flex justify-between text-xs text-muted">
-        <span>{label}</span>
-        <span>{Math.round(progress)}%</span>
-      </div>
-      <div className="h-2 w-full overflow-hidden rounded-full bg-edge">
-        <div
-          className="h-full rounded-full bg-accent transition-all duration-300 ease-out"
-          style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
-        />
-      </div>
-    </div>
-  );
-}
+  AUTH_TYPES,
+  CATEGORIES,
+  COPILOT_PRESET,
+  LOCKED_PRESETS,
+  defaultConnectorRange,
+  formatApiError,
+  isCopilotConnector,
+  isoDate,
+  presetFormFields,
+  statusTone,
+} from '../../lib/connectors-preset';
+import { ProgressBar } from './ProgressBar';
 
 export function ConnectorsClient() {
   const searchParams = useSearchParams();
@@ -542,19 +373,6 @@ export function ConnectorsClient() {
     }
     setError(null);
     await load();
-  };
-
-  const statusTone = (s: string) => {
-    if (s === 'healthy' || s === 'connected') {
-      return 'text-pos';
-    }
-    if (s === 'auth_failed' || s === 'validation_failed') {
-      return 'text-neg';
-    }
-    if (s === 'syncing' || s === 'rate_limited') {
-      return 'text-warn';
-    }
-    return 'text-muted';
   };
 
   return (
