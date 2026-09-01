@@ -20,7 +20,7 @@ export default async function CfoPage({
     : DEFAULT_BASIS;
   const forecastDays = parseForecastHorizon(searchParams.horizon);
 
-  const dataBounds = await fetchDataBounds(searchParams);
+  const dataBounds = await fetchDataBounds();
   const { from, to, isAllTime } = resolvePageRange(searchParams, dataBounds, 365);
 
   return (

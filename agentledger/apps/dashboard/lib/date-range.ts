@@ -101,6 +101,16 @@ export function presetRange(days: number): { from: string; to: string } {
   return defaultRange(days);
 }
 
+/** Full previous calendar month in UTC (e.g. Aug 1–31 when today is in September). */
+export function previousCalendarMonthRange(ref = new Date()): { from: string; to: string } {
+  const y = ref.getUTCFullYear();
+  const m = ref.getUTCMonth();
+  const firstOfPrev = new Date(Date.UTC(m === 0 ? y - 1 : y, m === 0 ? 11 : m - 1, 1));
+  const lastOfPrev = new Date(Date.UTC(y, m, 0));
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  return { from: iso(firstOfPrev), to: iso(lastOfPrev) };
+}
+
 export type DateBounds = { earliest_day: string; latest_day: string };
 
 export type ResolvedRange = { from: string; to: string; isAllTime: boolean };

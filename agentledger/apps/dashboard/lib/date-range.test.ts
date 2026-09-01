@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { decodeRange, encodeRange } from './date-range';
+import { decodeRange, encodeRange, previousCalendarMonthRange } from './date-range';
 import { resolveRangeWithCookie } from './resolve-range';
+
+test('previousCalendarMonthRange returns full prior UTC month', () => {
+  assert.deepEqual(previousCalendarMonthRange(new Date('2026-09-01T12:00:00.000Z')), {
+    from: '2026-08-01',
+    to: '2026-08-31',
+  });
+});
 
 test('encodeRange / decodeRange round-trip', () => {
   const r = { from: '2025-01-01', to: '2025-03-31' };

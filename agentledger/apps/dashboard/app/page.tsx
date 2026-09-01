@@ -12,7 +12,6 @@ import { ProductWorthPanel } from '../components/lari/ProductWorthPanel';
 import { Badge, BadgeTone, Card, DataTable, PageHeader, Stat, num, usd } from '../components/ui';
 import { DateRangePicker } from '../components/DateRangePicker';
 import { apiClient, fetchData, proxyApi } from '../lib/api';
-import { combinedAiCost } from '../lib/combined-ai-cost';
 import { fetchDataBounds } from '../lib/data-bounds';
 import { env } from '../lib/env';
 import { seatUsdByVendor } from '../lib/platform-billing';
@@ -189,15 +188,8 @@ export default async function OverviewPage({
   const source = searchParams.source || undefined;
   const api = apiClient();
 
-  const dataBounds = await fetchDataBounds(searchParams);
+  const dataBounds = await fetchDataBounds();
   const { from, to, isAllTime } = resolvePageRange(searchParams, dataBounds);
-
-  type TotalCostRow = {
-    month: string;
-    attributable_cost_usd: number | string;
-    fixed_cost_usd: number | string;
-    total_cost_of_ai_usd: number | string;
-  };
 
   type FixedCostVendorRow = { vendor?: string | null; cost_usd?: number | string | null };
 
@@ -207,7 +199,6 @@ export default async function OverviewPage({
     costByUser,
     platformSpend,
     modelMix,
-    totalCostRows,
     fixedCostRows,
     usersRes,
     vendorBillingRes,
@@ -232,11 +223,6 @@ export default async function OverviewPage({
       api.GET('/v1/analytics/model-mix', { params: { query: { from, to } } }),
       [],
     ) as Promise<unknown> as Promise<ModelRow[]>,
-    (async () => {
-      const qs = new URLSearchParams({ from, to }).toString();
-      const res = await proxyApi(`/v1/fixed-costs/total-cost-of-ai?${qs}`);
-      return res.ok && Array.isArray(res.data) ? (res.data as TotalCostRow[]) : [];
-    })(),
     (async () => {
       const qs = new URLSearchParams({ from, to }).toString();
       const res = await proxyApi(`/v1/fixed-costs?${qs}`);
@@ -307,10 +293,15 @@ export default async function OverviewPage({
 
   const meteredCost = spend.reduce((s, r) => s + Number(r.cost_usd), 0);
   const totalCalls = spend.reduce((s, r) => s + Number(r.calls), 0);
-  const costOfAi = combinedAiCost(meteredCost, totalCostRows);
-  const totalCostOfAi = costOfAi.total;
-  const attributableCost = costOfAi.attributable;
-  const fixedOverhead = costOfAi.fixed;
+  const orgVendorsForTotals =
+    (
+      vendorBillingRes as {
+        vendors?: { seat_usd: number }[];
+      }
+    ).vendors ?? [];
+  const fixedOverhead = orgVendorsForTotals.reduce((s, v) => s + Number(v.seat_usd ?? 0), 0);
+  const attributableCost = meteredCost;
+  const totalCostOfAi = meteredCost + fixedOverhead;
   const blocked = spend.reduce((s, r) => s + Number(r.blocked_calls), 0);
   const chart = spend.map((r) => ({ day: String(r.day).slice(5), cost_usd: Number(r.cost_usd) }));
 

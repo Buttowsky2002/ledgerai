@@ -6,6 +6,7 @@ import {
   allTimeHref,
   encodeRange,
   presetRange,
+  previousCalendarMonthRange,
   RANGE_COOKIE,
   rangeHref,
   todayIso,
@@ -104,6 +105,13 @@ export function DateRangePicker({
     setDraftAllTime(false);
   };
 
+  const selectLastMonth = () => {
+    const r = previousCalendarMonthRange();
+    setDraftFrom(r.from);
+    setDraftTo(r.to);
+    setDraftAllTime(false);
+  };
+
   const selectAllTime = () => {
     setDraftFrom(earliestDay);
     setDraftTo(latestDay);
@@ -130,11 +138,15 @@ export function DateRangePicker({
     const range = presetRange(preset.days);
     return range.from === from && range.to === to;
   });
+  const lastMonthRange = previousCalendarMonthRange();
+  const isLastMonth = from === lastMonthRange.from && to === lastMonthRange.to;
   const activeSelection = isAllTime
     ? 'All time'
     : activePreset
       ? `Last ${activePreset.label}`
-      : fmtRange(from, to);
+      : isLastMonth
+        ? 'Last month'
+        : fmtRange(from, to);
 
   const inputClass =
     'w-full rounded-md border border-edge bg-black/40 px-3 py-2 text-sm text-gray-100 [color-scheme:dark] focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/30';
@@ -236,6 +248,17 @@ export function DateRangePicker({
                 </button>
               );
             })}
+            <button
+              type="button"
+              onClick={selectLastMonth}
+              className={`rounded-md px-2.5 py-1 text-xs transition-colors ${
+                !draftAllTime && lastMonthRange.from === draftFrom && lastMonthRange.to === draftTo
+                  ? 'bg-accent/15 text-accent ring-1 ring-inset ring-accent/30'
+                  : 'border border-edge text-muted hover:bg-white/5 hover:text-gray-100'
+              }`}
+            >
+              Last month
+            </button>
             <button
               type="button"
               onClick={selectAllTime}

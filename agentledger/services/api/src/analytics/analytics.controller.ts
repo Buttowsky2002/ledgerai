@@ -28,6 +28,12 @@ export class AnalyticsController {
   ) {}
 
   @Roles('viewer')
+  @Get('data-bounds')
+  dataBounds() {
+    return this.analytics.dataBounds();
+  }
+
+  @Roles('viewer')
   @Get('spend')
   spend(@Query() q: RangeQueryDto) {
     return this.analytics.spend(q.from, q.to, q.team);
