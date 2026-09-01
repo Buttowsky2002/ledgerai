@@ -26,9 +26,14 @@ module.exports = {
     'no-var': 'error',
     curly: ['error', 'all'],
     // Cyclomatic-complexity ratchet. review-nodejs-code targets <=5; the current
-    // API ceiling is 85, so this only blocks regression past today's worst and is
-    // meant to be lowered as god services are decomposed (135 functions still
-    // exceed 8 — tracked follow-up, not a blocker).
-    complexity: ['warn', 85],
+    // API ceiling is 54 (down from 85 after import.mapper + analytics/lari/copilot/
+    // portal/connectors decomposition). The two residual 41+ functions —
+    // connectors.service.ts sync and github-copilot-client — are I/O orchestrators
+    // whose pure logic is already extracted, so their branching is deferred for
+    // characterization-test-backed decomposition. This blocks regression past
+    // today's worst and is meant to be lowered further as the remaining god
+    // services are decomposed (93 functions still exceed 10 — tracked follow-up,
+    // not a blocker).
+    complexity: ['warn', 54],
   },
 };
