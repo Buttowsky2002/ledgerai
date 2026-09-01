@@ -77,7 +77,9 @@ export function GitHubCopilotDetail({
     try {
       const res = await fetchCopilotOverview(from, to);
       setData(res);
-      if (res?.roiAssumptions) {setAssumptions(res.roiAssumptions);}
+      if (res?.roiAssumptions) {
+        setAssumptions(res.roiAssumptions);
+      }
     } catch {
       setError(true);
     } finally {
@@ -162,14 +164,21 @@ export function GitHubCopilotDetail({
       )}
 
       {syncError && (
-        <p className="rounded-lg border border-neg/30 bg-neg/10 px-4 py-3 text-sm text-neg">{syncError}</p>
+        <p className="rounded-lg border border-neg/30 bg-neg/10 px-4 py-3 text-sm text-neg">
+          {syncError}
+        </p>
       )}
       {syncSuccess && (
-        <p className="rounded-lg border border-pos/30 bg-pos/10 px-4 py-3 text-sm text-pos">{syncSuccess}</p>
+        <p className="rounded-lg border border-pos/30 bg-pos/10 px-4 py-3 text-sm text-pos">
+          {syncSuccess}
+        </p>
       )}
 
       {assumptionsOpen && data?.connections?.[0] && (
-        <Card title="ROI assumptions (estimated)" subtitle="Adjust model inputs — not exact productivity measures">
+        <Card
+          title="ROI assumptions (estimated)"
+          subtitle="Adjust model inputs — not exact productivity measures"
+        >
           <div className="grid max-w-2xl grid-cols-2 gap-3 text-sm">
             {(
               [
@@ -190,7 +199,9 @@ export function GitHubCopilotDetail({
                   step="any"
                   className="mt-1 w-full rounded border border-edge bg-panel px-2 py-1.5"
                   value={assumptions[key]}
-                  onChange={(e) => setAssumptions({ ...assumptions, [key]: Number(e.target.value) })}
+                  onChange={(e) =>
+                    setAssumptions({ ...assumptions, [key]: Number(e.target.value) })
+                  }
                 />
               </label>
             ))}
@@ -214,7 +225,10 @@ export function GitHubCopilotDetail({
       )}
 
       {!loading && !error && !data?.connected && (
-        <Card title="Connect GitHub Copilot Business" subtitle="Org slug + fine-grained PAT — token encrypted at rest">
+        <Card
+          title="Connect GitHub Copilot Business"
+          subtitle="Org slug + fine-grained PAT — token encrypted at rest"
+        >
           <GitHubCopilotConnectForm compact onConnected={() => void load()} />
           <p className="mt-4 text-center text-xs text-muted">
             Or configure in{' '}
@@ -230,7 +244,8 @@ export function GitHubCopilotDetail({
 
       {empty && (
         <p className="py-6 text-center text-sm text-muted">
-          Connection is active but no seats or usage were imported. Run <strong>Sync now</strong> or sync from{' '}
+          Connection is active but no seats or usage were imported. Run <strong>Sync now</strong> or
+          sync from{' '}
           <Link href="/settings/connectors" className="text-accent hover:underline">
             Data sources
           </Link>
@@ -241,7 +256,12 @@ export function GitHubCopilotDetail({
       {m && c && data?.connected && !empty && (
         <>
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 xl:grid-cols-6">
-            <Stat label="Allocated spend (est.)" value={usd(m.monthlyCopilotSpend)} accent sub="sum of member rows" />
+            <Stat
+              label="Allocated spend (est.)"
+              value={usd(m.monthlyCopilotSpend)}
+              accent
+              sub="sum of member rows"
+            />
             <Stat label="Active seats" value={String(m.activeSeats)} tone="pos" />
             <Stat
               label="Inactive seats"
@@ -250,7 +270,11 @@ export function GitHubCopilotDetail({
             />
             <Stat label="AI credits used" value={String(Math.round(m.aiCreditsUsed))} />
             <Stat label="Credit utilization" value={`${m.creditUtilizationPct.toFixed(1)}%`} />
-            <Stat label="Est. hours saved" value={m.estimatedHoursSaved.toFixed(1)} sub="estimated" />
+            <Stat
+              label="Est. hours saved"
+              value={m.estimatedHoursSaved.toFixed(1)}
+              sub="estimated"
+            />
             <Stat label="Est. value created" value={usd(m.estimatedValueCreated)} sub="estimated" />
             <Stat
               label="Est. ROI %"

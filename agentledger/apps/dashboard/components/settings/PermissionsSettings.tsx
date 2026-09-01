@@ -19,13 +19,7 @@ const ROLE_LABEL: Record<UserRole, string> = {
 const FIELD =
   'rounded border border-edge bg-ink px-2 py-1.5 text-sm text-gray-100 focus:border-accent focus:outline-none';
 
-function InviteModal({
-  onClose,
-  onSuccess,
-}: {
-  onClose: () => void;
-  onSuccess: () => void;
-}) {
+function InviteModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const [email, setEmail] = useState('');
   const [apiRole, setApiRole] = useState<UserRole>('viewer');
   const [busy, setBusy] = useState(false);
@@ -55,7 +49,11 @@ function InviteModal({
       <div className="w-full max-w-md space-y-5 rounded-lg border border-edge bg-panel p-6">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-white">Invite team member</h2>
-          <button type="button" onClick={onClose} className="text-lg leading-none text-muted hover:text-white">
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-lg leading-none text-muted hover:text-white"
+          >
             ×
           </button>
         </div>
@@ -164,7 +162,10 @@ export function PermissionsSettings({
     });
     setBusyId(null);
     if (!res.ok) {
-      const body = (await res.json().catch(() => null)) as { message?: string; error?: string } | null;
+      const body = (await res.json().catch(() => null)) as {
+        message?: string;
+        error?: string;
+      } | null;
       setErr(body?.message ?? body?.error ?? `Update failed (${res.status})`);
       setRoles((prev) => ({
         ...prev,
@@ -194,8 +195,8 @@ export function PermissionsSettings({
   if (!canManage) {
     return (
       <p className="text-sm text-muted">
-        Only users with the <span className="text-gray-100">admin</span> role can change permissions.
-        Ask an admin to promote your identity, then sign out and back in.
+        Only users with the <span className="text-gray-100">admin</span> role can change
+        permissions. Ask an admin to promote your identity, then sign out and back in.
       </p>
     );
   }
@@ -207,7 +208,8 @@ export function PermissionsSettings({
       <div className="flex items-start justify-between gap-3">
         <p className="text-xs text-muted">
           Roles control what each person can do in the app (viewer → analyst → admin). Changes apply
-          on the next access-token refresh (about 15 minutes) or after the user signs out and back in.
+          on the next access-token refresh (about 15 minutes) or after the user signs out and back
+          in.
         </p>
         <button
           type="button"

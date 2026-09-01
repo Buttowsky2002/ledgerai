@@ -49,7 +49,9 @@ export function sumVendorColumns(
   for (const user of users) {
     for (const vendor of vendors) {
       const slice = user.vendor_spend?.[vendor];
-      if (!slice) {continue;}
+      if (!slice) {
+        continue;
+      }
       out[vendor].seat_usd += slice.seat_usd;
       out[vendor].overage_usd += slice.overage_usd;
       out[vendor].total_usd += slice.total_usd;
@@ -59,6 +61,8 @@ export function sumVendorColumns(
 }
 
 export function userVendorTotal(user: { vendor_spend?: Record<string, VendorSpendSlice> }): number {
-  if (!user.vendor_spend) {return 0;}
+  if (!user.vendor_spend) {
+    return 0;
+  }
   return Object.values(user.vendor_spend).reduce((s, v) => s + v.total_usd, 0);
 }

@@ -26,7 +26,9 @@ export const PLAN_TIER_LABELS: Record<PlanTier, string> = {
 };
 
 /** Default USD per seat/month when known — undefined means enter manually. */
-const DEFAULT_UNIT_USD: Partial<Record<FixedCostVendor, Partial<Record<PlanTier, number | undefined>>>> = {
+const DEFAULT_UNIT_USD: Partial<
+  Record<FixedCostVendor, Partial<Record<PlanTier, number | undefined>>>
+> = {
   openai: { free: 0, team: 30 },
   anthropic: { free: 0, team: 30 },
   cursor: { free: 0, team: 40 },
@@ -41,19 +43,27 @@ export function vendorLabel(vendor: string): string {
 }
 
 export function costTypeForTier(tier: PlanTier): FixedCostType {
-  if (tier === 'enterprise') {return 'subscription';}
-  if (tier === 'free') {return 'seat_license';}
+  if (tier === 'enterprise') {
+    return 'subscription';
+  }
+  if (tier === 'free') {
+    return 'seat_license';
+  }
   return 'seat_license';
 }
 
 export function lineItemFor(vendor: FixedCostVendor, tier: PlanTier, customName?: string): string {
-  if (vendor === 'other' && customName?.trim()) {return customName.trim();}
+  if (vendor === 'other' && customName?.trim()) {
+    return customName.trim();
+  }
   const product = AI_VENDORS.find((v) => v.id === vendor)?.product ?? vendor;
   return `${product} ${PLAN_TIER_LABELS[tier]}`;
 }
 
 export function defaultUnitUsd(vendor: FixedCostVendor, tier: PlanTier): number | null {
-  if (tier === 'free') {return 0;}
+  if (tier === 'free') {
+    return 0;
+  }
   const row = DEFAULT_UNIT_USD[vendor];
   const v = row?.[tier];
   return v === undefined ? null : v;
@@ -70,8 +80,12 @@ export function parseStoredPlan(
   if (li.includes('enterprise') || costType === 'subscription') {
     return { vendor: v, tier: 'enterprise' };
   }
-  if (li.includes('free')) {return { vendor: v, tier: 'free' };}
-  if (li.includes('team')) {return { vendor: v, tier: 'team' };}
+  if (li.includes('free')) {
+    return { vendor: v, tier: 'free' };
+  }
+  if (li.includes('team')) {
+    return { vendor: v, tier: 'team' };
+  }
   return { vendor: v, tier: costType === 'subscription' ? 'enterprise' : 'team' };
 }
 

@@ -3,11 +3,15 @@ import { cookies } from 'next/headers';
 import { env } from '@/lib/env';
 import { refreshUrl } from '@/lib/auth';
 
-function cookieOptsFromRaw(raw: string): { name: string; value: string; options: Record<string, unknown> } | null {
+function cookieOptsFromRaw(
+  raw: string,
+): { name: string; value: string; options: Record<string, unknown> } | null {
   const parts = raw.split(';').map((s) => s.trim());
   const pair = parts[0];
   const eq = pair.indexOf('=');
-  if (eq <= 0) {return null;}
+  if (eq <= 0) {
+    return null;
+  }
   const name = pair.slice(0, eq);
   const value = pair.slice(eq + 1);
   const options: Record<string, unknown> = { httpOnly: true, path: '/' };
@@ -32,13 +36,20 @@ function applyApiSetCookies(res: NextResponse, apiRes: Response): void {
     typeof apiRes.headers.getSetCookie === 'function' ? apiRes.headers.getSetCookie() : [];
   for (const raw of setCookies) {
     const parsed = cookieOptsFromRaw(raw);
-    if (!parsed) {continue;}
-    res.cookies.set(parsed.name, parsed.value, parsed.options as Parameters<typeof res.cookies.set>[2]);
+    if (!parsed) {
+      continue;
+    }
+    res.cookies.set(
+      parsed.name,
+      parsed.value,
+      parsed.options as Parameters<typeof res.cookies.set>[2],
+    );
   }
 }
 
 function clearSessionCookies(res: NextResponse): void {
-  const secure = process.env.NODE_ENV === 'production' || env('BADGERIQ_COOKIE_SAMESITE') === 'none';
+  const secure =
+    process.env.NODE_ENV === 'production' || env('BADGERIQ_COOKIE_SAMESITE') === 'none';
   for (const name of ['al_access', 'al_refresh', 'al_oidc_tx'] as const) {
     res.cookies.set(name, '', {
       httpOnly: true,

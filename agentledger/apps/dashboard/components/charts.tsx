@@ -52,17 +52,38 @@ export function AreaChartClient({ data, xKey, yKey }: { data: Row[]; xKey: strin
           </linearGradient>
         </defs>
         <CartesianGrid stroke={GRID} vertical={false} />
-        <XAxis dataKey={xKey} stroke={AXIS} fontSize={11} tickLine={false} axisLine={false} minTickGap={28} />
+        <XAxis
+          dataKey={xKey}
+          stroke={AXIS}
+          fontSize={11}
+          tickLine={false}
+          axisLine={false}
+          minTickGap={28}
+        />
         <YAxis stroke={AXIS} fontSize={11} tickLine={false} axisLine={false} width={52} />
         <Tooltip contentStyle={TOOLTIP} cursor={{ stroke: GRID }} />
-        <Area type="monotone" dataKey={yKey} stroke={ACCENT} strokeWidth={2} fill="url(#areaFill)" />
+        <Area
+          type="monotone"
+          dataKey={yKey}
+          stroke={ACCENT}
+          strokeWidth={2}
+          fill="url(#areaFill)"
+        />
       </AreaChart>
     </ResponsiveContainer>
   );
 }
 
 /** Axis-less micro line for KPI cards. */
-export function Sparkline({ data, yKey, height = 40 }: { data: Row[]; yKey: string; height?: number }) {
+export function Sparkline({
+  data,
+  yKey,
+  height = 40,
+}: {
+  data: Row[];
+  yKey: string;
+  height?: number;
+}) {
   return (
     <ResponsiveContainer width="100%" height={height}>
       <LineChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
@@ -137,16 +158,32 @@ export function PieChartClient({
   const total = data.reduce((s, row) => s + Number(row[valueKey] ?? 0), 0);
 
   const renderLabel = showPercent
-    ? (props: { name?: string; percent?: number; cx?: number; cy?: number; midAngle?: number; outerRadius?: number }) => {
+    ? (props: {
+        name?: string;
+        percent?: number;
+        cx?: number;
+        cy?: number;
+        midAngle?: number;
+        outerRadius?: number;
+      }) => {
         const { name, percent, cx = 0, cy = 0, midAngle = 0, outerRadius = 0 } = props;
-        if (!percent || percent < 0.04) {return null;}
+        if (!percent || percent < 0.04) {
+          return null;
+        }
         const RAD = Math.PI / 180;
         const radius = outerRadius + 18;
         const x = cx + radius * Math.cos(-midAngle * RAD);
         const y = cy + radius * Math.sin(-midAngle * RAD);
         const short = String(name ?? '').length > 18 ? `${String(name).slice(0, 16)}…` : name;
         return (
-          <text x={x} y={y} fill="#e5e7eb" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize={11}>
+          <text
+            x={x}
+            y={y}
+            fill="#e5e7eb"
+            textAnchor={x > cx ? 'start' : 'end'}
+            dominantBaseline="central"
+            fontSize={11}
+          >
             {short} {(percent * 100).toFixed(0)}%
           </text>
         );

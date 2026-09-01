@@ -54,12 +54,14 @@ export function SpendBillingCell({
         <span className="mt-0.5 block">
           {cursorOnDemand > 0 ? (
             <span className="block">
-              <span className="font-medium text-gray-300">Cursor overage</span> {usd(cursorOnDemand)}
+              <span className="font-medium text-gray-300">Cursor overage</span>{' '}
+              {usd(cursorOnDemand)}
             </span>
           ) : null}
           {cursorIncluded > 0 ? (
             <span className="block">
-              <span className="font-medium text-gray-300">Cursor included</span> {usd(cursorIncluded)}
+              <span className="font-medium text-gray-300">Cursor included</span>{' '}
+              {usd(cursorIncluded)}
             </span>
           ) : null}
         </span>
@@ -78,11 +80,21 @@ export function billingTypeLabel(
   const included = Math.max(0, cursorIncludedUsd);
   const metered = Math.max(meteredUsd, onDemand);
 
-  if (metered <= 0 && seatUsd <= 0 && included <= 0 && onDemand <= 0) {return null;}
-  if (metered <= 0 && seatUsd <= 0 && included > 0 && onDemand <= 0) {return 'cursor_included';}
-  if (metered > 0 && seatUsd > 0) {return 'mixed';}
-  if (seatUsd > 0) {return 'per_seat';}
-  if (metered > 0 && included > 0) {return 'mixed';}
+  if (metered <= 0 && seatUsd <= 0 && included <= 0 && onDemand <= 0) {
+    return null;
+  }
+  if (metered <= 0 && seatUsd <= 0 && included > 0 && onDemand <= 0) {
+    return 'cursor_included';
+  }
+  if (metered > 0 && seatUsd > 0) {
+    return 'mixed';
+  }
+  if (seatUsd > 0) {
+    return 'per_seat';
+  }
+  if (metered > 0 && included > 0) {
+    return 'mixed';
+  }
   return 'metered';
 }
 
@@ -103,7 +115,9 @@ export function BillingTypeBadge({
     Number(cursorIncludedUsd ?? 0),
     Number(cursorOnDemandUsd ?? 0),
   );
-  if (!kind) {return null;}
+  if (!kind) {
+    return null;
+  }
   const label =
     kind === 'mixed'
       ? 'Mixed'
@@ -121,7 +135,9 @@ export function BillingTypeBadge({
           ? 'border-edge bg-white/5 text-muted'
           : 'border-accent/40 bg-accent/10 text-accent';
   return (
-    <span className={`rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${tone}`}>
+    <span
+      className={`rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${tone}`}
+    >
       {label}
     </span>
   );

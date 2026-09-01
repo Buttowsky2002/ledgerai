@@ -18,10 +18,7 @@ export async function POST() {
   try {
     const headers: Record<string, string> = {};
     if (access || refresh) {
-      headers.Cookie = [
-        access ? `al_access=${access}` : '',
-        refresh ? `al_refresh=${refresh}` : '',
-      ]
+      headers.Cookie = [access ? `al_access=${access}` : '', refresh ? `al_refresh=${refresh}` : '']
         .filter(Boolean)
         .join('; ');
     }
@@ -30,7 +27,8 @@ export async function POST() {
     // Cookie clear below still runs — local stacks may not reach the API host.
   }
 
-  const secure = process.env.NODE_ENV === 'production' || env('BADGERIQ_COOKIE_SAMESITE') === 'none';
+  const secure =
+    process.env.NODE_ENV === 'production' || env('BADGERIQ_COOKIE_SAMESITE') === 'none';
   const res = new NextResponse(null, { status: 204 });
   for (const name of ['al_access', 'al_refresh', 'al_oidc_tx'] as const) {
     res.cookies.set(name, '', {

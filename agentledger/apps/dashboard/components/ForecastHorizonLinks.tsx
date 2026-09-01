@@ -21,7 +21,9 @@ export function ForecastHorizonLinks({ basePath, from, to, forecastDays, extraPa
           key={h.days}
           href={rangeHref(basePath, from, to, { ...extraParams, horizon: String(h.days) })}
           className={`rounded px-3 py-1.5 text-sm ${
-            h.days === forecastDays ? 'bg-accent/20 text-white' : 'border border-edge text-muted hover:bg-white/5'
+            h.days === forecastDays
+              ? 'bg-accent/20 text-white'
+              : 'border border-edge text-muted hover:bg-white/5'
           }`}
         >
           {h.label}

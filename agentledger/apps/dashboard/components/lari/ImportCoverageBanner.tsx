@@ -35,7 +35,9 @@ export function DataCoveragePanel({
         }
       })
       .catch(() => {
-        if (!cancelled) {setLoading(false);}
+        if (!cancelled) {
+          setLoading(false);
+        }
       });
     return () => {
       cancelled = true;
@@ -58,7 +60,9 @@ export function DataCoveragePanel({
     );
   }
 
-  if (!alwaysShow && !data.importParityMessage) {return null;}
+  if (!alwaysShow && !data.importParityMessage) {
+    return null;
+  }
 
   const cov = data.dataCoverage;
   const healthy = cov.outcomeRoiReady && cov.productsWithoutOutcomes === 0;

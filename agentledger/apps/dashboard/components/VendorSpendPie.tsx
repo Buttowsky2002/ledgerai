@@ -8,13 +8,19 @@ type Slice = { label: string; value: number; color: string };
 
 function buildSlices(seat: number, overage: number): Slice[] {
   const slices: Slice[] = [];
-  if (seat > 0) {slices.push({ label: 'Seat', value: seat, color: COLORS[0] });}
-  if (overage > 0) {slices.push({ label: 'Overage', value: overage, color: COLORS[1] });}
+  if (seat > 0) {
+    slices.push({ label: 'Seat', value: seat, color: COLORS[0] });
+  }
+  if (overage > 0) {
+    slices.push({ label: 'Overage', value: overage, color: COLORS[1] });
+  }
   return slices;
 }
 
 function conicGradient(slices: Slice[], total: number): string {
-  if (total <= 0 || slices.length === 0) {return 'conic-gradient(#374151 0deg 360deg)';}
+  if (total <= 0 || slices.length === 0) {
+    return 'conic-gradient(#374151 0deg 360deg)';
+  }
   let deg = 0;
   const stops: string[] = [];
   for (const s of slices) {
@@ -67,7 +73,10 @@ export function VendorSpendPie({
       <ul className="space-y-1 text-xs">
         {slices.map((s) => (
           <li key={s.label} className="flex items-center gap-2">
-            <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: s.color }} />
+            <span
+              className="inline-block h-2.5 w-2.5 rounded-full"
+              style={{ background: s.color }}
+            />
             <span className="text-muted">{s.label}</span>
             <span className="num text-gray-200">{usd(s.value)}</span>
             <span className="text-muted">({((s.value / total) * 100).toFixed(0)}%)</span>

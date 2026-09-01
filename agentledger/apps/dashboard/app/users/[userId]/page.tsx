@@ -3,7 +3,11 @@ import { Badge, Card, PageHeader } from '../../../components/ui';
 import { UserVendorDetailTabs } from '../../../components/users/UserVendorDetailTabs';
 import { proxyApi } from '../../../lib/api';
 import { resolveRange } from '../../../lib/resolve-range';
-import { userVendorTotal, type VendorSpendSlice, type VendorUsageSlice } from '../../../lib/vendor-spend';
+import {
+  userVendorTotal,
+  type VendorSpendSlice,
+  type VendorUsageSlice,
+} from '../../../lib/vendor-spend';
 import { usd } from '../../../components/ui';
 
 export const dynamic = 'force-dynamic';
@@ -36,13 +40,17 @@ export default async function UserDetailPage({
   ]);
 
   const user = (userData ?? null) as UserRow | null;
-  const vendors = (listData as { vendors?: string[] } | null)?.vendors ?? Object.keys(user?.vendor_spend ?? {});
+  const vendors =
+    (listData as { vendors?: string[] } | null)?.vendors ?? Object.keys(user?.vendor_spend ?? {});
 
   if (!user) {
     return (
       <>
         <PageHeader title="User not found" subtitle={userId} />
-        <Link href={`/users?from=${from}&to=${to}`} className="text-sm text-accent hover:text-accent-soft hover:underline">
+        <Link
+          href={`/users?from=${from}&to=${to}`}
+          className="text-sm text-accent hover:text-accent-soft hover:underline"
+        >
           ← Back to users
         </Link>
       </>
@@ -55,7 +63,10 @@ export default async function UserDetailPage({
         title={user.display_name}
         subtitle={`${from} → ${to}`}
         actions={
-          <Link href={`/users?from=${from}&to=${to}`} className="text-sm text-muted hover:text-white">
+          <Link
+            href={`/users?from=${from}&to=${to}`}
+            className="text-sm text-muted hover:text-white"
+          >
             ← All users
           </Link>
         }

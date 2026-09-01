@@ -39,7 +39,9 @@ export default async function AllocationPage({
                 key={d}
                 href={`/allocation?dimension=${d}&from=${from}&to=${to}`}
                 className={`rounded px-3 py-1.5 text-sm capitalize ${
-                  d === dimension ? 'bg-accent/20 text-white' : 'border border-edge text-muted hover:bg-white/5'
+                  d === dimension
+                    ? 'bg-accent/20 text-white'
+                    : 'border border-edge text-muted hover:bg-white/5'
                 }`}
               >
                 {d}
@@ -58,7 +60,11 @@ export default async function AllocationPage({
             { key: 'cost', label: 'Spend', align: 'right' },
             { key: 'calls', label: 'Calls', align: 'right' },
           ]}
-          rows={rows.map((r) => ({ key: r.key || '(none)', cost: usd(r.cost_usd), calls: num(r.calls) }))}
+          rows={rows.map((r) => ({
+            key: r.key || '(none)',
+            cost: usd(r.cost_usd),
+            calls: num(r.calls),
+          }))}
         />
       </Card>
     </>

@@ -8,7 +8,9 @@ export async function POST(req: NextRequest) {
     body,
   });
   if (!ok) {
-    return NextResponse.json(data ?? { error: 'preview failed' }, { status: status >= 400 ? status : 502 });
+    return NextResponse.json(data ?? { error: 'preview failed' }, {
+      status: status >= 400 ? status : 502,
+    });
   }
   return NextResponse.json(data);
 }

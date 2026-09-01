@@ -58,19 +58,26 @@ function methodBadge(method: string) {
   return <span className={`rounded border px-2 py-0.5 text-xs font-medium ${cls}`}>{method}</span>;
 }
 
-export default async function AttributionAuditPage({ searchParams }: { searchParams: { outcome?: string } }) {
+export default async function AttributionAuditPage({
+  searchParams,
+}: {
+  searchParams: { outcome?: string };
+}) {
   const outcome = searchParams.outcome?.trim();
   const api = apiClient();
 
   if (!outcome) {
     return (
       <>
-        <PageHeader title="Attribution audit" subtitle="Trace any attributed score to its source evidence" />
+        <PageHeader
+          title="Attribution audit"
+          subtitle="Trace any attributed score to its source evidence"
+        />
         <Card title="Pick an outcome">
           <p className="text-sm text-muted">
-            Append <code className="rounded bg-white/10 px-1">?outcome=&lt;outcome_id&gt;</code> to inspect every edge
-            attributing that outcome — its signals, evidence, method, model version, and (for multi-agent chains) the
-            Shapley split.
+            Append <code className="rounded bg-white/10 px-1">?outcome=&lt;outcome_id&gt;</code> to
+            inspect every edge attributing that outcome — its signals, evidence, method, model
+            version, and (for multi-agent chains) the Shapley split.
           </p>
         </Card>
       </>
@@ -78,7 +85,9 @@ export default async function AttributionAuditPage({ searchParams }: { searchPar
   }
 
   const edges = (await fetchData(
-    api.GET('/v1/attribution/edges', { params: { query: { outcomeId: outcome, minConfidence: 0 } } }),
+    api.GET('/v1/attribution/edges', {
+      params: { query: { outcomeId: outcome, minConfidence: 0 } },
+    }),
     [],
   )) as unknown as Edge[];
 
@@ -98,9 +107,21 @@ export default async function AttributionAuditPage({ searchParams }: { searchPar
       <PageHeader title="Attribution audit" subtitle={outcome} />
 
       <div className="mb-6 grid grid-cols-3 gap-4">
-        <Stat label="Edges" value={num(edges.length)} sub={`${num(headlineCount)} headline-eligible (≥ ${HEADLINE})`} />
-        <Stat label="Attributed value" value={usd(totalValue)} sub="incremental (counterfactual-adjusted)" />
-        <Stat label="Coalition" value={coalition ? `${num(coalition.members.length)} agents` : '—'} sub={coalition ? coalition.method : 'single-agent'} />
+        <Stat
+          label="Edges"
+          value={num(edges.length)}
+          sub={`${num(headlineCount)} headline-eligible (≥ ${HEADLINE})`}
+        />
+        <Stat
+          label="Attributed value"
+          value={usd(totalValue)}
+          sub="incremental (counterfactual-adjusted)"
+        />
+        <Stat
+          label="Coalition"
+          value={coalition ? `${num(coalition.members.length)} agents` : '—'}
+          sub={coalition ? coalition.method : 'single-agent'}
+        />
       </div>
 
       {edges.length === 0 && (
@@ -130,7 +151,10 @@ export default async function AttributionAuditPage({ searchParams }: { searchPar
             <div className="mb-3 grid grid-cols-4 gap-4 text-sm">
               <div>
                 <div className="text-muted">Confidence</div>
-                <div className="tabular-nums">{cal.toFixed(3)} <span className="text-muted">(raw {Number(e.confidence_raw).toFixed(3)})</span></div>
+                <div className="tabular-nums">
+                  {cal.toFixed(3)}{' '}
+                  <span className="text-muted">(raw {Number(e.confidence_raw).toFixed(3)})</span>
+                </div>
               </div>
               <div>
                 <div className="text-muted">Incremental value</div>
@@ -138,7 +162,9 @@ export default async function AttributionAuditPage({ searchParams }: { searchPar
               </div>
               <div>
                 <div className="text-muted">Counterfactual δ</div>
-                <div className="tabular-nums">{e.counterfactual_delta == null ? '—' : Number(e.counterfactual_delta).toFixed(2)}</div>
+                <div className="tabular-nums">
+                  {e.counterfactual_delta == null ? '—' : Number(e.counterfactual_delta).toFixed(2)}
+                </div>
               </div>
               <div>
                 <div className="text-muted">Model</div>
@@ -158,7 +184,11 @@ export default async function AttributionAuditPage({ searchParams }: { searchPar
                   value: c.value == null ? '—' : Number(c.value).toFixed(3),
                   wlo: c.weighted_log_odds == null ? '—' : Number(c.weighted_log_odds).toFixed(3),
                   // evidence_ref is untrusted source data — React escapes it (rules 5/13).
-                  evidence: c.evidence_ref ? <span className="font-mono text-xs break-all">{c.evidence_ref}</span> : '—',
+                  evidence: c.evidence_ref ? (
+                    <span className="font-mono text-xs break-all">{c.evidence_ref}</span>
+                  ) : (
+                    '—'
+                  ),
                 }))}
               />
             )}
@@ -170,7 +200,10 @@ export default async function AttributionAuditPage({ searchParams }: { searchPar
         <Card title="Shapley split" actions={methodBadge('shapley')}>
           <p className="mb-3 text-xs text-muted">
             Value allocated across {num(coalition.members.length)} agents by marginal contribution
-            {coalition.sample_count > 0 ? ` (Monte Carlo, ${num(coalition.sample_count)} samples)` : ' (exact)'}.
+            {coalition.sample_count > 0
+              ? ` (Monte Carlo, ${num(coalition.sample_count)} samples)`
+              : ' (exact)'}
+            .
           </p>
           <DataTable
             columns={[

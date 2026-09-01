@@ -10,10 +10,7 @@ import type {
   RecommendationPriority,
 } from '@/types/lari';
 
-const PRIORITY_META: Record<
-  RecommendationPriority,
-  { label: string; tone: BadgeTone }
-> = {
+const PRIORITY_META: Record<RecommendationPriority, { label: string; tone: BadgeTone }> = {
   critical: { label: 'Critical', tone: 'neg' },
   high: { label: 'High', tone: 'warn' },
   medium: { label: 'Medium', tone: 'info' },
@@ -36,7 +33,9 @@ const CATEGORY_LABEL: Record<string, string> = {
 
 function RecommendationRow({ rec }: { rec: LariActionableRecommendation }) {
   const meta = PRIORITY_META[rec.priority];
-  const criticality = rec.evidence.find((item) => item.startsWith('criticality='))?.slice('criticality='.length);
+  const criticality = rec.evidence
+    .find((item) => item.startsWith('criticality='))
+    ?.slice('criticality='.length);
   const criticalityTone: BadgeTone =
     criticality === 'critical'
       ? 'neg'
@@ -108,10 +107,14 @@ export function LariRecommendationsPanel({
         }
       })
       .catch(() => {
-        if (!cancelled) {setError(true);}
+        if (!cancelled) {
+          setError(true);
+        }
       })
       .finally(() => {
-        if (!cancelled) {setLoading(false);}
+        if (!cancelled) {
+          setLoading(false);
+        }
       });
     return () => {
       cancelled = true;
@@ -153,7 +156,11 @@ export function LariRecommendationsPanel({
           No savings or configuration actions flagged — portfolio looks efficient.
         </p>
       ) : (
-        <div className="space-y-3">{shown.map((rec) => <RecommendationRow key={rec.id} rec={rec} />)}</div>
+        <div className="space-y-3">
+          {shown.map((rec) => (
+            <RecommendationRow key={rec.id} rec={rec} />
+          ))}
+        </div>
       )}
 
       {!loading && !compact && data && data.providerRankings.length > 0 && (
@@ -194,7 +201,10 @@ export function LariRecommendationsPanel({
             ]}
             rows={data.agentEconomicsHighlights.slice(0, 10).map((a) => ({
               agent: (
-                <Link href={`/agents/${encodeURIComponent(a.agentId)}`} className="text-accent hover:underline">
+                <Link
+                  href={`/agents/${encodeURIComponent(a.agentId)}`}
+                  className="text-accent hover:underline"
+                >
                   {a.agentId}
                 </Link>
               ),

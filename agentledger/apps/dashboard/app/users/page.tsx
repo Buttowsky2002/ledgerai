@@ -5,7 +5,12 @@ import { VendorSpendCell } from '../../components/VendorSpendCell';
 import { proxyApi } from '../../lib/api';
 import { resolveRange } from '../../lib/resolve-range';
 import { vendorLabel } from '../../lib/fixed-cost-catalog';
-import { sumVendorColumns, userVendorTotal, vendorShortLabel, type VendorSpendSlice } from '../../lib/vendor-spend';
+import {
+  sumVendorColumns,
+  userVendorTotal,
+  vendorShortLabel,
+  type VendorSpendSlice,
+} from '../../lib/vendor-spend';
 import { usd } from '../../components/ui';
 
 export const dynamic = 'force-dynamic';
@@ -51,10 +56,14 @@ export default async function UsersPage({
     ? (searchParams.tab as MemberTab)
     : 'all';
   const qs = new URLSearchParams({ from, to });
-  if (q) {qs.set('q', q);}
+  if (q) {
+    qs.set('q', q);
+  }
 
   const { ok, data } = await proxyApi(`/v1/analytics/users?${qs.toString()}`);
-  const payload = (ok && data && typeof data === 'object' ? data : { users: [], vendors: [] }) as UsersResponse;
+  const payload = (
+    ok && data && typeof data === 'object' ? data : { users: [], vendors: [] }
+  ) as UsersResponse;
   const allUsers = payload.users ?? [];
   const vendors = payload.vendors ?? [];
   const orgTotal = payload.org_billing?.total_cost_of_ai;
@@ -70,8 +79,12 @@ export default async function UsersPage({
 
   const tabHref = (next: MemberTab, keepQ = true) => {
     const params = new URLSearchParams({ from, to });
-    if (next !== 'all') {params.set('tab', next);}
-    if (keepQ && q) {params.set('q', q);}
+    if (next !== 'all') {
+      params.set('tab', next);
+    }
+    if (keepQ && q) {
+      params.set('q', q);
+    }
     return `/users?${params.toString()}`;
   };
 
@@ -131,7 +144,9 @@ export default async function UsersPage({
                   key={t.id}
                   href={tabHref(t.id)}
                   className={`rounded px-3 py-1.5 text-sm ${
-                    t.id === tab ? 'bg-accent/20 text-white' : 'border border-edge text-muted hover:bg-white/5'
+                    t.id === tab
+                      ? 'bg-accent/20 text-white'
+                      : 'border border-edge text-muted hover:bg-white/5'
                   }`}
                 >
                   {t.label}
@@ -146,7 +161,8 @@ export default async function UsersPage({
       {loadError && (
         <Card title="Could not load users">
           <p className="text-sm text-warn">
-            The users API returned an error. Restart the API service if you recently deployed this feature.
+            The users API returned an error. Restart the API service if you recently deployed this
+            feature.
           </p>
         </Card>
       )}
@@ -183,7 +199,8 @@ export default async function UsersPage({
       <Card title={`Member directory · ${MEMBER_TABS.find((t) => t.id === tab)?.label ?? 'All'}`}>
         {vendors.length > 0 && (
           <p className="mb-3 text-xs text-muted">
-            Vendors: {vendors.map((v) => vendorLabel(v)).join(' · ')} — click a user for usage detail
+            Vendors: {vendors.map((v) => vendorLabel(v)).join(' · ')} — click a user for usage
+            detail
           </p>
         )}
         <DataTable

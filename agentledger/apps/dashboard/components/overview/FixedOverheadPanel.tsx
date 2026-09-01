@@ -4,11 +4,7 @@ import { Card, DataTable, usd } from '@/components/ui';
 import { vendorLabel } from '@/lib/fixed-cost-catalog';
 import { vendorDetailHref } from '@/lib/vendor-routes';
 import { proxyApi } from '@/lib/api';
-import {
-  formatSignedUsd,
-  monthLabel,
-  previousCalendarMonth,
-} from '@/lib/seat-price-delta';
+import { formatSignedUsd, monthLabel, previousCalendarMonth } from '@/lib/seat-price-delta';
 
 type OrgVendorRow = {
   vendor: string;
@@ -79,8 +75,12 @@ export async function FixedOverheadPanel({ from, to }: { from: string; to: strin
 
   const pieData = orgVendors.flatMap((v) => {
     const slices = [];
-    if (v.seat_usd > 0) {slices.push({ label: `${vendorLabel(v.vendor)} seats`, cost_usd: v.seat_usd });}
-    if (v.budget_overage_usd > 0) {slices.push({ label: `${vendorLabel(v.vendor)} overage`, cost_usd: v.budget_overage_usd });}
+    if (v.seat_usd > 0) {
+      slices.push({ label: `${vendorLabel(v.vendor)} seats`, cost_usd: v.seat_usd });
+    }
+    if (v.budget_overage_usd > 0) {
+      slices.push({ label: `${vendorLabel(v.vendor)} overage`, cost_usd: v.budget_overage_usd });
+    }
     return slices;
   });
 
@@ -133,7 +133,10 @@ export async function FixedOverheadPanel({ from, to }: { from: string; to: strin
           ]}
           rows={orgVendors.map((r) => ({
             vendor: (
-              <Link href={vendorDetailHref(r.vendor, from, to)} className="text-accent hover:underline">
+              <Link
+                href={vendorDetailHref(r.vendor, from, to)}
+                className="text-accent hover:underline"
+              >
                 {vendorLabel(r.vendor)}
               </Link>
             ),
@@ -144,7 +147,9 @@ export async function FixedOverheadPanel({ from, to }: { from: string; to: strin
           }))}
           footerRows={[
             {
-              vendor: <span className="text-xs uppercase tracking-wide text-muted">Grand total</span>,
+              vendor: (
+                <span className="text-xs uppercase tracking-wide text-muted">Grand total</span>
+              ),
               seat: usd(grandSeat),
               seatChange:
                 seatChangeUsd !== 0 ? (

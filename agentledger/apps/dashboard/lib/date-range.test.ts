@@ -25,7 +25,10 @@ test('resolveRangeWithCookie prefers URL params over cookie', () => {
 
 test('resolveRangeWithCookie falls back to cookie when URL invalid', () => {
   const cookie = encodeRange({ from: '2025-02-01', to: '2025-02-28' });
-  assert.deepEqual(resolveRangeWithCookie({}, cookie, 90), { from: '2025-02-01', to: '2025-02-28' });
+  assert.deepEqual(resolveRangeWithCookie({}, cookie, 90), {
+    from: '2025-02-01',
+    to: '2025-02-28',
+  });
   assert.deepEqual(resolveRangeWithCookie({ from: 'bad', to: '2025-02-28' }, cookie, 90), {
     from: '2025-02-01',
     to: '2025-02-28',

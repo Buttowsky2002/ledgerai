@@ -58,7 +58,9 @@ export function DateRangeFilter({ basePath, from, to, extraParams }: Props) {
               type="button"
               onClick={() => navigate(r)}
               className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
-                active ? 'bg-accent/15 text-accent ring-1 ring-inset ring-accent/30' : 'text-muted hover:bg-white/5'
+                active
+                  ? 'bg-accent/15 text-accent ring-1 ring-inset ring-accent/30'
+                  : 'text-muted hover:bg-white/5'
               }`}
             >
               {p.label}

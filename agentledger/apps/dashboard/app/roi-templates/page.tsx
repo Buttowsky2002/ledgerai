@@ -19,9 +19,15 @@ type RoiTemplate = {
 
 function formulaSummary(f: ValueFormula): string {
   const parts: string[] = [];
-  if (f.hourly_rate != null) {parts.push(`$${f.hourly_rate}/h`);}
-  if (f.baseline_minutes != null) {parts.push(`${f.baseline_minutes}m`);}
-  if (f.rework_pct != null) {parts.push(`${Math.round(f.rework_pct * 100)}% rework`);}
+  if (f.hourly_rate != null) {
+    parts.push(`$${f.hourly_rate}/h`);
+  }
+  if (f.baseline_minutes != null) {
+    parts.push(`${f.baseline_minutes}m`);
+  }
+  if (f.rework_pct != null) {
+    parts.push(`${Math.round(f.rework_pct * 100)}% rework`);
+  }
   return parts.join(' · ') || '—';
 }
 
@@ -34,7 +40,10 @@ export default async function RoiTemplatesPage() {
 
   return (
     <>
-      <PageHeader title="ROI templates" subtitle="Value formulas + attribution overrides per outcome type" />
+      <PageHeader
+        title="ROI templates"
+        subtitle="Value formulas + attribution overrides per outcome type"
+      />
       <Card title="Create template">
         <CreateRoiTemplate />
       </Card>
@@ -59,7 +68,9 @@ export default async function RoiTemplatesPage() {
             match: (t.attribution?.match_on ?? []).join(', ') || '—',
             scope: t.tenantId ? 'tenant' : 'built-in',
             // Built-in packs (tenant_id NULL) are read-only under RLS — no delete control.
-            actions: t.tenantId ? <DeleteButton url={`/api/roi-templates/${t.templateId}`} /> : null,
+            actions: t.tenantId ? (
+              <DeleteButton url={`/api/roi-templates/${t.templateId}`} />
+            ) : null,
           }))}
         />
       </Card>

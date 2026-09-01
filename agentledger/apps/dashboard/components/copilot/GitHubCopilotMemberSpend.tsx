@@ -1,11 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  AreaChartClient,
-  BarChartClient,
-  LineChartClient,
-} from '@/components/charts';
+import { AreaChartClient, BarChartClient, LineChartClient } from '@/components/charts';
 import { Badge, Card, Stat, usd } from '@/components/ui';
 import { fetchCopilotMemberSpend } from '@/lib/api/github-copilot';
 import { copilotNetValueUsd, formatCopilotRoiMultiple } from '@/lib/copilot-metrics';
@@ -55,7 +51,11 @@ function FilterSelect({
 
 function MemberTable({ rows }: { rows: CopilotMemberSpendRow[] }) {
   if (rows.length === 0) {
-    return <p className="py-8 text-center text-sm text-muted">No member spend data for selected filters.</p>;
+    return (
+      <p className="py-8 text-center text-sm text-muted">
+        No member spend data for selected filters.
+      </p>
+    );
   }
   return (
     <div className="overflow-x-auto">
@@ -76,7 +76,10 @@ function MemberTable({ rows }: { rows: CopilotMemberSpendRow[] }) {
             <th className="py-2 pr-3 text-right">Hrs saved (est.)</th>
             <th className="py-2 pr-3 text-right">Value (est.)</th>
             <th className="py-2 pr-3 text-right">Net value (est.)</th>
-            <th className="py-2 pr-3 text-right" title="Estimated value ÷ allocated cost; capped at 10×">
+            <th
+              className="py-2 pr-3 text-right"
+              title="Estimated value ÷ allocated cost; capped at 10×"
+            >
               Multiple (est.)
             </th>
             <th className="py-2">Status</th>
@@ -86,35 +89,43 @@ function MemberTable({ rows }: { rows: CopilotMemberSpendRow[] }) {
           {rows.map((m) => {
             const net = copilotNetValueUsd(m.estimatedValueCreated, m.totalAllocatedCost);
             return (
-            <tr key={m.githubLogin} className="border-b border-edge/40 hover:bg-white/[0.02]">
-              <td className="py-2 pr-3 font-medium text-gray-100">{m.displayName ?? m.githubLogin}</td>
-              <td className="py-2 pr-3 capitalize text-muted">{m.seatStatus.replace('_', ' ')}</td>
-              <td className="py-2 pr-3 text-muted">
-                {m.lastActivityAt ? m.lastActivityAt.slice(0, 10) : '—'}
-              </td>
-              <td className="py-2 pr-3 text-right">{usd(m.seatCost)}</td>
-              <td className="py-2 pr-3 text-right">{Math.round(m.aiCreditsUsed)}</td>
-              <td className="py-2 pr-3 text-right">{usd(m.estimatedCreditCost)}</td>
-              <td className="py-2 pr-3 text-right">{usd(m.allocatedOverageCost)}</td>
-              <td className="py-2 pr-3 text-right font-medium">{usd(m.totalAllocatedCost)}</td>
-              <td className="py-2 pr-3 text-right">{m.linesAccepted}</td>
-              <td className="py-2 pr-3 text-right">{m.chatTurns}</td>
-              <td className="py-2 pr-3 text-right">{m.prSummaryCount}</td>
-              <td className="py-2 pr-3 text-right">{m.estimatedHoursSaved.toFixed(1)}</td>
-              <td className="py-2 pr-3 text-right">{usd(m.estimatedValueCreated)}</td>
-              <td className={`py-2 pr-3 text-right font-medium ${net < 0 ? 'text-neg' : 'text-pos'}`}>
-                {usd(net)}
-              </td>
-              <td
-                className={`py-2 pr-3 text-right ${net < 0 ? 'text-neg' : 'text-muted'}`}
-                title="Value ÷ allocated cost (capped at 10×)"
-              >
-                {formatCopilotRoiMultiple(m.estimatedValueCreated, m.totalAllocatedCost)}
-              </td>
-              <td className="py-2">
-                <Badge tone={STATUS_TONE[m.utilizationStatus] ?? 'info'}>{m.utilizationStatus}</Badge>
-              </td>
-            </tr>
+              <tr key={m.githubLogin} className="border-b border-edge/40 hover:bg-white/[0.02]">
+                <td className="py-2 pr-3 font-medium text-gray-100">
+                  {m.displayName ?? m.githubLogin}
+                </td>
+                <td className="py-2 pr-3 capitalize text-muted">
+                  {m.seatStatus.replace('_', ' ')}
+                </td>
+                <td className="py-2 pr-3 text-muted">
+                  {m.lastActivityAt ? m.lastActivityAt.slice(0, 10) : '—'}
+                </td>
+                <td className="py-2 pr-3 text-right">{usd(m.seatCost)}</td>
+                <td className="py-2 pr-3 text-right">{Math.round(m.aiCreditsUsed)}</td>
+                <td className="py-2 pr-3 text-right">{usd(m.estimatedCreditCost)}</td>
+                <td className="py-2 pr-3 text-right">{usd(m.allocatedOverageCost)}</td>
+                <td className="py-2 pr-3 text-right font-medium">{usd(m.totalAllocatedCost)}</td>
+                <td className="py-2 pr-3 text-right">{m.linesAccepted}</td>
+                <td className="py-2 pr-3 text-right">{m.chatTurns}</td>
+                <td className="py-2 pr-3 text-right">{m.prSummaryCount}</td>
+                <td className="py-2 pr-3 text-right">{m.estimatedHoursSaved.toFixed(1)}</td>
+                <td className="py-2 pr-3 text-right">{usd(m.estimatedValueCreated)}</td>
+                <td
+                  className={`py-2 pr-3 text-right font-medium ${net < 0 ? 'text-neg' : 'text-pos'}`}
+                >
+                  {usd(net)}
+                </td>
+                <td
+                  className={`py-2 pr-3 text-right ${net < 0 ? 'text-neg' : 'text-muted'}`}
+                  title="Value ÷ allocated cost (capped at 10×)"
+                >
+                  {formatCopilotRoiMultiple(m.estimatedValueCreated, m.totalAllocatedCost)}
+                </td>
+                <td className="py-2">
+                  <Badge tone={STATUS_TONE[m.utilizationStatus] ?? 'info'}>
+                    {m.utilizationStatus}
+                  </Badge>
+                </td>
+              </tr>
             );
           })}
         </tbody>
@@ -190,31 +201,47 @@ export function GitHubCopilotMemberSpend({ from, to }: { from: string; to: strin
             {conn.lastSuccessAt && (
               <p>Last sync: {new Date(conn.lastSuccessAt).toLocaleString()}</p>
             )}
-            {conn.lastErrorMessage && (
-              <p className="text-neg">{conn.lastErrorMessage}</p>
-            )}
+            {conn.lastErrorMessage && <p className="text-neg">{conn.lastErrorMessage}</p>}
             <p>{data?.recordsImported ?? 0} records imported</p>
           </div>
         )}
       </div>
 
       {data?.disclaimer && (
-        <p className="rounded-lg border border-edge/80 bg-panel/60 px-4 py-2.5 text-xs text-muted" title={SPEND_TOOLTIP}>
+        <p
+          className="rounded-lg border border-edge/80 bg-panel/60 px-4 py-2.5 text-xs text-muted"
+          title={SPEND_TOOLTIP}
+        >
           {data.disclaimer}
         </p>
       )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
         <FilterSelect label="Month" value={month} options={monthOptions} onChange={setMonth} />
-        <FilterSelect label="User" value={user} options={data?.filters.users ?? []} onChange={setUser} />
+        <FilterSelect
+          label="User"
+          value={user}
+          options={data?.filters.users ?? []}
+          onChange={setUser}
+        />
         <FilterSelect
           label="Utilization"
           value={utilizationStatus}
           options={data?.filters.utilizationStatuses ?? []}
           onChange={setUtilizationStatus}
         />
-        <FilterSelect label="Model" value={model} options={data?.filters.models ?? []} onChange={setModel} />
-        <FilterSelect label="Editor" value={editor} options={data?.filters.editors ?? []} onChange={setEditor} />
+        <FilterSelect
+          label="Model"
+          value={model}
+          options={data?.filters.models ?? []}
+          onChange={setModel}
+        />
+        <FilterSelect
+          label="Editor"
+          value={editor}
+          options={data?.filters.editors ?? []}
+          onChange={setEditor}
+        />
         <FilterSelect
           label="Language"
           value={language}
@@ -248,11 +275,29 @@ export function GitHubCopilotMemberSpend({ from, to }: { from: string; to: strin
       {s && c && (
         <>
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-5">
-            <Stat label="Total Copilot spend (est.)" value={usd(s.totalCopilotSpend)} accent sub="allocated" />
-            <Stat label="Allocated member spend" value={usd(s.allocatedMemberSpend)} sub="estimated" />
+            <Stat
+              label="Total Copilot spend (est.)"
+              value={usd(s.totalCopilotSpend)}
+              accent
+              sub="allocated"
+            />
+            <Stat
+              label="Allocated member spend"
+              value={usd(s.allocatedMemberSpend)}
+              sub="estimated"
+            />
             <Stat label="Active paid seats" value={String(s.activePaidSeats)} tone="pos" />
-            <Stat label="Inactive paid seats" value={String(s.inactivePaidSeats)} tone={s.inactivePaidSeats > 0 ? 'warn' : 'default'} />
-            <Stat label="Est. wasted spend" value={usd(s.estimatedWastedSpend)} tone="warn" sub="inactive seats" />
+            <Stat
+              label="Inactive paid seats"
+              value={String(s.inactivePaidSeats)}
+              tone={s.inactivePaidSeats > 0 ? 'warn' : 'default'}
+            />
+            <Stat
+              label="Est. wasted spend"
+              value={usd(s.estimatedWastedSpend)}
+              tone="warn"
+              sub="inactive seats"
+            />
             <Stat label="Avg cost / active member" value={usd(s.avgCostPerActiveMember)} />
             <Stat label="Avg cost / engaged member" value={usd(s.avgCostPerEngagedMember)} />
             <Stat
@@ -327,7 +372,16 @@ export function GitHubCopilotMemberSpend({ from, to }: { from: string; to: strin
               <div className="divide-y divide-edge/60">
                 {data!.findings.map((f) => (
                   <div key={f.id} className="flex gap-3 py-3 first:pt-0 last:pb-0">
-                    <Badge tone={f.severity === 'critical' ? 'neg' : f.severity === 'warning' ? 'warn' : 'info'} dot>
+                    <Badge
+                      tone={
+                        f.severity === 'critical'
+                          ? 'neg'
+                          : f.severity === 'warning'
+                            ? 'warn'
+                            : 'info'
+                      }
+                      dot
+                    >
                       {f.severity}
                     </Badge>
                     <div>

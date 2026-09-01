@@ -26,7 +26,9 @@ export default async function VendorDetailPage({
     proxyApi(`/v1/analytics/vendor-billing?${qs.toString()}`),
     proxyApi(`/v1/analytics/users?${qs.toString()}`),
     proxyApi(`/v1/analytics/model-mix?${qs.toString()}`),
-    vendorId === 'cursor' ? proxyApi(`/v1/analytics/cursor-spend?${qs.toString()}`) : Promise.resolve({ ok: false, data: null }),
+    vendorId === 'cursor'
+      ? proxyApi(`/v1/analytics/cursor-spend?${qs.toString()}`)
+      : Promise.resolve({ ok: false, data: null }),
   ]);
 
   const billing =

@@ -43,7 +43,9 @@ export function ToolAllowlistPanel({
 
   async function addEntry(e: FormEvent) {
     e.preventDefault();
-    if (!canManage || !agentId || !toolName.trim()) {return;}
+    if (!canManage || !agentId || !toolName.trim()) {
+      return;
+    }
     setBusy(true);
     setErr(null);
     const res = await fetch('/api/agent-tool-allowlist', {
@@ -57,7 +59,10 @@ export function ToolAllowlistPanel({
     });
     setBusy(false);
     if (!res.ok) {
-      const body = (await res.json().catch(() => null)) as { message?: string; error?: string } | null;
+      const body = (await res.json().catch(() => null)) as {
+        message?: string;
+        error?: string;
+      } | null;
       setErr(body?.message ?? body?.error ?? `Create failed (${res.status})`);
       return;
     }
@@ -67,7 +72,9 @@ export function ToolAllowlistPanel({
   }
 
   async function removeEntry(allowId: string) {
-    if (!canManage) {return;}
+    if (!canManage) {
+      return;
+    }
     setBusyId(allowId);
     setErr(null);
     const res = await fetch(`/api/agent-tool-allowlist/${encodeURIComponent(allowId)}`, {
@@ -75,7 +82,10 @@ export function ToolAllowlistPanel({
     });
     setBusyId(null);
     if (!res.ok) {
-      const body = (await res.json().catch(() => null)) as { message?: string; error?: string } | null;
+      const body = (await res.json().catch(() => null)) as {
+        message?: string;
+        error?: string;
+      } | null;
       setErr(body?.message ?? body?.error ?? `Delete failed (${res.status})`);
       return;
     }
@@ -85,8 +95,8 @@ export function ToolAllowlistPanel({
   return (
     <div className="space-y-4">
       <p className="text-xs text-muted">
-        Deny-by-default: only tools on this list are permitted for an agent. Unauthorized use raises a
-        risk event and increases that agent&apos;s risk exposure.
+        Deny-by-default: only tools on this list are permitted for an agent. Unauthorized use raises
+        a risk event and increases that agent&apos;s risk exposure.
       </p>
 
       {canManage && (

@@ -1,6 +1,9 @@
 import Link from 'next/link';
 import { GitHubCopilotDetail } from '@/components/copilot/GitHubCopilotDetail';
-import { CursorPlatformDetail, type CursorSpendSummary } from '@/components/overview/CursorPlatformDetail';
+import {
+  CursorPlatformDetail,
+  type CursorSpendSummary,
+} from '@/components/overview/CursorPlatformDetail';
 import { VendorSpendCell } from '@/components/VendorSpendCell';
 import { VendorSpendPie } from '@/components/VendorSpendPie';
 import { Card, DataTable, PageHeader, Stat, num, usd } from '@/components/ui';
@@ -56,7 +59,10 @@ export function VendorDetailSections({
 
   const vendorUsers = users
     .filter((u) => (u.vendor_spend?.[vendorId]?.total_usd ?? 0) > 0)
-    .sort((a, b) => (b.vendor_spend?.[vendorId]?.total_usd ?? 0) - (a.vendor_spend?.[vendorId]?.total_usd ?? 0));
+    .sort(
+      (a, b) =>
+        (b.vendor_spend?.[vendorId]?.total_usd ?? 0) - (a.vendor_spend?.[vendorId]?.total_usd ?? 0),
+    );
 
   return (
     <>
@@ -80,7 +86,10 @@ export function VendorDetailSections({
       </Card>
 
       {vendorId === 'cursor' && (
-        <Card title="Cursor usage detail" subtitle="Seat licenses, metered overage, and included pool">
+        <Card
+          title="Cursor usage detail"
+          subtitle="Seat licenses, metered overage, and included pool"
+        >
           <CursorPlatformDetail
             from={from}
             to={to}
@@ -125,7 +134,9 @@ export function VendorDetailSections({
 
       <Card title="Users" subtitle={`Spend attributed to ${label}`}>
         {vendorUsers.length === 0 ? (
-          <p className="py-4 text-center text-sm text-muted">No user spend for this vendor in range.</p>
+          <p className="py-4 text-center text-sm text-muted">
+            No user spend for this vendor in range.
+          </p>
         ) : (
           <DataTable
             columns={[
@@ -149,9 +160,13 @@ export function VendorDetailSections({
             }))}
             footerRows={[
               {
-                user: <span className="text-xs uppercase tracking-wide text-muted">Grand total</span>,
+                user: (
+                  <span className="text-xs uppercase tracking-wide text-muted">Grand total</span>
+                ),
                 team: '',
-                spend: usd(vendorUsers.reduce((s, u) => s + (u.vendor_spend?.[vendorId]?.total_usd ?? 0), 0)),
+                spend: usd(
+                  vendorUsers.reduce((s, u) => s + (u.vendor_spend?.[vendorId]?.total_usd ?? 0), 0),
+                ),
                 detail: '',
               },
             ]}
@@ -192,8 +207,12 @@ export function buildModelTableRows(
   }
 
   for (const m of models) {
-    if (vendorFilter && !providerMatchesVendor(m.provider, vendorFilter)) {continue;}
-    if (m.provider.toLowerCase() === 'cursor' || cursorByModel.has(m.model)) {continue;}
+    if (vendorFilter && !providerMatchesVendor(m.provider, vendorFilter)) {
+      continue;
+    }
+    if (m.provider.toLowerCase() === 'cursor' || cursorByModel.has(m.model)) {
+      continue;
+    }
     rows.push({
       model: m.model || '(default)',
       metered_overage: m.cost_usd,

@@ -39,7 +39,10 @@ export function ExecutiveReportExport({
       const qs = new URLSearchParams({ from, to, format });
       const res = await fetch(`/api/reports/executive?${qs.toString()}`);
       if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { message?: string; error?: string } | null;
+        const body = (await res.json().catch(() => null)) as {
+          message?: string;
+          error?: string;
+        } | null;
         throw new Error(body?.message ?? body?.error ?? `Export failed (${res.status})`);
       }
       const blob = await res.blob();
@@ -66,7 +69,12 @@ export function ExecutiveReportExport({
         <button type="button" className={BTN} disabled={!!loading} onClick={() => download('pdf')}>
           {loading === 'pdf' ? 'Exporting…' : 'Export report (PDF)'}
         </button>
-        <button type="button" className={BTN_SECONDARY} disabled={!!loading} onClick={() => download('xlsx')}>
+        <button
+          type="button"
+          className={BTN_SECONDARY}
+          disabled={!!loading}
+          onClick={() => download('xlsx')}
+        >
           {loading === 'xlsx' ? '…' : 'XLSX'}
         </button>
       </div>

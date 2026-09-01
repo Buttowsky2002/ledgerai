@@ -23,7 +23,9 @@ function AcceptInviteForm() {
 
   const [invite, setInvite] = useState<InviteDetails | null>(null);
   const [displayName, setDisplayName] = useState('');
-  const [state, setState] = useState<'loading' | 'ready' | 'submitting' | 'done' | 'error'>('loading');
+  const [state, setState] = useState<'loading' | 'ready' | 'submitting' | 'done' | 'error'>(
+    'loading',
+  );
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -57,7 +59,9 @@ function AcceptInviteForm() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (state !== 'ready') {return;}
+    if (state !== 'ready') {
+      return;
+    }
     setState('submitting');
     setError(null);
 
@@ -108,7 +112,9 @@ function AcceptInviteForm() {
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <h2 className="text-xl font-semibold text-white">You have been invited</h2>
-            <p className="mt-1 text-sm text-muted">Set up your profile to get started with BadgerIQ.</p>
+            <p className="mt-1 text-sm text-muted">
+              Set up your profile to get started with BadgerIQ.
+            </p>
           </div>
 
           <div className="space-y-2 rounded-md border border-edge bg-panel p-4 text-sm">

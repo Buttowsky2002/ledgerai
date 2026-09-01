@@ -1,8 +1,14 @@
 import { usd } from './ui';
 
 /** Two-line vendor cell: seat + overage. */
-export function VendorSpendCell({ slice }: { slice?: { seat_usd: number; overage_usd: number; total_usd: number } }) {
-  if (!slice || slice.total_usd <= 0) {return <>—</>;}
+export function VendorSpendCell({
+  slice,
+}: {
+  slice?: { seat_usd: number; overage_usd: number; total_usd: number };
+}) {
+  if (!slice || slice.total_usd <= 0) {
+    return <>—</>;
+  }
   return (
     <div className="space-y-0.5 text-right text-xs leading-tight">
       {slice.seat_usd > 0 && (

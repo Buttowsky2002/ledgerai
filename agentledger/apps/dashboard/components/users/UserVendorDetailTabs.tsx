@@ -24,8 +24,17 @@ function modelTableRows(usage: VendorUsageSlice | undefined) {
   }));
 }
 
-export function UserVendorDetailTabs({ userId, from, to, vendors, vendorSpend, vendorUsage }: Props) {
-  const activeVendors = vendors.filter((v) => (vendorSpend[v]?.total_usd ?? 0) > 0 || (vendorUsage[v]?.calls ?? 0) > 0);
+export function UserVendorDetailTabs({
+  userId,
+  from,
+  to,
+  vendors,
+  vendorSpend,
+  vendorUsage,
+}: Props) {
+  const activeVendors = vendors.filter(
+    (v) => (vendorSpend[v]?.total_usd ?? 0) > 0 || (vendorUsage[v]?.calls ?? 0) > 0,
+  );
   const tabs = activeVendors.length > 0 ? activeVendors : vendors;
   const [tab, setTab] = useState(tabs[0] ?? 'cursor');
 
@@ -43,7 +52,9 @@ export function UserVendorDetailTabs({ userId, from, to, vendors, vendorSpend, v
             type="button"
             onClick={() => setTab(v)}
             className={`rounded-md px-3 py-1.5 text-sm ${
-              v === tab ? 'bg-accent/20 text-white ring-1 ring-inset ring-accent/30' : 'border border-edge text-muted hover:bg-white/5'
+              v === tab
+                ? 'bg-accent/20 text-white ring-1 ring-inset ring-accent/30'
+                : 'border border-edge text-muted hover:bg-white/5'
             }`}
           >
             {vendorShortLabel(v)}
@@ -92,7 +103,12 @@ export function UserVendorDetailTabs({ userId, from, to, vendors, vendorSpend, v
               ? [
                   { key: 'model', label: 'Model' },
                   { key: 'metered', label: 'Metered overage', align: 'right', width: '9rem' },
-                  { key: 'included', label: 'Included usage value', align: 'right', width: '11rem' },
+                  {
+                    key: 'included',
+                    label: 'Included usage value',
+                    align: 'right',
+                    width: '11rem',
+                  },
                   { key: 'calls', label: 'Events', align: 'right', width: '6rem' },
                 ]
               : [

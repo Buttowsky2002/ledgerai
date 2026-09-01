@@ -44,7 +44,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
                   role="status"
                   className="mb-4 rounded border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm text-amber-300"
                 >
-                  <strong>Demo mode</strong> — seeded sample data for evaluation, not a live deployment.
+                  <strong>Demo mode</strong> — seeded sample data for evaluation, not a live
+                  deployment.
                 </div>
               )}
               {children}

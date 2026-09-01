@@ -39,7 +39,9 @@ export function modelFamilyLabel(platform: string, model: string): string {
   const p = platform.trim().toLowerCase();
   const m = model.trim().toLowerCase();
   for (const rule of FAMILY_RULES) {
-    if (rule.test(p, m)) {return rule.label;}
+    if (rule.test(p, m)) {
+      return rule.label;
+    }
   }
   if (p) {
     return p
@@ -57,7 +59,5 @@ export function discoverModelFamilies(rows: ModelUsageRow[]): string[] {
     const label = modelFamilyLabel(row.platform, row.model);
     spendByFamily.set(label, (spendByFamily.get(label) ?? 0) + (row.spend_usd ?? 0));
   }
-  return [...spendByFamily.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .map(([label]) => label);
+  return [...spendByFamily.entries()].sort((a, b) => b[1] - a[1]).map(([label]) => label);
 }

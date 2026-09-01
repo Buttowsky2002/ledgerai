@@ -51,8 +51,11 @@ export function OverviewAiSourcesPanel({
 
   function setView(next: 'users' | 'models') {
     const params = new URLSearchParams(searchParams.toString());
-    if (next === 'models') {params.set('aiView', 'models');}
-    else {params.delete('aiView');}
+    if (next === 'models') {
+      params.set('aiView', 'models');
+    } else {
+      params.delete('aiView');
+    }
     router.push(`/?${params.toString()}`, { scroll: false });
   }
 
@@ -137,12 +140,17 @@ export function OverviewAiSourcesPanel({
             }))}
             footerRows={[
               {
-                user: <span className="text-xs uppercase tracking-wide text-muted">Grand total</span>,
+                user: (
+                  <span className="text-xs uppercase tracking-wide text-muted">Grand total</span>
+                ),
                 email: '',
                 team: '',
                 total: usd(sortedUsers.reduce((s, u) => s + userVendorTotal(u), 0)),
                 detail: (
-                  <Link href={`/users?from=${from}&to=${to}`} className="text-xs text-accent hover:underline">
+                  <Link
+                    href={`/users?from=${from}&to=${to}`}
+                    className="text-xs text-accent hover:underline"
+                  >
                     Directory →
                   </Link>
                 ),
@@ -168,7 +176,9 @@ export function OverviewAiSourcesPanel({
           }))}
           footerRows={[
             {
-              model: <span className="text-xs uppercase tracking-wide text-muted">Grand total</span>,
+              model: (
+                <span className="text-xs uppercase tracking-wide text-muted">Grand total</span>
+              ),
               metered: usd(modelRows.reduce((s, r) => s + r.metered_overage, 0)),
               included: usd(modelRows.reduce((s, r) => s + r.included_value, 0)),
               calls: num(modelRows.reduce((s, r) => s + r.calls, 0)),

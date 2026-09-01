@@ -19,7 +19,10 @@ export function sumFixedOverhead(rows: FixedCostSliceRow[]): number {
  * Do not use v_total_cost_of_ai.total for the headline — that view's metered side
  * is gateway-only and undercounts vs analytics/spend.
  */
-export function combinedAiCost(meteredUsd: number, fixedRows: FixedCostSliceRow[]): AiCostBreakdown {
+export function combinedAiCost(
+  meteredUsd: number,
+  fixedRows: FixedCostSliceRow[],
+): AiCostBreakdown {
   const fixed = sumFixedOverhead(fixedRows);
   return {
     attributable: meteredUsd,

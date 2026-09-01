@@ -63,15 +63,28 @@ export default async function CisoPage() {
         subtitle="Agent governance posture — tool/MCP risk events, allowlists, and NHI blast radius"
       />
       <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-5">
-        <Stat label="Agents at risk" value={num(agentsAtRisk)} sub={`${num(rows.length)} with governed events`} />
+        <Stat
+          label="Agents at risk"
+          value={num(agentsAtRisk)}
+          sub={`${num(rows.length)} with governed events`}
+        />
         <Stat label="Governed risk events" value={num(totalEvents)} />
         <Stat label="High severity" value={num(highSeverity)} />
-        <Stat label="Peak risk exposure" value={pct(peakExposure)} sub="discounts risk-adjusted ROI" />
-        <Stat label="Agents with active NHI" value={num(activeCredAgents)} sub={`${num(blastRows.length)} agents`} />
+        <Stat
+          label="Peak risk exposure"
+          value={pct(peakExposure)}
+          sub="discounts risk-adjusted ROI"
+        />
+        <Stat
+          label="Agents with active NHI"
+          value={num(activeCredAgents)}
+          sub={`${num(blastRows.length)} agents`}
+        />
       </div>
       <p className="mb-6 text-xs text-muted">
-        Risk events are raised when an agent uses a tool/MCP outside its deny-by-default allowlist. Each agent&apos;s
-        risk exposure (unauthorized ÷ total tool calls) lowers its risk-adjusted ROI in the CFO view.
+        Risk events are raised when an agent uses a tool/MCP outside its deny-by-default allowlist.
+        Each agent&apos;s risk exposure (unauthorized ÷ total tool calls) lowers its risk-adjusted
+        ROI in the CFO view.
       </p>
 
       <Card title="Agent risk register">

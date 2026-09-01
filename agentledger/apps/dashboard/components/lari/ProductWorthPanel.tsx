@@ -4,7 +4,12 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Badge, BadgeTone, Card, usd } from '@/components/ui';
 import { fetchProductWorth } from '@/lib/api/lari';
-import type { ProductWorthEntry, ProductWorthResponse, ProductWorthVerdict, SpendTrend } from '@/types/lari';
+import type {
+  ProductWorthEntry,
+  ProductWorthResponse,
+  ProductWorthVerdict,
+  SpendTrend,
+} from '@/types/lari';
 
 const VERDICT_META: Record<ProductWorthVerdict, { label: string; tone: BadgeTone }> = {
   worth_it: { label: 'Worth it', tone: 'pos' },
@@ -78,10 +83,14 @@ export function ProductWorthPanel({ from, to }: { from: string; to: string }) {
         }
       })
       .catch(() => {
-        if (!cancelled) {setError(true);}
+        if (!cancelled) {
+          setError(true);
+        }
       })
       .finally(() => {
-        if (!cancelled) {setLoading(false);}
+        if (!cancelled) {
+          setLoading(false);
+        }
       });
     return () => {
       cancelled = true;
@@ -137,7 +146,10 @@ export function ProductWorthPanel({ from, to }: { from: string; to: string }) {
                     <Badge tone={p.spendTrend === 'up' ? 'warn' : 'neutral'}>{trendLabel}</Badge>
                   )}
                   {p.connectOutcomesPrompt && (
-                    <Link href="/settings/connectors" className="text-xs text-accent hover:underline">
+                    <Link
+                      href="/settings/connectors"
+                      className="text-xs text-accent hover:underline"
+                    >
                       Connect outcomes →
                     </Link>
                   )}
@@ -156,10 +168,7 @@ export function ProductWorthPanel({ from, to }: { from: string; to: string }) {
                   <p className="mt-2 text-xs text-accent">
                     Suggested budget: {usd(p.recommendedBudgetUsd)}/mo
                     {p.monthlyRunRateUsd !== p.recommendedBudgetUsd && (
-                      <span className="text-muted">
-                        {' '}
-                        (run-rate {usd(p.monthlyRunRateUsd)}/mo)
-                      </span>
+                      <span className="text-muted"> (run-rate {usd(p.monthlyRunRateUsd)}/mo)</span>
                     )}
                   </p>
                 )}

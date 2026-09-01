@@ -29,7 +29,9 @@ export const dynamic = 'force-dynamic';
 
 function liveRefreshIntervalMs(): number {
   const raw = env('BADGERIQ_DASHBOARD_LIVE_REFRESH_MS');
-  if (!raw) {return 30_000;}
+  if (!raw) {
+    return 30_000;
+  }
   const n = Number.parseInt(raw, 10);
   return Number.isFinite(n) && n >= 0 ? n : 30_000;
 }
@@ -88,14 +90,62 @@ const REC: Record<
   Recommendation,
   { label: string; tone: BadgeTone; action: boolean; priority: number; hint: string }
 > = {
-  pause: { label: 'Pause', tone: 'neg', action: true, priority: 0, hint: 'Negative net return — halt spend' },
-  retire: { label: 'Retire', tone: 'neg', action: true, priority: 0, hint: 'No attributable value — decommission' },
-  investigate: { label: 'Investigate', tone: 'warn', action: true, priority: 1, hint: 'Anomalous cost or risk signal' },
-  require_approval: { label: 'Require approval', tone: 'warn', action: true, priority: 1, hint: 'Governance gate before scaling' },
-  optimize: { label: 'Optimize', tone: 'warn', action: true, priority: 2, hint: 'High cost relative to value' },
-  improve_evidence: { label: 'Improve evidence', tone: 'info', action: true, priority: 3, hint: 'Attribution confidence below threshold' },
-  scale: { label: 'Scale', tone: 'pos', action: true, priority: 4, hint: 'Strong return — expand deployment' },
-  maintain: { label: 'Maintain', tone: 'neutral', action: false, priority: 5, hint: 'Healthy — no action needed' },
+  pause: {
+    label: 'Pause',
+    tone: 'neg',
+    action: true,
+    priority: 0,
+    hint: 'Negative net return — halt spend',
+  },
+  retire: {
+    label: 'Retire',
+    tone: 'neg',
+    action: true,
+    priority: 0,
+    hint: 'No attributable value — decommission',
+  },
+  investigate: {
+    label: 'Investigate',
+    tone: 'warn',
+    action: true,
+    priority: 1,
+    hint: 'Anomalous cost or risk signal',
+  },
+  require_approval: {
+    label: 'Require approval',
+    tone: 'warn',
+    action: true,
+    priority: 1,
+    hint: 'Governance gate before scaling',
+  },
+  optimize: {
+    label: 'Optimize',
+    tone: 'warn',
+    action: true,
+    priority: 2,
+    hint: 'High cost relative to value',
+  },
+  improve_evidence: {
+    label: 'Improve evidence',
+    tone: 'info',
+    action: true,
+    priority: 3,
+    hint: 'Attribution confidence below threshold',
+  },
+  scale: {
+    label: 'Scale',
+    tone: 'pos',
+    action: true,
+    priority: 4,
+    hint: 'Strong return — expand deployment',
+  },
+  maintain: {
+    label: 'Maintain',
+    tone: 'neutral',
+    action: false,
+    priority: 5,
+    hint: 'Healthy — no action needed',
+  },
 };
 
 const BAR_BG: Record<BadgeTone, string> = {
@@ -127,7 +177,14 @@ function ConfMeter({ score }: { score: number }) {
 export default async function OverviewPage({
   searchParams,
 }: {
-  searchParams: { from?: string; to?: string; source?: string; vendor?: string; range?: string; aiView?: string };
+  searchParams: {
+    from?: string;
+    to?: string;
+    source?: string;
+    vendor?: string;
+    range?: string;
+    aiView?: string;
+  };
 }) {
   const source = searchParams.source || undefined;
   const api = apiClient();
@@ -144,8 +201,17 @@ export default async function OverviewPage({
 
   type FixedCostVendorRow = { vendor?: string | null; cost_usd?: number | string | null };
 
-  const [spend, economics, costByUser, platformSpend, modelMix, totalCostRows, fixedCostRows, usersRes, vendorBillingRes] =
-    await Promise.all([
+  const [
+    spend,
+    economics,
+    costByUser,
+    platformSpend,
+    modelMix,
+    totalCostRows,
+    fixedCostRows,
+    usersRes,
+    vendorBillingRes,
+  ] = await Promise.all([
     fetchData(
       api.GET('/v1/analytics/spend', { params: { query: { from, to } } }),
       [],
@@ -179,12 +245,16 @@ export default async function OverviewPage({
     (async () => {
       const qs = new URLSearchParams({ from, to }).toString();
       const res = await proxyApi(`/v1/analytics/users?${qs}`);
-      return res.ok && res.data && typeof res.data === 'object' ? res.data : { users: [], vendors: [] };
+      return res.ok && res.data && typeof res.data === 'object'
+        ? res.data
+        : { users: [], vendors: [] };
     })(),
     (async () => {
       const qs = new URLSearchParams({ from, to }).toString();
       const res = await proxyApi(`/v1/analytics/vendor-billing?${qs}`);
-      return res.ok && res.data && typeof res.data === 'object' ? res.data : { vendors: [], total_cost_of_ai: 0 };
+      return res.ok && res.data && typeof res.data === 'object'
+        ? res.data
+        : { vendors: [], total_cost_of_ai: 0 };
     })(),
   ]);
 
@@ -275,11 +345,7 @@ export default async function OverviewPage({
         actions={
           <div className="flex flex-wrap items-center gap-4">
             <OverviewLiveRefresh intervalMs={liveRefreshIntervalMs()} />
-            <Suspense
-              fallback={
-                <div className="text-sm text-muted">Export report…</div>
-              }
-            >
+            <Suspense fallback={<div className="text-sm text-muted">Export report…</div>}>
               <ExecutiveReportExport from={from} to={to} bounds={dataBounds} />
             </Suspense>
           </div>
@@ -345,9 +411,24 @@ export default async function OverviewPage({
         <OverviewAiSourcesPanel
           from={from}
           to={to}
-          users={((usersRes as { users?: UserRow[] }).users ?? []) as Parameters<typeof OverviewAiSourcesPanel>[0]['users']}
+          users={
+            ((usersRes as { users?: UserRow[] }).users ?? []) as Parameters<
+              typeof OverviewAiSourcesPanel
+            >[0]['users']
+          }
           models={models}
-          orgVendors={(vendorBillingRes as { vendors?: { vendor: string; seat_usd: number; budget_overage_usd: number; total_usd: number }[] }).vendors ?? []}
+          orgVendors={
+            (
+              vendorBillingRes as {
+                vendors?: {
+                  vendor: string;
+                  seat_usd: number;
+                  budget_overage_usd: number;
+                  total_usd: number;
+                }[];
+              }
+            ).vendors ?? []
+          }
           cursorSpend={cursorSpend}
         />
       </Suspense>
@@ -365,7 +446,9 @@ export default async function OverviewPage({
       <Card
         title="Recommended actions"
         subtitle="LARI engine · portfolio-wide"
-        actions={<Badge tone={actions.length > 0 ? 'warn' : 'pos'}>{num(actions.length)} flagged</Badge>}
+        actions={
+          <Badge tone={actions.length > 0 ? 'warn' : 'pos'}>{num(actions.length)} flagged</Badge>
+        }
       >
         {actions.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted">
@@ -394,7 +477,9 @@ export default async function OverviewPage({
                     <div className={`num text-sm font-medium ${roiTone(r.risk_adjusted_roi)}`}>
                       {usd(r.risk_adjusted_roi)}
                     </div>
-                    <div className="text-[11px] uppercase tracking-wide text-muted">risk-adj ROI</div>
+                    <div className="text-[11px] uppercase tracking-wide text-muted">
+                      risk-adj ROI
+                    </div>
                   </div>
                 </div>
               );

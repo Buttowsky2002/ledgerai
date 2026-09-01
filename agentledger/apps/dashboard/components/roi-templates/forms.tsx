@@ -5,7 +5,8 @@ import { FormEvent, useState } from 'react';
 
 const FIELD =
   'rounded border border-edge bg-ink px-2 py-1.5 text-sm text-gray-100 placeholder:text-muted focus:border-accent focus:outline-none';
-const BTN = 'rounded bg-accent/20 px-3 py-1.5 text-sm text-white hover:bg-accent/30 disabled:opacity-50';
+const BTN =
+  'rounded bg-accent/20 px-3 py-1.5 text-sm text-white hover:bg-accent/30 disabled:opacity-50';
 
 const OUTCOME_TYPES = ['pr_merged', 'ticket_resolved', 'issue_closed'];
 const SOURCE_SYSTEMS = ['github', 'jira', 'zendesk', 'manual', 'api'];
@@ -38,10 +39,14 @@ export function CreateRoiTemplate() {
       hourly_rate: Number(hourlyRate),
       baseline_minutes: Number(baselineMinutes),
     };
-    if (reworkPct !== '') {valueFormula.rework_pct = Number(reworkPct);}
+    if (reworkPct !== '') {
+      valueFormula.rework_pct = Number(reworkPct);
+    }
 
     const attribution: Record<string, unknown> = { match_on: matchOn };
-    if (windowMinutes !== '') {attribution.window_minutes = Number(windowMinutes);}
+    if (windowMinutes !== '') {
+      attribution.window_minutes = Number(windowMinutes);
+    }
 
     const res = await fetch('/api/roi-templates', {
       method: 'POST',
@@ -63,12 +68,34 @@ export function CreateRoiTemplate() {
   return (
     <form onSubmit={submit} className="space-y-4">
       <div className="flex flex-wrap items-end gap-2">
-        <input className={FIELD} placeholder="Template name" value={name} onChange={(e) => setName(e.target.value)} required />
-        <select className={FIELD} value={outcomeType} onChange={(e) => setOutcomeType(e.target.value)}>
-          {OUTCOME_TYPES.map((o) => <option key={o} value={o}>{o}</option>)}
+        <input
+          className={FIELD}
+          placeholder="Template name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+        />
+        <select
+          className={FIELD}
+          value={outcomeType}
+          onChange={(e) => setOutcomeType(e.target.value)}
+        >
+          {OUTCOME_TYPES.map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
         </select>
-        <select className={FIELD} value={sourceSystem} onChange={(e) => setSourceSystem(e.target.value)}>
-          {SOURCE_SYSTEMS.map((s) => <option key={s} value={s}>{s}</option>)}
+        <select
+          className={FIELD}
+          value={sourceSystem}
+          onChange={(e) => setSourceSystem(e.target.value)}
+        >
+          {SOURCE_SYSTEMS.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
         </select>
       </div>
 
@@ -76,15 +103,40 @@ export function CreateRoiTemplate() {
         <legend className="mb-1 text-xs uppercase tracking-wide text-muted">Value formula</legend>
         <label className="flex flex-col text-xs text-muted">
           hourly_rate
-          <input className={FIELD} type="number" step="0.01" min="0" value={hourlyRate} onChange={(e) => setHourlyRate(e.target.value)} required />
+          <input
+            className={FIELD}
+            type="number"
+            step="0.01"
+            min="0"
+            value={hourlyRate}
+            onChange={(e) => setHourlyRate(e.target.value)}
+            required
+          />
         </label>
         <label className="flex flex-col text-xs text-muted">
           baseline_minutes
-          <input className={FIELD} type="number" step="1" min="0" value={baselineMinutes} onChange={(e) => setBaselineMinutes(e.target.value)} required />
+          <input
+            className={FIELD}
+            type="number"
+            step="1"
+            min="0"
+            value={baselineMinutes}
+            onChange={(e) => setBaselineMinutes(e.target.value)}
+            required
+          />
         </label>
         <label className="flex flex-col text-xs text-muted">
           rework_pct (0–1)
-          <input className={FIELD} type="number" step="0.01" min="0" max="1" value={reworkPct} onChange={(e) => setReworkPct(e.target.value)} placeholder="optional" />
+          <input
+            className={FIELD}
+            type="number"
+            step="0.01"
+            min="0"
+            max="1"
+            value={reworkPct}
+            onChange={(e) => setReworkPct(e.target.value)}
+            placeholder="optional"
+          />
         </label>
       </fieldset>
 
@@ -92,12 +144,23 @@ export function CreateRoiTemplate() {
         <legend className="mb-1 text-xs uppercase tracking-wide text-muted">Attribution</legend>
         <label className="flex flex-col text-xs text-muted">
           window_minutes
-          <input className={FIELD} type="number" step="1" min="1" value={windowMinutes} onChange={(e) => setWindowMinutes(e.target.value)} />
+          <input
+            className={FIELD}
+            type="number"
+            step="1"
+            min="1"
+            value={windowMinutes}
+            onChange={(e) => setWindowMinutes(e.target.value)}
+          />
         </label>
         <div className="flex items-center gap-3 text-sm text-gray-100">
           {MATCH_ON.map((m) => (
             <label key={m} className="flex items-center gap-1">
-              <input type="checkbox" checked={matchOn.includes(m)} onChange={() => toggleMatch(m)} />
+              <input
+                type="checkbox"
+                checked={matchOn.includes(m)}
+                onChange={() => toggleMatch(m)}
+              />
               {m}
             </label>
           ))}
@@ -105,7 +168,9 @@ export function CreateRoiTemplate() {
       </fieldset>
 
       <div className="flex items-center gap-2">
-        <button className={BTN} disabled={busy}>Create template</button>
+        <button className={BTN} disabled={busy}>
+          Create template
+        </button>
         {err && <span className="text-xs text-neg">{err}</span>}
       </div>
     </form>

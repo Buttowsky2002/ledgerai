@@ -33,9 +33,7 @@ export function BlastRadiusTable({ rows }: { rows: BlastRadiusRow[] }) {
               <td className="py-2 pr-3 text-gray-100">
                 <div>{r.agentName}</div>
                 <div className="font-mono text-xs text-muted">{r.agentId.slice(0, 8)}…</div>
-                {r.decommissionedAt && (
-                  <div className="text-xs text-neg">decommissioned</div>
-                )}
+                {r.decommissionedAt && <div className="text-xs text-neg">decommissioned</div>}
               </td>
               <td className="py-2 pr-3 capitalize text-muted">{r.approvalStatus}</td>
               <td className="py-2 pr-3 text-right text-gray-100">{r.activeCredentials}</td>

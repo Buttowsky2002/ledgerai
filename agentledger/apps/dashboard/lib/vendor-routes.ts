@@ -16,7 +16,9 @@ export function vendorToProviders(vendor: string): string[] {
 
 export function providerMatchesVendor(provider: string, vendor: string): boolean {
   const p = provider.trim().toLowerCase();
-  return vendorToProviders(vendor).some((slug) => p === slug.toLowerCase() || p.includes(slug.toLowerCase()));
+  return vendorToProviders(vendor).some(
+    (slug) => p === slug.toLowerCase() || p.includes(slug.toLowerCase()),
+  );
 }
 
 export function vendorDetailHref(vendor: string, from: string, to: string): string {

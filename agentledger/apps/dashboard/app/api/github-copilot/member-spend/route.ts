@@ -6,7 +6,9 @@ export async function GET(req: NextRequest) {
   const path = qs ? `/v1/github-copilot/member-spend?${qs}` : '/v1/github-copilot/member-spend';
   const { ok, status, data } = await proxyApi(path);
   if (!ok) {
-    return NextResponse.json(data ?? { error: 'member spend failed' }, { status: status >= 400 ? status : 502 });
+    return NextResponse.json(data ?? { error: 'member spend failed' }, {
+      status: status >= 400 ? status : 502,
+    });
   }
   return NextResponse.json(data);
 }
