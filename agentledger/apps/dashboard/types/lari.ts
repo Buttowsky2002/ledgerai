@@ -38,6 +38,8 @@ export interface CfoViewSummary {
   costBasis: CostBasisMode;
   forecastDays: number;
   observedPeriodDays: number;
+  observedFixedCostUsd: number;
+  monthlySeatRunRateUsd: number;
 }
 
 export interface CfoViewMonthly {

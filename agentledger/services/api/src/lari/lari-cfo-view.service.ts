@@ -21,7 +21,14 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 
 import { getTenantId } from '../tenant/tenant-context';
-import { sumProratedMonthlyCosts } from '../fixed-costs/fixed-cost-prorate';
+import {
+  billingMonthsInRange,
+  currentMonthlySeatRunRate,
+  forecastFixedSeatCost,
+  periodSeatTotalForRange,
+  seatLookupFromDate,
+  type FixedCostSeatRow,
+} from '../fixed-costs/fixed-cost-prorate';
 
 import {
   CostBasisMode,
@@ -219,7 +226,7 @@ export class LariCfoViewService {
 
     const [
       subscriptionCost,
-      fixedCostObserved,
+      fixedCostSnapshot,
       seatStats,
       copilotSpend,
       cursorSpendSummary,
@@ -238,7 +245,14 @@ export class LariCfoViewService {
       this.cursorProductivity.getProductivitySummary(tenantId, r.from, r.to),
     ]);
 
-    const fixedCostBase = fixedCostObserved > 0 ? fixedCostObserved : subscriptionCost;
+    const fixedCostBase =
+      fixedCostSnapshot.periodTotal > 0 ? fixedCostSnapshot.periodTotal : subscriptionCost;
+    const monthlySeatRunRate =
+      fixedCostSnapshot.monthlyRunRate > 0
+        ? fixedCostSnapshot.monthlyRunRate
+        : fixedCostBase > 0
+          ? fixedCostBase / Math.max(billingMonthsInRange(r.from, r.to).length, 1)
+          : 0;
 
     const totals = costBasisTotals[0] ?? {
       computed_cost_usd: 0,
@@ -302,9 +316,7 @@ export class LariCfoViewService {
     );
     const horizonDays = Math.max(1, forecastDays);
     const variableScale = horizonDays / periodDays;
-    const monthsInWindow = Math.max(periodDays / 30.437, 1 / 30.437);
-    const monthlyFixed = fixedCostBase / monthsInWindow;
-    const forecastFixed = monthlyFixed * (horizonDays / 30.437);
+    const forecastFixed = forecastFixedSeatCost(monthlySeatRunRate, horizonDays);
 
     const forecastToken = usageCost * variableScale;
     const forecastCoding = n(codingAgentCost[0]?.cost_usd) * variableScale;
@@ -387,6 +399,10 @@ export class LariCfoViewService {
       forecastDays: horizonDays,
 
       observedPeriodDays: periodDays,
+
+      observedFixedCostUsd: usd(fixedCostBase),
+
+      monthlySeatRunRateUsd: usd(monthlySeatRunRate),
     };
 
     const outcomeBreakdown = buildOutcomeBreakdown(roiRows, {
@@ -571,22 +587,35 @@ export class LariCfoViewService {
     }
   }
 
-  /** Seat licenses and recurring overhead from fixed_costs, prorated to the query window. */
-  private async fixedCostForPeriod(r: Range): Promise<number> {
-    const rows = await this.ch.queryScoped<{ period_month: string; cost_usd: number }>(
-      `SELECT period_month, cost_usd
+  /** Seat licenses and recurring overhead from fixed_costs for the query window. */
+  private async fixedCostForPeriod(
+    r: Range,
+  ): Promise<{ periodTotal: number; monthlyRunRate: number }> {
+    const seatFrom = seatLookupFromDate(r.to);
+    const rows = await this.ch.queryScoped<{
+      period_month: string;
+      vendor: string;
+      cost_usd: number;
+      seats: number;
+    }>(
+      `SELECT period_month, vendor, cost_usd, seats
        FROM agentledger.fixed_costs FINAL
        WHERE tenant_id = {tenant:String}
-         AND period_month >= toStartOfMonth(toDate({from:String}))
+         AND period_month >= toDate({seatFrom:String})
          AND period_month <= toStartOfMonth(toDate({to:String}))
          AND attributable = 0`,
-      { from: r.from, to: r.to },
+      { seatFrom, to: r.to },
     );
-    return sumProratedMonthlyCosts(
-      rows.map((row) => ({ period_month: String(row.period_month), cost_usd: n(row.cost_usd) })),
-      r.from,
-      r.to,
-    );
+    const mapped: FixedCostSeatRow[] = rows.map((row) => ({
+      period_month: String(row.period_month),
+      vendor: String(row.vendor),
+      cost_usd: n(row.cost_usd),
+      seats: n(row.seats),
+    }));
+    return {
+      periodTotal: periodSeatTotalForRange(mapped, r.from, r.to),
+      monthlyRunRate: currentMonthlySeatRunRate(mapped),
+    };
   }
 
   /** Prorate subscription contract cost across the query window (fallback when fixed_costs empty). */

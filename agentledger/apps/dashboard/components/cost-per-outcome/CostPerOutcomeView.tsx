@@ -11,6 +11,7 @@ import { Card, DataTable, PageHeader, Stat, num, usd } from '@/components/ui';
 import { fetchCfoView } from '@/lib/api/lari';
 import { rangeHref, type DateBounds } from '@/lib/date-range';
 import { forecastHorizonLabel } from '@/lib/forecast-horizon';
+import { usdPerMonth } from '@/lib/usd-per-month';
 import type { CostBasisMode, CfoViewResponse } from '@/types/lari';
 
 const BASIS_OPTIONS: { value: CostBasisMode; label: string }[] = [
@@ -191,8 +192,8 @@ export function CostPerOutcomeView({
             />
             <Stat
               label="Fixed cost (seats)"
-              value={usd(data.costProvenance.stack.fixedCostUsd)}
-              sub="fixed_costs licenses & subscriptions"
+              value={usdPerMonth(data.summary.monthlySeatRunRateUsd)}
+              sub={`${forecastHorizonLabel(data.summary.forecastDays)} projected ${usd(data.costProvenance.stack.fixedCostUsd)}`}
             />
             <Stat
               label="Business value"

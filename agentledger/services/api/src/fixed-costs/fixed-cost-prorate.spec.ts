@@ -1,6 +1,9 @@
 import {
+  currentMonthlySeatRunRate,
   daysInBillingMonth,
+  forecastFixedSeatCost,
   overlapDaysInBillingMonth,
+  periodSeatTotalForRange,
   prorateMonthlyCost,
   sumMonthlySeatCosts,
   sumProratedMonthlyCosts,
@@ -31,5 +34,16 @@ describe('fixed-cost-prorate', () => {
 
   it('sums full monthly seat costs without day proration', () => {
     expect(sumMonthlySeatCosts([{ cost_usd: 1380 }, { cost_usd: 1350 }])).toBe(2730);
+  });
+
+  it('uses latest admin seat config per vendor for monthly run-rate', () => {
+    const rows = [
+      { period_month: '2026-08-01', vendor: 'anthropic', cost_usd: 1380, seats: 46 },
+      { period_month: '2026-09-01', vendor: 'openai', cost_usd: 1350, seats: 45 },
+      { period_month: '2026-09-01', vendor: 'github', cost_usd: 214.72, seats: 11 },
+    ];
+    expect(currentMonthlySeatRunRate(rows)).toBe(2944.72);
+    expect(periodSeatTotalForRange(rows, '2026-08-01', '2026-08-31')).toBe(2944.72);
+    expect(forecastFixedSeatCost(2944.72, 365)).toBeCloseTo(35313.03, 0);
   });
 });

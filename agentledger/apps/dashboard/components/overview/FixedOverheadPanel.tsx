@@ -2,9 +2,19 @@ import Link from 'next/link';
 import { PieChartClient } from '@/components/charts';
 import { Card, DataTable, usd } from '@/components/ui';
 import { vendorLabel } from '@/lib/fixed-cost-catalog';
+import {
+  billingMonthsInRange,
+  currentMonthlySeatRunRate,
+  latestBillingMonthInRange,
+  latestSeatByVendor,
+  periodSeatTotalForRange,
+  seatLookupFromDate,
+  type FixedCostSeatRow,
+} from '@/lib/overview-seat-monthly';
 import { vendorDetailHref } from '@/lib/vendor-routes';
 import { proxyApi } from '@/lib/api';
 import { formatSignedUsd, monthLabel, previousCalendarMonth } from '@/lib/seat-price-delta';
+import { usdPerMonth } from '@/lib/usd-per-month';
 
 type OrgVendorRow = {
   vendor: string;
@@ -61,9 +71,9 @@ export async function FixedOverheadPanel({
   to: string;
   vendorBilling?: VendorBillingData;
 }) {
+  const qs = new URLSearchParams({ from, to }).toString();
   let vendorBilling = vendorBillingProp;
   if (!vendorBilling) {
-    const qs = new URLSearchParams({ from, to }).toString();
     const vendorBillingRes = await proxyApi(`/v1/analytics/vendor-billing?${qs}`);
     vendorBilling =
       vendorBillingRes.ok && vendorBillingRes.data && typeof vendorBillingRes.data === 'object'
@@ -71,8 +81,48 @@ export async function FixedOverheadPanel({
         : { vendors: [], total_cost_of_ai: 0 };
   }
 
+  const fixedCostRes = await proxyApi(
+    `/v1/fixed-costs?${new URLSearchParams({ from: seatLookupFromDate(to), to }).toString()}`,
+  );
+  const fixedRows: FixedCostSeatRow[] =
+    fixedCostRes.ok && Array.isArray(fixedCostRes.data)
+      ? (fixedCostRes.data as FixedCostSeatRow[])
+      : [];
+
+  const billingMonth = latestBillingMonthInRange(from, to);
+  const billingMonthCount = billingMonthsInRange(from, to).length;
+  const latestByVendor = latestSeatByVendor(fixedRows);
+
   const orgVendors = vendorBilling.vendors ?? [];
-  const grandSeat = orgVendors.reduce((s, r) => s + r.seat_usd, 0);
+  let monthlySeatRunRate = currentMonthlySeatRunRate(fixedRows);
+  let periodSeatTotalUsd = periodSeatTotalForRange(fixedRows, from, to);
+  const vendorBillingPeriodSeat = orgVendors.reduce((s, r) => s + r.seat_usd, 0);
+
+  for (const row of orgVendors) {
+    if (row.seat_usd <= 0 || latestByVendor.has(row.vendor)) {
+      continue;
+    }
+    const share =
+      billingMonthCount === 1 ? row.seat_usd : row.seat_usd / Math.max(billingMonthCount, 1);
+    monthlySeatRunRate = Math.round((monthlySeatRunRate + share) * 100) / 100;
+    periodSeatTotalUsd = Math.round((periodSeatTotalUsd + row.seat_usd) * 100) / 100;
+  }
+  if (monthlySeatRunRate <= 0 && vendorBillingPeriodSeat > 0) {
+    monthlySeatRunRate =
+      billingMonthCount === 1
+        ? vendorBillingPeriodSeat
+        : vendorBillingPeriodSeat / billingMonthCount;
+    periodSeatTotalUsd = vendorBillingPeriodSeat;
+  }
+
+  function subscriptionLabel(vendor: string, fallbackSeatUsd: number): string {
+    const fromRows = latestByVendor.get(vendor.toLowerCase());
+    const monthly = fromRows?.seat_usd ?? fallbackSeatUsd / Math.max(billingMonthCount, 1);
+    return usdPerMonth(Math.round(monthly * 100) / 100);
+  }
+
+  const grandSeat = periodSeatTotalUsd;
+  const grandSeatMonthly = Math.round(monthlySeatRunRate * 100) / 100;
   const grandOverage = orgVendors.reduce((s, r) => s + r.budget_overage_usd, 0);
   const grandTotal = vendorBilling.total_cost_of_ai ?? grandSeat + grandOverage;
   const subscriptionPct = grandTotal > 0 ? (grandSeat / grandTotal) * 100 : 0;
@@ -97,7 +147,7 @@ export async function FixedOverheadPanel({
   return (
     <Card
       title="Fixed / overhead costs"
-      subtitle={`${from} → ${to} · monthly seat subscriptions (seats × unit) · seat change vs previous billing month`}
+      subtitle={`${from} → ${to} · ${monthLabel(`${billingMonth}-01`)} run-rate · seat change vs previous billing month`}
       actions={
         <Link href="/admin/fixed-overhead" className="text-xs text-accent hover:underline">
           Manage seats & plans
@@ -114,8 +164,13 @@ export async function FixedOverheadPanel({
           <p className="num text-xl text-gray-200">{usd(grandOverage)}</p>
         </div>
         <div>
-          <p className="text-xs uppercase tracking-wide text-muted">Subscription amount</p>
-          <p className="num text-xl text-warn">{usd(grandSeat)}</p>
+          <p className="text-xs uppercase tracking-wide text-muted">Subscription run-rate</p>
+          <p className="num text-xl text-warn">{usdPerMonth(grandSeatMonthly)}</p>
+          {billingMonthCount > 1 && (
+            <p className="text-xs text-muted">
+              {usd(grandSeat)} across {billingMonthCount} billing months
+            </p>
+          )}
           <p className="text-xs text-muted">{subscriptionPct.toFixed(1)}% of total</p>
           {seatChangeUsd !== 0 && (
             <p className={`text-xs ${seatChangeUsd > 0 ? 'text-warn' : 'text-pos'}`}>
@@ -136,7 +191,7 @@ export async function FixedOverheadPanel({
         <DataTable
           columns={[
             { key: 'vendor', label: 'Vendor' },
-            { key: 'seat', label: 'Subscription amount', align: 'right' },
+            { key: 'seat', label: 'Subscription /mo', align: 'right' },
             { key: 'seatChange', label: 'Seat change', align: 'right' },
             { key: 'overage', label: 'Budget overage', align: 'right' },
             { key: 'total', label: 'Total', align: 'right' },
@@ -150,7 +205,7 @@ export async function FixedOverheadPanel({
                 {vendorLabel(r.vendor)}
               </Link>
             ),
-            seat: usd(r.seat_usd),
+            seat: subscriptionLabel(r.vendor, r.seat_usd),
             seatChange: <SeatChangeCell row={r} />,
             overage: usd(r.budget_overage_usd),
             total: usd(r.total_usd),
@@ -160,7 +215,7 @@ export async function FixedOverheadPanel({
               vendor: (
                 <span className="text-xs uppercase tracking-wide text-muted">Grand total</span>
               ),
-              seat: usd(grandSeat),
+              seat: usdPerMonth(grandSeatMonthly),
               seatChange:
                 seatChangeUsd !== 0 ? (
                   <span className={`num text-xs ${seatChangeUsd > 0 ? 'text-warn' : 'text-pos'}`}>

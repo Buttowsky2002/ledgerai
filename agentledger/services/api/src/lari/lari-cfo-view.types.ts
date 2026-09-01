@@ -43,6 +43,10 @@ export interface CfoViewSummary {
   costBasis: CostBasisMode;
   forecastDays: number;
   observedPeriodDays: number;
+  /** Observed fixed/seat overhead in the selected window. */
+  observedFixedCostUsd: number;
+  /** Current monthly seat subscription run-rate from fixed_costs. */
+  monthlySeatRunRateUsd: number;
 }
 
 export interface CfoViewMonthly {

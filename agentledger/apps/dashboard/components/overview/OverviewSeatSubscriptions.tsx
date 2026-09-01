@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { vendorLabel } from '@/lib/fixed-cost-catalog';
-import { formatSignedUsd } from '@/lib/seat-price-delta';
+import { formatSignedUsd, monthLabel } from '@/lib/seat-price-delta';
+import { usdPerMonth } from '@/lib/usd-per-month';
 import { usd } from '@/components/ui';
 
 export type OverviewVendorSeatRow = {
@@ -9,15 +10,21 @@ export type OverviewVendorSeatRow = {
   seats?: number;
   usd_from_seats?: number;
   prior_seats?: number | null;
+  billing_month?: string;
 };
 
 type Props = {
   vendors: OverviewVendorSeatRow[];
   seatChangeUsd?: number;
+  billingMonth?: string;
 };
 
 /** Per-vendor seat subscriptions at the top of Overview (same data as admin fixed overhead). */
-export function OverviewSeatSubscriptions({ vendors, seatChangeUsd = 0 }: Props) {
+export function OverviewSeatSubscriptions({
+  vendors,
+  seatChangeUsd = 0,
+  billingMonth,
+}: Props) {
   const seatVendors = vendors.filter((v) => v.seat_usd > 0);
   if (seatVendors.length === 0) {
     return (
@@ -34,7 +41,8 @@ export function OverviewSeatSubscriptions({ vendors, seatChangeUsd = 0 }: Props)
     <div className="mb-6">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs font-medium uppercase tracking-wider text-muted">
-          Seat subscriptions · monthly (seats × unit)
+          Seat subscriptions · {billingMonth ? monthLabel(`${billingMonth}-01`) : 'monthly'} (seats ×
+          unit)
         </p>
         {seatChangeUsd !== 0 && (
           <p className={`text-xs ${seatChangeUsd > 0 ? 'text-warn' : 'text-pos'}`}>
@@ -55,7 +63,7 @@ export function OverviewSeatSubscriptions({ vendors, seatChangeUsd = 0 }: Props)
               className="min-w-[9rem] rounded-lg border border-edge bg-panel px-4 py-3 transition-colors hover:border-accent/40 hover:bg-white/[0.03]"
             >
               <p className="text-xs text-muted">{vendorLabel(v.vendor)}</p>
-              <p className="num text-lg font-semibold text-gray-100">{usd(v.seat_usd)}</p>
+              <p className="num text-lg font-semibold text-gray-100">{usdPerMonth(v.seat_usd)}</p>
               <p className="mt-0.5 text-xs text-muted">
                 {v.seats != null && v.seats > 0 ? (
                   <>

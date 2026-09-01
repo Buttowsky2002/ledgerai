@@ -18,9 +18,20 @@ import { DateRangePicker } from '../components/DateRangePicker';
 import { apiClient, fetchData, proxyApi } from '../lib/api';
 import { fetchDataBounds } from '../lib/data-bounds';
 import { env } from '../lib/env';
+import {
+  billingMonthsInRange,
+  currentMonthlySeatRunRate,
+  latestBillingMonthInRange,
+  latestSeatByVendor,
+  periodSeatTotalForRange,
+  seatLookupFromDate,
+  type FixedCostSeatRow,
+} from '../lib/overview-seat-monthly';
 import { seatUsdByVendor } from '../lib/platform-billing';
-import { formatSignedUsd } from '../lib/seat-price-delta';
+import { formatSignedUsd, monthLabel } from '../lib/seat-price-delta';
 import { resolvePageRange } from '../lib/resolve-range';
+import { usdPerMonth } from '../lib/usd-per-month';
+import type { OverviewVendorSeatRow } from '../components/overview/OverviewSeatSubscriptions';
 
 type UserRow = {
   user_id: string;
@@ -196,8 +207,39 @@ export default async function OverviewPage({
   const dataBounds = await fetchDataBounds();
   const { from, to, isAllTime } = resolvePageRange(searchParams, dataBounds);
 
-  type FixedCostVendorRow = { vendor?: string | null; cost_usd?: number | string | null };
+  type FixedCostVendorRow = FixedCostSeatRow;
 
+  function mergeOverviewSeatVendors(
+    fixedRows: FixedCostVendorRow[],
+    billingVendors: OverviewVendorSeatRow[],
+  ): OverviewVendorSeatRow[] {
+    const byVendor = latestSeatByVendor(fixedRows);
+    const merged = new Map<string, OverviewVendorSeatRow>();
+
+    for (const [vendor, row] of byVendor) {
+      merged.set(vendor, {
+        vendor,
+        seat_usd: row.seat_usd,
+        seats: row.seats > 0 ? row.seats : undefined,
+        billing_month: row.period_month.slice(0, 7),
+      });
+    }
+
+    for (const row of billingVendors) {
+      if (row.seat_usd <= 0) {
+        continue;
+      }
+      const existing = merged.get(row.vendor);
+      merged.set(row.vendor, {
+        ...row,
+        seat_usd: existing?.seat_usd ?? row.seat_usd,
+        seats: existing?.seats ?? row.seats,
+        billing_month: existing?.billing_month ?? row.billing_month,
+      });
+    }
+
+    return [...merged.values()].sort((a, b) => b.seat_usd - a.seat_usd);
+  }
   const [
     spend,
     economics,
@@ -229,7 +271,8 @@ export default async function OverviewPage({
       [],
     ) as Promise<unknown> as Promise<ModelRow[]>,
     (async () => {
-      const qs = new URLSearchParams({ from, to }).toString();
+      const seatFrom = seatLookupFromDate(to);
+      const qs = new URLSearchParams({ from: seatFrom, to }).toString();
       const res = await proxyApi(`/v1/fixed-costs?${qs}`);
       return res.ok && Array.isArray(res.data) ? (res.data as FixedCostVendorRow[]) : [];
     })(),
@@ -302,15 +345,46 @@ export default async function OverviewPage({
     vendorBillingRes && typeof vendorBillingRes === 'object'
       ? (vendorBillingRes as VendorBillingData)
       : { vendors: [], total_cost_of_ai: 0 };
-  const orgVendorsForTotals = vendorBilling.vendors ?? [];
-  const fixedOverhead = orgVendorsForTotals.reduce((s, v) => s + Number(v.seat_usd ?? 0), 0);
-  const totalSeats = orgVendorsForTotals.reduce(
+  const billingVendors = vendorBilling.vendors ?? [];
+  const fixedRows = fixedCostRows as FixedCostVendorRow[];
+  const billingMonth = latestBillingMonthInRange(from, to);
+  const billingMonthCount = billingMonthsInRange(from, to).length;
+
+  let monthlySeatRunRate = currentMonthlySeatRunRate(fixedRows);
+  let periodSeatTotalUsd = periodSeatTotalForRange(fixedRows, from, to);
+
+  const vendorBillingPeriodSeat = billingVendors.reduce((s, v) => s + Number(v.seat_usd ?? 0), 0);
+  for (const row of billingVendors) {
+    if (row.seat_usd <= 0) {
+      continue;
+    }
+    const fromFixed = latestSeatByVendor(fixedRows).has(row.vendor);
+    if (!fromFixed) {
+      const share =
+        billingMonthCount === 1 ? row.seat_usd : row.seat_usd / Math.max(billingMonthCount, 1);
+      monthlySeatRunRate = Math.round((monthlySeatRunRate + share) * 100) / 100;
+      periodSeatTotalUsd = Math.round((periodSeatTotalUsd + row.seat_usd) * 100) / 100;
+    }
+  }
+
+  if (monthlySeatRunRate <= 0 && vendorBillingPeriodSeat > 0) {
+    monthlySeatRunRate =
+      billingMonthCount === 1
+        ? vendorBillingPeriodSeat
+        : vendorBillingPeriodSeat / billingMonthCount;
+    periodSeatTotalUsd = vendorBillingPeriodSeat;
+  }
+
+  const overviewSeatVendors = mergeOverviewSeatVendors(fixedRows, billingVendors);
+  const totalSeats = overviewSeatVendors.reduce(
     (s, v) => s + (v.seats != null && v.seats > 0 ? v.seats : 0),
     0,
   );
   const seatChangeUsd = vendorBilling.seat_change_usd ?? 0;
+
   const attributableCost = meteredCost;
-  const totalCostOfAi = meteredCost + fixedOverhead;
+  const fixedOverhead = periodSeatTotalUsd;
+  const totalCostOfAi = meteredCost + periodSeatTotalUsd;
   const blocked = spend.reduce((s, r) => s + Number(r.blocked_calls), 0);
   const chart = spend.map((r) => ({ day: String(r.day).slice(5), cost_usd: Number(r.cost_usd) }));
 
@@ -359,7 +433,12 @@ export default async function OverviewPage({
           accent
           sub={
             <>
-              {usd(attributableCost)} metered · {usd(fixedOverhead)} fixed
+              {usd(attributableCost)} metered · {usdPerMonth(Math.round(monthlySeatRunRate * 100) / 100)} fixed
+              {billingMonthCount > 1 && (
+                <span className="mt-0.5 block text-muted">
+                  {usd(fixedOverhead)} subscriptions across {billingMonthCount} billing months
+                </span>
+              )}
               <span className="mt-0.5 block">{num(totalCalls)} calls</span>
             </>
           }
@@ -367,11 +446,17 @@ export default async function OverviewPage({
         />
         <Stat
           label="Seat subscriptions"
-          value={usd(fixedOverhead)}
+          value={usdPerMonth(Math.round(monthlySeatRunRate * 100) / 100)}
           tone="warn"
           sub={
             <>
-              {totalSeats > 0 ? `${num(totalSeats)} seats · monthly` : 'monthly seat licenses'}
+              {monthLabel(`${billingMonth}-01`)} ·{' '}
+              {totalSeats > 0 ? `${num(totalSeats)} seats` : 'monthly seat licenses'}
+              {billingMonthCount > 1 && (
+                <span className="mt-0.5 block text-muted">
+                  {usd(fixedOverhead)} total for {billingMonthCount} months in range
+                </span>
+              )}
               {seatChangeUsd !== 0 && (
                 <span className={`mt-0.5 block ${seatChangeUsd > 0 ? 'text-warn' : 'text-pos'}`}>
                   {formatSignedUsd(seatChangeUsd)} from seat changes
@@ -400,7 +485,11 @@ export default async function OverviewPage({
         />
       </div>
 
-      <OverviewSeatSubscriptions vendors={orgVendorsForTotals} seatChangeUsd={seatChangeUsd} />
+      <OverviewSeatSubscriptions
+        vendors={overviewSeatVendors}
+        seatChangeUsd={seatChangeUsd}
+        billingMonth={billingMonth}
+      />
 
       <FixedOverheadPanel from={from} to={to} vendorBilling={vendorBilling} />
 
@@ -434,7 +523,7 @@ export default async function OverviewPage({
             >[0]['users']
           }
           models={models}
-          orgVendors={orgVendorsForTotals}
+          orgVendors={billingVendors}
           cursorSpend={cursorSpend}
         />
       </Suspense>
