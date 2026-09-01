@@ -2,6 +2,7 @@ import {
   daysInBillingMonth,
   overlapDaysInBillingMonth,
   prorateMonthlyCost,
+  sumMonthlySeatCosts,
   sumProratedMonthlyCosts,
 } from './fixed-cost-prorate';
 
@@ -26,5 +27,9 @@ describe('fixed-cost-prorate', () => {
       '2026-06-10',
     );
     expect(total).toBe(182);
+  });
+
+  it('sums full monthly seat costs without day proration', () => {
+    expect(sumMonthlySeatCosts([{ cost_usd: 1380 }, { cost_usd: 1350 }])).toBe(2730);
   });
 });

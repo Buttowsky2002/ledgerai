@@ -1457,13 +1457,9 @@ export class AnalyticsService {
     const seatUsdByVendor: Record<string, number> = {};
     for (const row of monthlyFixed) {
       const vendor = String(row.vendor).trim().toLowerCase();
-      const prorated = prorateMonthlyCost(
-        Number(row.cost_usd ?? 0),
-        String(row.period_month),
-        r.from,
-        r.to,
-      );
-      seatUsdByVendor[vendor] = (seatUsdByVendor[vendor] ?? 0) + prorated;
+      // Seat licenses bill monthly (seats × unit); do not prorate by days in range.
+      const monthly = n(row.cost_usd);
+      seatUsdByVendor[vendor] = usd((seatUsdByVendor[vendor] ?? 0) + monthly);
     }
 
     const overageUsdByVendor: Record<string, number> = {};
@@ -1476,8 +1472,9 @@ export class AnalyticsService {
     }
 
     if (cursorSummary) {
-      if (cursorSummary.seatLicenseUsd > 0) {
-        seatUsdByVendor.cursor = (seatUsdByVendor.cursor ?? 0) + cursorSummary.seatLicenseUsd;
+      // Connector-derived Cursor seats only when admin fixed_costs has no cursor row.
+      if ((seatUsdByVendor.cursor ?? 0) <= 0 && cursorSummary.seatLicenseUsd > 0) {
+        seatUsdByVendor.cursor = usd(cursorSummary.seatLicenseUsd);
       }
       if (cursorSummary.meteredOverageUsd > 0) {
         overageUsdByVendor.cursor =
@@ -1492,8 +1489,8 @@ export class AnalyticsService {
         ghSeat += m.seatCost;
         ghOverage += m.allocatedOverageCost;
       }
-      if (ghSeat > 0) {
-        seatUsdByVendor.github = (seatUsdByVendor.github ?? 0) + usd(ghSeat);
+      if (ghSeat > 0 && (seatUsdByVendor.github ?? 0) <= 0) {
+        seatUsdByVendor.github = usd(ghSeat);
       }
       if (ghOverage > 0) {
         overageUsdByVendor.github = (overageUsdByVendor.github ?? 0) + usd(ghOverage);

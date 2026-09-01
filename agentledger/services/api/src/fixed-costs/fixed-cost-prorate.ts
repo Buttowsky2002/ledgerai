@@ -53,3 +53,9 @@ export function sumProratedMonthlyCosts(
   );
   return Math.round(total * 100) / 100;
 }
+
+/** Sum full monthly seat charges from fixed_costs rows (no day proration within a month). */
+export function sumMonthlySeatCosts(rows: { cost_usd: number }[]): number {
+  const total = rows.reduce((s, row) => s + Number(row.cost_usd ?? 0), 0);
+  return Math.round(total * 100) / 100;
+}

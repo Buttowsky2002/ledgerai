@@ -87,7 +87,7 @@ export async function FixedOverheadPanel({ from, to }: { from: string; to: strin
   return (
     <Card
       title="Fixed / overhead costs"
-      subtitle={`${from} → ${to} · seat subscriptions prorated by days in range · seat change vs previous billing month`}
+      subtitle={`${from} → ${to} · monthly seat subscriptions (seats × unit) · seat change vs previous billing month`}
       actions={
         <Link href="/admin/fixed-overhead" className="text-xs text-accent hover:underline">
           Manage seats & plans
