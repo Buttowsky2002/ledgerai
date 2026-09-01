@@ -18,7 +18,7 @@ type OrgVendorRow = {
   prior_period_month?: string | null;
 };
 
-type VendorBillingResponse = {
+export type VendorBillingData = {
   vendors: OrgVendorRow[];
   total_cost_of_ai: number;
   seat_change_usd?: number;
@@ -52,14 +52,24 @@ function SeatChangeCell({ row }: { row: OrgVendorRow }) {
   );
 }
 
-export async function FixedOverheadPanel({ from, to }: { from: string; to: string }) {
-  const qs = new URLSearchParams({ from, to }).toString();
-  const vendorBillingRes = await proxyApi(`/v1/analytics/vendor-billing?${qs}`);
-
-  const vendorBilling =
-    vendorBillingRes.ok && vendorBillingRes.data && typeof vendorBillingRes.data === 'object'
-      ? (vendorBillingRes.data as VendorBillingResponse)
-      : { vendors: [], total_cost_of_ai: 0 };
+export async function FixedOverheadPanel({
+  from,
+  to,
+  vendorBilling: vendorBillingProp,
+}: {
+  from: string;
+  to: string;
+  vendorBilling?: VendorBillingData;
+}) {
+  let vendorBilling = vendorBillingProp;
+  if (!vendorBilling) {
+    const qs = new URLSearchParams({ from, to }).toString();
+    const vendorBillingRes = await proxyApi(`/v1/analytics/vendor-billing?${qs}`);
+    vendorBilling =
+      vendorBillingRes.ok && vendorBillingRes.data && typeof vendorBillingRes.data === 'object'
+        ? (vendorBillingRes.data as VendorBillingData)
+        : { vendors: [], total_cost_of_ai: 0 };
+  }
 
   const orgVendors = vendorBilling.vendors ?? [];
   const grandSeat = orgVendors.reduce((s, r) => s + r.seat_usd, 0);

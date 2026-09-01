@@ -4,7 +4,8 @@ import { AreaChartClient, Sparkline } from '../components/charts';
 import { OverviewAiSourcesPanel } from '../components/overview/OverviewAiSourcesPanel';
 import type { CursorSpendSummary } from '../components/overview/CursorPlatformDetail';
 import { CostByUserPanel } from '../components/overview/CostByUserPanel';
-import { FixedOverheadPanel } from '../components/overview/FixedOverheadPanel';
+import { FixedOverheadPanel, type VendorBillingData } from '../components/overview/FixedOverheadPanel';
+import { OverviewSeatSubscriptions } from '../components/overview/OverviewSeatSubscriptions';
 import { ExecutiveReportExport } from '../components/overview/ExecutiveReportExport';
 import { OverviewLiveRefresh } from '../components/overview/OverviewLiveRefresh';
 import { LariRecommendationsPanel } from '../components/lari/LariRecommendationsPanel';
@@ -15,7 +16,7 @@ import { apiClient, fetchData, proxyApi } from '../lib/api';
 import { fetchDataBounds } from '../lib/data-bounds';
 import { env } from '../lib/env';
 import { seatUsdByVendor } from '../lib/platform-billing';
-import { resolvePageRange } from '../lib/resolve-range';
+import { formatSignedUsd } from '../lib/seat-price-delta';
 
 type UserRow = {
   user_id: string;
@@ -293,13 +294,14 @@ export default async function OverviewPage({
 
   const meteredCost = spend.reduce((s, r) => s + Number(r.cost_usd), 0);
   const totalCalls = spend.reduce((s, r) => s + Number(r.calls), 0);
-  const orgVendorsForTotals =
-    (
-      vendorBillingRes as {
-        vendors?: { seat_usd: number }[];
-      }
-    ).vendors ?? [];
+  const vendorBilling: VendorBillingData =
+    vendorBillingRes.ok && vendorBillingRes.data && typeof vendorBillingRes.data === 'object'
+      ? (vendorBillingRes.data as VendorBillingData)
+      : { vendors: [], total_cost_of_ai: 0 };
+  const orgVendorsForTotals = vendorBilling.vendors ?? [];
   const fixedOverhead = orgVendorsForTotals.reduce((s, v) => s + Number(v.seat_usd ?? 0), 0);
+  const totalSeats = orgVendorsForTotals.reduce((s, v) => s + (v.seats != null && v.seats > 0 ? v.seats : 0), 0);
+  const seatChangeUsd = vendorBilling.seat_change_usd ?? 0;
   const attributableCost = meteredCost;
   const totalCostOfAi = meteredCost + fixedOverhead;
   const blocked = spend.reduce((s, r) => s + Number(r.blocked_calls), 0);
@@ -343,7 +345,7 @@ export default async function OverviewPage({
         }
       />
 
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <Stat
           label="Total cost of AI"
           value={usd(totalCostOfAi)}
@@ -355,6 +357,23 @@ export default async function OverviewPage({
             </>
           }
           chart={chart.length > 1 ? <Sparkline data={chart} yKey="cost_usd" /> : undefined}
+        />
+        <Stat
+          label="Seat subscriptions"
+          value={usd(fixedOverhead)}
+          tone="warn"
+          sub={
+            <>
+              {totalSeats > 0 ? `${num(totalSeats)} seats · monthly` : 'monthly seat licenses'}
+              {seatChangeUsd !== 0 && (
+                <span
+                  className={`mt-0.5 block ${seatChangeUsd > 0 ? 'text-warn' : 'text-pos'}`}
+                >
+                  {formatSignedUsd(seatChangeUsd)} from seat changes
+                </span>
+              )}
+            </>
+          }
         />
         <Stat
           label="Net risk-adjusted ROI"
@@ -376,6 +395,10 @@ export default async function OverviewPage({
         />
       </div>
 
+      <OverviewSeatSubscriptions vendors={orgVendorsForTotals} seatChangeUsd={seatChangeUsd} />
+
+      <FixedOverheadPanel from={from} to={to} vendorBilling={vendorBilling} />
+
       <Suspense
         fallback={
           <Card title="Product worth">
@@ -389,8 +412,6 @@ export default async function OverviewPage({
       <Card title="Daily spend" subtitle="USD">
         <AreaChartClient data={chart} xKey="day" yKey="cost_usd" />
       </Card>
-
-      <FixedOverheadPanel from={from} to={to} />
 
       <Suspense
         fallback={
@@ -408,18 +429,7 @@ export default async function OverviewPage({
             >[0]['users']
           }
           models={models}
-          orgVendors={
-            (
-              vendorBillingRes as {
-                vendors?: {
-                  vendor: string;
-                  seat_usd: number;
-                  budget_overage_usd: number;
-                  total_usd: number;
-                }[];
-              }
-            ).vendors ?? []
-          }
+          orgVendors={orgVendorsForTotals}
           cursorSpend={cursorSpend}
         />
       </Suspense>
