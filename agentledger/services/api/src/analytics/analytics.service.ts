@@ -56,30 +56,16 @@ import {
   type VendorSpendSlice,
   type VendorUsageSlice,
 } from './vendor-spend';
+import {
+  buildPilotReport,
+  buildSourceReconciliation,
+  type SourceReconciliationResult,
+  type SourceReconciliationRow,
+} from './analytics-report.util';
 
 type Range = { from: string; to: string };
 
-/** One day of portal vs API spend for reconciliation (Admin billing import). */
-export interface SourceReconciliationDay {
-  day: string;
-  portalCostUsd: number;
-  portalCalls: number;
-  apiCostUsd: number;
-  apiCalls: number;
-}
-
-export interface SourceReconciliationResult {
-  from: string;
-  to: string;
-  days: SourceReconciliationDay[];
-  summary: {
-    portalTotalUsd: number;
-    apiTotalUsd: number;
-    overlapDays: number;
-    portalOnlyDays: number;
-    apiOnlyDays: number;
-  };
-}
+export type { SourceReconciliationDay, SourceReconciliationResult } from './analytics-report.util';
 
 export interface UserModelBreakdownRow {
   model: string;
@@ -1239,66 +1225,11 @@ export class AnalyticsService {
       ),
     ]);
 
-    const st = (spendTotals[0] ?? {}) as Record<string, unknown>;
-    const ue = (unit[0] ?? {}) as Record<string, unknown>;
-    const ro = (roi[0] ?? {}) as Record<string, unknown>;
-    const sevRows = severity as Record<string, unknown>[];
-
-    return {
-      window: { from: r.from, to: r.to, days },
-      spend: {
-        source: 'llm_calls (metered)',
-        totalCostUsd: n(st.cost_usd),
-        calls: n(st.calls),
-        inputTokens: n(st.input_tokens),
-        outputTokens: n(st.output_tokens),
-        blockedCalls: n(st.blocked_calls),
-        errorCalls: n(st.error_calls),
-        byProvider: (byProvider as Record<string, unknown>[]).map((x) => ({
-          provider: String(x.provider),
-          costUsd: n(x.cost_usd),
-          calls: n(x.calls),
-        })),
-      },
-      topAgents: {
-        source: 'spend_hourly_by_key',
-        agents: (agents as Record<string, unknown>[]).map((x) => ({
-          agentId: String(x.agent_id),
-          costUsd: n(x.cost_usd),
-          calls: n(x.calls),
-        })),
-      },
-      unitEconomics: {
-        source: 'outcomes + agent_runs',
-        minConfidence: HEADLINE,
-        outcomes: n(ue.outcomes),
-        aiCostUsd: n(ue.ai_cost_usd),
-        businessValueUsd: n(ue.business_value_usd),
-        costPerOutcome: n(ue.cost_per_outcome),
-        netValueUsd: n(ue.net_value_usd),
-        avgConfidence: n(ue.avg_confidence),
-      },
-      roi: {
-        source: 'v_roi',
-        minConfidence: HEADLINE,
-        outcomes: n(ro.outcomes),
-        valueUsd: n(ro.value_usd),
-        fullyLoadedCostUsd: n(ro.fully_loaded_cost_usd),
-        expectedRoiUsd: n(ro.expected_roi_usd),
-        riskAdjustedRoiUsd: n(ro.risk_adjusted_roi_usd),
-        roiLowUsd: n(ro.roi_low_usd),
-        roiHighUsd: n(ro.roi_high_usd),
-        avgConfidence: n(ro.avg_confidence),
-      },
-      governance: {
-        source: 'risk_daily',
-        bySeverity: sevRows
-          .filter((x) => String(x.severity) !== '')
-          .map((x) => ({ severity: String(x.severity), events: n(x.total_events) })),
-        dlpBlockEvents: sevRows.reduce((s, x) => s + n(x.dlp_block_events), 0),
-        highSeverityEvents: sevRows.reduce((s, x) => s + n(x.high_events), 0),
-      },
-    };
+    return buildPilotReport(
+      { spendTotals, byProvider, agents, unit, roi, severity },
+      { from: r.from, to: r.to, days },
+      HEADLINE,
+    );
   }
 
   /**
@@ -1307,13 +1238,7 @@ export class AnalyticsService {
    */
   async sourceReconciliation(from?: string, to?: string): Promise<SourceReconciliationResult> {
     const r = this.range(from, to);
-    const rows = await this.ch.queryScoped<{
-      day: string;
-      portal_cost_usd: unknown;
-      portal_calls: unknown;
-      api_cost_usd: unknown;
-      api_calls: unknown;
-    }>(
+    const rows = await this.ch.queryScoped<SourceReconciliationRow>(
       `SELECT
          toDate(ts) AS day,
          sumIf(cost_usd, source = 'portal_import') AS portal_cost_usd,
@@ -1329,39 +1254,7 @@ export class AnalyticsService {
       r as Record<string, ChParam>,
     );
 
-    const days: SourceReconciliationDay[] = rows.map((row) => ({
-      day: String(row.day).slice(0, 10),
-      portalCostUsd: n(row.portal_cost_usd),
-      portalCalls: n(row.portal_calls),
-      apiCostUsd: n(row.api_cost_usd),
-      apiCalls: n(row.api_calls),
-    }));
-
-    let portalTotalUsd = 0;
-    let apiTotalUsd = 0;
-    let overlapDays = 0;
-    let portalOnlyDays = 0;
-    let apiOnlyDays = 0;
-    for (const d of days) {
-      portalTotalUsd += d.portalCostUsd;
-      apiTotalUsd += d.apiCostUsd;
-      const hasPortal = d.portalCostUsd > 0;
-      const hasApi = d.apiCostUsd > 0;
-      if (hasPortal && hasApi) {
-        overlapDays++;
-      } else if (hasPortal) {
-        portalOnlyDays++;
-      } else if (hasApi) {
-        apiOnlyDays++;
-      }
-    }
-
-    return {
-      from: r.from,
-      to: r.to,
-      days,
-      summary: { portalTotalUsd, apiTotalUsd, overlapDays, portalOnlyDays, apiOnlyDays },
-    };
+    return buildSourceReconciliation(rows, r);
   }
 
   /** Member directory — token/Cursor spend (ClickHouse) + GitHub Copilot (Postgres). */
