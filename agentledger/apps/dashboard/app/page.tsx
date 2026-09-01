@@ -4,7 +4,10 @@ import { AreaChartClient, Sparkline } from '../components/charts';
 import { OverviewAiSourcesPanel } from '../components/overview/OverviewAiSourcesPanel';
 import type { CursorSpendSummary } from '../components/overview/CursorPlatformDetail';
 import { CostByUserPanel } from '../components/overview/CostByUserPanel';
-import { FixedOverheadPanel, type VendorBillingData } from '../components/overview/FixedOverheadPanel';
+import {
+  FixedOverheadPanel,
+  type VendorBillingData,
+} from '../components/overview/FixedOverheadPanel';
 import { OverviewSeatSubscriptions } from '../components/overview/OverviewSeatSubscriptions';
 import { ExecutiveReportExport } from '../components/overview/ExecutiveReportExport';
 import { OverviewLiveRefresh } from '../components/overview/OverviewLiveRefresh';
@@ -301,7 +304,10 @@ export default async function OverviewPage({
       : { vendors: [], total_cost_of_ai: 0 };
   const orgVendorsForTotals = vendorBilling.vendors ?? [];
   const fixedOverhead = orgVendorsForTotals.reduce((s, v) => s + Number(v.seat_usd ?? 0), 0);
-  const totalSeats = orgVendorsForTotals.reduce((s, v) => s + (v.seats != null && v.seats > 0 ? v.seats : 0), 0);
+  const totalSeats = orgVendorsForTotals.reduce(
+    (s, v) => s + (v.seats != null && v.seats > 0 ? v.seats : 0),
+    0,
+  );
   const seatChangeUsd = vendorBilling.seat_change_usd ?? 0;
   const attributableCost = meteredCost;
   const totalCostOfAi = meteredCost + fixedOverhead;
@@ -367,9 +373,7 @@ export default async function OverviewPage({
             <>
               {totalSeats > 0 ? `${num(totalSeats)} seats · monthly` : 'monthly seat licenses'}
               {seatChangeUsd !== 0 && (
-                <span
-                  className={`mt-0.5 block ${seatChangeUsd > 0 ? 'text-warn' : 'text-pos'}`}
-                >
+                <span className={`mt-0.5 block ${seatChangeUsd > 0 ? 'text-warn' : 'text-pos'}`}>
                   {formatSignedUsd(seatChangeUsd)} from seat changes
                 </span>
               )}
