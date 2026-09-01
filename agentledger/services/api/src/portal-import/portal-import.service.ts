@@ -18,41 +18,19 @@ import {
 
 import type { ColumnMappingByName } from './column-mapping';
 
-import { providerModelConflictMessage, type ProviderModelConflict } from './provider-model-guard';
+import { providerModelConflictMessage } from './provider-model-guard';
 
 import { shouldSurfaceLegacyImportAudit } from './legacy-import-list';
 
-export interface PortalFileResult {
-  fileName: string;
-
-  parsed: number;
-
-  skipped: number;
-
-  skippedZeroCost: number;
-
-  imported: number;
-
-  duplicateSkipped: number;
-
-  usersDetected: number;
-
-  totalCostUsd: number;
-
-  dateRange: { from: string | null; to: string | null };
-
-  parseErrors: { line: number; message: string }[];
-
-  preview: Record<string, unknown>[];
-
-  headers: string[];
-
-  mappingUsed: ColumnMappingByName | null;
-
-  ok: boolean;
-
-  error?: string;
-}
+import {
+  buildEmptyFileResult,
+  buildImportedFileResult,
+  buildPortalPreviewResult,
+  buildRejectedFileResult,
+  extractSampleRawRows,
+  type PortalFileResult,
+  type PortalPreviewResult,
+} from './portal-import.util';
 
 export interface PortalUploadResult {
   source: typeof PORTAL_IMPORT_SOURCE;
@@ -106,40 +84,6 @@ export interface PortalImportRunDeleteResult {
   keysReleased: number;
 }
 
-export interface PortalPreviewResult {
-  fileName?: string;
-  headers: string[];
-  headerRow: number;
-  delimiter: string;
-  format: ReturnType<typeof parseAnthropicPortalCsv>['format'];
-  suggestion: ReturnType<typeof parseAnthropicPortalCsv>['suggestion'];
-  mapping: ColumnMappingByName | null;
-  provider: string | null;
-  requiresProvider: boolean;
-  /** Models contradicting the stamped provider — non-empty blocks the import. */
-  providerConflicts: ProviderModelConflict[];
-  providerConflictMessage?: string;
-  importable: boolean;
-
-  parsed: number;
-
-  skipped: number;
-
-  skippedZeroCost: number;
-
-  usersDetected: number;
-
-  totalCostUsd: number;
-
-  dateRange: { from: string | null; to: string | null };
-
-  parseErrors: { line: number; message: string }[];
-
-  preview: Record<string, unknown>[];
-
-  sampleRawRows: string[][];
-}
-
 @Injectable()
 export class PortalImportService {
   private readonly logger = new Logger(PortalImportService.name);
@@ -161,58 +105,9 @@ export class PortalImportService {
 
     const parsed = parseAnthropicPortalCsv(csvText, opts?.mapping, opts?.fileName, opts?.provider);
 
-    const sampleRawRows: string[][] = [];
+    const sampleRawRows = extractSampleRawRows(csvText, parsed);
 
-    // Re-parse for raw samples (lightweight — preview only)
-
-    const lines = csvText
-      .trim()
-      .split(/\r?\n/)
-      .slice(parsed.headerRow, parsed.headerRow + 6);
-
-    for (let i = 1; i < lines.length && sampleRawRows.length < 5; i++) {
-      sampleRawRows.push(
-        lines[i]?.split(parsed.delimiter === '\t' ? '\t' : parsed.delimiter) ?? [],
-      );
-    }
-
-    return {
-      fileName: opts?.fileName,
-      headers: parsed.headers,
-      headerRow: parsed.headerRow,
-      delimiter: parsed.delimiter,
-      format: parsed.format,
-      suggestion: parsed.suggestion,
-
-      mapping: parsed.mappingUsed,
-      provider: parsed.provider,
-      requiresProvider: parsed.requiresProvider,
-      providerConflicts: parsed.providerConflicts,
-      providerConflictMessage:
-        parsed.providerConflicts.length > 0
-          ? providerModelConflictMessage(parsed.provider ?? 'unknown', parsed.providerConflicts)
-          : undefined,
-
-      importable: parsed.rows.length > 0 && parsed.providerConflicts.length === 0,
-
-      parsed: parsed.stats.parsed,
-
-      skipped: parsed.stats.skipped,
-
-      skippedZeroCost: parsed.stats.skippedZeroCost,
-
-      usersDetected: parsed.stats.usersDetected,
-
-      totalCostUsd: parsed.stats.totalCostUsd,
-
-      dateRange: { from: parsed.stats.minDay, to: parsed.stats.maxDay },
-
-      parseErrors: parsed.errors,
-
-      preview: parsed.preview,
-
-      sampleRawRows,
-    };
+    return buildPortalPreviewResult(parsed, sampleRawRows, opts?.fileName);
   }
 
   async uploadAnthropicCsv(
@@ -270,37 +165,7 @@ export class PortalImportService {
 
     for (const file of files) {
       if (!file.csv?.trim()) {
-        fileResults.push({
-          fileName: file.name,
-
-          parsed: 0,
-
-          skipped: 0,
-
-          skippedZeroCost: 0,
-
-          imported: 0,
-
-          duplicateSkipped: 0,
-
-          usersDetected: 0,
-
-          totalCostUsd: 0,
-
-          dateRange: { from: null, to: null },
-
-          parseErrors: [{ line: 1, message: 'file is empty' }],
-
-          preview: [],
-
-          headers: [],
-
-          mappingUsed: null,
-
-          ok: false,
-
-          error: 'file is empty',
-        });
+        fileResults.push(buildEmptyFileResult(file.name));
 
         continue;
       }
@@ -308,23 +173,9 @@ export class PortalImportService {
       const parsed = parseAnthropicPortalCsv(file.csv, file.mapping, file.name, file.provider);
 
       if (parsed.requiresProvider) {
-        fileResults.push({
-          fileName: file.name,
-          parsed: 0,
-          skipped: parsed.stats.skipped,
-          skippedZeroCost: parsed.stats.skippedZeroCost,
-          imported: 0,
-          duplicateSkipped: 0,
-          usersDetected: 0,
-          totalCostUsd: 0,
-          dateRange: { from: parsed.stats.minDay, to: parsed.stats.maxDay },
-          parseErrors: parsed.errors,
-          preview: parsed.preview,
-          headers: parsed.headers,
-          mappingUsed: parsed.mappingUsed,
-          ok: false,
-          error: 'select a billing provider for this file',
-        });
+        fileResults.push(
+          buildRejectedFileResult(file.name, parsed, 'select a billing provider for this file'),
+        );
         continue;
       }
 
@@ -342,26 +193,13 @@ export class PortalImportService {
           },
           'portal billing CSV rejected — model vocabulary contradicts selected provider',
         );
-        fileResults.push({
-          fileName: file.name,
-          parsed: 0,
-          skipped: parsed.stats.skipped,
-          skippedZeroCost: parsed.stats.skippedZeroCost,
-          imported: 0,
-          duplicateSkipped: 0,
-          usersDetected: 0,
-          totalCostUsd: 0,
-          dateRange: { from: parsed.stats.minDay, to: parsed.stats.maxDay },
-          parseErrors: parsed.errors,
-          preview: parsed.preview,
-          headers: parsed.headers,
-          mappingUsed: parsed.mappingUsed,
-          ok: false,
-          error: providerModelConflictMessage(
-            parsed.provider ?? 'unknown',
-            parsed.providerConflicts,
+        fileResults.push(
+          buildRejectedFileResult(
+            file.name,
+            parsed,
+            providerModelConflictMessage(parsed.provider ?? 'unknown', parsed.providerConflicts),
           ),
-        });
+        );
         continue;
       }
 
@@ -371,37 +209,7 @@ export class PortalImportService {
             ? 'all data rows have zero or missing cost — check cost column mapping or cost unit (USD vs cents)'
             : (parsed.errors[0]?.message ?? 'no importable rows');
 
-        fileResults.push({
-          fileName: file.name,
-
-          parsed: 0,
-
-          skipped: parsed.stats.skipped,
-
-          skippedZeroCost: parsed.stats.skippedZeroCost,
-
-          imported: 0,
-
-          duplicateSkipped: 0,
-
-          usersDetected: 0,
-
-          totalCostUsd: 0,
-
-          dateRange: { from: parsed.stats.minDay, to: parsed.stats.maxDay },
-
-          parseErrors: parsed.errors,
-
-          preview: parsed.preview,
-
-          headers: parsed.headers,
-
-          mappingUsed: parsed.mappingUsed,
-
-          ok: false,
-
-          error: hint,
-        });
+        fileResults.push(buildRejectedFileResult(file.name, parsed, hint));
 
         continue;
       }
@@ -441,35 +249,7 @@ export class PortalImportService {
       }
       allRows = allRows.concat(parsed.rows);
 
-      fileResults.push({
-        fileName: file.name,
-
-        parsed: parsed.stats.parsed,
-
-        skipped: parsed.stats.skipped,
-
-        skippedZeroCost: parsed.stats.skippedZeroCost,
-
-        imported: 0,
-
-        duplicateSkipped: 0,
-
-        usersDetected: parsed.stats.usersDetected,
-
-        totalCostUsd: parsed.stats.totalCostUsd,
-
-        dateRange: { from: parsed.stats.minDay, to: parsed.stats.maxDay },
-
-        parseErrors: parsed.errors,
-
-        preview: parsed.preview,
-
-        headers: parsed.headers,
-
-        mappingUsed: parsed.mappingUsed,
-
-        ok: true,
-      });
+      fileResults.push(buildImportedFileResult(file.name, parsed));
     }
 
     const importableFiles = fileResults.filter((f) => f.ok);
