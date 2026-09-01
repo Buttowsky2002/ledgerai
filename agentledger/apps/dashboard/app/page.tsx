@@ -17,6 +17,7 @@ import { fetchDataBounds } from '../lib/data-bounds';
 import { env } from '../lib/env';
 import { seatUsdByVendor } from '../lib/platform-billing';
 import { formatSignedUsd } from '../lib/seat-price-delta';
+import { resolvePageRange } from '../lib/resolve-range';
 
 type UserRow = {
   user_id: string;
@@ -295,8 +296,8 @@ export default async function OverviewPage({
   const meteredCost = spend.reduce((s, r) => s + Number(r.cost_usd), 0);
   const totalCalls = spend.reduce((s, r) => s + Number(r.calls), 0);
   const vendorBilling: VendorBillingData =
-    vendorBillingRes.ok && vendorBillingRes.data && typeof vendorBillingRes.data === 'object'
-      ? (vendorBillingRes.data as VendorBillingData)
+    vendorBillingRes && typeof vendorBillingRes === 'object'
+      ? (vendorBillingRes as VendorBillingData)
       : { vendors: [], total_cost_of_ai: 0 };
   const orgVendorsForTotals = vendorBilling.vendors ?? [];
   const fixedOverhead = orgVendorsForTotals.reduce((s, v) => s + Number(v.seat_usd ?? 0), 0);
