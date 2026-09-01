@@ -9,7 +9,6 @@ import { AnalyticsStore } from '../analytics-store/analytics-store';
 import { ConnectorDefinitionsService } from './connector-definitions.service';
 import { ConnectorSecretsService } from './connector-secrets.service';
 import { fetchPreviewPage } from './engine/connector-engine';
-import type { ApiCredentials } from './engine/api-client';
 import { sanitizeForPreview, safeErrorMessage } from './engine/sanitizer';
 import { DEFAULT_BACKFILL_DAYS, resolvePreviewWindow, resolveSyncChunks } from './sync-range';
 import {
@@ -31,6 +30,12 @@ import {
   AzureDevOpsOutcomesService,
 } from './azure-devops/azure-devops-outcomes.service';
 import { listProjectRepos, parseAdoConfig } from './azure-devops/azure-devops-client';
+import {
+  LOCKED_BUILTIN_PRESETS,
+  applyCreateOverrides,
+  parseCredentials,
+  resolveStoredDefinition,
+} from './connector-config.util';
 
 const DEFAULT_CONNECTOR_SCHEDULE = {
   intervalMinutes: DEFAULT_SYNC_INTERVAL_MINUTES,
@@ -45,14 +50,6 @@ const NO_USER_ATTRIBUTION_WARNING =
   'Spend imported at org level only — no named users detected. For per-user cost, use an Anthropic ' +
   'Analytics API key (read:analytics scope) from claude.ai Organization settings. Admin API keys ' +
   '(sk-ant-admin) only support org-level cost_report, not user_cost_report.';
-
-/** Built-in presets — UI must not override auth, URL, or endpoints from stale form defaults. */
-const LOCKED_BUILTIN_PRESETS = new Set([
-  'anthropic-usage',
-  'openai-usage',
-  'cursor-usage',
-  'azure-devops-outcomes',
-]);
 
 function omitSecretRef<T extends { secretRef?: unknown }>(row: T): Omit<T, 'secretRef'> {
   const { secretRef, ...safe } = row;
@@ -129,51 +126,6 @@ export class ConnectorsService {
     private readonly ch: AnalyticsStore,
     private readonly azureDevOps: AzureDevOpsOutcomesService,
   ) {}
-
-  private applyCreateOverrides(
-    def: ConnectorDefinition,
-    dto: CreateConnectorDto,
-  ): ConnectorDefinition {
-    const cfg = dto.configJson ?? {};
-    const locked =
-      LOCKED_BUILTIN_PRESETS.has(def.id ?? '') || LOCKED_BUILTIN_PRESETS.has(dto.presetId ?? '');
-    const authType = locked
-      ? def.authType
-      : ((cfg.authType as ConnectorDefinition['authType']) ?? def.authType);
-    const isAnthropicBuiltin = def.id === 'anthropic-usage' || dto.presetId === 'anthropic-usage';
-    let endpoints = def.endpoints ? [...def.endpoints] : [];
-    const endpointPath = cfg.endpointPath as string | undefined;
-    if (endpointPath && !isAnthropicBuiltin && !locked) {
-      if (endpoints.length > 0) {
-        endpoints[0] = { ...endpoints[0], path: endpointPath };
-      } else {
-        endpoints = [{ path: endpointPath, method: 'GET' }];
-      }
-    }
-    return {
-      ...def,
-      baseUrl: locked ? def.baseUrl : (dto.baseUrl ?? def.baseUrl),
-      authType,
-      authHeaderName:
-        authType === 'api_key_header' ? (def.authHeaderName ?? 'x-api-key') : def.authHeaderName,
-      endpoints,
-    };
-  }
-
-  private resolveStoredDefinition(cfg: Record<string, unknown>): ConnectorDefinition | undefined {
-    if (!cfg?.definition) {
-      return undefined;
-    }
-    const def = { ...(cfg.definition as ConnectorDefinition) };
-    if (cfg.baseUrl) {
-      def.baseUrl = String(cfg.baseUrl);
-    }
-    const endpointPath = cfg.endpointPath as string | undefined;
-    if (endpointPath && def.endpoints?.[0]) {
-      def.endpoints = [{ ...def.endpoints[0], path: endpointPath }];
-    }
-    return def;
-  }
 
   private mergeBuiltinDefinition(kind: string, cfg: Record<string, unknown>): ConnectorDefinition {
     const fresh = this.definitions.getBuiltin(kind);
@@ -307,33 +259,11 @@ export class ConnectorsService {
     if (row.kind && this.definitions.listBuiltin().some((p) => p.id === row.kind)) {
       return this.mergeBuiltinDefinition(row.kind, cfg);
     }
-    const fromConfig = this.resolveStoredDefinition(cfg);
+    const fromConfig = resolveStoredDefinition(cfg);
     if (fromConfig) {
       return fromConfig;
     }
     throw new BadRequestException('connector has no definition');
-  }
-
-  private parseCredentials(secret: string | undefined, authType?: string): ApiCredentials {
-    if (!secret) {
-      return {};
-    }
-    const trimmed = secret.trim();
-    if (authType === 'basic_auth') {
-      if (!trimmed.includes(':')) {
-        return { username: trimmed, password: '' };
-      }
-      const [username, ...rest] = trimmed.split(':');
-      return { username, password: rest.join(':') };
-    }
-    if (authType === 'custom_header') {
-      const [name, ...rest] = trimmed.split('=');
-      return { customHeader: { name, value: rest.join('=') } };
-    }
-    if (authType === 'bearer_token') {
-      return { bearerToken: trimmed };
-    }
-    return { apiKey: trimmed };
   }
 
   /** Encrypted connector secret first; Anthropic Admin env fallback for headless sync only. */
@@ -422,9 +352,9 @@ export class ConnectorsService {
     let definition: ConnectorDefinition | undefined;
 
     if (dto.presetId) {
-      definition = this.applyCreateOverrides(this.definitions.getBuiltin(dto.presetId), dto);
+      definition = applyCreateOverrides(this.definitions.getBuiltin(dto.presetId), dto);
     } else if (definitionId) {
-      definition = this.applyCreateOverrides(await this.definitions.get(definitionId), dto);
+      definition = applyCreateOverrides(await this.definitions.get(definitionId), dto);
     }
 
     const secretRef = dto.authSecret?.trim()
@@ -605,7 +535,7 @@ export class ConnectorsService {
     const definitionBase = await this.resolveDefinition(row);
     const secret = await this.resolveProviderSecret(row, definitionBase, inlineSecret);
     const definition = applyAnthropicKeyRouting(definitionBase, secret);
-    const creds = this.parseCredentials(secret, definition.authType);
+    const creds = parseCredentials(secret, definition.authType);
 
     const maxDaysPerRequest = definition.syncRange?.maxDaysPerRequest ?? undefined;
     const { syncStart, syncEnd } = resolvePreviewWindow(
@@ -760,7 +690,7 @@ export class ConnectorsService {
       throw new BadRequestException('connector has no credentials');
     }
     const definition = applyAnthropicKeyRouting(definitionBase, secret);
-    const creds = this.parseCredentials(secret, definition.authType);
+    const creds = parseCredentials(secret, definition.authType);
 
     const cfg = (row.config ?? {}) as Record<string, unknown>;
     const handoff = readConnectorHandoff(cfg);
