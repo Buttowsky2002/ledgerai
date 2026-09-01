@@ -8,7 +8,6 @@ import {
   AI_VENDORS,
   PLAN_TIERS,
   PLAN_TIER_LABELS,
-  aggregateByVendor,
   costTypeForTier,
   defaultUnitUsd,
   lineItemFor,
@@ -16,6 +15,7 @@ import {
   vendorLabel,
   type PlanTier,
 } from '@/lib/fixed-cost-catalog';
+import { latestMonthlyTotalsByVendor, priorSeatEntryForVendor } from '@/lib/overview-seat-monthly';
 import {
   createFixedCost,
   deleteFixedCost,
@@ -135,7 +135,7 @@ export function FixedOverheadClient() {
     [vendor, planTier, customLineItem],
   );
 
-  const vendorTotals = useMemo(() => aggregateByVendor(rows), [rows]);
+  const vendorTotals = useMemo(() => latestMonthlyTotalsByVendor(rows), [rows]);
 
   const liveDelta = useMemo(() => {
     const current = snapshotFromForm(seats, unitCostUsd, costUsd);
@@ -198,7 +198,25 @@ export function FixedOverheadClient() {
     if (editKey) {
       return;
     }
+    const costType = costTypeForTier(planTier);
+    const prior = priorSeatEntryForVendor(rows, vendor, {
+      beforeMonth: billingMonth,
+      lineItem,
+      costType,
+    });
+    if (prior) {
+      setSeats(prior.seats > 0 ? String(prior.seats) : '');
+      setUnitCostUsd(prior.unit_cost_usd > 0 ? String(prior.unit_cost_usd) : '');
+      setCostManual(false);
+      setBaseline({
+        seats: prior.seats,
+        unitCostUsd: prior.unit_cost_usd,
+        costUsd: prior.cost_usd,
+      });
+      return;
+    }
     const def = defaultUnitUsd(vendor, planTier);
+    setSeats('');
     if (def !== null) {
       setUnitCostUsd(String(def));
       if (planTier === 'free') {
@@ -207,7 +225,9 @@ export function FixedOverheadClient() {
     } else {
       setUnitCostUsd('');
     }
-  }, [vendor, planTier, editKey]);
+    setCostManual(false);
+    setBaseline(null);
+  }, [vendor, planTier, billingMonth, lineItem, rows, editKey]);
 
   function resetForm() {
     setEditKey(null);
@@ -300,6 +320,14 @@ export function FixedOverheadClient() {
 
     setSaving(true);
     try {
+      const existingForMonth = rows.find(
+        (row) =>
+          monthInputValue(String(row.period_month)) === billingMonth &&
+          row.vendor === vendor &&
+          row.cost_type === costType &&
+          (row.line_item || '') === lineItem,
+      );
+
       const result = editKey
         ? await updateFixedCost({
             ...payload,
@@ -308,7 +336,15 @@ export function FixedOverheadClient() {
             costType: editKey.costType,
             lineItem: editKey.lineItem ?? payload.lineItem,
           })
-        : await createFixedCost(payload);
+        : existingForMonth
+          ? await updateFixedCost({
+              ...payload,
+              periodMonth: String(existingForMonth.period_month).slice(0, 10),
+              vendor: existingForMonth.vendor,
+              costType: existingForMonth.cost_type,
+              lineItem: existingForMonth.line_item || undefined,
+            })
+          : await createFixedCost(payload);
 
       if (!result.ok) {
         const hint =
@@ -431,7 +467,7 @@ export function FixedOverheadClient() {
       {vendorTotals.length > 0 && (
         <Card
           title="Overhead by vendor"
-          subtitle="Fixed spend in selected range — matches Overview breakdown"
+          subtitle="Latest monthly run-rate per vendor — matches Overview"
         >
           <div className="flex flex-wrap gap-3">
             {vendorTotals.map((v) => (
@@ -439,8 +475,8 @@ export function FixedOverheadClient() {
                 key={v.vendor}
                 className="rounded-lg border border-edge bg-panel px-4 py-3 min-w-[8rem]"
               >
-                <p className="text-xs text-muted">{v.label}</p>
-                <p className="num text-lg font-semibold text-gray-100">{usd(v.total)}</p>
+                <p className="text-xs text-muted">{vendorLabel(v.vendor)}</p>
+                <p className="num text-lg font-semibold text-gray-100">{usd(v.total)}/mo</p>
               </div>
             ))}
           </div>
@@ -448,6 +484,12 @@ export function FixedOverheadClient() {
       )}
 
       <Card title={editKey ? 'Edit entry' : 'Add seats & plan'} subtitle={`Saving as: ${lineItem}`}>
+        {!editKey && baseline && (
+          <p className="mb-4 text-xs text-muted">
+            Pre-filled from {String(baseline.seats)} seats · {usd(baseline.costUsd)}/mo in the
+            prior billing month — adjust if seats or price changed.
+          </p>
+        )}
         <form onSubmit={(e) => void onSubmit(e)} className="space-y-5">
           <div>
             <span className="mb-2 block text-sm text-muted">Vendor</span>

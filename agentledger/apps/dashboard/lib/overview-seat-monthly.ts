@@ -223,6 +223,65 @@ export function currentMonthlySeatRunRate(rows: FixedCostSeatRow[]): number {
   return Math.round(total * 100) / 100;
 }
 
+export type SeatEntrySnapshot = {
+  period_month: string;
+  seats: number;
+  unit_cost_usd: number;
+  cost_usd: number;
+};
+
+/**
+ * Latest admin row for a vendor/plan strictly before a billing month — used to pre-fill
+ * seats and unit price when recording a new month.
+ */
+export function priorSeatEntryForVendor(
+  rows: Array<
+    FixedCostSeatRow & { line_item?: string | null; cost_type?: string | null; unit_cost_usd?: number | string | null }
+  >,
+  vendor: string,
+  opts?: { beforeMonth?: string; lineItem?: string; costType?: string },
+): SeatEntrySnapshot | null {
+  const vendorKey = vendor.trim().toLowerCase();
+  const before = opts?.beforeMonth?.slice(0, 7);
+  let bestMonth = '';
+  let best: SeatEntrySnapshot | null = null;
+
+  for (const row of rows) {
+    if (String(row.vendor ?? '').trim().toLowerCase() !== vendorKey) {
+      continue;
+    }
+    if (opts?.lineItem != null && String(row.line_item ?? '') !== opts.lineItem) {
+      continue;
+    }
+    if (opts?.costType != null && String(row.cost_type ?? '') !== opts.costType) {
+      continue;
+    }
+    const month = monthKey(String(row.period_month ?? ''));
+    if (!month || (before && month >= before)) {
+      continue;
+    }
+    if (month > bestMonth) {
+      bestMonth = month;
+      best = {
+        period_month: `${month}-01`,
+        seats: Number(row.seats ?? 0),
+        unit_cost_usd: Number(row.unit_cost_usd ?? 0),
+        cost_usd: Number(row.cost_usd ?? 0),
+      };
+    }
+  }
+  return best;
+}
+
+/** Latest monthly $ per vendor (not summed across billing months in range). */
+export function latestMonthlyTotalsByVendor(
+  rows: FixedCostSeatRow[],
+): { vendor: string; total: number }[] {
+  return [...latestSeatByVendor(rows).entries()]
+    .map(([vendor, snap]) => ({ vendor, total: snap.seat_usd }))
+    .sort((a, b) => b.total - a.total);
+}
+
 /**
  * Fixed subscription $ attributed to [from, to]: one full monthly charge per billing
  * month in range at each vendor's latest config on or before that month; for a
