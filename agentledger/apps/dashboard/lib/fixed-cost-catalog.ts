@@ -16,12 +16,21 @@ export const AI_VENDORS: { id: FixedCostVendor; label: string; product: string }
   { id: 'other', label: 'Other', product: 'Custom' },
 ];
 
-export const PLAN_TIERS = ['free', 'team', 'enterprise'] as const;
+export const PLAN_TIERS = ['free', 'team', 'premium', 'enterprise'] as const;
 export type PlanTier = (typeof PLAN_TIERS)[number];
 
 export const PLAN_TIER_LABELS: Record<PlanTier, string> = {
   free: 'Free',
   team: 'Team',
+  premium: 'Premium',
+  enterprise: 'Enterprise',
+};
+
+/** Form labels: Team seats display as Basic vs Premium. */
+export const PLAN_TIER_BUTTON_LABELS: Record<PlanTier, string> = {
+  free: 'Free',
+  team: 'Basic',
+  premium: 'Premium',
   enterprise: 'Enterprise',
 };
 
@@ -30,7 +39,7 @@ const DEFAULT_UNIT_USD: Partial<
   Record<FixedCostVendor, Partial<Record<PlanTier, number | undefined>>>
 > = {
   openai: { free: 0, team: 30 },
-  anthropic: { free: 0, team: 30 },
+  anthropic: { free: 0, team: 30, premium: 100 },
   cursor: { free: 0, team: 40 },
   google: { free: 0, team: 20 },
   github: { free: 0, team: 19 },
@@ -45,9 +54,6 @@ export function vendorLabel(vendor: string): string {
 export function costTypeForTier(tier: PlanTier): FixedCostType {
   if (tier === 'enterprise') {
     return 'subscription';
-  }
-  if (tier === 'free') {
-    return 'seat_license';
   }
   return 'seat_license';
 }
@@ -80,10 +86,13 @@ export function parseStoredPlan(
   if (li.includes('enterprise') || costType === 'subscription') {
     return { vendor: v, tier: 'enterprise' };
   }
+  if (li.includes('premium') || li.includes('max') || li.includes('ultra')) {
+    return { vendor: v, tier: 'premium' };
+  }
   if (li.includes('free')) {
     return { vendor: v, tier: 'free' };
   }
-  if (li.includes('team')) {
+  if (li.includes('team') || li.includes('basic')) {
     return { vendor: v, tier: 'team' };
   }
   return { vendor: v, tier: costType === 'subscription' ? 'enterprise' : 'team' };

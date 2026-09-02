@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { vendorLabel } from '@/lib/fixed-cost-catalog';
+import type { SeatTierSnap } from '@/lib/overview-seat-monthly';
 import { formatSignedUsd, monthLabel } from '@/lib/seat-price-delta';
 import { usdPerMonth } from '@/lib/usd-per-month';
 import { usd } from '@/components/ui';
@@ -11,6 +12,7 @@ export type OverviewVendorSeatRow = {
   usd_from_seats?: number;
   prior_seats?: number | null;
   billing_month?: string;
+  tiers?: SeatTierSnap[];
 };
 
 type Props = {
@@ -18,6 +20,27 @@ type Props = {
   seatChangeUsd?: number;
   billingMonth?: string;
 };
+
+function SeatTierLines({ tiers, seats }: { tiers?: SeatTierSnap[]; seats?: number }) {
+  const visible = (tiers ?? []).filter((t) => t.seats > 0 || t.seat_usd > 0);
+  if (visible.length === 0) {
+    return (
+      <p className="mt-0.5 text-xs text-muted">
+        {seats != null && seats > 0 ? `${seats} seat${seats === 1 ? '' : 's'}` : 'monthly'}
+      </p>
+    );
+  }
+  return (
+    <div className="mt-1 space-y-0.5">
+      {visible.map((t) => (
+        <p key={t.class} className="text-xs text-muted">
+          <span className="text-gray-300">{t.seats}</span> {t.class}
+          {t.unit_usd > 0 ? <span className="num"> · {usd(t.unit_usd)}/seat</span> : null}
+        </p>
+      ))}
+    </div>
+  );
+}
 
 /** Per-vendor seat subscriptions at the top of Overview (same data as admin fixed overhead). */
 export function OverviewSeatSubscriptions({ vendors, seatChangeUsd = 0, billingMonth }: Props) {
@@ -37,8 +60,8 @@ export function OverviewSeatSubscriptions({ vendors, seatChangeUsd = 0, billingM
     <div className="mb-6">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs font-medium uppercase tracking-wider text-muted">
-          Seat subscriptions · {billingMonth ? monthLabel(`${billingMonth}-01`) : 'monthly'} (seats
-          × unit)
+          Seat subscriptions · {billingMonth ? monthLabel(`${billingMonth}-01`) : 'monthly'} (basic
+          vs premium)
         </p>
         {seatChangeUsd !== 0 && (
           <p className={`text-xs ${seatChangeUsd > 0 ? 'text-warn' : 'text-pos'}`}>
@@ -47,38 +70,17 @@ export function OverviewSeatSubscriptions({ vendors, seatChangeUsd = 0, billingM
         )}
       </div>
       <div className="flex flex-wrap gap-3">
-        {seatVendors.map((v) => {
-          const seatDelta =
-            v.prior_seats != null && v.seats != null && v.seats !== v.prior_seats
-              ? v.seats - v.prior_seats
-              : null;
-          return (
-            <Link
-              key={v.vendor}
-              href="/admin/fixed-overhead"
-              className="min-w-[9rem] rounded-lg border border-edge bg-panel px-4 py-3 transition-colors hover:border-accent/40 hover:bg-white/[0.03]"
-            >
-              <p className="text-xs text-muted">{vendorLabel(v.vendor)}</p>
-              <p className="num text-lg font-semibold text-gray-100">{usdPerMonth(v.seat_usd)}</p>
-              <p className="mt-0.5 text-xs text-muted">
-                {v.seats != null && v.seats > 0 ? (
-                  <>
-                    {v.seats} seat{v.seats === 1 ? '' : 's'}
-                    {seatDelta != null && seatDelta !== 0 && (
-                      <span className={seatDelta > 0 ? ' text-warn' : ' text-pos'}>
-                        {' '}
-                        ({seatDelta > 0 ? '+' : ''}
-                        {seatDelta})
-                      </span>
-                    )}
-                  </>
-                ) : (
-                  'monthly'
-                )}
-              </p>
-            </Link>
-          );
-        })}
+        {seatVendors.map((v) => (
+          <Link
+            key={v.vendor}
+            href="/admin/fixed-overhead"
+            className="min-w-[11rem] rounded-lg border border-edge bg-panel px-4 py-3 transition-colors hover:border-accent/40 hover:bg-white/[0.03]"
+          >
+            <p className="text-xs text-muted">{vendorLabel(v.vendor)}</p>
+            <p className="num text-lg font-semibold text-gray-100">{usdPerMonth(v.seat_usd)}</p>
+            <SeatTierLines tiers={v.tiers} seats={v.seats} />
+          </Link>
+        ))}
       </div>
     </div>
   );

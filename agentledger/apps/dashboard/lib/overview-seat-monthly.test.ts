@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   billingMonthsInRange,
   currentMonthlySeatRunRate,
+  keywordSeatClass,
   latestBillingMonthInRange,
   latestMonthlyTotalsByVendor,
   latestSeatByVendor,
@@ -100,6 +101,13 @@ test('latestMonthlyTotalsByVendor carries forward older plan lines and sums by v
   const snap = latestSeatByVendor(rows).get('anthropic');
   assert.equal(snap?.seats, 66);
   assert.equal(snap?.seat_usd, 1640);
+  assert.deepEqual(
+    snap?.tiers.map((t) => ({ class: t.class, seats: t.seats, unit_usd: t.unit_usd })),
+    [
+      { class: 'basic', seats: 62, unit_usd: 20 },
+      { class: 'premium', seats: 4, unit_usd: 100 },
+    ],
+  );
 });
 
 test('latestSeatByVendor replaces a plan when the same line item is updated', () => {
@@ -150,6 +158,43 @@ test('current seats persist when the selected range ends before the latest billi
   // 30-day / last-month filters still see the current combined vendor run-rate.
   assert.equal(currentMonthlySeatRunRate(rows), 3130);
   assert.equal(periodSeatTotalForRange(rows, '2026-08-01', '2026-08-31'), 3130);
+});
+
+test('keywordSeatClass maps plan names to basic vs premium', () => {
+  assert.equal(keywordSeatClass('Claude Team', 'seat_license'), 'basic');
+  assert.equal(keywordSeatClass('Claude Max', 'seat_license'), 'premium');
+  assert.equal(keywordSeatClass('Claude Premium', 'seat_license'), 'premium');
+  assert.equal(keywordSeatClass('ChatGPT Enterprise', 'subscription'), 'premium');
+});
+
+test('same-priced Team line in a later month replaces; Max stays a separate premium class', () => {
+  const rows = [
+    {
+      vendor: 'anthropic',
+      period_month: '2026-07-01',
+      line_item: 'Claude Team',
+      cost_usd: 1380,
+      seats: 46,
+      unit_cost_usd: 30,
+    },
+    {
+      vendor: 'anthropic',
+      period_month: '2026-09-01',
+      line_item: 'Claude Premium',
+      cost_usd: 400,
+      seats: 4,
+      unit_cost_usd: 100,
+    },
+  ];
+  const snap = latestSeatByVendor(rows).get('anthropic');
+  assert.equal(snap?.seats, 50);
+  assert.equal(snap?.seat_usd, 1780);
+  const basic = snap?.tiers.find((t) => t.class === 'basic');
+  const premium = snap?.tiers.find((t) => t.class === 'premium');
+  assert.equal(basic?.seats, 46);
+  assert.equal(basic?.unit_usd, 30);
+  assert.equal(premium?.seats, 4);
+  assert.equal(premium?.unit_usd, 100);
 });
 
 test('seatLookupToDate keeps current seats visible on past ranges', () => {

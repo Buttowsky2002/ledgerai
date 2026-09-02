@@ -223,6 +223,7 @@ export default async function OverviewPage({
         seat_usd: row.seat_usd,
         seats: row.seats > 0 ? row.seats : undefined,
         billing_month: row.period_month.slice(0, 7),
+        tiers: row.tiers,
       });
     }
 
@@ -236,6 +237,7 @@ export default async function OverviewPage({
         seat_usd: existing?.seat_usd ?? row.seat_usd,
         seats: existing?.seats ?? row.seats,
         billing_month: existing?.billing_month ?? row.billing_month,
+        tiers: existing?.tiers ?? row.tiers,
       });
     }
 
