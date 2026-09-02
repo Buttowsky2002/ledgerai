@@ -116,6 +116,26 @@ describe('middleware', () => {
     expect(res.status).toBe(400);
   });
 
+  it('returns 401 JSON for API routes instead of an HTML login redirect', async () => {
+    const res = middleware(requestFor('/api/portal-import/anthropic/preview'));
+    expect(res.status).toBe(401);
+    expect(res.headers.get('content-type')).toMatch(/json/);
+    expect(res.headers.get('location')).toBeNull();
+    await expect(res.json()).resolves.toEqual({ error: 'unauthorized' });
+  });
+
+  it('returns session_expired JSON for API routes when only a refresh cookie exists', async () => {
+    const token = fakeJwt({ exp: Math.floor(Date.now() / 1000) - 60 });
+    const res = middleware(
+      requestFor('/api/portal-import/anthropic/preview', {
+        cookie: token,
+        refreshCookie: 'refresh-token-value',
+      }),
+    );
+    expect(res.status).toBe(401);
+    await expect(res.json()).resolves.toEqual({ error: 'session_expired' });
+  });
+
   it('returns 400 for x-middleware-subrequest even before cookie checks', async () => {
     const res = middleware(
       requestFor('/overview', {

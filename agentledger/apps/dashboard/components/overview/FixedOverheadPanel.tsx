@@ -11,6 +11,7 @@ import {
   seatLookupFromDate,
   seatLookupToDate,
   type FixedCostSeatRow,
+  type SeatTierSnap,
 } from '@/lib/overview-seat-monthly';
 import { vendorDetailHref } from '@/lib/vendor-routes';
 import { proxyApi } from '@/lib/api';
@@ -45,6 +46,7 @@ type DisplayVendorRow = {
   prior_seats?: number | null;
   usd_from_seats?: number;
   prior_period_month?: string | null;
+  tiers?: SeatTierSnap[];
 };
 
 /** True when seats moved vs the previous billing month (not a first-time entry). */
@@ -74,9 +76,29 @@ function SeatChangeCell({ row }: { row: DisplayVendorRow }) {
   );
 }
 
+function SeatCountCell({ row }: { row: DisplayVendorRow }) {
+  const visible = (row.tiers ?? []).filter((t) => t.seats > 0 || t.seat_usd > 0);
+  if (visible.length > 0) {
+    return (
+      <div className="text-right">
+        {visible.map((t) => (
+          <p key={t.class} className="text-xs text-muted">
+            <span className="num text-gray-200">{t.seats}</span> {t.class}
+            {t.unit_usd > 0 ? <span className="num"> · {usd(t.unit_usd)}</span> : null}
+          </p>
+        ))}
+      </div>
+    );
+  }
+  return <span>{row.seats != null && row.seats > 0 ? String(row.seats) : '—'}</span>;
+}
+
 /** One row per vendor: current monthly seats + in-range overage. */
 function buildVendorDisplayRows(
-  latestByVendor: Map<string, { seat_usd: number; seats: number; period_month: string }>,
+  latestByVendor: Map<
+    string,
+    { seat_usd: number; seats: number; period_month: string; tiers?: SeatTierSnap[] }
+  >,
   orgVendors: OrgVendorRow[],
 ): DisplayVendorRow[] {
   const byVendor = new Map<string, DisplayVendorRow>();
@@ -88,6 +110,7 @@ function buildVendorDisplayRows(
       seats: snap.seats > 0 ? snap.seats : undefined,
       budget_overage_usd: 0,
       total_usd: snap.seat_usd,
+      tiers: snap.tiers,
     });
   }
 
@@ -256,7 +279,7 @@ export async function FixedOverheadPanel({
                 {vendorLabel(r.vendor)}
               </Link>
             ),
-            seats: r.seats != null && r.seats > 0 ? String(r.seats) : '—',
+            seats: <SeatCountCell row={r} />,
             seat: usdPerMonth(r.seat_usd),
             seatChange: <SeatChangeCell row={r} />,
             overage: usd(r.budget_overage_usd),

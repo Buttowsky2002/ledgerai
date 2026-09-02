@@ -7,7 +7,7 @@ import { combinedAiCost } from '@/lib/combined-ai-cost';
 import {
   AI_VENDORS,
   PLAN_TIERS,
-  PLAN_TIER_LABELS,
+  PLAN_TIER_BUTTON_LABELS,
   costTypeForTier,
   defaultUnitUsd,
   lineItemFor,
@@ -15,7 +15,7 @@ import {
   vendorLabel,
   type PlanTier,
 } from '@/lib/fixed-cost-catalog';
-import { latestMonthlyTotalsByVendor, priorSeatEntryForVendor } from '@/lib/overview-seat-monthly';
+import { latestSeatByVendor, priorSeatEntryForVendor } from '@/lib/overview-seat-monthly';
 import {
   createFixedCost,
   deleteFixedCost,
@@ -135,7 +135,7 @@ export function FixedOverheadClient() {
     [vendor, planTier, customLineItem],
   );
 
-  const vendorTotals = useMemo(() => latestMonthlyTotalsByVendor(rows), [rows]);
+  const vendorTotals = useMemo(() => [...latestSeatByVendor(rows).entries()], [rows]);
 
   const liveDelta = useMemo(() => {
     const current = snapshotFromForm(seats, unitCostUsd, costUsd);
@@ -470,13 +470,21 @@ export function FixedOverheadClient() {
           subtitle="Latest monthly run-rate per vendor — matches Overview"
         >
           <div className="flex flex-wrap gap-3">
-            {vendorTotals.map((v) => (
+            {vendorTotals.map(([vendor, snap]) => (
               <div
-                key={v.vendor}
-                className="rounded-lg border border-edge bg-panel px-4 py-3 min-w-[8rem]"
+                key={vendor}
+                className="min-w-[9rem] rounded-lg border border-edge bg-panel px-4 py-3"
               >
-                <p className="text-xs text-muted">{vendorLabel(v.vendor)}</p>
-                <p className="num text-lg font-semibold text-gray-100">{usd(v.total)}/mo</p>
+                <p className="text-xs text-muted">{vendorLabel(vendor)}</p>
+                <p className="num text-lg font-semibold text-gray-100">{usd(snap.seat_usd)}/mo</p>
+                {snap.tiers
+                  .filter((t) => t.seats > 0 || t.seat_usd > 0)
+                  .map((t) => (
+                    <p key={t.class} className="mt-0.5 text-xs text-muted">
+                      {t.seats} {t.class}
+                      {t.unit_usd > 0 ? ` · ${usd(t.unit_usd)}/seat` : ''}
+                    </p>
+                  ))}
               </div>
             ))}
           </div>
@@ -525,10 +533,16 @@ export function FixedOverheadClient() {
                     planTier === tier ? 'bg-accent/25 text-white' : 'text-muted hover:text-gray-200'
                   } disabled:opacity-50`}
                 >
-                  {PLAN_TIER_LABELS[tier]}
+                  {PLAN_TIER_BUTTON_LABELS[tier]}
                 </button>
               ))}
             </div>
+            {planTier === 'premium' && (
+              <p className="mt-2 text-xs text-muted">
+                Premium is a separate seat class from Basic — both stay on Overview with their own
+                seat count and price.
+              </p>
+            )}
             {planTier === 'enterprise' && (
               <p className="mt-2 text-xs text-muted">
                 Enterprise is usually a custom contract — enter total cost manually.

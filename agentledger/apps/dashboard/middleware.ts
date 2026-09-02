@@ -27,7 +27,16 @@ export function middleware(request: NextRequest) {
 
   const token = request.cookies.get('al_access')?.value;
   if (!token || !isStructurallyValidJwt(token)) {
+    const isApi = request.nextUrl.pathname.startsWith('/api/');
     const refresh = request.cookies.get('al_refresh')?.value;
+    // API fetches must not follow an HTML login/refresh redirect — the client
+    // would try to parse <!DOCTYPE as JSON (CSV preview POSTs were hitting this).
+    if (isApi) {
+      return NextResponse.json(
+        { error: refresh ? 'session_expired' : 'unauthorized' },
+        { status: 401 },
+      );
+    }
     if (refresh && request.nextUrl.pathname !== '/api/auth/refresh') {
       const refreshTarget = request.nextUrl.clone();
       refreshTarget.pathname = '/api/auth/refresh';

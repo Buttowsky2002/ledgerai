@@ -75,7 +75,7 @@ async function bootstrap(): Promise<void> {
   // Cap request bodies (control-plane writes are small). Portal CSV uploads need more headroom.
   const defaultBodyLimit = env('BADGERIQ_API_BODY_LIMIT') ?? '256kb';
   const defaultJson = json({ limit: defaultBodyLimit });
-  const portalJson = json({ limit: '5mb' });
+  const portalJson = json({ limit: '20mb' });
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (req.path.startsWith('/v1/portal-import/')) {
       portalJson(req, res, next);

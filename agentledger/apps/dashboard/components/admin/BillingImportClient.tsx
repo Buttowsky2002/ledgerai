@@ -132,6 +132,9 @@ function defaultRange(): { from: string; to: string } {
 }
 
 function formatApiError(body: Record<string, unknown>, fallback: string): string {
+  if (body.error === 'session_expired' || body.error === 'unauthorized') {
+    return 'Session expired — refresh the page and sign in again.';
+  }
   if (typeof body.detail === 'string') {
     return body.detail;
   }
@@ -160,6 +163,46 @@ function formatApiError(body: Record<string, unknown>, fallback: string): string
     }
   }
   return fallback;
+}
+
+async function readJsonResponse(res: Response): Promise<Record<string, unknown>> {
+  const text = await res.text();
+  const trimmed = text.trim();
+  if (!trimmed || trimmed.startsWith('<')) {
+    throw new Error(
+      res.status === 401
+        ? 'Session expired — refresh the page and sign in again.'
+        : 'Upload failed — the server returned a web page instead of JSON. Refresh and try again, or split a large CSV.',
+    );
+  }
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    throw new Error('Upload failed — response was not valid JSON.');
+  }
+}
+
+async function portalFetch(
+  url: string,
+  init?: RequestInit,
+  retried = false,
+): Promise<{ res: Response; body: Record<string, unknown> }> {
+  const res = await fetch(url, { ...init, credentials: 'same-origin', redirect: 'manual' });
+  if (res.status === 401 && !retried) {
+    const refreshed = await fetch('/api/auth/refresh', {
+      method: 'POST',
+      credentials: 'same-origin',
+    });
+    if (refreshed.ok) {
+      return portalFetch(url, init, true);
+    }
+    throw new Error('Session expired — refresh the page and sign in again.');
+  }
+  if (res.status >= 300 && res.status < 400) {
+    throw new Error('Session expired — refresh the page and sign in again.');
+  }
+  const body = await readJsonResponse(res);
+  return { res, body };
 }
 
 function readHandoff(config?: Record<string, unknown>) {
@@ -326,7 +369,7 @@ export function BillingImportClient() {
   }, [loadImportRuns]);
 
   const runPreview = useCallback(async (file: StagedFile, mapping?: ColumnMapping | null) => {
-    const res = await fetch('/api/portal-import/anthropic/preview', {
+    const { res, body } = await portalFetch('/api/portal-import/anthropic/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -336,7 +379,6 @@ export function BillingImportClient() {
         provider: file.provider || undefined,
       }),
     });
-    const body = (await res.json()) as PortalPreview & Record<string, unknown>;
     if (!res.ok) {
       throw new Error(formatApiError(body, 'Preview failed'));
     }
@@ -463,7 +505,7 @@ export function BillingImportClient() {
     setError(null);
     setUploadResult(null);
     try {
-      const res = await fetch('/api/portal-import/anthropic', {
+      const { res, body } = await portalFetch('/api/portal-import/anthropic', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -484,7 +526,6 @@ export function BillingImportClient() {
           dryRun,
         }),
       });
-      const body = (await res.json()) as UploadResult & Record<string, unknown>;
       if (!res.ok) {
         setError(formatApiError(body, 'Import failed'));
         return;

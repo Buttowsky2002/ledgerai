@@ -2,6 +2,11 @@
 const nextConfig = {
   reactStrictMode: true,
   output: 'standalone',
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '20mb',
+    },
+  },
   // shared-types ships compiled ESM; transpile to be safe across Next's bundler.
   transpilePackages: ['@agentledger/shared-types', 'recharts'],
 
@@ -23,9 +28,7 @@ const nextConfig = {
    * blocks hydration and renders a blank page (dark body background only).
    */
   async headers() {
-    const publicApiOrigin = (
-      process.env.NEXT_PUBLIC_BADGERIQ_API_URL || ''
-    ).replace(/\/$/, '');
+    const publicApiOrigin = (process.env.NEXT_PUBLIC_BADGERIQ_API_URL || '').replace(/\/$/, '');
     const connectSrc = ["'self'", publicApiOrigin].filter(Boolean).join(' ');
 
     const csp = [

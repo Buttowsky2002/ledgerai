@@ -4,8 +4,25 @@ export type FixedCostSeatRow = {
   period_month?: string | null;
   cost_usd?: number | string | null;
   seats?: number | string | null;
+  unit_cost_usd?: number | string | null;
   line_item?: string | null;
   cost_type?: string | null;
+};
+
+export type SeatClass = 'basic' | 'premium';
+
+export type SeatTierSnap = {
+  class: SeatClass;
+  seats: number;
+  seat_usd: number;
+  unit_usd: number;
+};
+
+export type VendorSeatSnap = {
+  seat_usd: number;
+  seats: number;
+  period_month: string;
+  tiers: SeatTierSnap[];
 };
 
 function monthKey(iso: string): string {
@@ -98,58 +115,149 @@ function lineItemKey(row: FixedCostSeatRow): string {
   return `${vendorName(row)}\0${String(row.cost_type ?? '').trim()}\0${String(row.line_item ?? '').trim()}`;
 }
 
-function sumLineItemsByVendor(
-  rows: FixedCostSeatRow[],
-  billingMonth: string,
-): Map<string, { seat_usd: number; seats: number; period_month: string }> {
+function unitUsd(row: FixedCostSeatRow): number {
+  const stored = Number(row.unit_cost_usd ?? 0);
+  if (stored > 0) {
+    return Math.round(stored * 100) / 100;
+  }
+  const seats = Number(row.seats ?? 0);
+  const cost = Number(row.cost_usd ?? 0);
+  if (seats > 0 && cost > 0) {
+    return Math.round((cost / seats) * 100) / 100;
+  }
+  return 0;
+}
+
+/** Keyword class from plan name; null when the name is ambiguous. */
+export function keywordSeatClass(
+  lineItem?: string | null,
+  costType?: string | null,
+): SeatClass | null {
+  const li = String(lineItem ?? '').toLowerCase();
+  const ct = String(costType ?? '').toLowerCase();
+  if (ct === 'subscription' || /\b(enterprise|max|premium|ultra)\b/.test(li)) {
+    return 'premium';
+  }
+  if (/\b(team|standard|free|basic|plus)\b/.test(li) || /\bpro\b/.test(li)) {
+    return 'basic';
+  }
+  return null;
+}
+
+function assignSeatClass(
+  lineItem: string,
+  costType: string,
+  unit: number,
+  vendorUnits: number[],
+): SeatClass {
+  const distinct = [...new Set(vendorUnits.filter((u) => u > 0))].sort((a, b) => a - b);
+  if (distinct.length >= 2) {
+    const lo = distinct[0]!;
+    const hi = distinct[distinct.length - 1]!;
+    const mid = (lo + hi) / 2;
+    if (unit > mid) {
+      return 'premium';
+    }
+    if (unit < mid || unit === lo) {
+      return 'basic';
+    }
+  }
+  return keywordSeatClass(lineItem, costType) ?? 'basic';
+}
+
+type LineSnap = {
+  vendor: string;
+  month: string;
+  line_item: string;
+  cost_type: string;
+  seat_usd: number;
+  seats: number;
+  unit_usd: number;
+};
+
+function collectLatestLineItems(rows: FixedCostSeatRow[], billingMonth: string): LineSnap[] {
   const limit = billingMonth.slice(0, 7);
-  const best = new Map<
-    string,
-    { vendor: string; month: string; seat_usd: number; seats: number }
-  >();
+  const best = new Map<string, LineSnap>();
   for (const row of rows) {
     const month = monthKey(String(row.period_month ?? ''));
     if (!month || month > limit) {
       continue;
     }
-    const vendor = vendorName(row);
     const key = lineItemKey(row);
     const prev = best.get(key);
     if (prev && prev.month > month) {
       continue;
     }
-    if (prev && prev.month === month) {
-      prev.seat_usd += Number(row.cost_usd ?? 0);
-      prev.seats += Number(row.seats ?? 0);
-      continue;
-    }
-    best.set(key, {
-      vendor,
+    const snap: LineSnap = {
+      vendor: vendorName(row),
       month,
+      line_item: String(row.line_item ?? ''),
+      cost_type: String(row.cost_type ?? ''),
       seat_usd: Number(row.cost_usd ?? 0),
       seats: Number(row.seats ?? 0),
-    });
-  }
-
-  const out = new Map<string, { seat_usd: number; seats: number; period_month: string }>();
-  for (const snap of best.values()) {
-    const cur = out.get(snap.vendor) ?? { seat_usd: 0, seats: 0, period_month: `${snap.month}-01` };
-    cur.seat_usd += snap.seat_usd;
-    cur.seats += snap.seats;
-    if (snap.month > cur.period_month.slice(0, 7)) {
-      cur.period_month = `${snap.month}-01`;
-    }
-    out.set(snap.vendor, cur);
-  }
-  for (const [vendor, v] of out) {
-    if (v.seat_usd <= 0 && v.seats <= 0) {
-      out.delete(vendor);
+      unit_usd: unitUsd(row),
+    };
+    if (prev && prev.month === month) {
+      prev.seat_usd += snap.seat_usd;
+      prev.seats += snap.seats;
       continue;
     }
+    best.set(key, snap);
+  }
+  return [...best.values()];
+}
+
+function tiersFromLines(lines: LineSnap[]): SeatTierSnap[] {
+  const units = lines.map((l) => l.unit_usd);
+  const byClass = new Map<SeatClass, SeatTierSnap>();
+  for (const line of lines) {
+    const cls = assignSeatClass(line.line_item, line.cost_type, line.unit_usd, units);
+    const cur = byClass.get(cls) ?? { class: cls, seats: 0, seat_usd: 0, unit_usd: 0 };
+    cur.seats += line.seats;
+    cur.seat_usd += line.seat_usd;
+    cur.unit_usd = cur.seats > 0 ? cur.seat_usd / cur.seats : line.unit_usd;
+    byClass.set(cls, cur);
+  }
+  const out: SeatTierSnap[] = [];
+  for (const cls of ['basic', 'premium'] as const) {
+    const snap = byClass.get(cls);
+    if (!snap || (snap.seats <= 0 && snap.seat_usd <= 0)) {
+      continue;
+    }
+    out.push({
+      class: cls,
+      seats: snap.seats,
+      seat_usd: Math.round(snap.seat_usd * 100) / 100,
+      unit_usd: Math.round(snap.unit_usd * 100) / 100,
+    });
+  }
+  return out;
+}
+
+function sumLineItemsByVendor(
+  rows: FixedCostSeatRow[],
+  billingMonth: string,
+): Map<string, VendorSeatSnap> {
+  const grouped = new Map<string, LineSnap[]>();
+  for (const line of collectLatestLineItems(rows, billingMonth)) {
+    const list = grouped.get(line.vendor) ?? [];
+    list.push(line);
+    grouped.set(line.vendor, list);
+  }
+
+  const out = new Map<string, VendorSeatSnap>();
+  for (const [vendor, lines] of grouped) {
+    const seat_usd = Math.round(lines.reduce((s, l) => s + l.seat_usd, 0) * 100) / 100;
+    const seats = lines.reduce((s, l) => s + l.seats, 0);
+    if (seat_usd <= 0 && seats <= 0) {
+      continue;
+    }
+    const period_month = `${lines.reduce((m, l) => (l.month > m ? l.month : m), '0000-00')}-01`;
     out.set(vendor, {
-      seat_usd: Math.round(v.seat_usd * 100) / 100,
-      seats: v.seats,
-      period_month: v.period_month,
+      seat_usd,
+      seats,
+      period_month,
+      tiers: tiersFromLines(lines),
     });
   }
   return out;
@@ -164,7 +272,7 @@ function sumLineItemsByVendor(
 export function latestSeatByVendorOnOrBefore(
   rows: FixedCostSeatRow[],
   billingMonth: string,
-): Map<string, { seat_usd: number; seats: number; period_month: string }> {
+): Map<string, VendorSeatSnap> {
   return sumLineItemsByVendor(rows, billingMonth);
 }
 
@@ -212,9 +320,7 @@ export function seatLookupToDate(to: string, today = new Date()): string {
 }
 
 /** Current monthly seat charge per vendor: every plan line carried forward, then summed. */
-export function latestSeatByVendor(
-  rows: FixedCostSeatRow[],
-): Map<string, { seat_usd: number; seats: number; period_month: string }> {
+export function latestSeatByVendor(rows: FixedCostSeatRow[]): Map<string, VendorSeatSnap> {
   return latestSeatByVendorOnOrBefore(rows, '9999-12');
 }
 
