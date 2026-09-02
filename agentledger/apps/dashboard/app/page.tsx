@@ -25,6 +25,7 @@ import {
   latestSeatByVendor,
   periodSeatTotalForRange,
   seatLookupFromDate,
+  seatLookupToDate,
   type FixedCostSeatRow,
 } from '../lib/overview-seat-monthly';
 import { seatUsdByVendor } from '../lib/platform-billing';
@@ -272,7 +273,8 @@ export default async function OverviewPage({
     ) as Promise<unknown> as Promise<ModelRow[]>,
     (async () => {
       const seatFrom = seatLookupFromDate(to);
-      const qs = new URLSearchParams({ from: seatFrom, to }).toString();
+      const seatTo = seatLookupToDate(to);
+      const qs = new URLSearchParams({ from: seatFrom, to: seatTo }).toString();
       const res = await proxyApi(`/v1/fixed-costs?${qs}`);
       return res.ok && Array.isArray(res.data) ? (res.data as FixedCostVendorRow[]) : [];
     })(),

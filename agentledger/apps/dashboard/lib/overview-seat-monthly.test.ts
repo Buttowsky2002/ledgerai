@@ -11,6 +11,7 @@ import {
   periodSeatTotal,
   periodSeatTotalForRange,
   priorSeatEntryForVendor,
+  seatLookupToDate,
 } from './overview-seat-monthly';
 
 test('billingMonthsInRange spans partial months inclusively', () => {
@@ -62,4 +63,8 @@ test('latestMonthlyTotalsByVendor uses newest billing month only', () => {
     { vendor: 'openai', total: 1375 },
     { vendor: 'anthropic', total: 400 },
   ]);
+});
+
+test('seatLookupToDate keeps current seats visible on past ranges', () => {
+  assert.equal(seatLookupToDate('2026-08-31', new Date('2026-09-02T12:00:00Z')), '2026-09-02');
 });

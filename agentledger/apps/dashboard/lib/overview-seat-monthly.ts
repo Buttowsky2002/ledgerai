@@ -187,6 +187,15 @@ export function seatLookupFromDate(to: string, lookbackMonths = 24): string {
   return d.toISOString().slice(0, 10);
 }
 
+/**
+ * Upper bound for seat-config history: never cut off at a past range end, so the
+ * latest admin seats/price persist on every Overview date filter.
+ */
+export function seatLookupToDate(to: string, today = new Date()): string {
+  const todayIso = today.toISOString().slice(0, 10);
+  return to.slice(0, 10) >= todayIso ? to.slice(0, 10) : todayIso;
+}
+
 /** Latest configured monthly seat charge per vendor (newest billing month in history). */
 export function latestSeatByVendor(
   rows: FixedCostSeatRow[],
