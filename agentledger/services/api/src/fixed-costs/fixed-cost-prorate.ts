@@ -88,7 +88,10 @@ function sumLineItemsByVendor(
   billingMonth: string,
 ): Map<string, { seat_usd: number; seats: number; period_month: string }> {
   const limit = billingMonth.slice(0, 7);
-  const best = new Map<string, { vendor: string; month: string; seat_usd: number; seats: number }>();
+  const best = new Map<
+    string,
+    { vendor: string; month: string; seat_usd: number; seats: number }
+  >();
   for (const row of rows) {
     const month = monthKey(row.period_month);
     if (!month || month > limit) {
@@ -189,7 +192,11 @@ function monthlySeatRunRateAsOf(rows: FixedCostSeatRow[], asOf: string): number 
   return Math.round(total * 100) / 100;
 }
 
-function periodSeatTotalWithCarryForward(rows: FixedCostSeatRow[], from: string, to: string): number {
+function periodSeatTotalWithCarryForward(
+  rows: FixedCostSeatRow[],
+  from: string,
+  to: string,
+): number {
   const total = billingMonthsInRange(from, to).reduce(
     (s, month) => s + monthlySeatRunRateAsOf(rows, `${month}-28`),
     0,
@@ -201,7 +208,11 @@ function periodSeatTotalWithCarryForward(rows: FixedCostSeatRow[], from: string,
  * Fixed subscription $ attributed to [from, to]: one full monthly charge per billing
  * month in range at each vendor's latest config; single-month ranges use current run-rate.
  */
-export function periodSeatTotalForRange(rows: FixedCostSeatRow[], from: string, to: string): number {
+export function periodSeatTotalForRange(
+  rows: FixedCostSeatRow[],
+  from: string,
+  to: string,
+): number {
   const months = billingMonthsInRange(from, to);
   if (months.length === 1) {
     return currentMonthlySeatRunRate(rows);
