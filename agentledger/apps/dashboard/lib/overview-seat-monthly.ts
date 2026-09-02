@@ -4,6 +4,8 @@ export type FixedCostSeatRow = {
   period_month?: string | null;
   cost_usd?: number | string | null;
   seats?: number | string | null;
+  line_item?: string | null;
+  cost_type?: string | null;
 };
 
 function monthKey(iso: string): string {
@@ -88,69 +90,82 @@ export function periodSeatTotal(rows: FixedCostSeatRow[], from: string, to: stri
   return Math.round(total * 100) / 100;
 }
 
-type VendorMonthTotals = Map<string, Map<string, { seat_usd: number; seats: number }>>;
+function vendorName(row: FixedCostSeatRow): string {
+  return String(row.vendor ?? 'other')
+    .trim()
+    .toLowerCase();
+}
 
-function vendorMonthTotals(rows: FixedCostSeatRow[]): VendorMonthTotals {
-  const out: VendorMonthTotals = new Map();
+/** One subscription line (Team vs Max, seat vs enterprise) — carried independently. */
+function lineItemKey(row: FixedCostSeatRow): string {
+  return `${vendorName(row)}\0${String(row.cost_type ?? '').trim()}\0${String(row.line_item ?? '').trim()}`;
+}
+
+function sumLineItemsByVendor(
+  rows: FixedCostSeatRow[],
+  billingMonth: string,
+): Map<string, { seat_usd: number; seats: number; period_month: string }> {
+  const limit = billingMonth.slice(0, 7);
+  const best = new Map<string, { vendor: string; month: string; seat_usd: number; seats: number }>();
   for (const row of rows) {
     const month = monthKey(String(row.period_month ?? ''));
-    if (!month) {
+    if (!month || month > limit) {
       continue;
     }
-    const vendor = String(row.vendor ?? 'other')
-      .trim()
-      .toLowerCase();
-    const byMonth = out.get(vendor) ?? new Map();
-    const cur = byMonth.get(month) ?? { seat_usd: 0, seats: 0 };
-    cur.seat_usd += Number(row.cost_usd ?? 0);
-    cur.seats += Number(row.seats ?? 0);
-    byMonth.set(month, cur);
-    out.set(vendor, byMonth);
-  }
-  for (const [, byMonth] of out) {
-    for (const [month, v] of byMonth) {
-      byMonth.set(month, {
-        seat_usd: Math.round(v.seat_usd * 100) / 100,
-        seats: v.seats,
-      });
+    const vendor = vendorName(row);
+    const key = lineItemKey(row);
+    const prev = best.get(key);
+    if (prev && prev.month > month) {
+      continue;
     }
+    if (prev && prev.month === month) {
+      prev.seat_usd += Number(row.cost_usd ?? 0);
+      prev.seats += Number(row.seats ?? 0);
+      continue;
+    }
+    best.set(key, {
+      vendor,
+      month,
+      seat_usd: Number(row.cost_usd ?? 0),
+      seats: Number(row.seats ?? 0),
+    });
+  }
+
+  const out = new Map<string, { seat_usd: number; seats: number; period_month: string }>();
+  for (const snap of best.values()) {
+    const cur = out.get(snap.vendor) ?? { seat_usd: 0, seats: 0, period_month: `${snap.month}-01` };
+    cur.seat_usd += snap.seat_usd;
+    cur.seats += snap.seats;
+    if (snap.month > cur.period_month.slice(0, 7)) {
+      cur.period_month = `${snap.month}-01`;
+    }
+    out.set(snap.vendor, cur);
+  }
+  for (const [vendor, v] of out) {
+    if (v.seat_usd <= 0 && v.seats <= 0) {
+      out.delete(vendor);
+      continue;
+    }
+    out.set(vendor, {
+      seat_usd: Math.round(v.seat_usd * 100) / 100,
+      seats: v.seats,
+      period_month: v.period_month,
+    });
   }
   return out;
 }
 
 /**
- * Latest configured monthly seat charge per vendor on or before `billingMonth`
- * (carry-forward when admin billing month is later than the analytics range).
+ * Latest configured monthly seat charge per vendor on or before `billingMonth`.
+ * Each plan line (vendor + cost_type + line_item) carries forward independently,
+ * then sums to one vendor total — adding Claude Max in September does not drop
+ * Claude Team seats recorded in July.
  */
 export function latestSeatByVendorOnOrBefore(
   rows: FixedCostSeatRow[],
   billingMonth: string,
 ): Map<string, { seat_usd: number; seats: number; period_month: string }> {
-  const limit = billingMonth.slice(0, 7);
-  const totals = vendorMonthTotals(rows);
-  const out = new Map<string, { seat_usd: number; seats: number; period_month: string }>();
-
-  for (const [vendor, byMonth] of totals) {
-    let bestMonth = '';
-    for (const month of byMonth.keys()) {
-      if (month <= limit && month > bestMonth) {
-        bestMonth = month;
-      }
-    }
-    if (!bestMonth) {
-      continue;
-    }
-    const snap = byMonth.get(bestMonth)!;
-    if (snap.seat_usd <= 0) {
-      continue;
-    }
-    out.set(vendor, {
-      seat_usd: snap.seat_usd,
-      seats: snap.seats,
-      period_month: `${bestMonth}-01`,
-    });
-  }
-  return out;
+  return sumLineItemsByVendor(rows, billingMonth);
 }
 
 /** Monthly run-rate: sum of latest seat config per vendor as of range end. */
@@ -196,34 +211,11 @@ export function seatLookupToDate(to: string, today = new Date()): string {
   return to.slice(0, 10) >= todayIso ? to.slice(0, 10) : todayIso;
 }
 
-/** Latest configured monthly seat charge per vendor (newest billing month in history). */
+/** Current monthly seat charge per vendor: every plan line carried forward, then summed. */
 export function latestSeatByVendor(
   rows: FixedCostSeatRow[],
 ): Map<string, { seat_usd: number; seats: number; period_month: string }> {
-  const totals = vendorMonthTotals(rows);
-  const out = new Map<string, { seat_usd: number; seats: number; period_month: string }>();
-
-  for (const [vendor, byMonth] of totals) {
-    let bestMonth = '';
-    for (const month of byMonth.keys()) {
-      if (month > bestMonth) {
-        bestMonth = month;
-      }
-    }
-    if (!bestMonth) {
-      continue;
-    }
-    const snap = byMonth.get(bestMonth)!;
-    if (snap.seat_usd <= 0) {
-      continue;
-    }
-    out.set(vendor, {
-      seat_usd: snap.seat_usd,
-      seats: snap.seats,
-      period_month: `${bestMonth}-01`,
-    });
-  }
-  return out;
+  return latestSeatByVendorOnOrBefore(rows, '9999-12');
 }
 
 /** Current monthly run-rate from admin seat config (all vendors, latest billing month). */

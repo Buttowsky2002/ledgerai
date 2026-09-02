@@ -113,4 +113,33 @@ describe('vendorSeatChanges', () => {
     expect(changes.openai.prior_seats).toBe(10);
     expect(changes.openai.usd_from_seats).toBe(60);
   });
+
+  it('persists current OpenAI seats when the selected range has no OpenAI row', () => {
+    const { changes } = vendorSeatChanges(rows, '2026-08-01', '2026-08-31');
+    expect(changes.openai.seats).toBe(5);
+  });
+
+  it('combines Anthropic plan lines across months into one vendor total', () => {
+    const mixed = [
+      {
+        period_month: '2026-07-01',
+        vendor: 'anthropic',
+        line_item: 'Claude Team',
+        seats: 62,
+        unit_cost_usd: 20,
+        cost_usd: 1240,
+      },
+      {
+        period_month: '2026-09-01',
+        vendor: 'anthropic',
+        line_item: 'Claude Max',
+        seats: 4,
+        unit_cost_usd: 100,
+        cost_usd: 400,
+      },
+    ];
+    const { changes } = vendorSeatChanges(mixed, '2026-08-01', '2026-08-31');
+    expect(changes.anthropic.seats).toBe(66);
+    expect(changes.anthropic.prior_seats).toBe(62);
+  });
 });

@@ -1,5 +1,8 @@
 import { prorateMonthlyCost } from '../fixed-costs/fixed-cost-prorate';
 
+/** Cursor Team list price when the Admin API has members but no plan/fixed-cost row. */
+export const DEFAULT_CURSOR_SEAT_USD_PER_MONTH = 40;
+
 export interface CursorFixedCostMonthRow {
   period_month: string;
   cost_usd: number;

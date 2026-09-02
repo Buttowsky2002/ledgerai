@@ -53,16 +53,39 @@ test('priorSeatEntryForVendor returns latest row before billing month', () => {
   );
 });
 
-test('latestMonthlyTotalsByVendor uses newest billing month only', () => {
+test('latestMonthlyTotalsByVendor carries forward older plan lines and sums by vendor', () => {
   const rows = [
-    { vendor: 'anthropic', period_month: '2026-07-01', cost_usd: 1240, seats: 62 },
-    { vendor: 'openai', period_month: '2026-07-01', cost_usd: 1375, seats: 55 },
-    { vendor: 'anthropic', period_month: '2026-09-01', cost_usd: 400, seats: 4 },
+    { vendor: 'anthropic', period_month: '2026-07-01', line_item: 'Claude Team', cost_usd: 1240, seats: 62 },
+    { vendor: 'openai', period_month: '2026-07-01', line_item: 'ChatGPT Team', cost_usd: 1375, seats: 55 },
+    { vendor: 'anthropic', period_month: '2026-09-01', line_item: 'Claude Max', cost_usd: 400, seats: 4 },
   ];
   assert.deepEqual(latestMonthlyTotalsByVendor(rows), [
+    { vendor: 'anthropic', total: 1640 },
     { vendor: 'openai', total: 1375 },
-    { vendor: 'anthropic', total: 400 },
   ]);
+  const snap = latestSeatByVendor(rows).get('anthropic');
+  assert.equal(snap?.seats, 66);
+  assert.equal(snap?.seat_usd, 1640);
+});
+
+test('latestSeatByVendor replaces a plan when the same line item is updated', () => {
+  const rows = [
+    { vendor: 'anthropic', period_month: '2026-07-01', line_item: 'Claude Team', cost_usd: 1240, seats: 62 },
+    { vendor: 'anthropic', period_month: '2026-09-01', line_item: 'Claude Team', cost_usd: 400, seats: 4 },
+  ];
+  const snap = latestSeatByVendor(rows).get('anthropic');
+  assert.deepEqual(snap, { seat_usd: 400, seats: 4, period_month: '2026-09-01' });
+});
+
+test('current seats persist when the selected range ends before the latest billing month', () => {
+  const rows = [
+    { vendor: 'openai', period_month: '2026-06-01', line_item: 'ChatGPT Team', cost_usd: 1350, seats: 54 },
+    { vendor: 'anthropic', period_month: '2026-07-01', line_item: 'Claude Team', cost_usd: 1380, seats: 46 },
+    { vendor: 'anthropic', period_month: '2026-09-01', line_item: 'Claude Max', cost_usd: 400, seats: 4 },
+  ];
+  // 30-day / last-month filters still see the current combined vendor run-rate.
+  assert.equal(currentMonthlySeatRunRate(rows), 3130);
+  assert.equal(periodSeatTotalForRange(rows, '2026-08-01', '2026-08-31'), 3130);
 });
 
 test('seatLookupToDate keeps current seats visible on past ranges', () => {

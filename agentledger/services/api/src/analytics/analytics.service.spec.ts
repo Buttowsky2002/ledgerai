@@ -898,7 +898,40 @@ describe('AnalyticsService.cursorSpend', () => {
     expect(result?.activeMembersInRange).toBe(11);
     expect(result?.seatSource).toBe('fixed_costs');
     expect(result?.seatUnitUsdPerMonth).toBe(40);
+    expect(result?.seatCount).toBe(15);
+    expect(result?.seatLicenseUsd).toBe(600);
+  });
+
+  it('prices included seats from the API connection at the Team unit when no plan exists', async () => {
+    const queryScoped = jest.fn(async (sql: string) => {
+      if (sql.includes('count(DISTINCT user_id)')) {
+        return [{ members: 11 }];
+      }
+      return [];
+    });
+    const prisma = {
+      withTenant: jest.fn(async (_tenant: string, fn: (tx: unknown) => unknown) => {
+        return fn({ $queryRaw: async () => [] });
+      }),
+    };
+    const ch = { queryScoped } as unknown as ClickHouseService;
+    const cursorAnalytics = {
+      getSpendSummary: jest.fn(async () => cursorSummary),
+    } as unknown as CursorAnalyticsService;
+    const svc = new AnalyticsService(
+      ch,
+      prisma as unknown as PrismaService,
+      {} as LariService,
+      { getSpendSummary: jest.fn(async () => null) } as unknown as CopilotAnalyticsService,
+      emptyCopilotMemberSpend(),
+      cursorAnalytics,
+      emptyCursorProductivity() as never,
+    );
+
+    const result = await svc.cursorSpend('2026-08-01', '2026-08-31');
+    expect(result?.seatSource).toBe('subscription_plan');
     expect(result?.seatCount).toBe(11);
+    expect(result?.seatUnitUsdPerMonth).toBe(40);
     expect(result?.seatLicenseUsd).toBe(440);
   });
 

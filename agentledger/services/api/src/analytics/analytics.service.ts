@@ -42,6 +42,7 @@ import {
   mergeUserDirectoryRows,
   userMatchesQuery,
 } from './user-directory.util';
+import { DEFAULT_CURSOR_SEAT_USD_PER_MONTH } from './cursor-seat-license';
 import {
   billingMonthsInRange,
   latestSeatByVendor,
@@ -51,7 +52,7 @@ import {
   seatLookupToDate,
   type FixedCostSeatRow,
 } from '../fixed-costs/fixed-cost-prorate';
-import { previousCalendarMonth, vendorSeatChanges } from './seat-price-delta';
+import { vendorSeatChanges } from './seat-price-delta';
 import {
   buildOrgVendorBilling,
   orderedVendorIds,
@@ -377,9 +378,6 @@ export class AnalyticsService {
       return Promise.resolve(null);
     }
     const summary = await this.cursorAnalytics.getSpendSummary(tenantId, r.from, r.to);
-    if (!summary) {
-      return null;
-    }
 
     let seat: {
       seatLicenseUsd: number;
@@ -408,6 +406,32 @@ export class AnalyticsService {
         { event: 'cursor_seat_license_failed', err: String((err as Error)?.message ?? err) },
         'cursor-spend seat license lookup failed; returning usage summary',
       );
+    }
+
+    if (!summary) {
+      if (seat.seatLicenseUsd <= 0 && seat.seatCount <= 0) {
+        return null;
+      }
+      return {
+        billedUsd: 0,
+        meteredOverageUsd: 0,
+        usageValueUsd: 0,
+        seatLicenseUsd: seat.seatLicenseUsd,
+        seatCount: seat.seatCount,
+        seatUnitUsdPerMonth: seat.seatUnitUsdPerMonth,
+        seatSource: seat.seatSource,
+        activeMembersInRange: activeMembers,
+        totalCalls: 0,
+        includedCalls: 0,
+        onDemandCalls: 0,
+        totalTokens: 0,
+        legacyUntagged: false,
+        daily: [],
+        modelMix: [],
+        platform: { platform: 'cursor', cost_usd: 0, calls: 0 },
+        disclaimer:
+          'Cursor seat license is from the Admin API connection (members × unit). Included usage is not an invoice line.',
+      };
     }
 
     return {
@@ -462,6 +486,16 @@ export class AnalyticsService {
   }> {
     const seatFrom = seatLookupFromDate(r.to);
     const seatTo = seatLookupToDate(r.to);
+    let lookbackMembers = 0;
+    try {
+      lookbackMembers = await this.cursorActiveMembers(tenantId, { from: seatFrom, to: seatTo });
+    } catch (err) {
+      this.logger.warn(
+        { event: 'cursor_seat_members_failed', err: String((err as Error)?.message ?? err) },
+        'cursor seat lookback member lookup failed',
+      );
+    }
+    const members = Math.max(activeMembers, lookbackMembers);
     const fixedRows = await this.ch.queryScoped<{
       cost_usd: unknown;
       seats: unknown;
@@ -502,7 +536,7 @@ export class AnalyticsService {
           : latest.seats > 0
             ? latest.cost_usd / latest.seats
             : 0;
-      const seatCount = activeMembers > 0 ? activeMembers : latest.seats;
+      const seatCount = Math.max(members, latest.seats);
       const monthly = unit > 0 && seatCount > 0 ? unit * seatCount : latest.cost_usd;
       return {
         seatLicenseUsd: usd(monthly),
@@ -528,14 +562,13 @@ export class AnalyticsService {
           AND (contract_monthly_cost > 0 OR monthly_price_per_user > 0)`,
     );
     if (plans.length === 0) {
-      // Fall back to active connector members × $0 until a plan/fixed cost exists —
-      // still surface the seat count so Fixed overhead can show the connection.
-      if (activeMembers > 0) {
+      if (members > 0) {
+        const unit = DEFAULT_CURSOR_SEAT_USD_PER_MONTH;
         return {
-          seatLicenseUsd: 0,
-          seatCount: activeMembers,
-          seatUnitUsdPerMonth: 0,
-          seatSource: 'none',
+          seatLicenseUsd: usd(unit * members),
+          seatCount: members,
+          seatUnitUsdPerMonth: unit,
+          seatSource: 'subscription_plan',
         };
       }
       return { seatLicenseUsd: 0, seatCount: 0, seatUnitUsdPerMonth: 0, seatSource: 'none' };
@@ -550,7 +583,7 @@ export class AnalyticsService {
       return s + n(p.monthly_price_per_user) * n(p.seats_purchased);
     }, 0);
     const unit = planSeats > 0 ? monthlyTotal / planSeats : n(plans[0]?.monthly_price_per_user);
-    const seatCount = activeMembers > 0 ? activeMembers : planSeats;
+    const seatCount = Math.max(members, planSeats);
     const monthly = unit > 0 && seatCount > 0 ? unit * seatCount : monthlyTotal;
     return {
       seatLicenseUsd: usd(monthly),
@@ -1351,32 +1384,38 @@ export class AnalyticsService {
     // Look back + through today so latest seats/price persist on every date filter.
     const seatFrom = seatLookupFromDate(r.to);
     const seatTo = seatLookupToDate(r.to);
-    const [seatRows, platformRows, cursorSummary, copilotMembers] = await Promise.all([
-      this.ch.queryScoped<{
-        period_month: string;
-        vendor: string;
-        seats: unknown;
-        unit_cost_usd: unknown;
-        cost_usd: unknown;
-      }>(
-        `SELECT period_month, vendor, seats, unit_cost_usd, cost_usd
+    const [seatRows, platformRows, platformLookback, cursorSummary, copilotMembers] =
+      await Promise.all([
+        this.ch.queryScoped<{
+          period_month: string;
+          vendor: string;
+          seats: unknown;
+          unit_cost_usd: unknown;
+          cost_usd: unknown;
+          line_item: string;
+          cost_type: string;
+        }>(
+          `SELECT period_month, vendor, cost_type, line_item, seats, unit_cost_usd, cost_usd
          FROM agentledger.fixed_costs FINAL
          WHERE tenant_id = {tenant:String}
            AND period_month >= toDate({seatFrom:String})
            AND period_month <= toStartOfMonth(toDate({seatTo:String}))
            AND attributable = 0`,
-        { seatFrom, seatTo },
-      ),
-      this.platformSpend(r.from, r.to),
-      this.cursorSpend(r.from, r.to),
-      this.copilotMemberSpend.getMemberSpend(tenantId, { from: r.from, to: r.to }),
-    ]);
+          { seatFrom, seatTo },
+        ),
+        this.platformSpend(r.from, r.to),
+        this.platformSpend(seatFrom, seatTo),
+        this.cursorSpend(r.from, r.to),
+        this.copilotMemberSpend.getMemberSpend(tenantId, { from: r.from, to: r.to }),
+      ]);
 
     const mapped: FixedCostSeatRow[] = seatRows.map((row) => ({
       period_month: String(row.period_month),
       vendor: String(row.vendor).trim().toLowerCase(),
       cost_usd: n(row.cost_usd),
       seats: n(row.seats),
+      line_item: String(row.line_item ?? ''),
+      cost_type: String(row.cost_type ?? ''),
     }));
 
     // One monthly run-rate per vendor from the newest billing month (not summed across months).
@@ -1397,6 +1436,18 @@ export class AnalyticsService {
         continue;
       }
       overageUsdByVendor[vendor] = (overageUsdByVendor[vendor] ?? 0) + n(row.cost_usd);
+    }
+    // OpenAI/Anthropic API usage often lands outside a 30-day window; keep last-known
+    // metered overage so those vendors still appear on every date filter.
+    for (const row of platformLookback) {
+      const vendor = platformToVendor(String(row.platform));
+      if (vendor !== 'openai' && vendor !== 'anthropic') {
+        continue;
+      }
+      const lookbackUsd = n(row.cost_usd);
+      if (lookbackUsd > 0 && (overageUsdByVendor[vendor] ?? 0) <= 0) {
+        overageUsdByVendor[vendor] = lookbackUsd;
+      }
     }
 
     if (cursorSummary) {

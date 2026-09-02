@@ -48,6 +48,27 @@ describe('fixed-cost-prorate', () => {
     expect(forecastFixedSeatCost(2944.72, 365)).toBeCloseTo(35313.03, 0);
   });
 
+  it('combines Anthropic plan lines instead of replacing the vendor with the newest month', () => {
+    const rows = [
+      {
+        period_month: '2026-07-01',
+        vendor: 'anthropic',
+        line_item: 'Claude Team',
+        cost_usd: 1380,
+        seats: 46,
+      },
+      {
+        period_month: '2026-09-01',
+        vendor: 'anthropic',
+        line_item: 'Claude Max',
+        cost_usd: 400,
+        seats: 4,
+      },
+    ];
+    expect(currentMonthlySeatRunRate(rows)).toBe(1780);
+    expect(periodSeatTotalForRange(rows, '2026-08-01', '2026-08-31')).toBe(1780);
+  });
+
   it('seatLookupToDate extends past range ends through today', () => {
     expect(seatLookupToDate('2026-08-31', new Date('2026-09-02T12:00:00Z'))).toBe('2026-09-02');
     expect(seatLookupToDate('2026-09-15', new Date('2026-09-02T12:00:00Z'))).toBe('2026-09-15');

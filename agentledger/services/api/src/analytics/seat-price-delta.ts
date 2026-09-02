@@ -1,5 +1,11 @@
 /** Seat-license cost ≈ seats × unit. Split a $ change into volume vs rate. */
 
+import {
+  latestSeatByVendor,
+  latestSeatByVendorOnOrBefore,
+  type FixedCostSeatRow as ProrateSeatRow,
+} from '../fixed-costs/fixed-cost-prorate';
+
 export type SeatSnapshot = {
   seats: number;
   unitCostUsd: number;
@@ -21,6 +27,8 @@ export type FixedCostSeatRow = {
   seats: unknown;
   unit_cost_usd: unknown;
   cost_usd: unknown;
+  line_item?: string | null;
+  cost_type?: string | null;
 };
 
 export type VendorSeatChange = {
@@ -106,83 +114,46 @@ export function seatPriceDelta(current: SeatSnapshot, prior: SeatSnapshot | null
   };
 }
 
-function snapshotForRows(rows: FixedCostSeatRow[]): SeatSnapshot | null {
-  if (rows.length === 0) {
-    return null;
-  }
-  const seats = rows.reduce((s, r) => s + n(r.seats), 0);
-  const costUsd = round2(rows.reduce((s, r) => s + n(r.cost_usd), 0));
-  const units = rows
-    .map((r) =>
-      resolveUnitCost({
-        seats: n(r.seats),
-        unitCostUsd: n(r.unit_cost_usd),
-        costUsd: n(r.cost_usd),
-      }),
-    )
-    .filter((u) => u > 0)
-    .map((u) => round2(u));
-  const unique = [...new Set(units)];
-  const unitCostUsd = unique.length === 1 ? unique[0] : seats > 0 ? round2(costUsd / seats) : 0;
-  return { seats, unitCostUsd, costUsd };
+function toProrateRows(rows: FixedCostSeatRow[]): ProrateSeatRow[] {
+  return rows.map((row) => ({
+    period_month: String(row.period_month),
+    vendor:
+      String(row.vendor ?? '')
+        .trim()
+        .toLowerCase() || 'other',
+    cost_usd: n(row.cost_usd),
+    seats: n(row.seats),
+    line_item: row.line_item,
+    cost_type: row.cost_type,
+  }));
 }
 
 /**
- * Per vendor: latest billing month overlapping [from, to] vs the previous
- * calendar month. Seat-change $ is monthly run-rate, not prorated.
+ * Per vendor: current carried-forward seats vs the previous calendar month.
+ * Date range does not drop vendors whose last admin row is outside the filter.
  */
 export function vendorSeatChanges(
   rows: FixedCostSeatRow[],
-  from: string,
-  to: string,
+  _from: string,
+  _to: string,
 ): { latestMonth: string | null; changes: Record<string, VendorSeatChange> } {
-  const rangeStart = monthStart(from);
-  const rangeEnd = monthStart(to);
-  const byVendor = new Map<string, FixedCostSeatRow[]>();
-  for (const row of rows) {
-    const vendor =
-      String(row.vendor ?? '')
-        .trim()
-        .toLowerCase() || 'other';
-    const list = byVendor.get(vendor) ?? [];
-    list.push(row);
-    byVendor.set(vendor, list);
-  }
-
+  const mapped = toProrateRows(rows);
+  const currentByVendor = latestSeatByVendor(mapped);
   let latestMonth: string | null = null;
   const changes: Record<string, VendorSeatChange> = {};
 
-  for (const [vendor, vendorRows] of byVendor) {
-    const inRange = vendorRows.filter((r) => {
-      const m = monthStart(String(r.period_month));
-      return m >= rangeStart && m <= rangeEnd;
-    });
-    if (inRange.length === 0) {
-      continue;
+  for (const [vendor, current] of currentByVendor) {
+    if (!latestMonth || current.period_month > latestMonth) {
+      latestMonth = current.period_month;
     }
-    const vendorLatest = inRange.reduce(
-      (max, r) => {
-        const m = monthStart(String(r.period_month));
-        return m > max ? m : max;
-      },
-      monthStart(String(inRange[0].period_month)),
-    );
-    if (!latestMonth || vendorLatest > latestMonth) {
-      latestMonth = vendorLatest;
-    }
-
-    const priorMonth = previousCalendarMonth(vendorLatest);
-    const current = snapshotForRows(
-      vendorRows.filter((r) => monthStart(String(r.period_month)) === vendorLatest),
-    );
-    if (!current) {
-      continue;
-    }
-    const prior = snapshotForRows(
-      vendorRows.filter((r) => monthStart(String(r.period_month)) === priorMonth),
-    );
-    // No prior month → not a seat *change* (avoid treating the full bill as a delta).
-    if (!prior) {
+    const priorMonth = previousCalendarMonth(current.period_month);
+    const priorSnap = latestSeatByVendorOnOrBefore(mapped, priorMonth).get(vendor);
+    const currentSeat: SeatSnapshot = {
+      seats: current.seats,
+      unitCostUsd: 0,
+      costUsd: current.seat_usd,
+    };
+    if (!priorSnap || priorSnap.period_month === current.period_month) {
       changes[vendor] = {
         vendor,
         seats: current.seats,
@@ -193,15 +164,20 @@ export function vendorSeatChanges(
       };
       continue;
     }
-    const delta = seatPriceDelta(current, prior);
+    const priorSeat: SeatSnapshot = {
+      seats: priorSnap.seats,
+      unitCostUsd: 0,
+      costUsd: priorSnap.seat_usd,
+    };
+    const delta = seatPriceDelta(currentSeat, priorSeat);
     const seatsChanged = delta.seatDelta !== 0;
     changes[vendor] = {
       vendor,
       seats: current.seats,
-      prior_seats: prior.seats,
+      prior_seats: priorSeat.seats,
       usd_from_seats: seatsChanged ? delta.usdFromSeats : 0,
       usd_from_rate: seatsChanged ? 0 : delta.usdFromRate,
-      prior_period_month: priorMonth,
+      prior_period_month: priorSnap.period_month,
     };
   }
 
