@@ -3,21 +3,27 @@ import { Principal, runWithTenant } from '../tenant/tenant-context';
 
 describe('requireTenantFilter', () => {
   it('accepts tenant_id = {tenant:String}', () => {
-    expect(() => requireTenantFilter('SELECT 1 FROM x WHERE tenant_id = {tenant:String}')).not.toThrow();
+    expect(() =>
+      requireTenantFilter('SELECT 1 FROM x WHERE tenant_id = {tenant:String}'),
+    ).not.toThrow();
   });
 
   it('accepts the no-space form tenant_id={tenant:String}', () => {
-    expect(() => requireTenantFilter('SELECT 1 FROM x WHERE tenant_id={tenant:String}')).not.toThrow();
+    expect(() =>
+      requireTenantFilter('SELECT 1 FROM x WHERE tenant_id={tenant:String}'),
+    ).not.toThrow();
   });
 
   it('accepts an aliased filter alias.tenant_id = {tenant:String}', () => {
-    expect(() => requireTenantFilter('SELECT 1 FROM x t WHERE t.tenant_id = {tenant:String}')).not.toThrow();
+    expect(() =>
+      requireTenantFilter('SELECT 1 FROM x t WHERE t.tenant_id = {tenant:String}'),
+    ).not.toThrow();
   });
 
   it('rejects a query with no tenant filter', () => {
-    expect(() => requireTenantFilter('SELECT * FROM x WHERE day BETWEEN {from:Date} AND {to:Date}')).toThrow(
-      /tenant filter/i,
-    );
+    expect(() =>
+      requireTenantFilter('SELECT * FROM x WHERE day BETWEEN {from:Date} AND {to:Date}'),
+    ).toThrow(/tenant filter/i);
   });
 
   it('rejects a filter bound to some other param (not the principal tenant)', () => {
@@ -26,7 +32,9 @@ describe('requireTenantFilter', () => {
 
   it('does not accept a join condition as the tenant filter', () => {
     // `r.tenant_id = o.tenant_id` is a join predicate, not a bound-tenant filter.
-    expect(() => requireTenantFilter('SELECT 1 FROM a r JOIN b o ON r.tenant_id = o.tenant_id')).toThrow();
+    expect(() =>
+      requireTenantFilter('SELECT 1 FROM a r JOIN b o ON r.tenant_id = o.tenant_id'),
+    ).toThrow();
   });
 });
 
@@ -64,7 +72,9 @@ describe('ClickHouseService.queryScoped', () => {
 
   it('binds the principal tenant and ignores a caller-supplied tenant param', async () => {
     await runWithTenant(principal, async () => {
-      await svc.queryScoped('SELECT 1 FROM x WHERE tenant_id = {tenant:String}', { tenant: 'attacker' });
+      await svc.queryScoped('SELECT 1 FROM x WHERE tenant_id = {tenant:String}', {
+        tenant: 'attacker',
+      });
     });
     const url = String(fetchMock.mock.calls[0][0]);
     expect(url).toContain('param_tenant=real-tenant');

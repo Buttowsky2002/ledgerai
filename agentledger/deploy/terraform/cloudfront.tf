@@ -20,11 +20,26 @@ locals {
 
   cloudfront_origin_https = local.alb_https_enabled && var.enable_custom_domain
 
-  cloudfront_aliases = (
-    var.enable_cloudfront && var.enable_custom_domain
-    ? distinct(concat([local.custom_hostname], var.acm_subject_alternative_names))
-    : []
+  # Edge aliases are independent from ALB custom-domain provisioning. This lets
+  # an existing CloudFront hostname/certificate front the HTTP ALB origin
+  # without accidentally enabling the ALB HTTPS listener.
+  cloudfront_aliases = var.enable_cloudfront ? distinct(compact(concat(
+    local.public_hostname != "" ? [local.public_hostname] : [],
+    var.enable_custom_domain ? concat([local.custom_hostname], var.acm_subject_alternative_names) : [],
+  ))) : []
+
+  cloudfront_viewer_certificate_arn = (
+    var.cloudfront_certificate_arn != ""
+    ? var.cloudfront_certificate_arn
+    : local.alb_certificate_arn
   )
+}
+
+check "cloudfront_alias_certificate" {
+  assert {
+    condition     = length(local.cloudfront_aliases) == 0 || local.cloudfront_viewer_certificate_arn != ""
+    error_message = "CloudFront aliases require cloudfront_certificate_arn (or an ALB certificate provisioned by enable_custom_domain)."
+  }
 }
 
 resource "aws_cloudfront_distribution" "main" {
@@ -82,8 +97,10 @@ resource "aws_cloudfront_distribution" "main" {
   dynamic "viewer_certificate" {
     for_each = length(local.cloudfront_aliases) > 0 ? [1] : []
     content {
-      acm_certificate_arn      = local.alb_certificate_arn
-      ssl_support_method       = "sni-only"
+      acm_certificate_arn = local.cloudfront_viewer_certificate_arn
+      ssl_support_method  = "sni-only"
+      # Provider v5.100 cannot model AWS's newer TLSv1.3_2025 value. The
+      # lifecycle rule below preserves that stronger live setting.
       minimum_protocol_version = "TLSv1.2_2021"
     }
   }
@@ -93,6 +110,10 @@ resource "aws_cloudfront_distribution" "main" {
     content {
       cloudfront_default_certificate = true
     }
+  }
+
+  lifecycle {
+    ignore_changes = [viewer_certificate[0].minimum_protocol_version]
   }
 
   tags = local.tags

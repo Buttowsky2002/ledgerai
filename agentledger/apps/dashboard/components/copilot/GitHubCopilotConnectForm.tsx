@@ -8,7 +8,8 @@ const PERMISSIONS_HELP = (
     Use a fine-grained organization PAT with read-only:{' '}
     <strong>Organization Copilot metrics</strong>, <strong>GitHub Copilot Business</strong>, and{' '}
     <strong>Members</strong>. Classic PAT fallback: <code className="text-xs">read:org</code> +{' '}
-    <code className="text-xs">manage_billing:copilot</code>. The token is encrypted at rest and never logged.
+    <code className="text-xs">manage_billing:copilot</code>. The token is encrypted at rest and
+    never logged.
   </>
 );
 
@@ -24,9 +25,11 @@ export function GitHubCopilotConnectForm({
   const [enterpriseSlug, setEnterpriseSlug] = useState('');
   const [githubToken, setGithubToken] = useState('');
   const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{ ok: boolean; orgName?: string; hint?: string } | null>(
-    null,
-  );
+  const [testResult, setTestResult] = useState<{
+    ok: boolean;
+    orgName?: string;
+    hint?: string;
+  } | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -35,7 +38,9 @@ export function GitHubCopilotConnectForm({
   const canConnect = displayName.trim().length > 0 && canTest;
 
   async function handleTest() {
-    if (!canTest) return;
+    if (!canTest) {
+      return;
+    }
     setTesting(true);
     setTestResult(null);
     setError(null);
@@ -49,7 +54,9 @@ export function GitHubCopilotConnectForm({
   }
 
   async function handleConnect() {
-    if (!canConnect) return;
+    if (!canConnect) {
+      return;
+    }
     setConnecting(true);
     setError(null);
     setSuccess(null);
@@ -72,7 +79,11 @@ export function GitHubCopilotConnectForm({
       const hint =
         (typeof data?.hint === 'string' && data.hint) ||
         (data?.message && typeof data.message === 'object'
-          ? String((data.message as Record<string, unknown>).hint ?? (data.message as Record<string, unknown>).message ?? '')
+          ? String(
+              (data.message as Record<string, unknown>).hint ??
+                (data.message as Record<string, unknown>).message ??
+                '',
+            )
           : '') ||
         (typeof data?.message === 'string' ? data.message : '') ||
         'Could not create Copilot connection.';
@@ -87,9 +98,7 @@ export function GitHubCopilotConnectForm({
 
   return (
     <div className={compact ? 'space-y-4' : 'grid gap-4 md:grid-cols-2'}>
-      {!compact && (
-        <p className="md:col-span-2 text-sm text-muted">{PERMISSIONS_HELP}</p>
-      )}
+      {!compact && <p className="md:col-span-2 text-sm text-muted">{PERMISSIONS_HELP}</p>}
 
       <label className="block text-sm">
         <span className="text-muted">Connection name</span>
@@ -149,13 +158,17 @@ export function GitHubCopilotConnectForm({
       )}
 
       {error && (
-        <p className={`rounded border border-neg/30 bg-neg/10 px-3 py-2 text-sm text-neg ${compact ? '' : 'md:col-span-2'}`}>
+        <p
+          className={`rounded border border-neg/30 bg-neg/10 px-3 py-2 text-sm text-neg ${compact ? '' : 'md:col-span-2'}`}
+        >
           {error}
         </p>
       )}
 
       {success && (
-        <p className={`rounded border border-pos/30 bg-pos/10 px-3 py-2 text-sm text-pos ${compact ? '' : 'md:col-span-2'}`}>
+        <p
+          className={`rounded border border-pos/30 bg-pos/10 px-3 py-2 text-sm text-pos ${compact ? '' : 'md:col-span-2'}`}
+        >
           {success}
         </p>
       )}

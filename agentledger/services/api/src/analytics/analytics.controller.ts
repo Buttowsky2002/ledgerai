@@ -27,87 +27,115 @@ export class AnalyticsController {
     private readonly userValueService: UserValueService,
   ) {}
 
-  @Roles('viewer') @Get('spend')
+  @Roles('viewer')
+  @Get('data-bounds')
+  dataBounds() {
+    return this.analytics.dataBounds();
+  }
+
+  @Roles('viewer')
+  @Get('spend')
   spend(@Query() q: RangeQueryDto) {
     return this.analytics.spend(q.from, q.to, q.team);
   }
 
-  @Roles('viewer') @Get('allocation')
+  @Roles('viewer')
+  @Get('allocation')
   allocation(@Query() q: AllocationQueryDto) {
     return this.analytics.allocation(q.dimension, q.from, q.to);
   }
 
   /** Discovered users with spend, models, and identity resolution (spend_daily_by_user). */
-  @Roles('viewer') @Get('users')
+  @Roles('viewer')
+  @Get('users')
   users(@Query() q: UsersQueryDto) {
     return this.analytics.users(q.from, q.to, q.q);
   }
 
-  @Roles('viewer') @Get('users/:userId')
+  @Roles('viewer')
+  @Get('vendor-billing')
+  vendorBilling(@Query() q: RangeQueryDto) {
+    return this.analytics.vendorBilling(q.from, q.to);
+  }
+
+  @Roles('viewer')
+  @Get('users/:userId')
   userDetail(@Param('userId') userId: string, @Query() q: RangeQueryDto) {
     return this.analytics.userDetail(userId, q.from, q.to);
   }
 
-  @Roles('viewer') @Get('model-mix')
+  @Roles('viewer')
+  @Get('model-mix')
   modelMix(@Query() q: RangeQueryDto) {
     return this.analytics.modelMix(q.from, q.to);
   }
 
-  @Roles('viewer') @Get('platform-spend')
+  @Roles('viewer')
+  @Get('platform-spend')
   platformSpend(@Query() q: RangeQueryDto) {
     return this.analytics.platformSpend(q.from, q.to);
   }
 
   /** GitHub Copilot license + usage cost for supplemental AI spend (cost-per-outcome). */
-  @Roles('viewer') @Get('copilot-spend')
+  @Roles('viewer')
+  @Get('copilot-spend')
   copilotSpend(@Query() q: RangeQueryDto) {
     return this.analytics.copilotSpend(q.from, q.to);
   }
 
-  @Roles('viewer') @Get('cursor-spend')
+  @Roles('viewer')
+  @Get('cursor-spend')
   cursorSpend(@Query() q: RangeQueryDto) {
     return this.analytics.cursorSpend(q.from, q.to);
   }
 
   /** Per-user cost↔utilization correlation — team aggregates by default; individual rows opt-in. */
-  @Roles('viewer') @Get('user-value')
+  @Roles('viewer')
+  @Get('user-value')
   userValue(@Query() q: RangeQueryDto) {
     return this.userValueService.getUserValue(q.from, q.to);
   }
 
-  @Roles('viewer') @Get('burndown')
+  @Roles('viewer')
+  @Get('burndown')
   burndown(@Query() q: BurndownQueryDto) {
     return this.analytics.burndown(q.from, q.to, q.virtualKeyId);
   }
 
-  @Roles('viewer') @Get('risk')
+  @Roles('viewer')
+  @Get('risk')
   risk(@Query() q: RangeQueryDto) {
     return this.analytics.risk(q.from, q.to, q.team);
   }
 
-  @Roles('viewer') @Get('unit-economics')
+  @Roles('viewer')
+  @Get('unit-economics')
   unitEconomics(@Query() q: UnitEconomicsQueryDto) {
     return this.analytics.unitEconomics(q.from, q.to, q.outcomeType, q.minConfidence, q.team);
   }
 
-  @Roles('viewer') @Get('roi')
+  @Roles('viewer')
+  @Get('roi')
   roi(@Query() q: RoiQueryDto) {
     return this.analytics.roi(q.from, q.to, q.outcomeType, q.minConfidence, q.team);
   }
 
   // Per-agent economics + LARI recommendation (overview recommendations + table).
-  @Roles('viewer') @Get('agent-economics')
+  @Roles('viewer')
+  @Get('agent-economics')
   agentEconomics(@Query() q: RangeQueryDto) {
     return this.analytics.agentEconomics(q.from, q.to);
   }
 
-  @Roles('viewer') @Get('agent-risk')
+  @Roles('viewer')
+  @Get('agent-risk')
   agentRisk() {
     return this.analytics.agentRisk();
   }
 
   /** FOCUS 1.2 cost export (ADR-035). Default CSV download; ?format=json for rows. */
-  @Roles('viewer') @Get('focus-export')
+  @Roles('viewer')
+  @Get('focus-export')
   async focusExport(@Query() q: FocusExportQueryDto, @Res() res: Response): Promise<void> {
     const rows = await this.analytics.focusExport(q.from, q.to);
     if (q.format === 'json') {
@@ -120,7 +148,8 @@ export class AnalyticsController {
   }
 
   /** 30-day pilot report (ADR-036). JSON by default; ?format=md renders Markdown. */
-  @Roles('viewer') @Get('pilot-report')
+  @Roles('viewer')
+  @Get('pilot-report')
   async pilotReport(@Query() q: PilotReportQueryDto, @Res() res: Response): Promise<void> {
     const report = await this.analytics.pilotReport(q.from, q.to);
     if (q.format === 'md') {
@@ -131,13 +160,15 @@ export class AnalyticsController {
     res.json(report);
   }
 
-  @Roles('viewer') @Get('agents/:agentId')
+  @Roles('viewer')
+  @Get('agents/:agentId')
   agentDetail(@Param('agentId') agentId: string, @Query() q: RangeQueryDto) {
     return this.analytics.agentDetail(agentId, q.from, q.to);
   }
 
   /** Portal CSV vs API sync spend by day — admin reconciliation (reads llm_calls.source). */
-  @Roles('admin') @Get('source-reconciliation')
+  @Roles('admin')
+  @Get('source-reconciliation')
   sourceReconciliation(@Query() q: RangeQueryDto) {
     return this.analytics.sourceReconciliation(q.from, q.to);
   }

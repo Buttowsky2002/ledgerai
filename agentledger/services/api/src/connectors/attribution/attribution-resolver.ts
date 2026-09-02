@@ -29,18 +29,28 @@ export interface AttributionResult {
 }
 
 function str(v: unknown): string | undefined {
-  if (v === undefined || v === null || v === '') return undefined;
+  if (v === undefined || v === null || v === '') {
+    return undefined;
+  }
   return String(v);
 }
 
 /** Human-readable label for spend attribution in dashboards. */
 export function displayUserLabel(metrics: NormalizedUsageMetrics, resolvedUserId: string): string {
-  if (resolvedUserId === UNASSIGNED_USER) return UNASSIGNED_USER;
+  if (resolvedUserId === UNASSIGNED_USER) {
+    return UNASSIGNED_USER;
+  }
   const name = str(metrics.user_name);
   const email = str(metrics.user_email);
-  if (name && name !== 'Deleted User' && email) return `${name} (${email})`;
-  if (email) return email;
-  if (name && name !== 'Deleted User') return name;
+  if (name && name !== 'Deleted User' && email) {
+    return `${name} (${email})`;
+  }
+  if (email) {
+    return email;
+  }
+  if (name && name !== 'Deleted User') {
+    return name;
+  }
   return resolvedUserId;
 }
 
@@ -49,15 +59,15 @@ function findMapping(
   type: MappingType,
   key: string | undefined,
 ): AttributionMapping | undefined {
-  if (!key) return undefined;
+  if (!key) {
+    return undefined;
+  }
   return mappings.find((m) => m.mappingType === type && m.providerKey === key);
 }
 
 function findUserByEmail(entities: ProviderEntity[], email: string): ProviderEntity | undefined {
   const lower = email.toLowerCase();
-  return entities.find(
-    (e) => e.entityType === 'users' && e.email?.toLowerCase() === lower,
-  );
+  return entities.find((e) => e.entityType === 'users' && e.email?.toLowerCase() === lower);
 }
 
 /**

@@ -1,0 +1,44 @@
+%% Source of truth: docker-compose.yml (service wiring), services/api/src/app.module.ts
+%% (control plane), packages/sdk-python (collector_url=.../v1/events for sdks->collector),
+%% and the repo layout under agentledger/. High-level layer graph:
+%% producers emit events, the Go data plane lands them in the stores, the NestJS
+%% API reads the stores, and the Next.js dashboard reads the API. Detailed views
+%% live in the sibling .mmd files listed in README.md.
+flowchart TD
+    subgraph producers["Event producers"]
+        gateway["services/gateway (Go)"]
+        sdks["packages/sdk-python, sdk-typescript"]
+        adapters["services/ingest/adapters (litellm)"]
+    end
+
+    subgraph dataplane["Data plane (Go)"]
+        collector["services/collector"]
+        workers["services/workers/* (ch-insert, reconcile, attribution, risk-engine, risk-enrichment, pricesync, slack-alerter)"]
+        connectors["services/connectors/* (connector-sync, outcome-sync)"]
+    end
+
+    subgraph stores["Stores"]
+        redpanda["redpanda (events.raw)"]
+        clickhouse["clickhouse (analytics)"]
+        postgres["postgres (control plane)"]
+        redis["redis (budgets)"]
+    end
+
+    subgraph control["Control plane + UI"]
+        api["services/api (NestJS)"]
+        dashboard["apps/dashboard (Next.js)"]
+    end
+
+    sdks --> collector
+    adapters --> collector
+    collector --> redpanda
+    redpanda --> workers
+    workers --> clickhouse
+    workers --> postgres
+    connectors --> postgres
+    connectors --> clickhouse
+    gateway --> clickhouse
+    gateway --> redis
+    api --> postgres
+    api --> clickhouse
+    dashboard --> api

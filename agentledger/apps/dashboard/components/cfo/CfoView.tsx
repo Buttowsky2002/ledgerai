@@ -11,6 +11,7 @@ import { CostPerOutcomeStat } from '@/components/cfo/CostPerOutcomeStat';
 import { fetchCfoView, fetchUserValue } from '@/lib/api/lari';
 import { rangeHref, type DateBounds } from '@/lib/date-range';
 import { forecastHorizonLabel } from '@/lib/forecast-horizon';
+import { usdPerMonth } from '@/lib/usd-per-month';
 import type { CostBasisMode, CfoViewResponse, UserValueResponse } from '@/types/lari';
 
 const BASIS_OPTIONS: { value: CostBasisMode; label: string }[] = [
@@ -46,12 +47,12 @@ function UtilizationMeter({ score }: { score: number }) {
 function StatusBadge({ status }: { status: 'active' | 'low_use' | 'inactive' }) {
   const label = status === 'low_use' ? 'low use' : status;
   const tone =
-    status === 'active' ? 'text-pos border-pos/40 bg-pos/10' : status === 'low_use'
-      ? 'text-warn border-warn/40 bg-warn/10'
-      : 'text-neg border-neg/40 bg-neg/10';
-  return (
-    <span className={`rounded border px-2 py-0.5 text-xs capitalize ${tone}`}>{label}</span>
-  );
+    status === 'active'
+      ? 'text-pos border-pos/40 bg-pos/10'
+      : status === 'low_use'
+        ? 'text-warn border-warn/40 bg-warn/10'
+        : 'text-neg border-neg/40 bg-neg/10';
+  return <span className={`rounded border px-2 py-0.5 text-xs capitalize ${tone}`}>{label}</span>;
 }
 
 function PlatformUtilizationCard({
@@ -81,7 +82,9 @@ function PlatformUtilizationCard({
   return (
     <Card title="Platform utilization" subtitle={`License & usage proxy · ${from} → ${to}`}>
       {loading ? (
-        <div className="animate-pulse py-8 text-center text-sm text-muted">Loading utilization…</div>
+        <div className="animate-pulse py-8 text-center text-sm text-muted">
+          Loading utilization…
+        </div>
       ) : empty ? (
         <p className="py-8 text-center text-sm text-muted">
           Connect a provider import or assign seats to populate utilization.
@@ -103,11 +106,7 @@ function PlatformUtilizationCard({
             value={usd(data.aggregates.meteredSpendUsd)}
             sub="observed in window"
           />
-          <Stat
-            label="Seat licenses"
-            value="—"
-            sub="assign in Settings → Plans to track seats"
-          />
+          <Stat label="Seat licenses" value="—" sub="assign in Settings → Plans to track seats" />
         </div>
       ) : data?.mode === 'team' ? (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -196,10 +195,14 @@ export function CfoView({
         }
       })
       .catch(() => {
-        if (!cancelled) setError(true);
+        if (!cancelled) {
+          setError(true);
+        }
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       });
     return () => {
       cancelled = true;
@@ -211,10 +214,14 @@ export function CfoView({
     setUtilLoading(true);
     fetchUserValue({ from, to })
       .then((res) => {
-        if (!cancelled) setUserValue(res);
+        if (!cancelled) {
+          setUserValue(res);
+        }
       })
       .finally(() => {
-        if (!cancelled) setUtilLoading(false);
+        if (!cancelled) {
+          setUtilLoading(false);
+        }
       });
     return () => {
       cancelled = true;
@@ -262,9 +269,14 @@ export function CfoView({
               {BASIS_OPTIONS.map((opt) => (
                 <Link
                   key={opt.value}
-                  href={rangeHref('/cfo', from, to, { horizon: String(forecastDays), basis: opt.value })}
+                  href={rangeHref('/cfo', from, to, {
+                    horizon: String(forecastDays),
+                    basis: opt.value,
+                  })}
                   className={`rounded px-3 py-1.5 text-sm ${
-                    opt.value === costBasis ? 'bg-accent/20 text-white' : 'border border-edge text-muted hover:bg-white/5'
+                    opt.value === costBasis
+                      ? 'bg-accent/20 text-white'
+                      : 'border border-edge text-muted hover:bg-white/5'
                   }`}
                 >
                   {opt.label}
@@ -321,8 +333,8 @@ export function CfoView({
             <CostPerOutcomeStat summary={data.summary} outcomeCount={outcomeCount} />
             <Stat
               label="Fixed cost (seats)"
-              value={usd(data.costProvenance.stack.fixedCostUsd)}
-              sub="from fixed_costs licenses & subscriptions"
+              value={usdPerMonth(data.summary.monthlySeatRunRateUsd)}
+              sub={`${forecastHorizonLabel(data.summary.forecastDays)} projected ${usd(data.costProvenance.stack.fixedCostUsd)} · observed ${usd(data.summary.observedFixedCostUsd)} in window`}
             />
           </>
         ) : null}
@@ -331,11 +343,13 @@ export function CfoView({
       {!loading && data && (
         <p className="mb-4 rounded-lg border border-edge bg-panel/50 px-4 py-2 text-xs text-muted">
           Projected stack ({forecastHorizonLabel(data.summary.forecastDays)}): tokens{' '}
-          {usd(data.costProvenance.stack.tokenUsageUsd)} ({basisLabel(data.summary.costBasis)}) · fixed cost{' '}
-          {usd(data.costProvenance.stack.fixedCostUsd)} · coding agents {usd(data.costProvenance.stack.codingAgentUsd)} ·
-          Copilot {usd(data.costProvenance.stack.copilotUsd)} · overhead{' '}
+          {usd(data.costProvenance.stack.tokenUsageUsd)} ({basisLabel(data.summary.costBasis)}) ·
+          fixed cost {usd(data.costProvenance.stack.fixedCostUsd)} · coding agents{' '}
+          {usd(data.costProvenance.stack.codingAgentUsd)} · Copilot{' '}
+          {usd(data.costProvenance.stack.copilotUsd)} · overhead{' '}
           {usd(data.costProvenance.stack.qaEvalOverheadUsd)} · computed{' '}
-          {usd(data.costProvenance.computedCostUsd)} · metered {usd(data.costProvenance.meteredCostUsd)} · variance{' '}
+          {usd(data.costProvenance.computedCostUsd)} · metered{' '}
+          {usd(data.costProvenance.meteredCostUsd)} · variance{' '}
           {data.costProvenance.variancePct.toFixed(1)}% · coverage{' '}
           {data.costProvenance.meteredCoveragePct.toFixed(0)}%
         </p>
@@ -344,7 +358,10 @@ export function CfoView({
       {!loading && data && data.warnings.length > 0 && (
         <div className="mb-4 space-y-2">
           {data.warnings.map((w) => (
-            <p key={w} className="rounded-lg border border-warn/30 bg-warn/10 px-4 py-2 text-xs text-warn">
+            <p
+              key={w}
+              className="rounded-lg border border-warn/30 bg-warn/10 px-4 py-2 text-xs text-warn"
+            >
               {w}
             </p>
           ))}
@@ -352,9 +369,9 @@ export function CfoView({
       )}
 
       <p className="mb-6 text-xs text-muted">
-        ROI and cost per outcome use observed spend in the selected window. Projected spend extrapolates that
-        run rate to the forecast horizon (e.g. 1 year). Token costs use reconciled connector/portal billing;
-        seat licenses use fixed_costs entries.
+        ROI and cost per outcome use observed spend in the selected window. Projected spend
+        extrapolates that run rate to the forecast horizon (e.g. 1 year). Token costs use reconciled
+        connector/portal billing; seat licenses use fixed_costs entries.
       </p>
 
       <div className="mb-6">
@@ -368,9 +385,10 @@ export function CfoView({
       {noOutcomesButSpend && (
         <Card title="Spend without attributed outcomes">
           <p className="text-sm text-muted">
-            {usd(data!.summary.fullyLoadedCost)} projected spend ({forecastHorizonLabel(data!.summary.forecastDays)})
-            with tokens, fixed seat licenses, and meter/connector imports but no linked outcomes. Cost per outcome
-            requires outcome mappings — LARI below flags seat waste and model right-sizing from meter data.
+            {usd(data!.summary.fullyLoadedCost)} projected spend (
+            {forecastHorizonLabel(data!.summary.forecastDays)}) with tokens, fixed seat licenses,
+            and meter/connector imports but no linked outcomes. Cost per outcome requires outcome
+            mappings — LARI below flags seat waste and model right-sizing from meter data.
           </p>
         </Card>
       )}
@@ -392,7 +410,10 @@ export function CfoView({
               </div>
             ) : (
               <BarChartClient
-                data={(data?.monthly ?? []).map((m) => ({ month: m.month, roi: m.riskAdjustedRoi }))}
+                data={(data?.monthly ?? []).map((m) => ({
+                  month: m.month,
+                  roi: m.riskAdjustedRoi,
+                }))}
                 xKey="month"
                 yKey="roi"
               />
@@ -400,7 +421,9 @@ export function CfoView({
           </Card>
           <Card title="ROI by outcome type">
             {loading ? (
-              <div className="animate-pulse py-8 text-center text-sm text-muted">Loading table…</div>
+              <div className="animate-pulse py-8 text-center text-sm text-muted">
+                Loading table…
+              </div>
             ) : (
               <DataTable
                 columns={[

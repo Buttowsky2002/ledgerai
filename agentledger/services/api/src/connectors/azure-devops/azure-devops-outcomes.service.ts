@@ -22,7 +22,7 @@ export class AzureDevOpsOutcomesService {
     connectorId: string;
     config: Record<string, unknown>;
     pat: string;
-  }): Promise<{ recordsFetched: number; recordsImported: number }> {
+  }): Promise<{ recordsFetched: number; recordsImported: number; warnings?: string[] }> {
     if (!opts.pat?.trim()) {
       throw new BadRequestException('Azure DevOps connector requires a Personal Access Token');
     }
@@ -38,9 +38,22 @@ export class AzureDevOpsOutcomesService {
       `ADO sync connector=${opts.connectorId} org=${cfg.organization} project=${cfg.project} lookback=${cfg.lookbackDays}d`,
     );
 
-    const rows = await fetchAzureDevOpsOutcomes(creds, cfg);
+    const { rows, skippedRepos } = await fetchAzureDevOpsOutcomes(creds, cfg);
+    const warnings: string[] = [];
+    if (skippedRepos.length > 0) {
+      warnings.push(
+        `Skipped ${skippedRepos.length} repo(s) without PR access: ${skippedRepos.slice(0, 3).join(', ')}` +
+          (skippedRepos.length > 3 ? '…' : '') +
+          '. Work items still sync. Remove stale repo IDs from connector config or grant Code (read).',
+      );
+      this.logger.warn(`ADO sync skipped repos: ${skippedRepos.join(', ')}`);
+    }
     if (rows.length === 0) {
-      return { recordsFetched: 0, recordsImported: 0 };
+      return {
+        recordsFetched: 0,
+        recordsImported: 0,
+        warnings: warnings.length ? warnings : undefined,
+      };
     }
 
     const summary = await this.importService.importEvents({
@@ -50,6 +63,7 @@ export class AzureDevOpsOutcomesService {
     return {
       recordsFetched: rows.length,
       recordsImported: summary.imported,
+      warnings: warnings.length ? warnings : undefined,
     };
   }
 }

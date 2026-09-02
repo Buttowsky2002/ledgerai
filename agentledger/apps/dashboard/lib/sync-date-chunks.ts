@@ -21,7 +21,9 @@ export function syncDateChunks(
 ): { from: string; to: string }[] {
   const start = parseUtcDay(from);
   const end = parseUtcDay(to);
-  if (start > end) return [];
+  if (start > end) {
+    return [];
+  }
 
   const chunks: { from: string; to: string }[] = [];
   let chunkEnd = end;
@@ -31,7 +33,9 @@ export function syncDateChunks(
       Math.max(start.getTime(), chunkEnd.getTime() - (maxDays - 1) * 86_400_000),
     );
     chunks.unshift({ from: formatUtcDay(chunkStart), to: formatUtcDay(chunkEnd) });
-    if (chunkStart.getTime() <= start.getTime()) break;
+    if (chunkStart.getTime() <= start.getTime()) {
+      break;
+    }
     chunkEnd = new Date(chunkStart.getTime() - 86_400_000);
   }
 
@@ -39,7 +43,11 @@ export function syncDateChunks(
 }
 
 /** Most recent maxDays window within the selected range (for Test preview). */
-export function previewDateRange(from: string, to: string, maxDays = MAX_SYNC_DAYS): { from: string; to: string } {
+export function previewDateRange(
+  from: string,
+  to: string,
+  maxDays = MAX_SYNC_DAYS,
+): { from: string; to: string } {
   const chunks = syncDateChunks(from, to, maxDays);
   return chunks[chunks.length - 1] ?? { from, to };
 }

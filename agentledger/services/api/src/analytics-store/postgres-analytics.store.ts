@@ -67,7 +67,9 @@ function assertIdent(name: string, what: string): void {
 
 /** Rows per INSERT so `cols * rows <= PG_MAX_BIND_PARAMS`. */
 export function insertBatchSize(columnCount: number): number {
-  if (columnCount <= 0) return 1;
+  if (columnCount <= 0) {
+    return 1;
+  }
   return Math.max(1, Math.floor(PG_MAX_BIND_PARAMS / columnCount));
 }
 
@@ -120,20 +122,30 @@ export class PostgresAnalyticsStore extends AnalyticsStore {
    * from AsyncLocalStorage. Empty string is treated as absent.
    */
   private resolveTenantId(explicit?: string | null): string | null {
-    if (typeof explicit === 'string' && explicit !== '') return explicit;
+    if (typeof explicit === 'string' && explicit !== '') {
+      return explicit;
+    }
     return getTenantId();
   }
 
-  async query<T = Record<string, unknown>>(sql: string, params: Record<string, ChParam> = {}): Promise<T[]> {
+  async query<T = Record<string, unknown>>(
+    sql: string,
+    params: Record<string, ChParam> = {},
+  ): Promise<T[]> {
     const { sql: pgSql, values } = translateChSql(sql, params);
     const tenant = this.resolveTenantId(typeof params.tenant === 'string' ? params.tenant : null);
     const rows = tenant
-      ? await this.prisma.withTenant(tenant, (tx) => tx.$queryRawUnsafe<Record<string, unknown>[]>(pgSql, ...values))
+      ? await this.prisma.withTenant(tenant, (tx) =>
+          tx.$queryRawUnsafe<Record<string, unknown>[]>(pgSql, ...values),
+        )
       : await this.prisma.$queryRawUnsafe<Record<string, unknown>[]>(pgSql, ...values);
     return rows.map(normalizeRow) as T[];
   }
 
-  async queryScoped<T = Record<string, unknown>>(sql: string, params: Record<string, ChParam> = {}): Promise<T[]> {
+  async queryScoped<T = Record<string, unknown>>(
+    sql: string,
+    params: Record<string, ChParam> = {},
+  ): Promise<T[]> {
     const tenantId = getTenantId();
     if (!tenantId) {
       throw new Error('no tenant in context');
@@ -141,7 +153,9 @@ export class PostgresAnalyticsStore extends AnalyticsStore {
     requireTenantFilter(sql);
     const safe: Record<string, ChParam> = {};
     for (const [k, v] of Object.entries(params)) {
-      if (k !== 'tenant') safe[k] = v;
+      if (k !== 'tenant') {
+        safe[k] = v;
+      }
     }
     safe.tenant = tenantId;
     const { sql: pgSql, values } = translateChSql(sql, safe);
@@ -170,7 +184,9 @@ export class PostgresAnalyticsStore extends AnalyticsStore {
   }
 
   async insertRows(table: string, rows: Record<string, unknown>[]): Promise<void> {
-    if (rows.length === 0) return;
+    if (rows.length === 0) {
+      return;
+    }
     assertIdent(table, 'table');
     const types = await this.tableTypes(table);
     const upsert = TABLES[table];
@@ -184,8 +200,11 @@ export class PostgresAnalyticsStore extends AnalyticsStore {
         .sort();
       const sig = cols.join(',');
       const g = groups.get(sig);
-      if (g) g.push(row);
-      else groups.set(sig, [row]);
+      if (g) {
+        g.push(row);
+      } else {
+        groups.set(sig, [row]);
+      }
     }
 
     const tenant = this.resolveTenantId(
@@ -199,7 +218,9 @@ export class PostgresAnalyticsStore extends AnalyticsStore {
     await this.prisma.withTenant(tenant, async (tx) => {
       for (const [sig, groupRows] of groups) {
         const cols = sig === '' ? [] : sig.split(',');
-        if (cols.length === 0) continue;
+        if (cols.length === 0) {
+          continue;
+        }
         const batchSize = insertBatchSize(cols.length);
         for (let i = 0; i < groupRows.length; i += batchSize) {
           const chunk = groupRows.slice(i, i + batchSize);
@@ -235,13 +256,17 @@ export class PostgresAnalyticsStore extends AnalyticsStore {
   }
 
   private conflictClause(table: string, cols: string[], upsert: TableUpsert | undefined): string {
-    if (!upsert) return '';
+    if (!upsert) {
+      return '';
+    }
     if (!upsert.key.every((k) => cols.includes(k))) {
       // Without the full conflict key we cannot upsert deterministically.
       return '';
     }
     const nonKey = cols.filter((c) => !upsert.key.includes(c));
-    if (nonKey.length === 0) return ` ON CONFLICT (${upsert.key.join(', ')}) DO NOTHING`;
+    if (nonKey.length === 0) {
+      return ` ON CONFLICT (${upsert.key.join(', ')}) DO NOTHING`;
+    }
     const sets = nonKey.map((c) =>
       upsert.sum?.includes(c) ? `${c} = ${table}.${c} + EXCLUDED.${c}` : `${c} = EXCLUDED.${c}`,
     );
@@ -255,24 +280,36 @@ export class PostgresAnalyticsStore extends AnalyticsStore {
    */
   private upsertifyInsert(sql: string): string {
     const m = /^\s*INSERT\s+INTO\s+([a-z_][a-z0-9_]*)\s*\(([^)]*)\)/i.exec(sql);
-    if (!m) return sql;
+    if (!m) {
+      return sql;
+    }
     const table = m[1].toLowerCase();
     const upsert = TABLES[table];
-    if (!upsert || /ON\s+CONFLICT/i.test(sql)) return sql;
+    if (!upsert || /ON\s+CONFLICT/i.test(sql)) {
+      return sql;
+    }
     const cols = m[2].split(',').map((c) => c.trim().toLowerCase());
     return sql + this.conflictClause(table, cols, upsert);
   }
 
   private coerce(v: unknown): unknown {
-    if (v === undefined) return null;
-    if (typeof v === 'boolean') return v ? 1 : 0;
-    if (typeof v === 'object' && v !== null && !(v instanceof Date)) return JSON.stringify(v);
+    if (v === undefined) {
+      return null;
+    }
+    if (typeof v === 'boolean') {
+      return v ? 1 : 0;
+    }
+    if (typeof v === 'object' && v !== null && !(v instanceof Date)) {
+      return JSON.stringify(v);
+    }
     return v;
   }
 
   private async tableTypes(table: string): Promise<Map<string, string>> {
     const cached = this.columnTypes.get(table);
-    if (cached) return cached;
+    if (cached) {
+      return cached;
+    }
     const rows = await this.prisma.$queryRaw<{ column_name: string; udt_name: string }[]>`
       SELECT column_name, udt_name FROM information_schema.columns
       WHERE table_schema = current_schema() AND table_name = ${table}`;

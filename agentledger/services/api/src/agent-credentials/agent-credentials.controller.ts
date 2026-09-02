@@ -1,5 +1,14 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { BadRequestException, Body, Controller, Get, Logger, Param, Post, Query } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Logger,
+  Param,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { IsArray, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
 import { Roles } from '../auth/decorators';
 import { CrudService } from '../common/crud.service';
@@ -55,7 +64,8 @@ export class AgentCredentialsController {
     });
   }
 
-  @Roles('viewer') @Get()
+  @Roles('viewer')
+  @Get()
   async list(@Query('limit') limit?: string, @Query('offset') offset?: string) {
     const rows = (await this.crud.list(parsePagination(limit, offset))) as CredentialRow[];
     return rows.map(sanitize);
@@ -66,7 +76,8 @@ export class AgentCredentialsController {
    * returns the plaintext token exactly once. Created "pending" — not usable
    * until approved. analyst+ may request issuance.
    */
-  @Roles('analyst') @Post()
+  @Roles('analyst')
+  @Post()
   async issue(@Body() dto: IssueCredentialDto) {
     const token = 'agc_' + randomBytes(24).toString('base64url');
     const tokenHash = sha256(token);
@@ -85,7 +96,8 @@ export class AgentCredentialsController {
   }
 
   /** Approve a pending credential into active (admin only). */
-  @Roles('admin') @Post(':id/approve')
+  @Roles('admin')
+  @Post(':id/approve')
   async approve(@Param('id') id: string) {
     const before = (await this.crud.get(id)) as CredentialRow; // 404s cross-tenant under RLS
     if (before.status !== 'pending') {
@@ -101,7 +113,8 @@ export class AgentCredentialsController {
   }
 
   /** Revoke a credential (admin only). */
-  @Roles('admin') @Post(':id/revoke')
+  @Roles('admin')
+  @Post(':id/revoke')
   async revoke(@Param('id') id: string, @Body() dto: RevokeDto) {
     await this.crud.get(id); // 404s cross-tenant under RLS
     const after = (await this.crud.update(id, {
@@ -116,7 +129,8 @@ export class AgentCredentialsController {
    * Blast radius per agent: active credential count, total credentials, and
    * allowlisted tool count. RLS confines all three joined tables to the tenant.
    */
-  @Roles('viewer') @Get('blast-radius')
+  @Roles('viewer')
+  @Get('blast-radius')
   blastRadius() {
     return this.prisma.withTenant(getTenantId(), async (tx) => {
       const rows = await tx.$queryRawUnsafe<
@@ -158,7 +172,8 @@ export class AgentCredentialsController {
    * Decommission dormant agents: revoke active credentials unused for longer than
    * dormantDays (default 30) and mark their agents decommissioned. Admin only.
    */
-  @Roles('admin') @Post('decommission-dormant')
+  @Roles('admin')
+  @Post('decommission-dormant')
   async decommissionDormant(@Body() dto: DecommissionDto) {
     const days = dto.dormantDays ?? 30;
     const cutoff = new Date(Date.now() - days * 24 * 3600 * 1000);
@@ -194,7 +209,9 @@ export class AgentCredentialsController {
         before: null,
         after: { decommissionedAgents: res.count, revokedCredentials: credIds.length },
       });
-      this.logger.log(`dormant decommission: ${res.count} agents, ${credIds.length} creds (>${days}d)`);
+      this.logger.log(
+        `dormant decommission: ${res.count} agents, ${credIds.length} creds (>${days}d)`,
+      );
       return { decommissionedAgents: res.count };
     });
   }

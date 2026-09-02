@@ -2,7 +2,15 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useId, useRef, useState, useTransition } from 'react';
-import { allTimeHref, encodeRange, presetRange, RANGE_COOKIE, rangeHref, todayIso } from '../lib/date-range';
+import {
+  allTimeHref,
+  encodeRange,
+  presetRange,
+  previousCalendarMonthRange,
+  RANGE_COOKIE,
+  rangeHref,
+  todayIso,
+} from '../lib/date-range';
 
 function writeRangeCookie(r: { from: string; to: string }) {
   document.cookie = `${RANGE_COOKIE}=${encodeRange(r)}; path=/; max-age=31536000; samesite=lax`;
@@ -58,14 +66,18 @@ export function DateRangePicker({
   }, [open, from, to, isAllTime]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      return;
+    }
     const onDoc = (e: MouseEvent) => {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
         setOpen(false);
       }
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
+      if (e.key === 'Escape') {
+        setOpen(false);
+      }
     };
     document.addEventListener('mousedown', onDoc);
     document.addEventListener('keydown', onKey);
@@ -77,7 +89,9 @@ export function DateRangePicker({
 
   const commit = (href: string, cookie?: { from: string; to: string }) => {
     setOpen(false);
-    if (cookie) writeRangeCookie(cookie);
+    if (cookie) {
+      writeRangeCookie(cookie);
+    }
     startNavigation(() => {
       router.push(href);
       router.refresh();
@@ -91,6 +105,13 @@ export function DateRangePicker({
     setDraftAllTime(false);
   };
 
+  const selectLastMonth = () => {
+    const r = previousCalendarMonthRange();
+    setDraftFrom(r.from);
+    setDraftTo(r.to);
+    setDraftAllTime(false);
+  };
+
   const selectAllTime = () => {
     setDraftFrom(earliestDay);
     setDraftTo(latestDay);
@@ -98,7 +119,9 @@ export function DateRangePicker({
   };
 
   const apply = () => {
-    if (!draftFrom || !draftTo || draftFrom > draftTo) return;
+    if (!draftFrom || !draftTo || draftFrom > draftTo) {
+      return;
+    }
     if (draftAllTime) {
       commit(allTimeHref(basePath, extraParams));
       return;
@@ -110,19 +133,20 @@ export function DateRangePicker({
   };
 
   const draftValid = Boolean(draftFrom && draftTo && draftFrom <= draftTo);
-  const draftUnchanged =
-    draftAllTime === isAllTime &&
-    draftFrom === from &&
-    draftTo === to;
+  const draftUnchanged = draftAllTime === isAllTime && draftFrom === from && draftTo === to;
   const activePreset = PRESETS.find((preset) => {
     const range = presetRange(preset.days);
     return range.from === from && range.to === to;
   });
+  const lastMonthRange = previousCalendarMonthRange();
+  const isLastMonth = from === lastMonthRange.from && to === lastMonthRange.to;
   const activeSelection = isAllTime
     ? 'All time'
     : activePreset
       ? `Last ${activePreset.label}`
-      : fmtRange(from, to);
+      : isLastMonth
+        ? 'Last month'
+        : fmtRange(from, to);
 
   const inputClass =
     'w-full rounded-md border border-edge bg-black/40 px-3 py-2 text-sm text-gray-100 [color-scheme:dark] focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/30';
@@ -165,7 +189,9 @@ export function DateRangePicker({
             {draftAllTime ? (
               <>
                 All time
-                <span className="mt-0.5 block text-xs text-muted">{fmtRange(draftFrom, draftTo)}</span>
+                <span className="mt-0.5 block text-xs text-muted">
+                  {fmtRange(draftFrom, draftTo)}
+                </span>
               </>
             ) : (
               fmtRange(draftFrom, draftTo)
@@ -224,6 +250,17 @@ export function DateRangePicker({
             })}
             <button
               type="button"
+              onClick={selectLastMonth}
+              className={`rounded-md px-2.5 py-1 text-xs transition-colors ${
+                !draftAllTime && lastMonthRange.from === draftFrom && lastMonthRange.to === draftTo
+                  ? 'bg-accent/15 text-accent ring-1 ring-inset ring-accent/30'
+                  : 'border border-edge text-muted hover:bg-white/5 hover:text-gray-100'
+              }`}
+            >
+              Last month
+            </button>
+            <button
+              type="button"
               onClick={selectAllTime}
               className={`rounded-md px-2.5 py-1 text-xs transition-colors ${
                 draftAllTime
@@ -236,8 +273,8 @@ export function DateRangePicker({
           </div>
 
           <p className="mb-3 text-[11px] leading-relaxed text-muted">
-            All time spans from your first connection or imported spend ({earliestDay}) through today.
-            Presets only update this draft — nothing reloads until you Apply.
+            All time spans from your first connection or imported spend ({earliestDay}) through
+            today. Presets only update this draft — nothing reloads until you Apply.
           </p>
 
           <div className="flex items-center justify-between gap-2 border-t border-edge/70 pt-3">

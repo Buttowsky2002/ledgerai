@@ -52,23 +52,35 @@ function dayAfter(isoDay: string): string {
 
 function parseCost(raw: string, unit: 'usd' | 'cents'): number | undefined {
   const cleaned = raw.replace(/[$,\s]/g, '');
-  if (!cleaned) return undefined;
+  if (!cleaned) {
+    return undefined;
+  }
   const n = Number(cleaned);
-  if (!Number.isFinite(n) || n < 0) return undefined;
+  if (!Number.isFinite(n) || n < 0) {
+    return undefined;
+  }
   const usd = unit === 'cents' ? n / 100 : n;
   return usd > 0 ? usd : undefined;
 }
 
 function parseDay(raw: string): string | undefined {
   const s = raw.trim();
-  if (!s) return undefined;
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  if (!s) {
+    return undefined;
+  }
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    return s.slice(0, 10);
+  }
   if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(s)) {
     const d = new Date(s);
-    if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+    if (!Number.isNaN(d.getTime())) {
+      return d.toISOString().slice(0, 10);
+    }
   }
   const d = new Date(s);
-  if (Number.isNaN(d.getTime())) return undefined;
+  if (Number.isNaN(d.getTime())) {
+    return undefined;
+  }
   return d.toISOString().slice(0, 10);
 }
 
@@ -90,10 +102,16 @@ function mappingFromSuggestion(
   suggestion: MappingSuggestion,
   format: FormatDetection,
 ): ColumnMappingByName | null {
-  if (!format.billable) return null;
+  if (!format.billable) {
+    return null;
+  }
   const m = suggestion.mapping;
-  if (!m.cost) return null;
-  if (!m.date && !m.reportThroughDay && !format.reportTo) return null;
+  if (!m.cost) {
+    return null;
+  }
+  if (!m.date && !m.reportThroughDay && !format.reportTo) {
+    return null;
+  }
   return {
     cost: m.cost,
     costUnit: m.costUnit ?? suggestion.inferredCostUnit,
@@ -120,7 +138,9 @@ function resolveUserFields(
   const uuid = mapping.account_uuid >= 0 ? (cells[mapping.account_uuid] ?? '').trim() : '';
 
   const isOrg = email.toLowerCase().includes('org service') || email === '(org service usage)';
-  if (isOrg) return { label: '' };
+  if (isOrg) {
+    return { label: '' };
+  }
 
   const label =
     (email && email.includes('@') ? email : '') ||
@@ -147,7 +167,14 @@ function parseGrid(
   provider: string,
 ): Omit<
   PortalParseResult,
-  'headers' | 'headerRow' | 'delimiter' | 'format' | 'suggestion' | 'mappingUsed' | 'provider' | 'requiresProvider'
+  | 'headers'
+  | 'headerRow'
+  | 'delimiter'
+  | 'format'
+  | 'suggestion'
+  | 'mappingUsed'
+  | 'provider'
+  | 'requiresProvider'
 > {
   const errors: { line: number; message: string }[] = [];
   const rows: Record<string, unknown>[] = [];
@@ -163,7 +190,9 @@ function parseGrid(
   for (let i = headerRow + 1; i < grid.length; i++) {
     const cells = grid[i];
     const line = i + 1;
-    if (cells.every((c) => !c.trim())) continue;
+    if (cells.every((c) => !c.trim())) {
+      continue;
+    }
     dataRows++;
 
     const day =
@@ -176,7 +205,9 @@ function parseGrid(
 
     if (!day) {
       skipped++;
-      if (errors.length < 20) errors.push({ line, message: 'invalid or missing date' });
+      if (errors.length < 20) {
+        errors.push({ line, message: 'invalid or missing date' });
+      }
       continue;
     }
     if (cost === undefined) {
@@ -197,10 +228,16 @@ function parseGrid(
     const userLabel = userFields.label;
 
     models.add(model);
-    if (userLabel !== 'Unassigned') users.add(userLabel);
+    if (userLabel !== 'Unassigned') {
+      users.add(userLabel);
+    }
     totalCostUsd += cost;
-    if (!minDay || day < minDay) minDay = day;
-    if (!maxDay || day > maxDay) maxDay = day;
+    if (!minDay || day < minDay) {
+      minDay = day;
+    }
+    if (!maxDay || day > maxDay) {
+      maxDay = day;
+    }
 
     const inputTokens =
       mapping.input_tokens >= 0 && cells[mapping.input_tokens]
@@ -235,10 +272,18 @@ function parseGrid(
       input_tokens: inputTokens,
       output_tokens: outputTokens,
     };
-    if (userFields.email) row.user_email = userFields.email;
-    if (userFields.name) row.user_name = userFields.name;
-    if (userFields.providerUserId) row.provider_user_id = userFields.providerUserId;
-    if (userFields.uuid) row.account_uuid = userFields.uuid;
+    if (userFields.email) {
+      row.user_email = userFields.email;
+    }
+    if (userFields.name) {
+      row.user_name = userFields.name;
+    }
+    if (userFields.providerUserId) {
+      row.provider_user_id = userFields.providerUserId;
+    }
+    if (userFields.uuid) {
+      row.account_uuid = userFields.uuid;
+    }
 
     rows.push(row);
   }

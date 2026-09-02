@@ -4,26 +4,50 @@ import { AreaChartClient, Sparkline } from '../components/charts';
 import { OverviewAiSourcesPanel } from '../components/overview/OverviewAiSourcesPanel';
 import type { CursorSpendSummary } from '../components/overview/CursorPlatformDetail';
 import { CostByUserPanel } from '../components/overview/CostByUserPanel';
-import { FixedOverheadPanel } from '../components/overview/FixedOverheadPanel';
+import {
+  FixedOverheadPanel,
+  type VendorBillingData,
+} from '../components/overview/FixedOverheadPanel';
+import { OverviewSeatSubscriptions } from '../components/overview/OverviewSeatSubscriptions';
 import { ExecutiveReportExport } from '../components/overview/ExecutiveReportExport';
 import { OverviewLiveRefresh } from '../components/overview/OverviewLiveRefresh';
 import { LariRecommendationsPanel } from '../components/lari/LariRecommendationsPanel';
 import { ProductWorthPanel } from '../components/lari/ProductWorthPanel';
-import { ImportCoverageBanner } from '../components/lari/ImportCoverageBanner';
 import { Badge, BadgeTone, Card, DataTable, PageHeader, Stat, num, usd } from '../components/ui';
 import { DateRangePicker } from '../components/DateRangePicker';
 import { apiClient, fetchData, proxyApi } from '../lib/api';
-import { combinedAiCost } from '../lib/combined-ai-cost';
 import { fetchDataBounds } from '../lib/data-bounds';
 import { env } from '../lib/env';
+import {
+  billingMonthsInRange,
+  currentMonthlySeatRunRate,
+  latestBillingMonthInRange,
+  latestSeatByVendor,
+  periodSeatTotalForRange,
+  seatLookupFromDate,
+  seatLookupToDate,
+  type FixedCostSeatRow,
+} from '../lib/overview-seat-monthly';
 import { seatUsdByVendor } from '../lib/platform-billing';
+import { formatSignedUsd, monthLabel } from '../lib/seat-price-delta';
 import { resolvePageRange } from '../lib/resolve-range';
+import { usdPerMonth } from '../lib/usd-per-month';
+import type { OverviewVendorSeatRow } from '../components/overview/OverviewSeatSubscriptions';
+
+type UserRow = {
+  user_id: string;
+  display_name: string;
+  email: string | null;
+  team: string;
+};
 
 export const dynamic = 'force-dynamic';
 
 function liveRefreshIntervalMs(): number {
   const raw = env('BADGERIQ_DASHBOARD_LIVE_REFRESH_MS');
-  if (!raw) return 30_000;
+  if (!raw) {
+    return 30_000;
+  }
   const n = Number.parseInt(raw, 10);
   return Number.isFinite(n) && n >= 0 ? n : 30_000;
 }
@@ -82,14 +106,62 @@ const REC: Record<
   Recommendation,
   { label: string; tone: BadgeTone; action: boolean; priority: number; hint: string }
 > = {
-  pause: { label: 'Pause', tone: 'neg', action: true, priority: 0, hint: 'Negative net return — halt spend' },
-  retire: { label: 'Retire', tone: 'neg', action: true, priority: 0, hint: 'No attributable value — decommission' },
-  investigate: { label: 'Investigate', tone: 'warn', action: true, priority: 1, hint: 'Anomalous cost or risk signal' },
-  require_approval: { label: 'Require approval', tone: 'warn', action: true, priority: 1, hint: 'Governance gate before scaling' },
-  optimize: { label: 'Optimize', tone: 'warn', action: true, priority: 2, hint: 'High cost relative to value' },
-  improve_evidence: { label: 'Improve evidence', tone: 'info', action: true, priority: 3, hint: 'Attribution confidence below threshold' },
-  scale: { label: 'Scale', tone: 'pos', action: true, priority: 4, hint: 'Strong return — expand deployment' },
-  maintain: { label: 'Maintain', tone: 'neutral', action: false, priority: 5, hint: 'Healthy — no action needed' },
+  pause: {
+    label: 'Pause',
+    tone: 'neg',
+    action: true,
+    priority: 0,
+    hint: 'Negative net return — halt spend',
+  },
+  retire: {
+    label: 'Retire',
+    tone: 'neg',
+    action: true,
+    priority: 0,
+    hint: 'No attributable value — decommission',
+  },
+  investigate: {
+    label: 'Investigate',
+    tone: 'warn',
+    action: true,
+    priority: 1,
+    hint: 'Anomalous cost or risk signal',
+  },
+  require_approval: {
+    label: 'Require approval',
+    tone: 'warn',
+    action: true,
+    priority: 1,
+    hint: 'Governance gate before scaling',
+  },
+  optimize: {
+    label: 'Optimize',
+    tone: 'warn',
+    action: true,
+    priority: 2,
+    hint: 'High cost relative to value',
+  },
+  improve_evidence: {
+    label: 'Improve evidence',
+    tone: 'info',
+    action: true,
+    priority: 3,
+    hint: 'Attribution confidence below threshold',
+  },
+  scale: {
+    label: 'Scale',
+    tone: 'pos',
+    action: true,
+    priority: 4,
+    hint: 'Strong return — expand deployment',
+  },
+  maintain: {
+    label: 'Maintain',
+    tone: 'neutral',
+    action: false,
+    priority: 5,
+    hint: 'Healthy — no action needed',
+  },
 };
 
 const BAR_BG: Record<BadgeTone, string> = {
@@ -121,24 +193,64 @@ function ConfMeter({ score }: { score: number }) {
 export default async function OverviewPage({
   searchParams,
 }: {
-  searchParams: { from?: string; to?: string; source?: string; range?: string };
+  searchParams: {
+    from?: string;
+    to?: string;
+    source?: string;
+    vendor?: string;
+    range?: string;
+    aiView?: string;
+  };
 }) {
   const source = searchParams.source || undefined;
   const api = apiClient();
 
-  const dataBounds = await fetchDataBounds(searchParams);
+  const dataBounds = await fetchDataBounds();
   const { from, to, isAllTime } = resolvePageRange(searchParams, dataBounds);
 
-  type TotalCostRow = {
-    month: string;
-    attributable_cost_usd: number | string;
-    fixed_cost_usd: number | string;
-    total_cost_of_ai_usd: number | string;
-  };
+  type FixedCostVendorRow = FixedCostSeatRow;
 
-  type FixedCostVendorRow = { vendor?: string | null; cost_usd?: number | string | null };
+  function mergeOverviewSeatVendors(
+    fixedRows: FixedCostVendorRow[],
+    billingVendors: OverviewVendorSeatRow[],
+  ): OverviewVendorSeatRow[] {
+    const byVendor = latestSeatByVendor(fixedRows);
+    const merged = new Map<string, OverviewVendorSeatRow>();
 
-  const [spend, economics, costByUser, platformSpend, modelMix, totalCostRows, fixedCostRows] = await Promise.all([
+    for (const [vendor, row] of byVendor) {
+      merged.set(vendor, {
+        vendor,
+        seat_usd: row.seat_usd,
+        seats: row.seats > 0 ? row.seats : undefined,
+        billing_month: row.period_month.slice(0, 7),
+      });
+    }
+
+    for (const row of billingVendors) {
+      if (row.seat_usd <= 0) {
+        continue;
+      }
+      const existing = merged.get(row.vendor);
+      merged.set(row.vendor, {
+        ...row,
+        seat_usd: existing?.seat_usd ?? row.seat_usd,
+        seats: existing?.seats ?? row.seats,
+        billing_month: existing?.billing_month ?? row.billing_month,
+      });
+    }
+
+    return [...merged.values()].sort((a, b) => b.seat_usd - a.seat_usd);
+  }
+  const [
+    spend,
+    economics,
+    costByUser,
+    platformSpend,
+    modelMix,
+    fixedCostRows,
+    usersRes,
+    vendorBillingRes,
+  ] = await Promise.all([
     fetchData(
       api.GET('/v1/analytics/spend', { params: { query: { from, to } } }),
       [],
@@ -160,14 +272,25 @@ export default async function OverviewPage({
       [],
     ) as Promise<unknown> as Promise<ModelRow[]>,
     (async () => {
-      const qs = new URLSearchParams({ from, to }).toString();
-      const res = await proxyApi(`/v1/fixed-costs/total-cost-of-ai?${qs}`);
-      return res.ok && Array.isArray(res.data) ? (res.data as TotalCostRow[]) : [];
+      const seatFrom = seatLookupFromDate(to);
+      const seatTo = seatLookupToDate(to);
+      const qs = new URLSearchParams({ from: seatFrom, to: seatTo }).toString();
+      const res = await proxyApi(`/v1/fixed-costs?${qs}`);
+      return res.ok && Array.isArray(res.data) ? (res.data as FixedCostVendorRow[]) : [];
     })(),
     (async () => {
       const qs = new URLSearchParams({ from, to }).toString();
-      const res = await proxyApi(`/v1/fixed-costs?${qs}`);
-      return res.ok && Array.isArray(res.data) ? (res.data as FixedCostVendorRow[]) : [];
+      const res = await proxyApi(`/v1/analytics/users?${qs}`);
+      return res.ok && res.data && typeof res.data === 'object'
+        ? res.data
+        : { users: [], vendors: [] };
+    })(),
+    (async () => {
+      const qs = new URLSearchParams({ from, to }).toString();
+      const res = await proxyApi(`/v1/analytics/vendor-billing?${qs}`);
+      return res.ok && res.data && typeof res.data === 'object'
+        ? res.data
+        : { vendors: [], total_cost_of_ai: 0 };
     })(),
   ]);
 
@@ -220,10 +343,50 @@ export default async function OverviewPage({
 
   const meteredCost = spend.reduce((s, r) => s + Number(r.cost_usd), 0);
   const totalCalls = spend.reduce((s, r) => s + Number(r.calls), 0);
-  const costOfAi = combinedAiCost(meteredCost, totalCostRows);
-  const totalCostOfAi = costOfAi.total;
-  const attributableCost = costOfAi.attributable;
-  const fixedOverhead = costOfAi.fixed;
+  const vendorBilling: VendorBillingData =
+    vendorBillingRes && typeof vendorBillingRes === 'object'
+      ? (vendorBillingRes as VendorBillingData)
+      : { vendors: [], total_cost_of_ai: 0 };
+  const billingVendors = vendorBilling.vendors ?? [];
+  const fixedRows = fixedCostRows as FixedCostVendorRow[];
+  const billingMonth = latestBillingMonthInRange(from, to);
+  const billingMonthCount = billingMonthsInRange(from, to).length;
+
+  let monthlySeatRunRate = currentMonthlySeatRunRate(fixedRows);
+  let periodSeatTotalUsd = periodSeatTotalForRange(fixedRows, from, to);
+
+  const vendorBillingPeriodSeat = billingVendors.reduce((s, v) => s + Number(v.seat_usd ?? 0), 0);
+  for (const row of billingVendors) {
+    if (row.seat_usd <= 0) {
+      continue;
+    }
+    const fromFixed = latestSeatByVendor(fixedRows).has(row.vendor);
+    if (!fromFixed) {
+      const share =
+        billingMonthCount === 1 ? row.seat_usd : row.seat_usd / Math.max(billingMonthCount, 1);
+      monthlySeatRunRate = Math.round((monthlySeatRunRate + share) * 100) / 100;
+      periodSeatTotalUsd = Math.round((periodSeatTotalUsd + row.seat_usd) * 100) / 100;
+    }
+  }
+
+  if (monthlySeatRunRate <= 0 && vendorBillingPeriodSeat > 0) {
+    monthlySeatRunRate =
+      billingMonthCount === 1
+        ? vendorBillingPeriodSeat
+        : vendorBillingPeriodSeat / billingMonthCount;
+    periodSeatTotalUsd = vendorBillingPeriodSeat;
+  }
+
+  const overviewSeatVendors = mergeOverviewSeatVendors(fixedRows, billingVendors);
+  const totalSeats = overviewSeatVendors.reduce(
+    (s, v) => s + (v.seats != null && v.seats > 0 ? v.seats : 0),
+    0,
+  );
+  const seatChangeUsd = vendorBilling.seat_change_usd ?? 0;
+
+  const attributableCost = meteredCost;
+  const fixedOverhead = periodSeatTotalUsd;
+  const totalCostOfAi = meteredCost + periodSeatTotalUsd;
   const blocked = spend.reduce((s, r) => s + Number(r.blocked_calls), 0);
   const chart = spend.map((r) => ({ day: String(r.day).slice(5), cost_usd: Number(r.cost_usd) }));
 
@@ -258,29 +421,52 @@ export default async function OverviewPage({
         actions={
           <div className="flex flex-wrap items-center gap-4">
             <OverviewLiveRefresh intervalMs={liveRefreshIntervalMs()} />
-            <Suspense
-              fallback={
-                <div className="text-sm text-muted">Export report…</div>
-              }
-            >
+            <Suspense fallback={<div className="text-sm text-muted">Export report…</div>}>
               <ExecutiveReportExport from={from} to={to} bounds={dataBounds} />
             </Suspense>
           </div>
         }
       />
 
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <Stat
           label="Total cost of AI"
           value={usd(totalCostOfAi)}
           accent
           sub={
             <>
-              {usd(attributableCost)} metered · {usd(fixedOverhead)} fixed
+              {usd(attributableCost)} metered ·{' '}
+              {usdPerMonth(Math.round(monthlySeatRunRate * 100) / 100)} fixed
+              {billingMonthCount > 1 && (
+                <span className="mt-0.5 block text-muted">
+                  {usd(fixedOverhead)} subscriptions across {billingMonthCount} billing months
+                </span>
+              )}
               <span className="mt-0.5 block">{num(totalCalls)} calls</span>
             </>
           }
           chart={chart.length > 1 ? <Sparkline data={chart} yKey="cost_usd" /> : undefined}
+        />
+        <Stat
+          label="Seat subscriptions"
+          value={usdPerMonth(Math.round(monthlySeatRunRate * 100) / 100)}
+          tone="warn"
+          sub={
+            <>
+              {monthLabel(`${billingMonth}-01`)} ·{' '}
+              {totalSeats > 0 ? `${num(totalSeats)} seats` : 'monthly seat licenses'}
+              {billingMonthCount > 1 && (
+                <span className="mt-0.5 block text-muted">
+                  {usd(fixedOverhead)} total for {billingMonthCount} months in range
+                </span>
+              )}
+              {seatChangeUsd !== 0 && (
+                <span className={`mt-0.5 block ${seatChangeUsd > 0 ? 'text-warn' : 'text-pos'}`}>
+                  {formatSignedUsd(seatChangeUsd)} from seat changes
+                </span>
+              )}
+            </>
+          }
         />
         <Stat
           label="Net risk-adjusted ROI"
@@ -302,15 +488,13 @@ export default async function OverviewPage({
         />
       </div>
 
-      <Suspense
-        fallback={
-          <Card title="Data coverage">
-            <p className="py-8 text-center text-sm text-muted">Loading coverage…</p>
-          </Card>
-        }
-      >
-        <ImportCoverageBanner from={from} to={to} />
-      </Suspense>
+      <OverviewSeatSubscriptions
+        vendors={overviewSeatVendors}
+        seatChangeUsd={seatChangeUsd}
+        billingMonth={billingMonth}
+      />
+
+      <FixedOverheadPanel from={from} to={to} vendorBilling={vendorBilling} />
 
       <Suspense
         fallback={
@@ -326,8 +510,6 @@ export default async function OverviewPage({
         <AreaChartClient data={chart} xKey="day" yKey="cost_usd" />
       </Card>
 
-      <FixedOverheadPanel from={from} to={to} />
-
       <Suspense
         fallback={
           <Card title="AI sources & models">
@@ -336,14 +518,16 @@ export default async function OverviewPage({
         }
       >
         <OverviewAiSourcesPanel
-          platforms={platforms}
-          modelMix={models}
           from={from}
           to={to}
-          initialSource={source}
-          seatUsdByVendor={seatUsdByVendorMap}
-          cursorSpend={hasCursorPlatform ? cursorSpend : undefined}
-          cursorSpendError={cursorSpendError}
+          users={
+            ((usersRes as { users?: UserRow[] }).users ?? []) as Parameters<
+              typeof OverviewAiSourcesPanel
+            >[0]['users']
+          }
+          models={models}
+          orgVendors={billingVendors}
+          cursorSpend={cursorSpend}
         />
       </Suspense>
 
@@ -360,7 +544,9 @@ export default async function OverviewPage({
       <Card
         title="Recommended actions"
         subtitle="LARI engine · portfolio-wide"
-        actions={<Badge tone={actions.length > 0 ? 'warn' : 'pos'}>{num(actions.length)} flagged</Badge>}
+        actions={
+          <Badge tone={actions.length > 0 ? 'warn' : 'pos'}>{num(actions.length)} flagged</Badge>
+        }
       >
         {actions.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted">
@@ -389,7 +575,9 @@ export default async function OverviewPage({
                     <div className={`num text-sm font-medium ${roiTone(r.risk_adjusted_roi)}`}>
                       {usd(r.risk_adjusted_roi)}
                     </div>
-                    <div className="text-[11px] uppercase tracking-wide text-muted">risk-adj ROI</div>
+                    <div className="text-[11px] uppercase tracking-wide text-muted">
+                      risk-adj ROI
+                    </div>
                   </div>
                 </div>
               );

@@ -25,7 +25,9 @@ const baseData = (): ExecutiveReportData => ({
     { day: '2026-06-02', costUsd: 20 },
   ],
   priorSpendTrend: [{ day: '2026-05-02', costUsd: 5 }],
-  userSpend: [{ userId: 'u1', displayName: 'Alice Smith', teamName: 'Eng', costUsd: 80, calls: 10 }],
+  userSpend: [
+    { userId: 'u1', displayName: 'Alice Smith', teamName: 'Eng', costUsd: 80, calls: 10 },
+  ],
   userSpendTable: [
     {
       displayName: 'Alice Smith',

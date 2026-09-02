@@ -17,7 +17,9 @@ import { runWithTenant } from '../src/tenant/tenant-context';
 const CH = process.env.AGENTLEDGER_CLICKHOUSE_URL ?? 'http://localhost:8123';
 
 async function insertCH(table: string, rows: object[]): Promise<void> {
-  const body = `INSERT INTO agentledger.${table} FORMAT JSONEachRow\n` + rows.map((r) => JSON.stringify(r)).join('\n');
+  const body =
+    `INSERT INTO agentledger.${table} FORMAT JSONEachRow\n` +
+    rows.map((r) => JSON.stringify(r)).join('\n');
   const res = await fetch(`${CH}/`, { method: 'POST', body });
   if (!res.ok) {
     throw new Error(`CH insert ${table} failed: ${res.status} ${await res.text()}`);
@@ -25,9 +27,15 @@ async function insertCH(table: string, rows: object[]): Promise<void> {
 }
 
 function asBuffer(body: unknown): Buffer {
-  if (Buffer.isBuffer(body)) return body;
-  if (body instanceof Uint8Array) return Buffer.from(body);
-  if (typeof body === 'string') return Buffer.from(body, 'binary');
+  if (Buffer.isBuffer(body)) {
+    return body;
+  }
+  if (body instanceof Uint8Array) {
+    return Buffer.from(body);
+  }
+  if (typeof body === 'string') {
+    return Buffer.from(body, 'binary');
+  }
   if (body && typeof body === 'object' && 'type' in body && 'data' in body) {
     return Buffer.from((body as { data: number[] }).data);
   }
@@ -61,7 +69,9 @@ describe('Executive report export', () => {
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+    );
     await app.init();
     jwt = app.get(JwtService);
     prisma = app.get(PrismaService);
@@ -96,7 +106,9 @@ describe('Executive report export', () => {
 
     await request(app.getHttpServer())
       .post('/v1/roi-templates')
-      .set({ Authorization: `Bearer ${await jwt.mintAccess({ userId: randomUUID(), tenantId: tenantFull, role: 'admin' })}` })
+      .set({
+        Authorization: `Bearer ${await jwt.mintAccess({ userId: randomUUID(), tenantId: tenantFull, role: 'admin' })}`,
+      })
       .send({
         name: 'Merged PR',
         outcomeType: 'pr_merged',
@@ -206,7 +218,8 @@ describe('Executive report export', () => {
     await app.close();
   });
 
-  const tok = (tenant: string) => jwt.mintAccess({ userId: randomUUID(), tenantId: tenant, role: 'viewer' });
+  const tok = (tenant: string) =>
+    jwt.mintAccess({ userId: randomUUID(), tenantId: tenant, role: 'viewer' });
   const bearer = (t: string) => ({ Authorization: `Bearer ${t}` });
 
   const buildAs = (tenantId: string) =>

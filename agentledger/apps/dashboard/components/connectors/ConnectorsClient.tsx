@@ -14,176 +14,21 @@ import {
   syncBatchCount,
   syncDateChunks,
 } from '../../lib/sync-date-chunks';
-
-type Connector = {
-  connectorId: string;
-  displayName: string;
-  provider: string;
-  category: string;
-  status: string;
-  enabled: boolean;
-  lastSyncAt: string | null;
-  lastSuccessAt: string | null;
-  lastErrorMessageSafe?: string | null;
-  syncStatus?: {
-    lastSyncAt: string | null;
-    lastSyncStatus: string;
-    recordsImported: number;
-    usersDetected: number;
-    unmappedRecords: number;
-    spendSyncedUsd: number;
-    errorMessage?: string | null;
-  };
-  capabilities?: {
-    supportsUserLevelCost: boolean;
-  };
-  attributionWarning?: string;
-};
-
-type Preset = {
-  definitionId?: string;
-  name: string;
-  provider: string;
-  category: string;
-  builtIn?: boolean;
-  definitionJson?: {
-    baseUrl?: string;
-    authType?: string;
-    category?: string;
-    endpoints?: { path?: string; method?: string }[];
-  };
-};
-
-type PreviewResult = {
-  ok: boolean;
-  warning?: string;
-  rawResponse: unknown;
-  normalizedPreview: Record<string, unknown>[];
-  suggestedMappings: { source: string; target: string; confidence: number }[];
-  errors: { recordRef: string; code: string; message: string }[];
-};
-
-const CATEGORIES = [
-  'provider_spend',
-  'ai_usage',
-  'coding_tool',
-  'gateway_logs',
-  'observability',
-  'cloud_cost',
-  'outcome_system',
-  'risk_security',
-  'custom',
-] as const;
-
-const AUTH_TYPES = ['api_key_header', 'bearer_token', 'basic_auth', 'custom_header', 'none'] as const;
-
-const COPILOT_PRESET = 'github-copilot-business';
-const ADO_PRESET = 'azure-devops-outcomes';
-const LOCKED_PRESETS = new Set([
-  'anthropic-usage',
-  'openai-usage',
-  'cursor-usage',
-  COPILOT_PRESET,
+import type { Connector, Preset, PreviewResult } from '../../types/connectors';
+import {
   ADO_PRESET,
-]);
-
-function isCopilotConnector(c: Connector): boolean {
-  return c.provider === 'github_copilot_business' || c.category === 'license_usage_roi';
-}
-
-const PRESET_DEFAULTS: Record<
-  string,
-  { baseUrl: string; authType: string; endpointPath: string; category: string }
-> = {
-  'anthropic-usage': {
-    baseUrl: 'https://api.anthropic.com',
-    authType: 'api_key_header',
-    endpointPath: '/v1/organizations/cost_report',
-    category: 'provider_spend',
-  },
-  'openai-usage': {
-    baseUrl: 'https://api.openai.com',
-    authType: 'bearer_token',
-    endpointPath: '/v1/organization/costs',
-    category: 'provider_spend',
-  },
-  'cursor-usage': {
-    baseUrl: 'https://api.cursor.com',
-    authType: 'basic_auth',
-    endpointPath: '/teams/filtered-usage-events',
-    category: 'coding_tool',
-  },
-  'github-copilot-business': {
-    baseUrl: 'https://api.github.com',
-    authType: 'bearer_token',
-    endpointPath: '/orgs/{org}/copilot/billing',
-    category: 'license_usage_roi',
-  },
-  'azure-devops-outcomes': {
-    baseUrl: 'https://dev.azure.com',
-    authType: 'basic_auth',
-    endpointPath: '/',
-    category: 'outcome_system',
-  },
-};
-
-function presetFormFields(presetId: string, presets: Preset[]) {
-  const preset = presets.find((p) => (p.definitionId ?? p.name) === presetId);
-  const def = preset?.definitionJson;
-  if (def) {
-    return {
-      presetId,
-      category: def.category ?? preset?.category ?? 'provider_spend',
-      baseUrl: def.baseUrl ?? 'https://api.example.com',
-      authType: def.authType ?? 'api_key_header',
-      endpointPath: def.endpoints?.[0]?.path ?? '/v1/spend',
-    };
-  }
-  const fallback = PRESET_DEFAULTS[presetId];
-  return fallback ? { presetId, ...fallback } : { presetId };
-}
-
-function formatApiError(body: Record<string, unknown>, fallback: string): string {
-  if (typeof body.detail === 'string') return body.detail;
-  if (typeof body.message === 'string') return body.message;
-  if (body.message && typeof body.message === 'object' && !Array.isArray(body.message)) {
-    const nested = body.message as Record<string, unknown>;
-    if (typeof nested.message === 'string') return nested.message;
-  }
-  if (Array.isArray(body.message)) {
-    return body.message.map((m) => (typeof m === 'string' ? m : JSON.stringify(m))).join('; ');
-  }
-  if (typeof body.error === 'string') return body.error;
-  return fallback;
-}
-
-function isoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
-
-function defaultConnectorRange(): { from: string; to: string } {
-  const to = new Date();
-  const from = new Date(to);
-  from.setUTCDate(from.getUTCDate() - 89);
-  return { from: isoDate(from), to: isoDate(to) };
-}
-
-function ProgressBar({ progress, label }: { progress: number; label: string }) {
-  return (
-    <div className="mt-3">
-      <div className="mb-1 flex justify-between text-xs text-muted">
-        <span>{label}</span>
-        <span>{Math.round(progress)}%</span>
-      </div>
-      <div className="h-2 w-full overflow-hidden rounded-full bg-edge">
-        <div
-          className="h-full rounded-full bg-accent transition-all duration-300 ease-out"
-          style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
-        />
-      </div>
-    </div>
-  );
-}
+  AUTH_TYPES,
+  CATEGORIES,
+  COPILOT_PRESET,
+  LOCKED_PRESETS,
+  defaultConnectorRange,
+  formatApiError,
+  isCopilotConnector,
+  isoDate,
+  presetFormFields,
+  statusTone,
+} from '../../lib/connectors-preset';
+import { ProgressBar } from './ProgressBar';
 
 export function ConnectorsClient() {
   const searchParams = useSearchParams();
@@ -248,7 +93,9 @@ export function ConnectorsClient() {
         setConnectors(Array.isArray(data) ? data : []);
       } else {
         setConnectors([]);
-        setError('Could not load connectors — check that the API is running and you are signed in.');
+        setError(
+          'Could not load connectors — check that the API is running and you are signed in.',
+        );
       }
       if (presetRes.ok) {
         const data: unknown = await presetRes.json();
@@ -273,9 +120,12 @@ export function ConnectorsClient() {
   }, [load]);
 
   useEffect(() => {
-    const update = () => setCooldownSec(Math.max(0, Math.ceil((cooldownUntil - Date.now()) / 1000)));
+    const update = () =>
+      setCooldownSec(Math.max(0, Math.ceil((cooldownUntil - Date.now()) / 1000)));
     update();
-    if (cooldownUntil <= Date.now()) return;
+    if (cooldownUntil <= Date.now()) {
+      return;
+    }
     const timer = window.setInterval(update, 1000);
     return () => window.clearInterval(timer);
   }, [cooldownUntil]);
@@ -350,7 +200,9 @@ export function ConnectorsClient() {
   };
 
   const addMapping = async (connectorId: string) => {
-    if (!mappingForm.providerKey || !mappingForm.targetUserId) return;
+    if (!mappingForm.providerKey || !mappingForm.targetUserId) {
+      return;
+    }
     setError(null);
     const res = await fetch(`/api/connectors/${connectorId}/attribution-mappings`, {
       method: 'POST',
@@ -371,7 +223,9 @@ export function ConnectorsClient() {
   };
 
   const deleteConnector = async (id: string, name: string) => {
-    if (!window.confirm(`Delete connector "${name}"? This cannot be undone.`)) return;
+    if (!window.confirm(`Delete connector "${name}"? This cannot be undone.`)) {
+      return;
+    }
     setDeleting(id);
     setError(null);
     const res = await fetch(`/api/connectors/${id}`, { method: 'DELETE' });
@@ -492,7 +346,9 @@ export function ConnectorsClient() {
       } else if ((body.recordsImported ?? 0) > 0) {
         setError(null);
       } else {
-        setError(`Sync completed but imported 0 rows (${body.recordsSeen ?? 0} seen). Check Test preview for API data.`);
+        setError(
+          `Sync completed but imported 0 rows (${body.recordsSeen ?? 0} seen). Check Test preview for API data.`,
+        );
       }
       startApiCooldown();
       await load();
@@ -509,18 +365,14 @@ export function ConnectorsClient() {
     const result = await syncCopilotConnection(connectionId);
     setSyncingCopilot(null);
     if (!result?.ok) {
-      setError(result?.errorMessage ?? 'Copilot sync failed. Check token scopes (403) or org Copilot access.');
+      setError(
+        result?.errorMessage ??
+          'Copilot sync failed. Check token scopes (403) or org Copilot access.',
+      );
       return;
     }
     setError(null);
     await load();
-  };
-
-  const statusTone = (s: string) => {
-    if (s === 'healthy' || s === 'connected') return 'text-pos';
-    if (s === 'auth_failed' || s === 'validation_failed') return 'text-neg';
-    if (s === 'syncing' || s === 'rate_limited') return 'text-warn';
-    return 'text-muted';
   };
 
   return (
@@ -531,7 +383,10 @@ export function ConnectorsClient() {
         eyebrow="Settings"
         actions={
           <div className="flex gap-2">
-            <Link href="/settings" className="rounded border border-edge px-3 py-1.5 text-sm text-muted hover:bg-white/5">
+            <Link
+              href="/settings"
+              className="rounded border border-edge px-3 py-1.5 text-sm text-muted hover:bg-white/5"
+            >
               Back to settings
             </Link>
             <button
@@ -548,7 +403,9 @@ export function ConnectorsClient() {
       {error && (
         <div
           className={`mb-4 rounded border px-4 py-2 text-sm ${
-            error.includes('no cost rows') || error.includes('imported 0 rows') || error.includes('no billable cost')
+            error.includes('no cost rows') ||
+            error.includes('imported 0 rows') ||
+            error.includes('no billable cost')
               ? 'border-warn/40 bg-warn/10 text-warn'
               : 'border-neg/40 bg-neg/10 text-neg'
           }`}
@@ -571,17 +428,22 @@ export function ConnectorsClient() {
                   setError(null);
                 }}
               >
-                {presets.filter((p) => p.builtIn !== false).map((p) => (
-                  <option key={p.definitionId ?? p.name} value={p.definitionId ?? p.name}>
-                    {p.name}
-                  </option>
-                ))}
+                {presets
+                  .filter((p) => p.builtIn !== false)
+                  .map((p) => (
+                    <option key={p.definitionId ?? p.name} value={p.definitionId ?? p.name}>
+                      {p.name}
+                    </option>
+                  ))}
               </select>
             </label>
           </Card>
 
           {form.presetId === COPILOT_PRESET ? (
-            <Card title="GitHub Copilot Business" subtitle="Seat, usage, member spend, and estimated ROI">
+            <Card
+              title="GitHub Copilot Business"
+              subtitle="Seat, usage, member spend, and estimated ROI"
+            >
               <GitHubCopilotConnectForm
                 onConnected={() => {
                   setFormOpen(false);
@@ -590,174 +452,185 @@ export function ConnectorsClient() {
               />
             </Card>
           ) : (
-        <Card title="Custom API Connector">
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="block text-sm">
-              <span className="text-muted">Name</span>
-              <input
-                className="mt-1 w-full rounded border border-edge bg-black/20 px-3 py-2"
-                value={form.displayName}
-                onChange={(e) => setForm({ ...form, displayName: e.target.value })}
-                placeholder="My spend API"
-              />
-            </label>
-            <div className="hidden md:block" aria-hidden />
-            <div className="md:col-span-2">
-              {form.presetId === 'anthropic-usage' && (
-                <p className="mt-1 text-xs text-muted">
-                  Paste your Claude Console <strong>Admin API key</strong> (sk-ant-admin…) from
-                  console.anthropic.com → Settings → Admin keys. Sync pulls{' '}
-                  <code className="text-xs">cost_report</code> +{' '}
-                  <code className="text-xs">usage_report/messages</code> (grouped by workspace and
-                  model). Keys are stored encrypted server-side only; optional headless fallback:{' '}
-                  <code className="text-xs">ANTHROPIC_ADMIN_API_KEY</code> env on the API service.
-                </p>
-              )}
-              {form.presetId === 'cursor-usage' && (
-                <p className="mt-1 text-xs text-muted">
-                  Paste your Cursor <strong>Team Admin API key</strong> (cursor.com → Team settings → Admin API).
-                  Auth is HTTP Basic (<code className="text-xs">curl -u YOUR_KEY:</code>); base URL must stay{' '}
-                  https://api.cursor.com. Sync pulls billed usage events (Included vs On-Demand), editor daily
-                  activity (accepted / added lines, tabs, composer/chat), and — on Enterprise — committed AI lines
-                  via <code className="text-xs">/analytics/ai-code/commits</code>. Editor lines are not git commits;
-                  Background Agents and Cursor CLI are not tracked by Cursor.
-                </p>
-              )}
-              {form.presetId === ADO_PRESET && (
-                <p className="mt-1 text-xs text-muted">
-                  Connect Azure DevOps to import <strong>merged PRs</strong> and{' '}
-                  <strong>completed work items</strong> as outcomes for Product Worth / ROI. Create a Personal
-                  Access Token with <strong>Code (Read)</strong> and <strong>Work Items (Read)</strong> scopes.
-                  Organization is the name in <code className="text-xs">dev.azure.com/&#123;org&#125;</code>; project
-                  is the Azure DevOps project name. Optional repos list limits PR sync (comma-separated); leave blank
-                  for all repos in the project. Default lookback is 30 days.
-                </p>
-              )}
-            </div>
-            {form.presetId === ADO_PRESET && (
-              <>
+            <Card title="Custom API Connector">
+              <div className="grid gap-4 md:grid-cols-2">
                 <label className="block text-sm">
-                  <span className="text-muted">Organization</span>
+                  <span className="text-muted">Name</span>
                   <input
                     className="mt-1 w-full rounded border border-edge bg-black/20 px-3 py-2"
-                    value={form.adoOrganization}
-                    onChange={(e) => setForm({ ...form, adoOrganization: e.target.value })}
-                    placeholder="my-org"
+                    value={form.displayName}
+                    onChange={(e) => setForm({ ...form, displayName: e.target.value })}
+                    placeholder="My spend API"
                   />
+                </label>
+                <div className="hidden md:block" aria-hidden />
+                <div className="md:col-span-2">
+                  {form.presetId === 'anthropic-usage' && (
+                    <p className="mt-1 text-xs text-muted">
+                      Paste your Claude Console <strong>Admin API key</strong> (sk-ant-admin…) from
+                      console.anthropic.com → Settings → Admin keys. Sync pulls{' '}
+                      <code className="text-xs">cost_report</code> +{' '}
+                      <code className="text-xs">usage_report/messages</code> (grouped by workspace
+                      and model). Keys are stored encrypted server-side only; optional headless
+                      fallback: <code className="text-xs">ANTHROPIC_ADMIN_API_KEY</code> env on the
+                      API service.
+                    </p>
+                  )}
+                  {form.presetId === 'cursor-usage' && (
+                    <p className="mt-1 text-xs text-muted">
+                      Paste your Cursor <strong>Team Admin API key</strong> (cursor.com → Team
+                      settings → Admin API). Auth is HTTP Basic (
+                      <code className="text-xs">curl -u YOUR_KEY:</code>); base URL must stay{' '}
+                      https://api.cursor.com. Sync pulls billed usage events (Included vs
+                      On-Demand), editor daily activity (accepted / added lines, tabs,
+                      composer/chat), and — on Enterprise — committed AI lines via{' '}
+                      <code className="text-xs">/analytics/ai-code/commits</code>. Editor lines are
+                      not git commits; Background Agents and Cursor CLI are not tracked by Cursor.
+                    </p>
+                  )}
+                  {form.presetId === ADO_PRESET && (
+                    <p className="mt-1 text-xs text-muted">
+                      Connect Azure DevOps to import <strong>merged PRs</strong> and{' '}
+                      <strong>completed work items</strong> as outcomes for Product Worth / ROI.
+                      Create a Personal Access Token with <strong>Code (Read)</strong> and{' '}
+                      <strong>Work Items (Read)</strong> scopes. Organization is the name in{' '}
+                      <code className="text-xs">dev.azure.com/&#123;org&#125;</code>; project is the
+                      Azure DevOps project name. Optional repos list limits PR sync
+                      (comma-separated); leave blank for all repos in the project. Default lookback
+                      is 30 days.
+                    </p>
+                  )}
+                </div>
+                {form.presetId === ADO_PRESET && (
+                  <>
+                    <label className="block text-sm">
+                      <span className="text-muted">Organization</span>
+                      <input
+                        className="mt-1 w-full rounded border border-edge bg-black/20 px-3 py-2"
+                        value={form.adoOrganization}
+                        onChange={(e) => setForm({ ...form, adoOrganization: e.target.value })}
+                        placeholder="my-org"
+                      />
+                    </label>
+                    <label className="block text-sm">
+                      <span className="text-muted">Project</span>
+                      <input
+                        className="mt-1 w-full rounded border border-edge bg-black/20 px-3 py-2"
+                        value={form.adoProject}
+                        onChange={(e) => setForm({ ...form, adoProject: e.target.value })}
+                        placeholder="MyProject"
+                      />
+                    </label>
+                    <label className="block text-sm">
+                      <span className="text-muted">Repos (optional)</span>
+                      <input
+                        className="mt-1 w-full rounded border border-edge bg-black/20 px-3 py-2"
+                        value={form.adoRepos}
+                        onChange={(e) => setForm({ ...form, adoRepos: e.target.value })}
+                        placeholder="repo-a, repo-b"
+                      />
+                    </label>
+                    <label className="block text-sm">
+                      <span className="text-muted">Lookback days</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={365}
+                        className="mt-1 w-full rounded border border-edge bg-black/20 px-3 py-2"
+                        value={form.adoLookbackDays}
+                        onChange={(e) => setForm({ ...form, adoLookbackDays: e.target.value })}
+                      />
+                    </label>
+                  </>
+                )}
+                <label className="block text-sm">
+                  <span className="text-muted">Category</span>
+                  <select
+                    className="mt-1 w-full rounded border border-edge bg-black/20 px-3 py-2 disabled:opacity-50"
+                    value={form.category}
+                    disabled={LOCKED_PRESETS.has(form.presetId)}
+                    onChange={(e) => setForm({ ...form, category: e.target.value })}
+                  >
+                    {CATEGORIES.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label className="block text-sm">
-                  <span className="text-muted">Project</span>
+                  <span className="text-muted">Base URL</span>
                   <input
-                    className="mt-1 w-full rounded border border-edge bg-black/20 px-3 py-2"
-                    value={form.adoProject}
-                    onChange={(e) => setForm({ ...form, adoProject: e.target.value })}
-                    placeholder="MyProject"
+                    className="mt-1 w-full rounded border border-edge bg-black/20 px-3 py-2 disabled:opacity-50"
+                    value={form.baseUrl}
+                    disabled={LOCKED_PRESETS.has(form.presetId)}
+                    onChange={(e) => setForm({ ...form, baseUrl: e.target.value })}
                   />
                 </label>
-                <label className="block text-sm">
-                  <span className="text-muted">Repos (optional)</span>
+                {form.presetId !== ADO_PRESET && (
+                  <label className="block text-sm">
+                    <span className="text-muted">Endpoint path</span>
+                    <input
+                      className="mt-1 w-full rounded border border-edge bg-black/20 px-3 py-2 disabled:opacity-50"
+                      value={form.endpointPath}
+                      disabled={LOCKED_PRESETS.has(form.presetId)}
+                      onChange={(e) => setForm({ ...form, endpointPath: e.target.value })}
+                    />
+                  </label>
+                )}
+                {form.presetId !== ADO_PRESET && (
+                  <label className="block text-sm">
+                    <span className="text-muted">Auth type</span>
+                    <select
+                      className="mt-1 w-full rounded border border-edge bg-black/20 px-3 py-2 disabled:opacity-50"
+                      value={form.authType}
+                      disabled={LOCKED_PRESETS.has(form.presetId)}
+                      onChange={(e) => setForm({ ...form, authType: e.target.value })}
+                    >
+                      {AUTH_TYPES.map((a) => (
+                        <option key={a} value={a}>
+                          {a}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                <label className="block text-sm md:col-span-2">
+                  <span className="text-muted">Auth secret (stored encrypted, never logged)</span>
                   <input
+                    type="password"
                     className="mt-1 w-full rounded border border-edge bg-black/20 px-3 py-2"
-                    value={form.adoRepos}
-                    onChange={(e) => setForm({ ...form, adoRepos: e.target.value })}
-                    placeholder="repo-a, repo-b"
+                    value={form.authSecret}
+                    onChange={(e) => setForm({ ...form, authSecret: e.target.value })}
+                    placeholder={
+                      form.presetId === ADO_PRESET
+                        ? 'Azure DevOps PAT (Code read + Work Items read)'
+                        : form.presetId === 'cursor-usage'
+                          ? 'Cursor Team Admin API key'
+                          : form.presetId === 'anthropic-usage'
+                            ? 'Claude Console Admin API key (sk-ant-admin…)'
+                            : 'API key or bearer token'
+                    }
                   />
                 </label>
-                <label className="block text-sm">
-                  <span className="text-muted">Lookback days</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={365}
-                    className="mt-1 w-full rounded border border-edge bg-black/20 px-3 py-2"
-                    value={form.adoLookbackDays}
-                    onChange={(e) => setForm({ ...form, adoLookbackDays: e.target.value })}
-                  />
-                </label>
-              </>
-            )}
-            <label className="block text-sm">
-              <span className="text-muted">Category</span>
-              <select
-                className="mt-1 w-full rounded border border-edge bg-black/20 px-3 py-2 disabled:opacity-50"
-                value={form.category}
-                disabled={LOCKED_PRESETS.has(form.presetId)}
-                onChange={(e) => setForm({ ...form, category: e.target.value })}
-              >
-                {CATEGORIES.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-sm">
-              <span className="text-muted">Base URL</span>
-              <input
-                className="mt-1 w-full rounded border border-edge bg-black/20 px-3 py-2 disabled:opacity-50"
-                value={form.baseUrl}
-                disabled={LOCKED_PRESETS.has(form.presetId)}
-                onChange={(e) => setForm({ ...form, baseUrl: e.target.value })}
-              />
-            </label>
-            {form.presetId !== ADO_PRESET && (
-            <label className="block text-sm">
-              <span className="text-muted">Endpoint path</span>
-              <input
-                className="mt-1 w-full rounded border border-edge bg-black/20 px-3 py-2 disabled:opacity-50"
-                value={form.endpointPath}
-                disabled={LOCKED_PRESETS.has(form.presetId)}
-                onChange={(e) => setForm({ ...form, endpointPath: e.target.value })}
-              />
-            </label>
-            )}
-            {form.presetId !== ADO_PRESET && (
-            <label className="block text-sm">
-              <span className="text-muted">Auth type</span>
-              <select
-                className="mt-1 w-full rounded border border-edge bg-black/20 px-3 py-2 disabled:opacity-50"
-                value={form.authType}
-                disabled={LOCKED_PRESETS.has(form.presetId)}
-                onChange={(e) => setForm({ ...form, authType: e.target.value })}
-              >
-                {AUTH_TYPES.map((a) => (
-                  <option key={a} value={a}>{a}</option>
-                ))}
-              </select>
-            </label>
-            )}
-            <label className="block text-sm md:col-span-2">
-              <span className="text-muted">Auth secret (stored encrypted, never logged)</span>
-              <input
-                type="password"
-                className="mt-1 w-full rounded border border-edge bg-black/20 px-3 py-2"
-                value={form.authSecret}
-                onChange={(e) => setForm({ ...form, authSecret: e.target.value })}
-                placeholder={
-                  form.presetId === ADO_PRESET
-                    ? 'Azure DevOps PAT (Code read + Work Items read)'
-                    : form.presetId === 'cursor-usage'
-                      ? 'Cursor Team Admin API key'
-                      : form.presetId === 'anthropic-usage'
-                        ? 'Claude Console Admin API key (sk-ant-admin…)'
-                        : 'API key or bearer token'
-                }
-              />
-            </label>
-          </div>
-          <div className="mt-4 flex gap-2">
-            <button
-              type="button"
-              onClick={() => void createConnector()}
-              disabled={
-                !form.displayName ||
-                (form.presetId === ADO_PRESET &&
-                  (!form.adoOrganization.trim() || !form.adoProject.trim() || !form.authSecret.trim()))
-              }
-              className="rounded bg-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-            >
-              Save connector
-            </button>
-          </div>
-        </Card>
+              </div>
+              <div className="mt-4 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => void createConnector()}
+                  disabled={
+                    !form.displayName ||
+                    (form.presetId === ADO_PRESET &&
+                      (!form.adoOrganization.trim() ||
+                        !form.adoProject.trim() ||
+                        !form.authSecret.trim()))
+                  }
+                  className="rounded bg-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                >
+                  Save connector
+                </button>
+              </div>
+            </Card>
           )}
         </>
       )}
@@ -811,27 +684,31 @@ export function ConnectorsClient() {
         {loading ? (
           <p className="text-sm text-muted">Loading…</p>
         ) : connectors.length === 0 ? (
-          <p className="text-sm text-muted">No API connectors yet. Add one above to sync usage data.</p>
+          <p className="text-sm text-muted">
+            No API connectors yet. Add one above to sync usage data.
+          </p>
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
             {connectors.map((c) => {
               const sync = c.syncStatus;
               const lastSync = sync?.lastSyncAt ?? c.lastSuccessAt;
-              const copilotConn = isCopilotConnector(c) ? copilotByConnectorId.get(c.connectorId) : undefined;
+              const copilotConn = isCopilotConnector(c)
+                ? copilotByConnectorId.get(c.connectorId)
+                : undefined;
               const copilotLastSync = copilotConn?.lastSuccessAt ?? lastSync;
               const copilotRecords = copilotConn?.recordsImported;
-              const copilotError = copilotConn?.lastErrorMessage ?? sync?.errorMessage ?? c.lastErrorMessageSafe;
+              const copilotError =
+                copilotConn?.lastErrorMessage ?? sync?.errorMessage ?? c.lastErrorMessageSafe;
               return (
-                <div
-                  key={c.connectorId}
-                  className="rounded-lg border border-edge bg-black/20 p-4"
-                >
+                <div key={c.connectorId} className="rounded-lg border border-edge bg-black/20 p-4">
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <h3 className="font-medium capitalize text-gray-100">
                         {c.displayName ?? c.provider}
                       </h3>
-                      <p className="text-xs text-muted">{c.provider} · {c.category}</p>
+                      <p className="text-xs text-muted">
+                        {c.provider} · {c.category}
+                      </p>
                     </div>
                     <span className={`text-xs font-medium ${statusTone(c.status)}`}>
                       {c.status === 'healthy' || c.status === 'connected' ? 'Connected' : c.status}
@@ -845,19 +722,22 @@ export function ConnectorsClient() {
                     <dd className="num">
                       {copilotRecords != null
                         ? copilotRecords.toLocaleString()
-                        : sync?.recordsImported?.toLocaleString() ?? '—'}
+                        : (sync?.recordsImported?.toLocaleString() ?? '—')}
                     </dd>
                     {!isCopilotConnector(c) && (
                       <>
                         <dt className="text-muted">Users detected</dt>
                         <dd className="num">{sync?.usersDetected ?? '—'}</dd>
                         <dt className="text-muted">Unmapped records</dt>
-                        <dd className={`num ${(sync?.unmappedRecords ?? 0) > 0 ? 'text-warn' : ''}`}>
+                        <dd
+                          className={`num ${(sync?.unmappedRecords ?? 0) > 0 ? 'text-warn' : ''}`}
+                        >
                           {sync?.unmappedRecords ?? '—'}
                         </dd>
                         <dt className="text-muted">Spend synced</dt>
                         <dd className="num">
-                          {sync?.spendSyncedUsd != null && Number.isFinite(Number(sync.spendSyncedUsd))
+                          {sync?.spendSyncedUsd != null &&
+                          Number.isFinite(Number(sync.spendSyncedUsd))
                             ? `$${Number(sync.spendSyncedUsd).toFixed(2)}`
                             : '—'}
                         </dd>
@@ -871,9 +751,7 @@ export function ConnectorsClient() {
                     )}
                   </dl>
 
-                  {copilotError && (
-                    <p className="mt-2 text-xs text-neg">{copilotError}</p>
-                  )}
+                  {copilotError && <p className="mt-2 text-xs text-neg">{copilotError}</p>}
 
                   {!isCopilotConnector(c) && (sync?.errorMessage || c.lastErrorMessageSafe) && (
                     <p className="mt-2 text-xs text-neg">
@@ -890,16 +768,14 @@ export function ConnectorsClient() {
                   <div className="mt-4 flex flex-wrap gap-2">
                     {isCopilotConnector(c) && !copilotConn && (
                       <p className="mt-2 text-xs text-warn">
-                        Copilot connection metadata loading — refresh or complete setup in Add connector.
+                        Copilot connection metadata loading — refresh or complete setup in Add
+                        connector.
                       </p>
                     )}
 
                     {isCopilotConnector(c) && copilotConn ? (
                       <>
-                        <Link
-                          href="/"
-                          className="text-xs text-accent hover:underline"
-                        >
+                        <Link href="/" className="text-xs text-accent hover:underline">
                           View in Overview
                         </Link>
                         <button
@@ -908,7 +784,9 @@ export function ConnectorsClient() {
                           disabled={syncingCopilot === copilotConn.connectionId}
                           onClick={() => void syncCopilot(copilotConn.connectionId)}
                         >
-                          {syncingCopilot === copilotConn.connectionId ? 'Syncing…' : 'Sync Copilot data'}
+                          {syncingCopilot === copilotConn.connectionId
+                            ? 'Syncing…'
+                            : 'Sync Copilot data'}
                         </button>
                       </>
                     ) : (
@@ -931,7 +809,9 @@ export function ConnectorsClient() {
                             ? 'Syncing…'
                             : cooldownSec > 0
                               ? `Wait ${cooldownSec}s`
-                              : 'Sync usage data'}
+                              : c.category === 'outcome_system' || c.provider === 'azure_devops'
+                                ? 'Sync outcomes'
+                                : 'Sync usage data'}
                         </button>
                       </>
                     )}
@@ -939,14 +819,19 @@ export function ConnectorsClient() {
                       type="button"
                       className="text-xs text-neg hover:underline disabled:opacity-50"
                       disabled={deleting === c.connectorId}
-                      onClick={() => void deleteConnector(c.connectorId, c.displayName ?? c.connectorId)}
+                      onClick={() =>
+                        void deleteConnector(c.connectorId, c.displayName ?? c.connectorId)
+                      }
                     >
                       {deleting === c.connectorId ? 'Deleting…' : 'Delete'}
                     </button>
                   </div>
 
                   {testing === c.connectorId && !isCopilotConnector(c) && (
-                    <ProgressBar progress={testProgress} label="Testing connection and normalizing sample rows…" />
+                    <ProgressBar
+                      progress={testProgress}
+                      label="Testing connection and normalizing sample rows…"
+                    />
                   )}
                   {syncing === c.connectorId && !isCopilotConnector(c) && (
                     <ProgressBar
@@ -968,7 +853,9 @@ export function ConnectorsClient() {
                         <select
                           className="rounded border border-edge bg-black/20 px-2 py-1 text-xs"
                           value={mappingForm.mappingType}
-                          onChange={(e) => setMappingForm({ ...mappingForm, mappingType: e.target.value })}
+                          onChange={(e) =>
+                            setMappingForm({ ...mappingForm, mappingType: e.target.value })
+                          }
                         >
                           <option value="api_key">API key</option>
                           <option value="project">Project</option>
@@ -980,13 +867,17 @@ export function ConnectorsClient() {
                           className="rounded border border-edge bg-black/20 px-2 py-1 text-xs"
                           placeholder="Provider key / ID"
                           value={mappingForm.providerKey}
-                          onChange={(e) => setMappingForm({ ...mappingForm, providerKey: e.target.value })}
+                          onChange={(e) =>
+                            setMappingForm({ ...mappingForm, providerKey: e.target.value })
+                          }
                         />
                         <input
                           className="rounded border border-edge bg-black/20 px-2 py-1 text-xs"
                           placeholder="Target user ID"
                           value={mappingForm.targetUserId}
-                          onChange={(e) => setMappingForm({ ...mappingForm, targetUserId: e.target.value })}
+                          onChange={(e) =>
+                            setMappingForm({ ...mappingForm, targetUserId: e.target.value })
+                          }
                         />
                         <button
                           type="button"
@@ -1009,13 +900,17 @@ export function ConnectorsClient() {
         <Card title="Connection preview" subtitle="Sanitized response — secrets redacted">
           <div className="grid gap-4 lg:grid-cols-2">
             <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase text-muted">Raw response (sanitized)</h3>
+              <h3 className="mb-2 text-xs font-semibold uppercase text-muted">
+                Raw response (sanitized)
+              </h3>
               <pre className="max-h-64 overflow-auto rounded border border-edge bg-black/30 p-3 text-xs">
                 {JSON.stringify(preview.rawResponse, null, 2)}
               </pre>
             </div>
             <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase text-muted">Normalized preview</h3>
+              <h3 className="mb-2 text-xs font-semibold uppercase text-muted">
+                Normalized preview
+              </h3>
               <pre className="max-h-64 overflow-auto rounded border border-edge bg-black/30 p-3 text-xs">
                 {JSON.stringify(preview.normalizedPreview, null, 2)}
               </pre>
@@ -1034,7 +929,9 @@ export function ConnectorsClient() {
           )}
           {preview.normalizedPreview.some((r) => r.user_id || r.user_email) && (
             <div className="mt-4">
-              <h3 className="mb-2 text-xs font-semibold uppercase text-muted">Spend by user (preview)</h3>
+              <h3 className="mb-2 text-xs font-semibold uppercase text-muted">
+                Spend by user (preview)
+              </h3>
               <DataTable
                 columns={[
                   { key: 'user', label: 'User' },
@@ -1052,7 +949,9 @@ export function ConnectorsClient() {
           )}
           {Array.isArray(preview.suggestedMappings) && preview.suggestedMappings.length > 0 && (
             <div className="mt-4">
-              <h3 className="mb-2 text-xs font-semibold uppercase text-muted">Suggested mappings</h3>
+              <h3 className="mb-2 text-xs font-semibold uppercase text-muted">
+                Suggested mappings
+              </h3>
               <DataTable
                 columns={[
                   { key: 'source', label: 'Source field' },
@@ -1074,7 +973,9 @@ export function ConnectorsClient() {
                 {preview.errors.map((e, i) => (
                   <li key={i}>
                     {e.recordRef}:{' '}
-                    {typeof e.message === 'string' ? e.message : formatApiError({ message: e.message }, 'Unknown error')}
+                    {typeof e.message === 'string'
+                      ? e.message
+                      : formatApiError({ message: e.message }, 'Unknown error')}
                   </li>
                 ))}
               </ul>

@@ -23,7 +23,9 @@ function appendEndpointQuery(
     ...overrides,
   };
   for (const [k, v] of Object.entries(scalar)) {
-    if (v !== '') params.append(k, v);
+    if (v !== '') {
+      params.append(k, v);
+    }
   }
   const arrays = {
     ...(definition.queryParamArrays ?? {}),
@@ -38,16 +40,28 @@ function appendEndpointQuery(
 
 /** Extract a human-readable message from common provider error JSON shapes. */
 export function extractProviderErrorMessage(body: unknown): string {
-  if (body === null || body === undefined) return '';
-  if (typeof body === 'string') return body;
-  if (typeof body !== 'object') return String(body);
+  if (body === null || body === undefined) {
+    return '';
+  }
+  if (typeof body === 'string') {
+    return body;
+  }
+  if (typeof body !== 'object') {
+    return String(body);
+  }
 
   const obj = body as Record<string, unknown>;
-  if (typeof obj.message === 'string') return obj.message;
-  if (typeof obj.detail === 'string') return obj.detail;
+  if (typeof obj.message === 'string') {
+    return obj.message;
+  }
+  if (typeof obj.detail === 'string') {
+    return obj.detail;
+  }
 
   const error = obj.error;
-  if (typeof error === 'string') return error;
+  if (typeof error === 'string') {
+    return error;
+  }
   if (error && typeof error === 'object') {
     const err = error as Record<string, unknown>;
     if (typeof err.message === 'string') {
@@ -139,21 +153,41 @@ function classifyError(status: number, body: unknown): ConnectorError {
     };
   }
   if (status >= 500) {
-    return { code: 'PROVIDER_UNAVAILABLE', message: safeErrorMessage(msg), statusCode: status, retryable: true };
+    return {
+      code: 'PROVIDER_UNAVAILABLE',
+      message: safeErrorMessage(msg),
+      statusCode: status,
+      retryable: true,
+    };
   }
-  return { code: 'REQUEST_FAILED', message: safeErrorMessage(msg), statusCode: status, retryable: false };
+  return {
+    code: 'REQUEST_FAILED',
+    message: safeErrorMessage(msg),
+    statusCode: status,
+    retryable: false,
+  };
 }
 
-async function applyRateLimit(cfg: RateLimitConfig | undefined, providerKey: string): Promise<void> {
-  if (!cfg) return;
-  const minInterval =
-    cfg.requestsPerSecond ? 1000 / cfg.requestsPerSecond
-    : cfg.requestsPerMinute ? 60_000 / cfg.requestsPerMinute
-    : 0;
-  if (minInterval <= 0) return;
+async function applyRateLimit(
+  cfg: RateLimitConfig | undefined,
+  providerKey: string,
+): Promise<void> {
+  if (!cfg) {
+    return;
+  }
+  const minInterval = cfg.requestsPerSecond
+    ? 1000 / cfg.requestsPerSecond
+    : cfg.requestsPerMinute
+      ? 60_000 / cfg.requestsPerMinute
+      : 0;
+  if (minInterval <= 0) {
+    return;
+  }
   const lastAt = lastRequestAtByProvider.get(providerKey) ?? lastRequestAt;
   const elapsed = Date.now() - lastAt;
-  if (elapsed < minInterval) await sleep(minInterval - elapsed);
+  if (elapsed < minInterval) {
+    await sleep(minInterval - elapsed);
+  }
   const now = Date.now();
   lastRequestAt = now;
   lastRequestAtByProvider.set(providerKey, now);
@@ -167,11 +201,17 @@ export function resetRateLimitClock(): void {
 
 function parseRetryAfterMs(headers: Record<string, string>): number {
   const raw = headers['retry-after'];
-  if (!raw) return 0;
+  if (!raw) {
+    return 0;
+  }
   const seconds = Number(raw);
-  if (Number.isFinite(seconds) && seconds > 0) return seconds * 1000;
+  if (Number.isFinite(seconds) && seconds > 0) {
+    return seconds * 1000;
+  }
   const when = Date.parse(raw);
-  if (!Number.isNaN(when)) return Math.max(0, when - Date.now());
+  if (!Number.isNaN(when)) {
+    return Math.max(0, when - Date.now());
+  }
   return 0;
 }
 
@@ -193,10 +233,7 @@ export async function executeRequest(
   const url = overrides?.url ?? `${baseUrl}${path.startsWith('/') ? path : `/${path}`}`;
 
   const authHeaders = buildAuthHeaders(definition.authType, creds, definition.authHeaderName);
-  const staticHeaders = renderObject(
-    { ...definition.headers, ...endpoint?.headers },
-    ctx,
-  );
+  const staticHeaders = renderObject({ ...definition.headers, ...endpoint?.headers }, ctx);
   const headers: Record<string, string> = {
     Accept: 'application/json',
     ...staticHeaders,
@@ -253,7 +290,12 @@ export async function executeWithRetry(
   ctx: TemplateContext,
   overrides?: Parameters<typeof executeRequest>[3],
 ): Promise<ApiRequestResult> {
-  const retry: RetryConfig = definition.retry ?? { maxAttempts: 3, baseDelayMs: 500, maxDelayMs: 10_000, retryOn: [429, 500, 502, 503, 504] };
+  const retry: RetryConfig = definition.retry ?? {
+    maxAttempts: 3,
+    baseDelayMs: 500,
+    maxDelayMs: 10_000,
+    retryOn: [429, 500, 502, 503, 504],
+  };
   const maxAttempts = retry.maxAttempts ?? 3;
   const retryOn = new Set(retry.retryOn ?? [429, 500, 502, 503, 504]);
   let lastErr: ConnectorError | null = null;
@@ -269,17 +311,24 @@ export async function executeWithRetry(
     const err = classifyError(result.status, result.body);
     lastErr = err;
 
-    if (result.status === 429 || !err.retryable || !retryOn.has(result.status) || attempt === maxAttempts) {
+    if (
+      result.status === 429 ||
+      !err.retryable ||
+      !retryOn.has(result.status) ||
+      attempt === maxAttempts
+    ) {
       throw err;
     }
 
-    const retryAfter = parseRetryAfterMs(result.headers)
-      || (definition.rateLimit?.retryAfterHeader
+    const retryAfter =
+      parseRetryAfterMs(result.headers) ||
+      (definition.rateLimit?.retryAfterHeader
         ? Number(result.headers[definition.rateLimit.retryAfterHeader] ?? 0) * 1000
         : 0);
-    const delay = retryAfter > 0
-      ? retryAfter
-      : Math.min((retry.baseDelayMs ?? 500) * 2 ** (attempt - 1), retry.maxDelayMs ?? 10_000);
+    const delay =
+      retryAfter > 0
+        ? retryAfter
+        : Math.min((retry.baseDelayMs ?? 500) * 2 ** (attempt - 1), retry.maxDelayMs ?? 10_000);
     await sleep(delay);
   }
 

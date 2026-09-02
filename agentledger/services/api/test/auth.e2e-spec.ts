@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { JwtService } from '../src/auth/jwt.service';
+import { accessTtlSeconds } from '../src/auth/session-ttl';
 import { PrismaService } from '../src/prisma/prisma.service';
 
 /**
@@ -67,7 +68,11 @@ describe('Auth + RBAC', () => {
   });
 
   it('allows an analyst+ token and scopes to its tenant', async () => {
-    const token = await jwt.mintAccess({ userId: randomUUID(), tenantId: tenantA, role: 'analyst' });
+    const token = await jwt.mintAccess({
+      userId: randomUUID(),
+      tenantId: tenantA,
+      role: 'analyst',
+    });
     const res = await request(app.getHttpServer()).get('/v1/teams').set(bearer(token));
     expect(res.status).toBe(200);
     expect(res.body.map((t: { name: string }) => t.name)).toEqual([teamName]);
@@ -98,7 +103,11 @@ describe('Auth + RBAC', () => {
   });
 
   it('rejects a refresh token presented as an access token (401)', async () => {
-    const refresh = await jwt.mintRefresh({ userId: randomUUID(), tenantId: tenantA, role: 'admin' });
+    const refresh = await jwt.mintRefresh({
+      userId: randomUUID(),
+      tenantId: tenantA,
+      role: 'admin',
+    });
     const res = await request(app.getHttpServer()).get('/v1/teams').set(bearer(refresh));
     expect(res.status).toBe(401);
   });
@@ -131,7 +140,7 @@ describe('Auth + RBAC', () => {
       .post('/auth/refresh')
       .set('Cookie', `al_refresh=${refresh}`);
     expect(res.status).toBe(200); // @Res() + res.json() → Express default 200
-    expect(res.body).toMatchObject({ ok: true, expires_in: 15 * 60 });
+    expect(res.body).toMatchObject({ ok: true, expires_in: accessTtlSeconds() });
     expect(res.body.access_token).toBeUndefined(); // token lives only in the httpOnly cookie
 
     const accessEntry = findCookie(res, 'al_access');
@@ -141,7 +150,9 @@ describe('Auth + RBAC', () => {
     expect(accessEntry).toMatch(/Path=\//i);
 
     // The renewed access token (from the cookie) authorizes a protected route with DB role.
-    const probe = await request(app.getHttpServer()).get('/auth/me').set(bearer(cookieValue(accessEntry!)));
+    const probe = await request(app.getHttpServer())
+      .get('/auth/me')
+      .set(bearer(cookieValue(accessEntry!)));
     expect(probe.status).toBe(200);
     expect(probe.body).toMatchObject({ userId, role: 'admin' });
   });

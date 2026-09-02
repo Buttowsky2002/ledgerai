@@ -12,7 +12,10 @@ const sample: PilotReport = {
     errorCalls: 1,
     byProvider: [{ provider: 'openai', costUsd: 100, calls: 1200 }],
   },
-  topAgents: { source: 'spend_hourly_by_key', agents: [{ agentId: 'agent-x', costUsd: 80, calls: 900 }] },
+  topAgents: {
+    source: 'spend_hourly_by_key',
+    agents: [{ agentId: 'agent-x', costUsd: 80, calls: 900 }],
+  },
   unitEconomics: {
     source: 'outcomes + agent_runs',
     minConfidence: 0.5,
@@ -49,7 +52,13 @@ describe('renderMarkdown', () => {
   it('renders the title, window, and every section heading', () => {
     expect(md).toContain('# BadgerIQ Pilot Report');
     expect(md).toContain('2026-05-22 → 2026-06-21 (30 days)');
-    for (const h of ['## Spend', '## Top agents', '## Unit economics', '## Risk-adjusted ROI', '## Governance posture']) {
+    for (const h of [
+      '## Spend',
+      '## Top agents',
+      '## Unit economics',
+      '## Risk-adjusted ROI',
+      '## Governance posture',
+    ]) {
       expect(md).toContain(h);
     }
   });
@@ -69,7 +78,10 @@ describe('renderMarkdown', () => {
   });
 
   it('falls back gracefully when there are no agents', () => {
-    const empty = renderMarkdown({ ...sample, topAgents: { source: 'spend_hourly_by_key', agents: [] } });
+    const empty = renderMarkdown({
+      ...sample,
+      topAgents: { source: 'spend_hourly_by_key', agents: [] },
+    });
     expect(empty).toContain('_No agent-attributed spend in this window._');
   });
 });

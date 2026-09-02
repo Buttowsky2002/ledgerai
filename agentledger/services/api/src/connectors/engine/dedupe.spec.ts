@@ -10,7 +10,13 @@ describe('dedupe', () => {
   });
 
   it('detects overlapping sync duplicates via period+model+cost', () => {
-    const metrics = { period_start: '2026-01-01', model: 'gpt-4o', user_id: 'u1', product: 'api', cost_usd: 1.5 };
+    const metrics = {
+      period_start: '2026-01-01',
+      model: 'gpt-4o',
+      user_id: 'u1',
+      product: 'api',
+      cost_usd: 1.5,
+    };
     const h1 = computeDedupeHash({ strategy: 'period_model_user_product_cost' }, metrics);
     const h2 = computeDedupeHash({ strategy: 'period_model_user_product_cost' }, { ...metrics });
     expect(h1).toBe(h2);

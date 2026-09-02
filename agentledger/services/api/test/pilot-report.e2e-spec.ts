@@ -8,7 +8,9 @@ import { JwtService } from '../src/auth/jwt.service';
 const CH = process.env.AGENTLEDGER_CLICKHOUSE_URL ?? 'http://localhost:8123';
 
 async function insertCH(table: string, rows: object[]): Promise<void> {
-  const body = `INSERT INTO agentledger.${table} FORMAT JSONEachRow\n` + rows.map((r) => JSON.stringify(r)).join('\n');
+  const body =
+    `INSERT INTO agentledger.${table} FORMAT JSONEachRow\n` +
+    rows.map((r) => JSON.stringify(r)).join('\n');
   const res = await fetch(`${CH}/`, { method: 'POST', body });
   if (!res.ok) {
     throw new Error(`CH insert ${table} failed: ${res.status} ${await res.text()}`);
@@ -40,19 +42,81 @@ describe('Pilot report', () => {
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+    );
     await app.init();
     jwt = app.get(JwtService);
 
     await insertCH('llm_calls', [
-      { call_id: `pr-a1-${tenantA}`, ts: '2026-06-10 10:00:00', tenant_id: tenantA, team_id: 'eng', app_id: 'app', virtual_key_id: 'vk', agent_id: agentA, run_id: runA, provider: 'openai', response_model: 'gpt-4o', input_tokens: 100, output_tokens: 50, cost_usd: 4.0, status: 'ok', dlp_action: 'allow' },
-      { call_id: `pr-a2-${tenantA}`, ts: '2026-06-10 10:05:00', tenant_id: tenantA, team_id: 'eng', app_id: 'app', virtual_key_id: 'vk', agent_id: agentA, run_id: runA, provider: 'openai', response_model: 'gpt-4o', input_tokens: 80, output_tokens: 40, cost_usd: 2.0, status: 'blocked_dlp', dlp_action: 'block', risk_severity: 'high' },
+      {
+        call_id: `pr-a1-${tenantA}`,
+        ts: '2026-06-10 10:00:00',
+        tenant_id: tenantA,
+        team_id: 'eng',
+        app_id: 'app',
+        virtual_key_id: 'vk',
+        agent_id: agentA,
+        run_id: runA,
+        provider: 'openai',
+        response_model: 'gpt-4o',
+        input_tokens: 100,
+        output_tokens: 50,
+        cost_usd: 4.0,
+        status: 'ok',
+        dlp_action: 'allow',
+      },
+      {
+        call_id: `pr-a2-${tenantA}`,
+        ts: '2026-06-10 10:05:00',
+        tenant_id: tenantA,
+        team_id: 'eng',
+        app_id: 'app',
+        virtual_key_id: 'vk',
+        agent_id: agentA,
+        run_id: runA,
+        provider: 'openai',
+        response_model: 'gpt-4o',
+        input_tokens: 80,
+        output_tokens: 40,
+        cost_usd: 2.0,
+        status: 'blocked_dlp',
+        dlp_action: 'block',
+        risk_severity: 'high',
+      },
     ]);
     await insertCH('agent_runs', [
-      { run_id: runA, tenant_id: tenantA, agent_id: agentA, app_id: 'app', user_id: 'u', started_at: '2026-06-10 10:00:00', ended_at: '2026-06-10 10:06:00', status: 'completed', total_cost_usd: 6.0, total_tokens: 270, llm_calls: 2, tool_calls: 0, risk_events: 1 },
+      {
+        run_id: runA,
+        tenant_id: tenantA,
+        agent_id: agentA,
+        app_id: 'app',
+        user_id: 'u',
+        started_at: '2026-06-10 10:00:00',
+        ended_at: '2026-06-10 10:06:00',
+        status: 'completed',
+        total_cost_usd: 6.0,
+        total_tokens: 270,
+        llm_calls: 2,
+        tool_calls: 0,
+        risk_events: 1,
+      },
     ]);
     await insertCH('outcomes', [
-      { outcome_id: `oc-${tenantA}`, tenant_id: tenantA, ts: '2026-06-10 11:00:00', source_system: 'github', outcome_type: 'pr_merged', team_id: 'eng', user_id: 'u', run_id: runA, business_value_usd: 1000, quality_score: 0.9, attribution_confidence: 0.95, completion_status: 'merged' },
+      {
+        outcome_id: `oc-${tenantA}`,
+        tenant_id: tenantA,
+        ts: '2026-06-10 11:00:00',
+        source_system: 'github',
+        outcome_type: 'pr_merged',
+        team_id: 'eng',
+        user_id: 'u',
+        run_id: runA,
+        business_value_usd: 1000,
+        quality_score: 0.9,
+        attribution_confidence: 0.95,
+        completion_status: 'merged',
+      },
     ]);
   });
 
@@ -60,7 +124,8 @@ describe('Pilot report', () => {
     await app.close();
   });
 
-  const tok = (tenant: string) => jwt.mintAccess({ userId: randomUUID(), tenantId: tenant, role: 'viewer' });
+  const tok = (tenant: string) =>
+    jwt.mintAccess({ userId: randomUUID(), tenantId: tenant, role: 'viewer' });
   const bearer = (t: string) => ({ Authorization: `Bearer ${t}` });
 
   it('rejects unauthenticated (401)', async () => {

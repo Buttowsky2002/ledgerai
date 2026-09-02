@@ -29,8 +29,15 @@ export async function generateExecutiveXlsx(data: ExecutiveReportData): Promise<
     ws.addRow({ metric: 'From', value: data.window.from });
     ws.addRow({ metric: 'To', value: data.window.to });
     ws.addRow({ metric: 'Selected-range metered spend', value: data.current.costUsd });
-    const change = formatPeriodChange(data.prior.costUsd, data.current.costUsd, data.pctChangeVsPrior, formatPct);
-    if (change) ws.addRow({ metric: 'Change vs prior', value: change });
+    const change = formatPeriodChange(
+      data.prior.costUsd,
+      data.current.costUsd,
+      data.pctChangeVsPrior,
+      formatPct,
+    );
+    if (change) {
+      ws.addRow({ metric: 'Change vs prior', value: change });
+    }
     ws.addRow({ metric: 'Total calls', value: data.current.calls });
     if (data.costPer1kTokens !== null) {
       ws.addRow({ metric: 'Cost per 1K tokens', value: data.costPer1kTokens });
@@ -109,7 +116,10 @@ export async function generateExecutiveXlsx(data: ExecutiveReportData): Promise<
   }
 
   const activeProviders = data.providers.filter((p) => p.costUsd > 0);
-  if (shouldRenderProviderChart(activeProviders) || shouldRenderSingleProviderLabel(activeProviders)) {
+  if (
+    shouldRenderProviderChart(activeProviders) ||
+    shouldRenderSingleProviderLabel(activeProviders)
+  ) {
     const ws = wb.addWorksheet('Platform breakdown');
     ws.columns = [
       { header: 'Platform', key: 'platform', width: 18 },

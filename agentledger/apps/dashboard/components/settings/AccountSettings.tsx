@@ -14,7 +14,8 @@ export type SessionInfo = {
 
 const BTN =
   'rounded border border-edge bg-panel px-4 py-2 text-sm text-gray-100 hover:bg-white/5 disabled:opacity-50';
-const BTN_ACCENT = 'rounded bg-accent/20 px-4 py-2 text-sm text-white hover:bg-accent/30 disabled:opacity-50';
+const BTN_ACCENT =
+  'rounded bg-accent/20 px-4 py-2 text-sm text-white hover:bg-accent/30 disabled:opacity-50';
 const FIELD =
   'w-full max-w-sm rounded border border-edge bg-ink px-3 py-2 text-sm text-white placeholder:text-muted focus:border-accent focus:outline-none';
 
@@ -100,7 +101,9 @@ export function AccountSettings({ session }: { session: SessionInfo }) {
       {signedIn && (
         <form onSubmit={saveDisplayName} className="space-y-2">
           <p className="text-sm text-gray-100">Display name</p>
-          <p className="text-xs text-muted">Shown in the sidebar and on the team permissions list.</p>
+          <p className="text-xs text-muted">
+            Shown in the sidebar and on the team permissions list.
+          </p>
           <div className="flex flex-wrap items-center gap-2">
             <input
               type="text"

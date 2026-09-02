@@ -10,12 +10,18 @@ export function encodeRange(r: { from: string; to: string }): string {
 }
 
 export function decodeRange(raw: string | undefined): { from: string; to: string } | null {
-  if (!raw) return null;
+  if (!raw) {
+    return null;
+  }
   const idx = raw.indexOf('_');
-  if (idx <= 0 || idx >= raw.length - 1) return null;
+  if (idx <= 0 || idx >= raw.length - 1) {
+    return null;
+  }
   const from = raw.slice(0, idx);
   const to = raw.slice(idx + 1);
-  if (!ISO_DATE.test(from) || !ISO_DATE.test(to) || from > to) return null;
+  if (!ISO_DATE.test(from) || !ISO_DATE.test(to) || from > to) {
+    return null;
+  }
   return { from, to };
 }
 
@@ -37,10 +43,19 @@ export function parseRange(
   return defaultRange(defaultDays);
 }
 
-function validSearchParams(searchParams: { from?: string; to?: string }): { from: string; to: string } | null {
+function validSearchParams(searchParams: {
+  from?: string;
+  to?: string;
+}): { from: string; to: string } | null {
   const from = searchParams.from?.slice(0, 10);
   const to = searchParams.to?.slice(0, 10);
-  if (from && to && /^\d{4}-\d{2}-\d{2}$/.test(from) && /^\d{4}-\d{2}-\d{2}$/.test(to) && from <= to) {
+  if (
+    from &&
+    to &&
+    /^\d{4}-\d{2}-\d{2}$/.test(from) &&
+    /^\d{4}-\d{2}-\d{2}$/.test(to) &&
+    from <= to
+  ) {
     return { from, to };
   }
   return null;
@@ -53,9 +68,13 @@ export function resolveRangeWithCookie(
   defaultDays = 90,
 ): { from: string; to: string } {
   const fromUrl = validSearchParams(searchParams);
-  if (fromUrl) return fromUrl;
+  if (fromUrl) {
+    return fromUrl;
+  }
   const fromCookie = decodeRange(cookieRaw);
-  if (fromCookie) return fromCookie;
+  if (fromCookie) {
+    return fromCookie;
+  }
   return parseRange({}, defaultDays);
 }
 
@@ -70,7 +89,9 @@ export function rangeHref(
   params.set('to', to);
   if (extra) {
     for (const [k, v] of Object.entries(extra)) {
-      if (v) params.set(k, v);
+      if (v) {
+        params.set(k, v);
+      }
     }
   }
   return `${basePath}?${params.toString()}`;
@@ -78,6 +99,16 @@ export function rangeHref(
 
 export function presetRange(days: number): { from: string; to: string } {
   return defaultRange(days);
+}
+
+/** Full previous calendar month in UTC (e.g. Aug 1–31 when today is in September). */
+export function previousCalendarMonthRange(ref = new Date()): { from: string; to: string } {
+  const y = ref.getUTCFullYear();
+  const m = ref.getUTCMonth();
+  const firstOfPrev = new Date(Date.UTC(m === 0 ? y - 1 : y, m === 0 ? 11 : m - 1, 1));
+  const lastOfPrev = new Date(Date.UTC(y, m, 0));
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  return { from: iso(firstOfPrev), to: iso(lastOfPrev) };
 }
 
 export type DateBounds = { earliest_day: string; latest_day: string };
@@ -102,7 +133,9 @@ export function allTimeHref(basePath: string, extra?: Record<string, string | un
   const params = new URLSearchParams({ range: 'all' });
   if (extra) {
     for (const [k, v] of Object.entries(extra)) {
-      if (v) params.set(k, v);
+      if (v) {
+        params.set(k, v);
+      }
     }
   }
   const qs = params.toString();

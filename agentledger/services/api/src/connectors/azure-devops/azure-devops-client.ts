@@ -26,6 +26,26 @@ export type AdoOutcomeFlatRow = {
   attribution_confidence: number;
 };
 
+export type AdoFetchResult = {
+  rows: AdoOutcomeFlatRow[];
+  /** Repos skipped due to 404/403 — sync continues for other repos + work items. */
+  skippedRepos: string[];
+};
+
+function isRepoAccessError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return (
+    /\bAzure DevOps (404|403)\b/.test(msg) || /GitRepositoryNotFoundException|TF401019/i.test(msg)
+  );
+}
+
+function repoScopedPullRequestsUrl(org: string, project: string, repositoryId: string): string {
+  return (
+    `https://dev.azure.com/${encodeURIComponent(org)}/` +
+    `${encodeURIComponent(project)}/_apis/git/repositories/${encodeURIComponent(repositoryId)}/pullrequests`
+  );
+}
+
 type FetchLike = typeof fetch;
 
 const API_VERSION = '7.1';
@@ -41,12 +61,16 @@ export function parseAdoConfig(cfg: Record<string, unknown>): AdoConfig {
     throw new Error('Azure DevOps connector requires config.organization and config.project');
   }
   const lookbackRaw = Number(cfg.lookback_days ?? cfg.lookbackDays ?? 30);
-  const lookbackDays = Number.isFinite(lookbackRaw) && lookbackRaw > 0 ? Math.floor(lookbackRaw) : 30;
+  const lookbackDays =
+    Number.isFinite(lookbackRaw) && lookbackRaw > 0 ? Math.floor(lookbackRaw) : 30;
   const reposRaw = cfg.repos;
   const repos = Array.isArray(reposRaw)
     ? reposRaw.map((r) => String(r).trim()).filter(Boolean)
     : typeof reposRaw === 'string' && reposRaw.trim()
-      ? reposRaw.split(',').map((r) => r.trim()).filter(Boolean)
+      ? reposRaw
+          .split(',')
+          .map((r) => r.trim())
+          .filter(Boolean)
       : [];
   return { organization, project, lookbackDays, repos };
 }
@@ -57,21 +81,38 @@ async function adoFetch(
   url: string,
   init?: RequestInit,
 ): Promise<unknown> {
-  const res = await fetchImpl(url, {
-    ...init,
-    headers: {
-      Accept: 'application/json',
-      Authorization: `Basic ${encodePat(creds.pat)}`,
-      'Content-Type': 'application/json',
-      ...(init?.headers as Record<string, string> | undefined),
-    },
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`Azure DevOps ${res.status}: ${body.slice(0, 400)}`);
+  const controller = new AbortController();
+  const timeoutMs = 30_000;
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetchImpl(url, {
+      ...init,
+      signal: controller.signal,
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Basic ${encodePat(creds.pat)}`,
+        'Content-Type': 'application/json',
+        ...(init?.headers as Record<string, string> | undefined),
+      },
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`Azure DevOps ${res.status}: ${body.slice(0, 400)}`);
+    }
+    if (res.status === 204) {
+      return null;
+    }
+    return res.json();
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error(
+        `Azure DevOps request timed out after ${timeoutMs / 1000}s: ${url.slice(0, 120)}`,
+      );
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-  if (res.status === 204) return null;
-  return res.json();
 }
 
 function lookbackIso(days: number, now = new Date()): string {
@@ -114,9 +155,11 @@ export async function listProjectRepos(
     `${encodeURIComponent(cfg.project)}/_apis/git/repositories?api-version=${API_VERSION}`;
   const data = (await adoFetch(fetchImpl, creds, url)) as { value?: AdoRepo[] };
   const all = data?.value ?? [];
-  if (cfg.repos.length === 0) return all;
+  if (cfg.repos.length === 0) {
+    return all;
+  }
   const want = new Set(cfg.repos.map((r) => r.toLowerCase()));
-  return all.filter((r) => want.has(r.name.toLowerCase()));
+  return all.filter((r) => want.has(r.name.toLowerCase()) || want.has(r.id.toLowerCase()));
 }
 
 export async function fetchMergedPullRequests(
@@ -124,58 +167,81 @@ export async function fetchMergedPullRequests(
   creds: AdoCredentials,
   cfg: AdoConfig,
   now = new Date(),
-): Promise<AdoOutcomeFlatRow[]> {
+): Promise<AdoFetchResult> {
   const repos = await listProjectRepos(fetchImpl, creds, cfg);
   const floor = new Date(lookbackIso(cfg.lookbackDays, now)).getTime();
   const rows: AdoOutcomeFlatRow[] = [];
+  const skippedRepos: string[] = [];
+
+  if (cfg.repos.length > 0 && repos.length === 0) {
+    throw new Error(
+      `Azure DevOps: none of the configured repos match ${cfg.organization}/${cfg.project}. ` +
+        `Use repo names (or IDs) from Test connection — not project names.`,
+    );
+  }
 
   for (const repo of repos) {
-    let skip = 0;
-    const top = 100;
-    for (;;) {
-      const q = new URLSearchParams({
-        'searchCriteria.status': 'completed',
-        'searchCriteria.repositoryId': repo.id,
-        '$top': String(top),
-        '$skip': String(skip),
-        'api-version': API_VERSION,
-      });
-      const url =
-        `https://dev.azure.com/${encodeURIComponent(cfg.organization)}/` +
-        `${encodeURIComponent(cfg.project)}/_apis/git/pullrequests?${q.toString()}`;
-      const data = (await adoFetch(fetchImpl, creds, url)) as { value?: AdoPr[]; count?: number };
-      const page = data?.value ?? [];
-      if (page.length === 0) break;
-
-      for (const pr of page) {
-        const closed = pr.closedDate ?? pr.creationDate;
-        if (!closed) continue;
-        const ts = new Date(closed);
-        if (Number.isNaN(ts.getTime()) || ts.getTime() < floor) continue;
-        const user =
-          pr.createdBy?.uniqueName ??
-          pr.createdBy?.displayName ??
-          '';
-        const outcomeId = adoPrOutcomeId(cfg.organization, cfg.project, repo.name, pr.pullRequestId);
-        rows.push({
-          idempotency_key: outcomeId,
-          timestamp: ts.toISOString(),
-          outcome_id: outcomeId,
-          outcome_type: 'pr_merged',
-          source_system: 'azure_devops',
-          source: 'api',
-          user_id: user,
-          user_email: user.includes('@') ? user : undefined,
-          attribution_confidence: 0,
+    try {
+      let skip = 0;
+      const top = 100;
+      for (;;) {
+        const q = new URLSearchParams({
+          'searchCriteria.status': 'completed',
+          $top: String(top),
+          $skip: String(skip),
+          'api-version': API_VERSION,
         });
-      }
+        const url = `${repoScopedPullRequestsUrl(cfg.organization, cfg.project, repo.id)}?${q.toString()}`;
+        const data = (await adoFetch(fetchImpl, creds, url)) as { value?: AdoPr[]; count?: number };
+        const page = data?.value ?? [];
+        if (page.length === 0) {
+          break;
+        }
 
-      if (page.length < top) break;
-      skip += top;
+        for (const pr of page) {
+          const closed = pr.closedDate ?? pr.creationDate;
+          if (!closed) {
+            continue;
+          }
+          const ts = new Date(closed);
+          if (Number.isNaN(ts.getTime()) || ts.getTime() < floor) {
+            continue;
+          }
+          const user = pr.createdBy?.uniqueName ?? pr.createdBy?.displayName ?? '';
+          const outcomeId = adoPrOutcomeId(
+            cfg.organization,
+            cfg.project,
+            repo.name,
+            pr.pullRequestId,
+          );
+          rows.push({
+            idempotency_key: outcomeId,
+            timestamp: ts.toISOString(),
+            outcome_id: outcomeId,
+            outcome_type: 'pr_merged',
+            source_system: 'azure_devops',
+            source: 'api',
+            user_id: user,
+            user_email: user.includes('@') ? user : undefined,
+            attribution_confidence: 0,
+          });
+        }
+
+        if (page.length < top) {
+          break;
+        }
+        skip += top;
+      }
+    } catch (err) {
+      if (isRepoAccessError(err)) {
+        skippedRepos.push(`${repo.name} (${repo.id})`);
+        continue;
+      }
+      throw err;
     }
   }
 
-  return rows;
+  return { rows, skippedRepos };
 }
 
 export async function fetchClosedWorkItems(
@@ -202,7 +268,9 @@ export async function fetchClosedWorkItems(
   })) as AdoWiqlResult;
 
   const ids = (wiqlResult.workItems ?? []).map((w) => w.id).filter((id) => id > 0);
-  if (ids.length === 0) return [];
+  if (ids.length === 0) {
+    return [];
+  }
 
   const rows: AdoOutcomeFlatRow[] = [];
   const chunkSize = 200;
@@ -210,21 +278,24 @@ export async function fetchClosedWorkItems(
     const chunk = ids.slice(i, i + chunkSize);
     const q = new URLSearchParams({
       ids: chunk.join(','),
-      fields: 'System.Id,System.Title,System.ChangedDate,System.AssignedTo,System.State,System.WorkItemType',
+      fields:
+        'System.Id,System.Title,System.ChangedDate,System.AssignedTo,System.State,System.WorkItemType',
       'api-version': API_VERSION,
     });
-    const url =
-      `https://dev.azure.com/${encodeURIComponent(cfg.organization)}/_apis/wit/workitems?${q.toString()}`;
+    const url = `https://dev.azure.com/${encodeURIComponent(cfg.organization)}/_apis/wit/workitems?${q.toString()}`;
     const data = (await adoFetch(fetchImpl, creds, url)) as { value?: AdoWorkItem[] };
     for (const wi of data?.value ?? []) {
       const fields = wi.fields ?? {};
       const changed = String(fields['System.ChangedDate'] ?? '');
       const ts = new Date(changed);
-      if (Number.isNaN(ts.getTime())) continue;
+      if (Number.isNaN(ts.getTime())) {
+        continue;
+      }
       const assigned = fields['System.AssignedTo'];
       let user = '';
-      if (typeof assigned === 'string') user = assigned;
-      else if (assigned && typeof assigned === 'object') {
+      if (typeof assigned === 'string') {
+        user = assigned;
+      } else if (assigned && typeof assigned === 'object') {
         const a = assigned as { uniqueName?: string; displayName?: string };
         user = a.uniqueName ?? a.displayName ?? '';
       }
@@ -250,12 +321,15 @@ export async function fetchAzureDevOpsOutcomes(
   creds: AdoCredentials,
   cfg: AdoConfig,
   opts?: { fetchImpl?: FetchLike; now?: Date },
-): Promise<AdoOutcomeFlatRow[]> {
+): Promise<AdoFetchResult> {
   const fetchImpl = opts?.fetchImpl ?? fetch;
   const now = opts?.now ?? new Date();
-  const [prs, workItems] = await Promise.all([
+  const [prResult, workItems] = await Promise.all([
     fetchMergedPullRequests(fetchImpl, creds, cfg, now),
     fetchClosedWorkItems(fetchImpl, creds, cfg, now),
   ]);
-  return [...prs, ...workItems];
+  return {
+    rows: [...prResult.rows, ...workItems],
+    skippedRepos: prResult.skippedRepos,
+  };
 }

@@ -34,19 +34,22 @@ export class AgentToolAllowlistController {
     });
   }
 
-  @Roles('viewer') @Get()
+  @Roles('viewer')
+  @Get()
   list(@Query('limit') limit?: string, @Query('offset') offset?: string) {
     return this.crud.list(parsePagination(limit, offset));
   }
 
-  @Roles('admin') @Post()
+  @Roles('admin')
+  @Post()
   async create(@Body() dto: CreateAllowDto) {
     const created = await this.crud.create({ ...dto });
     await this.project(created, 1);
     return created;
   }
 
-  @Roles('admin') @Delete(':id')
+  @Roles('admin')
+  @Delete(':id')
   async remove(@Param('id') id: string) {
     const before = await this.crud.get(id); // 404s under RLS if another tenant's
     const result = await this.crud.remove(id);
@@ -57,7 +60,10 @@ export class AgentToolAllowlistController {
   // Upsert the (tenant, agent, tool) allow state into ClickHouse. Best-effort:
   // the Postgres row is already committed, so a ClickHouse outage logs rather than
   // failing the request (the entry can be re-projected by re-saving).
-  private async project(row: { tenantId: string; agentId: string; toolName: string }, allowed: 0 | 1): Promise<void> {
+  private async project(
+    row: { tenantId: string; agentId: string; toolName: string },
+    allowed: 0 | 1,
+  ): Promise<void> {
     const params: Record<string, ChParam> = {
       tenant: row.tenantId,
       agent: row.agentId,
@@ -71,7 +77,9 @@ export class AgentToolAllowlistController {
         params,
       );
     } catch (err) {
-      this.logger.warn(`agent_tool_allow projection failed for ${row.agentId}/${row.toolName}: ${String(err)}`);
+      this.logger.warn(
+        `agent_tool_allow projection failed for ${row.agentId}/${row.toolName}: ${String(err)}`,
+      );
     }
   }
 }

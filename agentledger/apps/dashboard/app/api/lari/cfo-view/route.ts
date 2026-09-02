@@ -6,7 +6,9 @@ export async function GET(req: NextRequest) {
   const path = qs ? `/v1/lari/cfo-view?${qs}` : '/v1/lari/cfo-view';
   const { ok, status, data } = await proxyApi(path);
   if (!ok) {
-    return NextResponse.json(data ?? { error: 'cfo-view failed' }, { status: status >= 400 ? status : 502 });
+    return NextResponse.json(data ?? { error: 'cfo-view failed' }, {
+      status: status >= 400 ? status : 502,
+    });
   }
   return NextResponse.json(data);
 }

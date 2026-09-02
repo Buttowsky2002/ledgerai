@@ -46,6 +46,29 @@ clickhouse_password = "..."
 
 All other variables have sensible defaults. See `variables.tf` for the full list.
 
+### Existing CloudFront custom hostname
+
+When the public hostname and ACM certificate already exist, declare them
+without enabling ALB custom-domain provisioning:
+
+```hcl
+enable_cloudfront          = true
+public_hostname            = "app.example.com"
+cloudfront_certificate_arn = "arn:aws:acm:us-east-1:<account>:certificate/<id>"
+```
+
+`public_hostname` becomes the canonical origin for dashboard links, API CORS,
+session redirects, and OIDC callbacks. `cloudfront_certificate_arn` is
+intentionally separate from `alb_certificate_arn`: setting the latter enables
+ALB HTTPS and changes CloudFront's origin protocol.
+
+Before changing `public_hostname`, register these exact callback URLs with each
+enabled identity provider:
+
+- `https://<public_hostname>/auth/callback/microsoft`
+- `https://<public_hostname>/auth/callback/google`
+- `https://<public_hostname>/auth/sso/callback`
+
 **Keep `image_tag` current.** A terraform apply redeploys every ECS service to
 whatever tag is in `pilot.auto.tfvars` / `pilot.tfvars`. Pinning an old tag
 (e.g. before a dashboard CSP hotfix) will silently roll the fleet backward and

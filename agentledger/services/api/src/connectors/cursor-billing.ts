@@ -2,12 +2,20 @@ export type CursorBillingKind = 'on_demand' | 'included' | 'errored';
 
 /** Coerce Cursor Admin API isChargeable (boolean | string | number). */
 export function coerceIsChargeable(v: unknown): boolean | undefined {
-  if (v === true || v === 1) return true;
-  if (v === false || v === 0) return false;
+  if (v === true || v === 1) {
+    return true;
+  }
+  if (v === false || v === 0) {
+    return false;
+  }
   if (typeof v === 'string') {
     const s = v.trim().toLowerCase();
-    if (s === 'true' || s === '1') return true;
-    if (s === 'false' || s === '0') return false;
+    if (s === 'true' || s === '1') {
+      return true;
+    }
+    if (s === 'false' || s === '0') {
+      return false;
+    }
   }
   return undefined;
 }
@@ -22,28 +30,46 @@ export function classifyCursorBillingKind(
   // Cursor documents `kind` as the billing outcome per request. Prefer it over
   // isChargeable when the two disagree — some Usage-based rows arrive with
   // isChargeable:false while still being true on-demand overage.
-  if (k.includes('error') || k.includes('not-charged')) return 'errored';
-  if (k.includes('usage-based') || k.includes('on-demand')) return 'on_demand';
-  if (k.includes('included')) return 'included';
+  if (k.includes('error') || k.includes('not-charged')) {
+    return 'errored';
+  }
+  if (k.includes('usage-based') || k.includes('on-demand')) {
+    return 'on_demand';
+  }
+  if (k.includes('included')) {
+    return 'included';
+  }
 
-  if (chargeable === true) return 'on_demand';
-  if (chargeable === false) return 'included';
+  if (chargeable === true) {
+    return 'on_demand';
+  }
+  if (chargeable === false) {
+    return 'included';
+  }
 
-  if (!k) return 'included';
+  if (!k) {
+    return 'included';
+  }
   // Unknown kind without isChargeable — default included so we never invent invoice lines.
   return 'included';
 }
 
 function num(v: unknown): number {
-  if (typeof v === 'number' && Number.isFinite(v)) return v;
-  if (v === undefined || v === null || v === '') return 0;
+  if (typeof v === 'number' && Number.isFinite(v)) {
+    return v;
+  }
+  if (v === undefined || v === null || v === '') {
+    return 0;
+  }
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 }
 
 /** Split Cursor chargedCents cost into billed overage vs subscription usage value. */
 export function enrichCursorBilling(metrics: Record<string, unknown>): Record<string, unknown> {
-  if (String(metrics.provider ?? '').toLowerCase() !== 'cursor') return metrics;
+  if (String(metrics.provider ?? '').toLowerCase() !== 'cursor') {
+    return metrics;
+  }
 
   const usageValueUsd = num(metrics.cost_usd);
   const kind = classifyCursorBillingKind(

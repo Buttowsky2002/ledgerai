@@ -10,28 +10,31 @@ describe('AzureDevOpsOutcomesService', () => {
     });
     const svc = new AzureDevOpsOutcomesService({ importEvents } as never);
 
-    jest.spyOn(client, 'fetchAzureDevOpsOutcomes').mockResolvedValue([
-      {
-        idempotency_key: 'azure_devops:o/p/r#1',
-        timestamp: '2026-08-10T00:00:00.000Z',
-        outcome_id: 'azure_devops:o/p/r#1',
-        outcome_type: 'pr_merged',
-        source_system: 'azure_devops',
-        source: 'api',
-        user_id: 'a@b.com',
-        attribution_confidence: 0,
-      },
-      {
-        idempotency_key: 'azure_devops:o/p#2',
-        timestamp: '2026-08-11T00:00:00.000Z',
-        outcome_id: 'azure_devops:o/p#2',
-        outcome_type: 'work_item_closed',
-        source_system: 'azure_devops',
-        source: 'api',
-        user_id: 'c@d.com',
-        attribution_confidence: 0,
-      },
-    ]);
+    jest.spyOn(client, 'fetchAzureDevOpsOutcomes').mockResolvedValue({
+      rows: [
+        {
+          idempotency_key: 'azure_devops:o/p/r#1',
+          timestamp: '2026-08-10T00:00:00.000Z',
+          outcome_id: 'azure_devops:o/p/r#1',
+          outcome_type: 'pr_merged',
+          source_system: 'azure_devops',
+          source: 'api',
+          user_id: 'a@b.com',
+          attribution_confidence: 0,
+        },
+        {
+          idempotency_key: 'azure_devops:o/p#2',
+          timestamp: '2026-08-11T00:00:00.000Z',
+          outcome_id: 'azure_devops:o/p#2',
+          outcome_type: 'work_item_closed',
+          source_system: 'azure_devops',
+          source: 'api',
+          user_id: 'c@d.com',
+          attribution_confidence: 0,
+        },
+      ],
+      skippedRepos: [],
+    });
 
     const result = await svc.sync({
       connectorId: 'conn-1',

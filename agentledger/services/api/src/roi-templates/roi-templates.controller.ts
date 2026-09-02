@@ -48,15 +48,27 @@ class CreateRoiTemplateDto {
   @IsIn(OUTCOME_TYPES) outcomeType!: string;
   @IsIn(SOURCE_SYSTEMS) sourceSystem!: string;
   @IsObject() @ValidateNested() @Type(() => ValueFormulaDto) valueFormula!: ValueFormulaDto;
-  @IsOptional() @IsObject() @ValidateNested() @Type(() => AttributionDto) attribution?: AttributionDto;
+  @IsOptional()
+  @IsObject()
+  @ValidateNested()
+  @Type(() => AttributionDto)
+  attribution?: AttributionDto;
 }
 
 class UpdateRoiTemplateDto {
   @IsOptional() @IsString() name?: string;
   @IsOptional() @IsIn(OUTCOME_TYPES) outcomeType?: string;
   @IsOptional() @IsIn(SOURCE_SYSTEMS) sourceSystem?: string;
-  @IsOptional() @IsObject() @ValidateNested() @Type(() => ValueFormulaDto) valueFormula?: ValueFormulaDto;
-  @IsOptional() @IsObject() @ValidateNested() @Type(() => AttributionDto) attribution?: AttributionDto;
+  @IsOptional()
+  @IsObject()
+  @ValidateNested()
+  @Type(() => ValueFormulaDto)
+  valueFormula?: ValueFormulaDto;
+  @IsOptional()
+  @IsObject()
+  @ValidateNested()
+  @Type(() => AttributionDto)
+  attribution?: AttributionDto;
 }
 
 @Controller('v1/roi-templates')
@@ -74,31 +86,36 @@ export class RoiTemplatesController {
     });
   }
 
-  @Roles('viewer') @Get()
+  @Roles('viewer')
+  @Get()
   list(@Query('limit') limit?: string, @Query('offset') offset?: string) {
     return this.crud.list(parsePagination(limit, offset));
   }
 
-  @Roles('viewer') @Get(':id')
+  @Roles('viewer')
+  @Get(':id')
   get(@Param('id') id: string) {
     return this.crud.get(id);
   }
 
-  @Roles('admin') @Post()
+  @Roles('admin')
+  @Post()
   async create(@Body() dto: CreateRoiTemplateDto) {
     const created = await this.crud.create({ ...dto });
     await this.projectRates(created);
     return created;
   }
 
-  @Roles('admin') @Patch(':id')
+  @Roles('admin')
+  @Patch(':id')
   async update(@Param('id') id: string, @Body() dto: UpdateRoiTemplateDto) {
     const after = await this.crud.update(id, { ...dto });
     await this.projectRates(after);
     return after;
   }
 
-  @Roles('admin') @Delete(':id')
+  @Roles('admin')
+  @Delete(':id')
   remove(@Param('id') id: string) {
     return this.crud.remove(id);
   }
@@ -141,7 +158,9 @@ export class RoiTemplatesController {
         params,
       );
     } catch (err) {
-      this.logger.warn(`roi_rates projection failed for ${t.sourceSystem}/${t.outcomeType}: ${String(err)}`);
+      this.logger.warn(
+        `roi_rates projection failed for ${t.sourceSystem}/${t.outcomeType}: ${String(err)}`,
+      );
     }
   }
 }

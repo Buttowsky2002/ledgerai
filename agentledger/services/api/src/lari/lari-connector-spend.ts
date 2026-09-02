@@ -82,7 +82,12 @@ export function supplementalConnectorSpend(
       costUsd: usd(copilot.totalCostUsd),
       calls: copilot.totalCalls,
     });
-    addConnectorSource(spendBySource, COPILOT_ANALYTICS_PLATFORM, copilot.totalCostUsd, copilot.totalCalls);
+    addConnectorSource(
+      spendBySource,
+      COPILOT_ANALYTICS_PLATFORM,
+      copilot.totalCostUsd,
+      copilot.totalCalls,
+    );
   }
 
   // Cursor metered usage is usually in llm_calls; seat license may only appear here.

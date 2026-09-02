@@ -31,8 +31,10 @@ export class AttributionService {
   edges(outcomeId?: string, agentId?: string, minConfidence = 0): Promise<AttributionEdge[]> {
     const oid = outcomeId ?? null;
     const aid = agentId ?? null;
-    return this.prisma.withTenant(this.tenant(), (tx) =>
-      tx.$queryRaw<AttributionEdge[]>`
+    return this.prisma.withTenant(
+      this.tenant(),
+      (tx) =>
+        tx.$queryRaw<AttributionEdge[]>`
         SELECT edge_id, outcome_id, run_id, agent_id, coalition_id, attribution_method,
                confidence_raw, confidence_calibrated, signal_contributions,
                counterfactual_delta, value_attributed, cost_attributed, model_version, created_at
@@ -46,8 +48,10 @@ export class AttributionService {
 
   /** One multi-agent coalition's members + Shapley split. */
   async coalition(coalitionId: string): Promise<AttributionCoalition | null> {
-    const rows = await this.prisma.withTenant(this.tenant(), (tx) =>
-      tx.$queryRaw<AttributionCoalition[]>`
+    const rows = await this.prisma.withTenant(
+      this.tenant(),
+      (tx) =>
+        tx.$queryRaw<AttributionCoalition[]>`
         SELECT coalition_id, outcome_id, members, method, sample_count, created_at
         FROM attribution_coalitions WHERE coalition_id = ${coalitionId}::uuid`,
     );
@@ -55,12 +59,18 @@ export class AttributionService {
   }
 
   /** Counterfactual baselines (with confounder-check caveats) for the audit trail. */
-  baselines(scope?: string, subjectId?: string, outcomeType?: string): Promise<AttributionBaseline[]> {
+  baselines(
+    scope?: string,
+    subjectId?: string,
+    outcomeType?: string,
+  ): Promise<AttributionBaseline[]> {
     const sc = scope ?? null;
     const sid = subjectId ?? null;
     const ot = outcomeType ?? null;
-    return this.prisma.withTenant(this.tenant(), (tx) =>
-      tx.$queryRaw<AttributionBaseline[]>`
+    return this.prisma.withTenant(
+      this.tenant(),
+      (tx) =>
+        tx.$queryRaw<AttributionBaseline[]>`
         SELECT scope, subject_id, outcome_type, baseline_rate, sample_size,
                confounder_checks, window_start, window_end, model_version, computed_at
         FROM attribution_baselines

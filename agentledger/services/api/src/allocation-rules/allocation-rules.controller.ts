@@ -49,27 +49,32 @@ export class AllocationRulesController {
     });
   }
 
-  @Roles('viewer') @Get()
+  @Roles('viewer')
+  @Get()
   list(@Query('limit') limit?: string, @Query('offset') offset?: string) {
     return this.crud.list(parsePagination(limit, offset));
   }
 
-  @Roles('viewer') @Get(':id')
+  @Roles('viewer')
+  @Get(':id')
   get(@Param('id') id: string) {
     return this.crud.get(id);
   }
 
-  @Roles('admin') @Post()
+  @Roles('admin')
+  @Post()
   create(@Body() dto: CreateAllocationRuleDto) {
     return this.crud.create({ ...dto });
   }
 
-  @Roles('admin') @Patch(':id')
+  @Roles('admin')
+  @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateAllocationRuleDto) {
     return this.crud.update(id, { ...dto });
   }
 
-  @Roles('admin') @Delete(':id')
+  @Roles('admin')
+  @Delete(':id')
   remove(@Param('id') id: string) {
     return this.crud.remove(id);
   }

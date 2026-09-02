@@ -14,7 +14,9 @@ export function renderObject(
   obj: Record<string, string> | undefined,
   ctx: TemplateContext,
 ): Record<string, string> {
-  if (!obj) return {};
+  if (!obj) {
+    return {};
+  }
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(obj)) {
     out[renderTemplate(k, ctx)] = renderTemplate(v, ctx);

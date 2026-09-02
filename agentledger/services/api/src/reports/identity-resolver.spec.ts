@@ -22,7 +22,9 @@ const entry = (
 describe('identity-resolver', () => {
   const uuidAlice = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
   const byId = new Map([[uuidAlice, entry('Alice Smith', 'Eng', 'alice@acme.test')]]);
-  const byEmail = new Map([['developer@company.com', entry('Dev User', 'Eng', 'developer@company.com')]]);
+  const byEmail = new Map([
+    ['developer@company.com', entry('Dev User', 'Eng', 'developer@company.com')],
+  ]);
   const byAlias = new Map([
     ['cursor-user-99', entry('Cursor Dev', 'Eng')],
     ['demo-user-0', entry('Alice Chen', 'Engineering')],
@@ -49,7 +51,9 @@ describe('identity-resolver', () => {
     });
 
     it('matches aliases when UUID and email miss', () => {
-      expect(matchIdentity('cursor-user-99', byId, byEmail, byAlias)?.displayName).toBe('Cursor Dev');
+      expect(matchIdentity('cursor-user-99', byId, byEmail, byAlias)?.displayName).toBe(
+        'Cursor Dev',
+      );
       expect(matchIdentity('demo-user-0', byId, byEmail, byAlias)?.displayName).toBe('Alice Chen');
     });
 
@@ -58,7 +62,9 @@ describe('identity-resolver', () => {
       emailFirst.set('shared-key', entry('Email Match', ''));
       const aliasSecond = new Map(byAlias);
       aliasSecond.set('shared-key', entry('Alias Match', ''));
-      expect(matchIdentity('shared-key', byId, emailFirst, aliasSecond)?.displayName).toBe('Email Match');
+      expect(matchIdentity('shared-key', byId, emailFirst, aliasSecond)?.displayName).toBe(
+        'Email Match',
+      );
     });
 
     it('returns null when all three paths miss', () => {
@@ -100,7 +106,9 @@ describe('identity-resolver', () => {
     });
 
     it('surfaces email for unlinked email-shaped handles', () => {
-      expect(resolveUserDirectoryIdentity('orphan@acme.test', byId, byEmail, byAlias)).toMatchObject({
+      expect(
+        resolveUserDirectoryIdentity('orphan@acme.test', byId, byEmail, byAlias),
+      ).toMatchObject({
         display_name: 'orphan',
         email: 'orphan@acme.test',
         resolved: false,

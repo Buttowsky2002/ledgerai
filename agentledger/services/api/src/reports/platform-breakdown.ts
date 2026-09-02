@@ -1,13 +1,24 @@
-import type { ModelSpendRow, PlatformBreakdownRow, ProviderSpendRow } from './executive-report.types';
+import type {
+  ModelSpendRow,
+  PlatformBreakdownRow,
+  ProviderSpendRow,
+} from './executive-report.types';
 import { usd } from './formatters';
 
 const SUBSCRIPTION_HINTS = ['cursor', 'copilot', 'github_copilot'];
 
 /** Infer subscription vs usage cost basis from provider slug. */
-export function inferCostBasis(provider: string, explicit?: string | null): 'subscription' | 'usage' {
-  if (explicit === 'subscription' || explicit === 'usage') return explicit;
+export function inferCostBasis(
+  provider: string,
+  explicit?: string | null,
+): 'subscription' | 'usage' {
+  if (explicit === 'subscription' || explicit === 'usage') {
+    return explicit;
+  }
   const p = provider.toLowerCase();
-  if (SUBSCRIPTION_HINTS.some((h) => p.includes(h))) return 'subscription';
+  if (SUBSCRIPTION_HINTS.some((h) => p.includes(h))) {
+    return 'subscription';
+  }
   return 'usage';
 }
 
@@ -31,7 +42,9 @@ export function buildPlatformBreakdown(
     .filter((p) => p.costUsd > 0)
     .map((p) => {
       const basis = inferCostBasis(p.provider, p.costBasis ?? null);
-      const modelRows = (modelsByProvider.get(p.provider) ?? []).sort((a, b) => b.costUsd - a.costUsd);
+      const modelRows = (modelsByProvider.get(p.provider) ?? []).sort(
+        (a, b) => b.costUsd - a.costUsd,
+      );
       const modelSum = usd(modelRows.reduce((s, m) => s + m.costUsd, 0));
       const remainderUsd = usd(p.costUsd - modelSum);
       return {

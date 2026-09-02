@@ -28,7 +28,9 @@ describe('Agent credentials / NHI governance (api)', () => {
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+    );
     await app.init();
     jwt = app.get(JwtService);
     prisma = app.get(PrismaService);
@@ -54,7 +56,8 @@ describe('Agent credentials / NHI governance (api)', () => {
     await app.close();
   });
 
-  const tok = (role = 'admin', t = tenant) => jwt.mintAccess({ userId: randomUUID(), tenantId: t, role });
+  const tok = (role = 'admin', t = tenant) =>
+    jwt.mintAccess({ userId: randomUUID(), tenantId: t, role });
   const srv = () => app.getHttpServer();
 
   it('issues a credential returning the plaintext token once, never the hash', async () => {
@@ -119,7 +122,9 @@ describe('Agent credentials / NHI governance (api)', () => {
       .get('/v1/agent-credentials')
       .set('Authorization', `Bearer ${await tok('viewer', other)}`)
       .expect(200);
-    expect((otherList.body as Array<{ credentialId: string }>).some((c) => c.credentialId === id)).toBe(false);
+    expect(
+      (otherList.body as Array<{ credentialId: string }>).some((c) => c.credentialId === id),
+    ).toBe(false);
 
     // ... and cannot approve it (RLS hides the row → 404).
     await request(srv())
@@ -133,7 +138,9 @@ describe('Agent credentials / NHI governance (api)', () => {
       .get('/v1/agent-credentials/blast-radius')
       .set('Authorization', `Bearer ${await tok('viewer')}`)
       .expect(200);
-    const row = (res.body as Array<{ agentId: string; totalCredentials: number }>).find((r) => r.agentId === agent);
+    const row = (res.body as Array<{ agentId: string; totalCredentials: number }>).find(
+      (r) => r.agentId === agent,
+    );
     expect(row).toBeDefined();
     expect(row!.totalCredentials).toBeGreaterThanOrEqual(1);
   });
@@ -143,7 +150,9 @@ describe('Agent credentials / NHI governance (api)', () => {
     const credId = randomUUID();
     const old = new Date(Date.now() - 90 * 24 * 3600 * 1000);
     await prisma.withTenant(tenant, async (tx) => {
-      await tx.agent.create({ data: { agentId: dormantAgent, tenantId: tenant, name: 'Dormant Agent' } });
+      await tx.agent.create({
+        data: { agentId: dormantAgent, tenantId: tenant, name: 'Dormant Agent' },
+      });
       await tx.agentCredential.create({
         data: {
           credentialId: credId,

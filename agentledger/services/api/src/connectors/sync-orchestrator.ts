@@ -50,17 +50,23 @@ async function fetchAuxiliaryEntities(
   };
   try {
     const result = await executeWithRetry(auxDef, ctx.credentials, tmplCtx);
-    const data = config.itemsPath ? getPath(result.body, config.itemsPath) ?? result.body : result.body;
+    const data = config.itemsPath
+      ? (getPath(result.body, config.itemsPath) ?? result.body)
+      : result.body;
     const page = extractPage(data, { type: 'none' });
-    const entities: ProviderEntity[] = page.items.map((item) => {
-      const row = item as Record<string, unknown>;
-      return {
-        entityType: config.step,
-        providerKey: String(row[config.idField] ?? ''),
-        email: config.emailField ? String(row[config.emailField] ?? '') || undefined : undefined,
-        displayName: config.nameField ? String(row[config.nameField] ?? '') || undefined : undefined,
-      };
-    }).filter((e) => e.providerKey);
+    const entities: ProviderEntity[] = page.items
+      .map((item) => {
+        const row = item as Record<string, unknown>;
+        return {
+          entityType: config.step,
+          providerKey: String(row[config.idField] ?? ''),
+          email: config.emailField ? String(row[config.emailField] ?? '') || undefined : undefined,
+          displayName: config.nameField
+            ? String(row[config.nameField] ?? '') || undefined
+            : undefined,
+        };
+      })
+      .filter((e) => e.providerKey);
     return { entities, requestCount: 1 };
   } catch {
     return { entities: [], requestCount: 0 };
@@ -68,7 +74,9 @@ async function fetchAuxiliaryEntities(
 }
 
 /** Full API sync flow: test → fetchUsers/Projects/ApiKeys → fetchUsage → attribute → return. */
-export async function runSyncOrchestrator(input: SyncOrchestratorInput): Promise<SyncOrchestratorResult> {
+export async function runSyncOrchestrator(
+  input: SyncOrchestratorInput,
+): Promise<SyncOrchestratorResult> {
   const capabilities = resolveCapabilities(input.presetId, input.definition.capabilities);
   const presetId = input.presetId ?? input.definition.id ?? '';
   const auxiliaryConfigs = PRESET_AUXILIARY_FETCHES[presetId] ?? [];
@@ -97,7 +105,9 @@ export async function runSyncOrchestrator(input: SyncOrchestratorInput): Promise
   };
 
   for (const aux of auxiliaryConfigs) {
-    if (!stepEnabled[aux.step]) continue;
+    if (!stepEnabled[aux.step]) {
+      continue;
+    }
     const { entities: fetched, requestCount } = await fetchAuxiliaryEntities(ctx, aux);
     entities.push(...fetched);
     auxiliaryRequestCount += requestCount;
@@ -122,9 +132,7 @@ export async function runSyncOrchestrator(input: SyncOrchestratorInput): Promise
   stepsCompleted.push('applyAttribution');
 
   const usersDetected = new Set(
-    records
-      .map((r) => String(r.metrics.user_id ?? ''))
-      .filter((id) => id && id !== 'Unassigned'),
+    records.map((r) => String(r.metrics.user_id ?? '')).filter((id) => id && id !== 'Unassigned'),
   ).size;
 
   return {

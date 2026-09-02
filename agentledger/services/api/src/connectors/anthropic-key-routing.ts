@@ -6,14 +6,18 @@ export function applyAnthropicKeyRouting(
   def: ConnectorDefinition,
   secret?: string,
 ): ConnectorDefinition {
-  if (def.provider !== 'anthropic' && def.id !== 'anthropic-usage') return def;
+  if (def.provider !== 'anthropic' && def.id !== 'anthropic-usage') {
+    return def;
+  }
   const key = secret?.trim() ?? '';
   if (!key || key.startsWith('sk-ant-admin')) {
     return def;
   }
 
   const analytics = def.fallbackDefinition;
-  if (!analytics?.endpoints?.length || !analytics.fieldMappings?.length) return def;
+  if (!analytics?.endpoints?.length || !analytics.fieldMappings?.length) {
+    return def;
+  }
 
   return {
     ...def,

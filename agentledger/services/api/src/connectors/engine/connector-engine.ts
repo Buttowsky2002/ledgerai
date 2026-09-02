@@ -63,7 +63,12 @@ function buildFetchDefinition(
   base: ConnectorDefinition,
   override: Pick<
     ConnectorDefinition,
-    'endpoints' | 'pagination' | 'fieldMappings' | 'validationRules' | 'dedupe' | 'destinationRecordType'
+    | 'endpoints'
+    | 'pagination'
+    | 'fieldMappings'
+    | 'validationRules'
+    | 'dedupe'
+    | 'destinationRecordType'
   >,
 ): ConnectorDefinition {
   return {
@@ -89,7 +94,9 @@ function shouldUseFallback(err: unknown): boolean {
   const e = err as ConnectorError;
   // 401: non-Enterprise Admin keys often get unauthorized (not just 403) on
   // /analytics/* endpoints — treat like 403 for optional companions / fallbacks.
-  if (e.statusCode === 401 || e.statusCode === 403 || e.statusCode === 404) return true;
+  if (e.statusCode === 401 || e.statusCode === 403 || e.statusCode === 404) {
+    return true;
+  }
   if (e.statusCode === 400) {
     const msg = e.message ?? '';
     return /analytics|enterprise|permission|group_by|invalid/i.test(msg);
@@ -109,7 +116,9 @@ async function executeConnectorRequest(
     return await executeWithRetry(ctx.definition, ctx.credentials, tmplCtx, overrides);
   } catch (err) {
     const fallback = ctx.definition.fallbackDefinition;
-    if (!fallback || !shouldUseFallback(err)) throw err;
+    if (!fallback || !shouldUseFallback(err)) {
+      throw err;
+    }
     const fallbackDef = mergeDefinition(ctx.definition, fallback);
     return executeWithRetry(fallbackDef, ctx.credentials, tmplCtx, overrides);
   }
@@ -133,7 +142,8 @@ function normalizeRecord(
 
   const externalId = String(metrics.id ?? metrics.record_id ?? metrics.external_id ?? index);
   const dedupeHash = computeDedupeHash(def.dedupe, metrics, externalId);
-  const ts = parseDate(metrics.ts ?? metrics.timestamp ?? metrics.period_end) ?? ctx.syncEnd.toISOString();
+  const ts =
+    parseDate(metrics.ts ?? metrics.timestamp ?? metrics.period_end) ?? ctx.syncEnd.toISOString();
 
   const record: NormalizedRecord = {
     tenant_id: ctx.tenantId,
@@ -169,10 +179,14 @@ function mergeSupplementalMetrics(
 ): NormalizedRecord[] {
   return records.map((rec) => {
     const extra = supplementalMap.get(metricsMergeKey(rec.metrics, mergeOn));
-    if (!extra) return rec;
+    if (!extra) {
+      return rec;
+    }
     const metrics = { ...rec.metrics };
     for (const [k, v] of Object.entries(extra)) {
-      if (v === undefined || v === null || v === '') continue;
+      if (v === undefined || v === null || v === '') {
+        continue;
+      }
       if (metrics[k] === undefined || metrics[k] === null || metrics[k] === '') {
         metrics[k] = v;
       }
@@ -212,7 +226,9 @@ export async function fetchEndpointRecords(
     );
     requestCount++;
 
-    const data = def.responseDataPath ? getPath(result.body, def.responseDataPath) ?? result.body : result.body;
+    const data = def.responseDataPath
+      ? (getPath(result.body, def.responseDataPath) ?? result.body)
+      : result.body;
     const pageResult = extractPage(data, pagination);
 
     pageResult.items.forEach((item, idx) => {
@@ -228,7 +244,9 @@ export async function fetchEndpointRecords(
       }
     });
 
-    if (!pageResult.hasMore) break;
+    if (!pageResult.hasMore) {
+      break;
+    }
 
     cursor = pageResult.nextCursor;
     nextUrl = pageResult.nextUrl;
@@ -238,7 +256,9 @@ export async function fetchEndpointRecords(
     offset += pageResult.items.length;
 
     if (!pagination.hasMorePath && (pagination.type === 'page' || pagination.type === 'offset')) {
-      if (pageResult.items.length < pageSize) break;
+      if (pageResult.items.length < pageSize) {
+        break;
+      }
     }
   }
 
@@ -271,7 +291,10 @@ async function fetchSupplementalMetricsMap(
 }
 
 /** Fetch and normalize all pages from the connector API. */
-export async function fetchAllRecords(ctx: SyncContext, maxPages?: number): Promise<FetchAllResult> {
+export async function fetchAllRecords(
+  ctx: SyncContext,
+  maxPages?: number,
+): Promise<FetchAllResult> {
   const def = ctx.definition;
   const primary = await fetchEndpointRecords(ctx, maxPages);
   let records = primary.records;
@@ -299,7 +322,9 @@ export async function fetchAllRecords(ctx: SyncContext, maxPages?: number): Prom
   const companionStepsCompleted: string[] = [];
   if (def.companionFetches?.length) {
     for (const companion of def.companionFetches) {
-      if (companion.skipWhenPrimaryEmpty && primaryCount === 0) continue;
+      if (companion.skipWhenPrimaryEmpty && primaryCount === 0) {
+        continue;
+      }
       try {
         const companionDef = buildFetchDefinition(ctx.definition, {
           endpoints: [companion.endpoint],
@@ -341,7 +366,6 @@ export async function fetchAllRecords(ctx: SyncContext, maxPages?: number): Prom
   };
 }
 
-
 /** Fetch a single page for test/preview (no pagination loop). */
 export async function fetchPreviewPage(ctx: SyncContext): Promise<{
   rawResponse: unknown;
@@ -352,7 +376,7 @@ export async function fetchPreviewPage(ctx: SyncContext): Promise<{
   const tmplCtx = buildTemplateContext(ctx);
   const result = await executeConnectorRequest(ctx, tmplCtx);
   const data = ctx.definition.responseDataPath
-    ? getPath(result.body, ctx.definition.responseDataPath) ?? result.body
+    ? (getPath(result.body, ctx.definition.responseDataPath) ?? result.body)
     : result.body;
   const pageResult = extractPage(data, ctx.definition.pagination);
 

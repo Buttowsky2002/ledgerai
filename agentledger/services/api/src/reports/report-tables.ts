@@ -22,15 +22,21 @@ export interface ModelSpendTableRow {
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
 function pct(part: number, total: number): number {
-  if (total <= 0) return 0;
+  if (total <= 0) {
+    return 0;
+  }
   return round2((part / total) * 100);
 }
 
 /** Map user_id -> highest-spend model in period. */
-export function buildTopModelMap(rows: { userId: string; model: string; costUsd: number }[]): Map<string, string> {
+export function buildTopModelMap(
+  rows: { userId: string; model: string; costUsd: number }[],
+): Map<string, string> {
   const map = new Map<string, string>();
   for (const row of rows) {
-    if (!map.has(row.userId)) map.set(row.userId, row.model);
+    if (!map.has(row.userId)) {
+      map.set(row.userId, row.model);
+    }
   }
   return map;
 }
@@ -91,7 +97,10 @@ export function buildUserSpendTable(
 }
 
 /** Flat model ranking across all platforms. */
-export function buildModelSpendTable(models: ModelSpendRow[], totalCost: number): ModelSpendTableRow[] {
+export function buildModelSpendTable(
+  models: ModelSpendRow[],
+  totalCost: number,
+): ModelSpendTableRow[] {
   return [...models]
     .filter((m) => m.costUsd > 0)
     .sort((a, b) => b.costUsd - a.costUsd)
@@ -110,8 +119,12 @@ export function isSinglePlatformDominant(
   threshold = 0.95,
 ): boolean {
   const active = providers.filter((p) => p.costUsd > 0);
-  if (active.length <= 1) return true;
+  if (active.length <= 1) {
+    return true;
+  }
   const total = active.reduce((s, p) => s + p.costUsd, 0);
-  if (total <= 0) return true;
+  if (total <= 0) {
+    return true;
+  }
   return active[0].costUsd / total >= threshold;
 }

@@ -45,14 +45,18 @@ export function resolveDisplayName(
   handle?: string,
 ): string {
   const dn = displayName?.trim();
-  if (dn) return dn;
+  if (dn) {
+    return dn;
+  }
   const em = email?.trim();
   if (em) {
     const at = em.indexOf('@');
     return at > 0 ? em.slice(0, at) : em;
   }
   const h = handle?.trim();
-  if (h) return h;
+  if (h) {
+    return h;
+  }
   return UNASSIGNED_LABEL;
 }
 
@@ -61,7 +65,9 @@ function normalizeKey(value: string): string {
 }
 
 function parseAliases(raw: unknown): string[] {
-  if (!Array.isArray(raw)) return [];
+  if (!Array.isArray(raw)) {
+    return [];
+  }
   const out: string[] = [];
   for (const item of raw) {
     if (typeof item === 'string' && item.trim()) {
@@ -70,7 +76,9 @@ function parseAliases(raw: unknown): string[] {
       const rec = item as Record<string, unknown>;
       for (const key of ['id', 'email', 'value', 'alias']) {
         const v = rec[key];
-        if (typeof v === 'string' && v.trim()) out.push(v.trim());
+        if (typeof v === 'string' && v.trim()) {
+          out.push(v.trim());
+        }
       }
     }
   }
@@ -89,11 +97,17 @@ export function matchIdentity(
   byEmail: Map<string, IdentityEntry>,
   byAlias: Map<string, IdentityEntry>,
 ): IdentityEntry | null {
-  if (UUID_RE.test(userId) && byId.has(userId)) return byId.get(userId)!;
+  if (UUID_RE.test(userId) && byId.has(userId)) {
+    return byId.get(userId)!;
+  }
   const emailHit = byEmail.get(normalizeKey(userId));
-  if (emailHit) return emailHit;
+  if (emailHit) {
+    return emailHit;
+  }
   const aliasHit = byAlias.get(normalizeKey(userId));
-  if (aliasHit) return aliasHit;
+  if (aliasHit) {
+    return aliasHit;
+  }
   return null;
 }
 
@@ -148,7 +162,9 @@ export function rollupUserSpendForChart(rows: UserSpendRow[], topN = 15): UserSp
     .filter((r) => r.costUsd > 0)
     .sort((a, b) => b.costUsd - a.costUsd);
 
-  if (ranked.length === 0 && special.length === 0) return [];
+  if (ranked.length === 0 && special.length === 0) {
+    return [];
+  }
 
   const out: UserSpendRow[] = [];
   if (ranked.length <= topN) {
@@ -165,7 +181,9 @@ export function rollupUserSpendForChart(rows: UserSpendRow[], topN = 15): UserSp
     });
   }
   for (const row of special) {
-    if (row.costUsd > 0) out.push(row);
+    if (row.costUsd > 0) {
+      out.push(row);
+    }
   }
   return out;
 }
@@ -181,7 +199,9 @@ export async function resolveUserIdentities(
   tenantId: string,
   rows: Omit<UserSpendRow, 'displayName' | 'teamName'>[],
 ): Promise<UserSpendRow[]> {
-  if (rows.length === 0) return [];
+  if (rows.length === 0) {
+    return [];
+  }
 
   const { byId, byEmail, byAlias } = await loadIdentityLookups(prisma, tenantId);
 
@@ -249,7 +269,10 @@ export async function loadIdentityLookups(
     ] as string[];
     const teams =
       teamIds.length > 0
-        ? await tx.team.findMany({ where: { teamId: { in: teamIds } }, select: { teamId: true, name: true } })
+        ? await tx.team.findMany({
+            where: { teamId: { in: teamIds } },
+            select: { teamId: true, name: true },
+          })
         : [];
     const teamNames = new Map(teams.map((t) => [t.teamId, t.name]));
 
@@ -271,11 +294,17 @@ export async function loadIdentityLookups(
         teamName: teamId ? (teamNames.get(teamId) ?? '') : '',
         criticalityTier: criticalityTier?.trim().toLowerCase() || 'standard',
       };
-      if (UUID_RE.test(id)) byId.set(id, entry);
-      if (email?.trim()) byEmail.set(normalizeKey(email), entry);
+      if (UUID_RE.test(id)) {
+        byId.set(id, entry);
+      }
+      if (email?.trim()) {
+        byEmail.set(normalizeKey(email), entry);
+      }
       for (const alias of aliases) {
         byAlias.set(normalizeKey(alias), entry);
-        if (isEmailLike(alias)) byEmail.set(normalizeKey(alias), entry);
+        if (isEmailLike(alias)) {
+          byEmail.set(normalizeKey(alias), entry);
+        }
       }
     };
 

@@ -15,7 +15,9 @@ export function PageHeader({
     <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
       <div>
         {eyebrow && (
-          <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-accent/80">{eyebrow}</div>
+          <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-accent/80">
+            {eyebrow}
+          </div>
         )}
         <h1 className="text-[26px] font-semibold leading-none tracking-tight">{title}</h1>
         {subtitle && <div className="mt-2 text-sm text-muted">{subtitle}</div>}
@@ -41,7 +43,11 @@ export function Card({
       {(title || actions) && (
         <div className="flex items-center justify-between gap-4 border-b border-edge/70 px-5 py-3.5">
           <div>
-            {title && <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-200">{title}</h2>}
+            {title && (
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-200">
+                {title}
+              </h2>
+            )}
             {subtitle && <p className="mt-0.5 text-xs text-muted">{subtitle}</p>}
           </div>
           {actions}
@@ -81,7 +87,9 @@ export function Stat({
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/70 to-transparent" />
       )}
       <div className="text-[11px] font-medium uppercase tracking-wider text-muted">{label}</div>
-      <div className={`num mt-2 text-[28px] font-semibold leading-none ${TONE_TEXT[tone]}`}>{value}</div>
+      <div className={`num mt-2 text-[28px] font-semibold leading-none ${TONE_TEXT[tone]}`}>
+        {value}
+      </div>
       {sub && <div className="mt-2 text-xs text-muted">{sub}</div>}
       {chart && <div className="-mx-1 mt-3">{chart}</div>}
     </div>
@@ -97,7 +105,15 @@ const BADGE_TONE: Record<BadgeTone, string> = {
   info: 'bg-accent/10 text-accent ring-accent/20',
 };
 
-export function Badge({ tone = 'neutral', dot = false, children }: { tone?: BadgeTone; dot?: boolean; children: ReactNode }) {
+export function Badge({
+  tone = 'neutral',
+  dot = false,
+  children,
+}: {
+  tone?: BadgeTone;
+  dot?: boolean;
+  children: ReactNode;
+}) {
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${BADGE_TONE[tone]}`}
@@ -112,16 +128,30 @@ export interface Column {
   key: string;
   label: string;
   align?: 'right';
+  /** Fixed width for numeric columns so headers align with values. */
+  width?: string;
 }
 
-export function DataTable({ columns, rows }: { columns: Column[]; rows: Record<string, ReactNode>[] }) {
+export function DataTable({
+  columns,
+  rows,
+  footerRows,
+}: {
+  columns: Column[];
+  rows: Record<string, ReactNode>[];
+  footerRows?: Record<string, ReactNode>[];
+}) {
   return (
     <div className="overflow-x-auto">
-      <table className="table">
+      <table className="table table-fixed w-full">
         <thead>
           <tr>
             {columns.map((c) => (
-              <th key={c.key} className={c.align === 'right' ? 'text-right' : ''}>
+              <th
+                key={c.key}
+                className={c.align === 'right' ? 'text-right' : ''}
+                style={c.width ? { width: c.width } : undefined}
+              >
                 {c.label}
               </th>
             ))}
@@ -139,8 +169,6 @@ export function DataTable({ columns, rows }: { columns: Column[]; rows: Record<s
               <tr key={i}>
                 {columns.map((c) => (
                   <td key={c.key} className={c.align === 'right' ? 'text-right' : ''}>
-                    {/* Right-aligned columns are numeric by convention — render them in
-                        the tabular mono house style automatically. */}
                     {c.align === 'right' ? <span className="num">{r[c.key]}</span> : r[c.key]}
                   </td>
                 ))}
@@ -148,6 +176,19 @@ export function DataTable({ columns, rows }: { columns: Column[]; rows: Record<s
             ))
           )}
         </tbody>
+        {footerRows && footerRows.length > 0 && (
+          <tfoot>
+            {footerRows.map((r, i) => (
+              <tr key={i} className="border-t border-edge bg-black/30 font-medium">
+                {columns.map((c) => (
+                  <td key={c.key} className={c.align === 'right' ? 'text-right' : ''}>
+                    {c.align === 'right' ? <span className="num">{r[c.key]}</span> : r[c.key]}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tfoot>
+        )}
       </table>
     </div>
   );

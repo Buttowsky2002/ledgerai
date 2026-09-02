@@ -3,10 +3,7 @@ import { svgEmbedsChartFont } from './chart-font';
 
 describe('chart-renderer', () => {
   it('produces SVG for spend trend with embedded font', () => {
-    const svg = spendTrendSvg(
-      [{ costUsd: 10 }, { costUsd: 20 }],
-      [{ costUsd: 5 }],
-    );
+    const svg = spendTrendSvg([{ costUsd: 10 }, { costUsd: 20 }], [{ costUsd: 5 }]);
     expect(svg).toContain('<svg');
     expect(svg).toContain('stroke-dasharray');
     expect(svgEmbedsChartFont(svg)).toBe(true);

@@ -4,7 +4,11 @@ import { AccountSettings } from '../../components/settings/AccountSettings';
 import { AuditingSettings } from '../../components/settings/AuditingSettings';
 import { DeleteButton } from '../../components/settings/DeleteButton';
 import { CreateBudget, CreateKey, CreatePolicy } from '../../components/settings/forms';
-import { AddIdpForm, IssueScimTokenForm, RevokeButton } from '../../components/settings/IntegrationsForms';
+import {
+  AddIdpForm,
+  IssueScimTokenForm,
+  RevokeButton,
+} from '../../components/settings/IntegrationsForms';
 import { PermissionsSettings } from '../../components/settings/PermissionsSettings';
 import { PrivacySettings } from '../../components/settings/PrivacySettings';
 import { Card, DataTable, PageHeader, usd } from '../../components/ui';
@@ -24,7 +28,14 @@ const TABS = [
   ['integrations', 'Integrations'],
   ['connectors', 'Data sources'],
 ] as const;
-type SettingsTab = 'account' | 'permissions' | 'auditing' | 'keys' | 'policies' | 'budgets' | 'integrations';
+type SettingsTab =
+  | 'account'
+  | 'permissions'
+  | 'auditing'
+  | 'keys'
+  | 'policies'
+  | 'budgets'
+  | 'integrations';
 
 export default async function SettingsPage({ searchParams }: { searchParams: { tab?: string } }) {
   if (searchParams.tab === 'connectors') {
@@ -159,7 +170,8 @@ async function AuditingTab() {
     <Card title="Activity audit">
       <p className="mb-4 text-xs text-muted">
         Only users with the <span className="text-gray-100">admin</span> role can view the audit
-        log. History defaults to the last 30 days — widen the range or load more to see older events.
+        log. History defaults to the last 30 days — widen the range or load more to see older
+        events.
       </p>
       <AuditingSettings />
     </Card>
@@ -195,7 +207,9 @@ async function KeysTab({ api }: { api: Api }) {
             name: k.name,
             env: k.environment,
             status: k.revokedAt ? 'revoked' : 'active',
-            actions: k.revokedAt ? null : <DeleteButton url={`/api/keys/${k.keyId}`} label="Revoke" />,
+            actions: k.revokedAt ? null : (
+              <DeleteButton url={`/api/keys/${k.keyId}`} label="Revoke" />
+            ),
           }))}
         />
       </Card>
@@ -205,10 +219,16 @@ async function KeysTab({ api }: { api: Api }) {
 
 async function IntegrationsTab({ api }: { api: Api }) {
   const [scimTokens, idps] = await Promise.all([
-    fetchData(api.GET('/v1/scim-tokens', { params: { query: { limit: '100', offset: '0' } } }), []) as Promise<
+    fetchData(
+      api.GET('/v1/scim-tokens', { params: { query: { limit: '100', offset: '0' } } }),
+      [],
+    ) as Promise<
       { tokenId: string; name: string; revokedAt: string | null; lastUsedAt: string | null }[]
     >,
-    fetchData(api.GET('/v1/tenant-idp-config', { params: { query: { limit: '100', offset: '0' } } }), []) as Promise<
+    fetchData(
+      api.GET('/v1/tenant-idp-config', { params: { query: { limit: '100', offset: '0' } } }),
+      [],
+    ) as Promise<
       {
         idpId: string;
         issuer: string;
@@ -235,13 +255,16 @@ async function IntegrationsTab({ api }: { api: Api }) {
               name: t.name,
               status: t.revokedAt ? 'revoked' : 'active',
               lastUsed: t.lastUsedAt ? new Date(t.lastUsedAt).toISOString().slice(0, 10) : '—',
-              actions: t.revokedAt ? null : <RevokeButton url={`/api/scim-tokens/${t.tokenId}/revoke`} />,
+              actions: t.revokedAt ? null : (
+                <RevokeButton url={`/api/scim-tokens/${t.tokenId}/revoke`} />
+              ),
             }))}
           />
         </div>
         <p className="mt-3 text-xs text-muted">
-          Point your IdP (Okta, Entra, Google Workspace) to https://app.yourdomain.com/scim/v2 with this token as the
-          Bearer credential. SCIM Users map to identities; SCIM Groups map to teams.
+          Point your IdP (Okta, Entra, Google Workspace) to https://app.yourdomain.com/scim/v2 with
+          this token as the Bearer credential. SCIM Users map to identities; SCIM Groups map to
+          teams.
         </p>
       </Card>
 
@@ -266,8 +289,8 @@ async function IntegrationsTab({ api }: { api: Api }) {
           />
         </div>
         <p className="mt-3 text-xs text-muted">
-          Users whose email domain matches will be redirected to this IdP at login. Set the callback URL in your IdP to
-          https://app.yourdomain.com/auth/sso/callback.
+          Users whose email domain matches will be redirected to this IdP at login. Set the callback
+          URL in your IdP to https://app.yourdomain.com/auth/sso/callback.
         </p>
       </Card>
     </>

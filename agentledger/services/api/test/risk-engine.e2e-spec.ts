@@ -9,13 +9,19 @@ import { PrismaService } from '../src/prisma/prisma.service';
 const CH = process.env.AGENTLEDGER_CLICKHOUSE_URL ?? 'http://localhost:8123';
 
 async function insertCH(table: string, rows: object[]): Promise<void> {
-  const body = `INSERT INTO agentledger.${table} FORMAT JSONEachRow\n` + rows.map((r) => JSON.stringify(r)).join('\n');
+  const body =
+    `INSERT INTO agentledger.${table} FORMAT JSONEachRow\n` +
+    rows.map((r) => JSON.stringify(r)).join('\n');
   const res = await fetch(`${CH}/`, { method: 'POST', body });
-  if (!res.ok) throw new Error(`CH insert ${table} failed: ${res.status} ${await res.text()}`);
+  if (!res.ok) {
+    throw new Error(`CH insert ${table} failed: ${res.status} ${await res.text()}`);
+  }
 }
 async function queryCH(sql: string): Promise<string> {
   const res = await fetch(`${CH}/?default_format=TabSeparated`, { method: 'POST', body: sql });
-  if (!res.ok) throw new Error(`CH query failed: ${res.status} ${await res.text()}`);
+  if (!res.ok) {
+    throw new Error(`CH query failed: ${res.status} ${await res.text()}`);
+  }
   return (await res.text()).trim();
 }
 
@@ -46,7 +52,9 @@ describe('Risk engine + governance (api)', () => {
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+    );
     await app.init();
     jwt = app.get(JwtService);
     prisma = app.get(PrismaService);
@@ -96,24 +104,76 @@ describe('Risk engine + governance (api)', () => {
   it('a governed risk event shows in the CISO register and lowers risk-adjusted ROI', async () => {
     // ROI inputs: template rate, agent run (cost), attributed outcome.
     await insertCH('roi_rates', [
-      { tenant_id: tenant, source_system: 'github', outcome_type: 'pr_merged', hourly_rate: 120, baseline_minutes: 60, updated_at: '2026-06-10 09:00:00.000' },
+      {
+        tenant_id: tenant,
+        source_system: 'github',
+        outcome_type: 'pr_merged',
+        hourly_rate: 120,
+        baseline_minutes: 60,
+        updated_at: '2026-06-10 09:00:00.000',
+      },
     ]);
     await insertCH('agent_runs', [
-      { run_id: 'r1', tenant_id: tenant, agent_id: agent, app_id: 'app', user_id: 'u', started_at: '2026-06-10 09:00:00', ended_at: '2026-06-10 09:05:00', status: 'completed', total_cost_usd: 5, total_tokens: 10, llm_calls: 1, tool_calls: 3, risk_events: 1 },
+      {
+        run_id: 'r1',
+        tenant_id: tenant,
+        agent_id: agent,
+        app_id: 'app',
+        user_id: 'u',
+        started_at: '2026-06-10 09:00:00',
+        ended_at: '2026-06-10 09:05:00',
+        status: 'completed',
+        total_cost_usd: 5,
+        total_tokens: 10,
+        llm_calls: 1,
+        tool_calls: 3,
+        risk_events: 1,
+      },
     ]);
     await insertCH('outcomes', [
-      { outcome_id: 'o1', tenant_id: tenant, ts: '2026-06-10 09:10:00', source_system: 'github', outcome_type: 'pr_merged', team_id: 't', user_id: 'u', run_id: 'r1', business_value_usd: 0, quality_score: 0.9, attribution_confidence: 0.9, completion_status: 'merged' },
+      {
+        outcome_id: 'o1',
+        tenant_id: tenant,
+        ts: '2026-06-10 09:10:00',
+        source_system: 'github',
+        outcome_type: 'pr_merged',
+        team_id: 't',
+        user_id: 'u',
+        run_id: 'r1',
+        business_value_usd: 0,
+        quality_score: 0.9,
+        attribution_confidence: 0.9,
+        completion_status: 'merged',
+      },
     ]);
     // The risk-engine's outputs (validated in its Go integration test).
     await insertCH('risk_events', [
-      { event_id: `unauthorized_tool:${agent}:shell_exec`, tenant_id: tenant, agent_id: agent, run_id: 'r1', category: 'unauthorized_tool', severity: 'high', detail: 'shell_exec', occurrences: 2, first_seen: '2026-06-10 09:02:00.000', detected_at: '2026-06-10 09:20:00.000' },
+      {
+        event_id: `unauthorized_tool:${agent}:shell_exec`,
+        tenant_id: tenant,
+        agent_id: agent,
+        run_id: 'r1',
+        category: 'unauthorized_tool',
+        severity: 'high',
+        detail: 'shell_exec',
+        occurrences: 2,
+        first_seen: '2026-06-10 09:02:00.000',
+        detected_at: '2026-06-10 09:20:00.000',
+      },
     ]);
     await insertCH('agent_risk', [
-      { tenant_id: tenant, agent_id: agent, risk_exposure_pct: 0.6667, updated_at: '2026-06-10 09:20:00.000' },
+      {
+        tenant_id: tenant,
+        agent_id: agent,
+        risk_exposure_pct: 0.6667,
+        updated_at: '2026-06-10 09:20:00.000',
+      },
     ]);
 
     // CISO register surfaces the governed event for the agent.
-    const reg = await request(app.getHttpServer()).get('/v1/analytics/agent-risk').set(bearer(await tok('viewer')));
+    const reg = await request(app.getHttpServer())
+      .get('/v1/analytics/agent-risk')
+      .set(bearer(await tok('viewer')));
     expect(reg.status).toBe(200);
     const row = reg.body.find((r: { agent_id: string }) => r.agent_id === agent);
     expect(row).toBeDefined();

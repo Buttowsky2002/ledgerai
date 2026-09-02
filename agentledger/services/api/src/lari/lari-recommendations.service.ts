@@ -207,7 +207,9 @@ export class LariRecommendationsService {
           top = provider;
         }
       }
-      if (top) topProviderByAgent.set(agentId, top);
+      if (top) {
+        topProviderByAgent.set(agentId, top);
+      }
     }
 
     const rows: AgentEconomicsHighlight[] = [];
@@ -235,8 +237,10 @@ export class LariRecommendationsService {
   }
 
   private async seatStats(tenantId: string): Promise<{ purchased: number; active: number }> {
-    const rows = await this.prisma.withTenant(tenantId, (tx) =>
-      tx.$queryRaw<{ purchased: number; active: number }[]>`
+    const rows = await this.prisma.withTenant(
+      tenantId,
+      (tx) =>
+        tx.$queryRaw<{ purchased: number; active: number }[]>`
         SELECT
           COALESCE(SUM(p.seats_purchased), 0)::int AS purchased,
           COALESCE(SUM(CASE WHEN s.active THEN s.seats_assigned ELSE 0 END), 0)::int AS active
@@ -247,19 +251,21 @@ export class LariRecommendationsService {
   }
 
   private async subscriptionPlans(tenantId: string) {
-    const rows = await this.prisma.withTenant(tenantId, (tx) =>
-      tx.$queryRaw<
-        {
-          plan_id: string;
-          provider: string;
-          plan_name: string;
-          seats_purchased: number;
-          contract_monthly_cost: number | string;
-          monthly_price_per_user: number | string;
-          active_seats: number;
-          criticality_tier: string;
-        }[]
-      >`
+    const rows = await this.prisma.withTenant(
+      tenantId,
+      (tx) =>
+        tx.$queryRaw<
+          {
+            plan_id: string;
+            provider: string;
+            plan_name: string;
+            seats_purchased: number;
+            contract_monthly_cost: number | string;
+            monthly_price_per_user: number | string;
+            active_seats: number;
+            criticality_tier: string;
+          }[]
+        >`
         SELECT
           p.plan_id,
           p.provider,
@@ -294,7 +300,9 @@ export class LariRecommendationsService {
         where: { tenantId, provider: COPILOT_PROVIDER },
         select: { connectionId: true },
       });
-      if (conns.length === 0) return { connections: conns, seats: [] as { lastActivityAt: Date | null }[] };
+      if (conns.length === 0) {
+        return { connections: conns, seats: [] as { lastActivityAt: Date | null }[] };
+      }
       const connectionIds = conns.map((c) => c.connectionId);
       const seatRows = await tx.githubCopilotSeat.findMany({
         where: { tenantId, connectionId: { in: connectionIds }, isActive: true },
@@ -302,28 +310,31 @@ export class LariRecommendationsService {
       });
       return { connections: conns, seats: seatRows };
     });
-    if (connections.connections.length === 0) return { count: 0, seatPrice: 19 };
+    if (connections.connections.length === 0) {
+      return { count: 0, seatPrice: 19 };
+    }
 
     const seats = connections.seats;
     const now = Date.now();
     const inactive = seats.filter((s) => {
-      if (!s.lastActivityAt) return true;
+      if (!s.lastActivityAt) {
+        return true;
+      }
       return (now - s.lastActivityAt.getTime()) / MS_DAY >= 14;
     });
     return { count: inactive.length, seatPrice: 19 };
   }
 
   /** Org-level Copilot ROI % for product-worth verdicts (undefined when no Copilot data). */
-  private async copilotPortfolioRoiPct(
-    tenantId: string,
-    r: Range,
-  ): Promise<number | undefined> {
+  private async copilotPortfolioRoiPct(tenantId: string, r: Range): Promise<number | undefined> {
     const rows = await this.prisma.withTenant(tenantId, async (tx) => {
       const connections = await tx.aiProviderConnection.findMany({
         where: { tenantId, provider: COPILOT_PROVIDER },
         select: { connectionId: true },
       });
-      if (connections.length === 0) return [];
+      if (connections.length === 0) {
+        return [];
+      }
       const connectionIds = connections.map((c) => c.connectionId);
       return tx.githubCopilotRoiDaily.findMany({
         where: {
@@ -342,11 +353,15 @@ export class LariRecommendationsService {
         },
       });
     });
-    if (rows.length === 0) return undefined;
+    if (rows.length === 0) {
+      return undefined;
+    }
 
     const totalValue = rows.reduce((s, row) => s + n(row.estimatedValue), 0);
     const totalCost = rows.reduce((s, row) => s + n(row.totalCopilotCost), 0);
-    if (totalCost <= 0) return n(rows[0]?.roiPercentage) || undefined;
+    if (totalCost <= 0) {
+      return n(rows[0]?.roiPercentage) || undefined;
+    }
     return Math.round(((totalValue - totalCost) / totalCost) * 10000) / 100;
   }
 
@@ -375,8 +390,12 @@ export class LariRecommendationsService {
         model: row.modelPrefix,
       };
       const rate = n(row.usdPerMillion);
-      if (row.tokenType === 'input') entry.inputUsdPerM = rate;
-      if (row.tokenType === 'output') entry.outputUsdPerM = rate;
+      if (row.tokenType === 'input') {
+        entry.inputUsdPerM = rate;
+      }
+      if (row.tokenType === 'output') {
+        entry.outputUsdPerM = rate;
+      }
       byModel.set(key, entry);
     }
 

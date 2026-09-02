@@ -28,7 +28,12 @@ describe('pagination', () => {
   it('stops when hasMorePath is false', () => {
     const result = extractPage(
       { usageEvents: [{ id: '1' }], pagination: { hasNextPage: false } },
-      { type: 'page', itemsPath: 'usageEvents', hasMorePath: 'pagination.hasNextPage', pageSize: 100 },
+      {
+        type: 'page',
+        itemsPath: 'usageEvents',
+        hasMorePath: 'pagination.hasNextPage',
+        pageSize: 100,
+      },
     );
     expect(result.hasMore).toBe(false);
   });
@@ -70,7 +75,11 @@ describe('pagination', () => {
   });
 
   it('builds page params', () => {
-    const params = buildPaginationParams({ type: 'page', pageParam: 'page', limitParam: 'limit' }, { page: 2 }, 50);
+    const params = buildPaginationParams(
+      { type: 'page', pageParam: 'page', limitParam: 'limit' },
+      { page: 2 },
+      50,
+    );
     expect(params).toEqual({ page: '2', limit: '50' });
   });
 

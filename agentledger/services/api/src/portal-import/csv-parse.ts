@@ -15,11 +15,19 @@ export function detectDelimiter(text: string): ',' | ';' | '\t' {
   const counts = { ',': 0, ';': 0, '\t': 0 };
   let inQuotes = false;
   for (const ch of line) {
-    if (ch === '"') inQuotes = !inQuotes;
-    if (!inQuotes && ch in counts) counts[ch as keyof typeof counts]++;
+    if (ch === '"') {
+      inQuotes = !inQuotes;
+    }
+    if (!inQuotes && ch in counts) {
+      counts[ch as keyof typeof counts]++;
+    }
   }
-  if (counts[';'] > counts[','] && counts[';'] > counts['\t']) return ';';
-  if (counts['\t'] > counts[',']) return '\t';
+  if (counts[';'] > counts[','] && counts[';'] > counts['\t']) {
+    return ';';
+  }
+  if (counts['\t'] > counts[',']) {
+    return '\t';
+  }
   return ',';
 }
 
@@ -61,11 +69,15 @@ export function parseCsv(text: string, delimiter = ','): string[][] {
       continue;
     }
     if (ch === '\n' || ch === '\r') {
-      if (ch === '\r' && text[i + 1] === '\n') i++;
+      if (ch === '\r' && text[i + 1] === '\n') {
+        i++;
+      }
       row.push(field.trim());
       if (row.some((c) => c !== '')) {
         rows.push(row);
-        if (rows.length >= MAX_CSV_ROWS) break;
+        if (rows.length >= MAX_CSV_ROWS) {
+          break;
+        }
       }
       row = [];
       field = '';
@@ -76,7 +88,9 @@ export function parseCsv(text: string, delimiter = ','): string[][] {
     i++;
   }
   row.push(field.trim());
-  if (row.some((c) => c !== '') && rows.length < MAX_CSV_ROWS) rows.push(row);
+  if (row.some((c) => c !== '') && rows.length < MAX_CSV_ROWS) {
+    rows.push(row);
+  }
   return rows;
 }
 

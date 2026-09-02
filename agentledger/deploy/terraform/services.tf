@@ -31,10 +31,11 @@ locals {
   ch_pass_secret = "${module.clickhouse_secret.secret_arn}:password::"
 
   # Browser-facing origin (OIDC login links). No path suffix — ALB matches Nest
-  # paths (/auth/*, /v1/*, …) directly. Prefer custom domain; else CloudFront.
+  # paths (/auth/*, /v1/*, …) directly. Prefer the canonical public hostname,
+  # then a Terraform-provisioned custom domain, then the CloudFront hostname.
   public_url = (
-    var.enable_custom_domain
-    ? "https://${var.environment}.${var.domain_name}"
+    local.public_hostname != ""
+    ? "https://${local.public_hostname}"
     : "https://${aws_cloudfront_distribution.main[0].domain_name}"
   )
 }
@@ -105,6 +106,8 @@ module "api" {
       # Pilot analytics live in Postgres (023_analytics_mvp.sql), not ClickHouse.
       # Without this the API defaults to ClickHouse and overview/connectors go empty.
       BADGERIQ_ANALYTICS_BACKEND = "postgres"
+      # Dashboard session length after SSO (access JWT + al_access cookie).
+      BADGERIQ_JWT_ACCESS_TTL = "8h"
       # Design-partner → attribution engine via Cloud Map (not localhost).
       BADGERIQ_ATTRIBUTION_WORKER_URL = "http://attribution.badgeriq.local:8096"
     },
@@ -127,9 +130,10 @@ module "api" {
   expose_via_alb   = true
   alb_listener_arn = local.alb_service_listener_arn
   # Nest has no setGlobalPrefix — controllers mount at /auth, /v1/*, /scim/v2,
-  # /healthz, /readyz (and /metrics, /docs internally). /scim/* has its own
-  # higher-priority listener rule below. ALB max 5 path values per rule.
-  alb_path_patterns = ["/auth/*", "/v1/*", "/healthz", "/readyz"]
+  # /healthz, /readyz (and /metrics, /docs internally). AWS allows at most five
+  # values across all conditions in one rule. Two host values leave room for
+  # only three paths, so health endpoints use the dedicated rule below.
+  alb_path_patterns = ["/auth/*", "/v1/*"]
   alb_host_headers  = local.allowed_host_headers
   alb_priority      = 20
 
@@ -142,6 +146,32 @@ module "api" {
   cloudmap_namespace_id      = local.svc_common.cloudmap_namespace_id
   registry_secret_arn        = local.svc_common.registry_secret_arn
   tags                       = local.svc_common.tags
+}
+
+# API health endpoints share the API target group but need a separate listener
+# rule to stay within ALB's five condition-value limit (2 paths + 2 hosts).
+resource "aws_lb_listener_rule" "api_health" {
+  listener_arn = local.alb_service_listener_arn
+  priority     = 21
+
+  action {
+    type             = "forward"
+    target_group_arn = module.api.target_group_arn
+  }
+
+  condition {
+    path_pattern {
+      values = ["/healthz", "/readyz"]
+    }
+  }
+
+  condition {
+    host_header {
+      values = local.allowed_host_headers
+    }
+  }
+
+  tags = local.tags
 }
 
 # SCIM lifecycle (/scim/v2) — dedicated higher-priority rule. Auth stays at the

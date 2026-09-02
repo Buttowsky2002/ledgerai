@@ -27,7 +27,10 @@ export class ReportsController {
 
       if (format === 'xlsx') {
         const buf = await generateExecutiveXlsx(data);
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader(
+          'Content-Type',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        );
         res.setHeader(
           'Content-Disposition',
           `attachment; filename="executive-report-${data.window.from}-${data.window.to}.xlsx"`,
@@ -48,7 +51,10 @@ export class ReportsController {
       );
       res.send(buf);
     } catch (err) {
-      this.log.error(`executive export failed format=${format} from=${q.from} to=${q.to}`, err instanceof Error ? err.stack : err);
+      this.log.error(
+        `executive export failed format=${format} from=${q.from} to=${q.to}`,
+        err instanceof Error ? err.stack : err,
+      );
       throw err;
     }
   }

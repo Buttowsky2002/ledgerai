@@ -76,8 +76,24 @@ export interface ImportFlatRow {
 }
 
 const RECORD_TYPE_TARGETS: Record<DestinationRecordType, string[]> = {
-  spend_usage_record: ['cost_usd', 'provider', 'model', 'input_tokens', 'output_tokens', 'user_id', 'user_email'],
-  llm_call_record: ['cost_usd', 'provider', 'model', 'input_tokens', 'output_tokens', 'user_id', 'agent_id'],
+  spend_usage_record: [
+    'cost_usd',
+    'provider',
+    'model',
+    'input_tokens',
+    'output_tokens',
+    'user_id',
+    'user_email',
+  ],
+  llm_call_record: [
+    'cost_usd',
+    'provider',
+    'model',
+    'input_tokens',
+    'output_tokens',
+    'user_id',
+    'agent_id',
+  ],
   coding_activity_record: [
     'tool_name',
     'user_id',
@@ -149,8 +165,12 @@ function flattenKeys(obj: Record<string, unknown>, prefix = ''): Record<string, 
 function scoreMapping(source: string, target: string, value: unknown): number {
   const s = source.toLowerCase();
   const t = target.toLowerCase();
-  if (s.endsWith(t) || s === t) return 0.95;
-  if (s.includes(t.replace(/_/g, '')) || s.includes(t)) return 0.8;
+  if (s.endsWith(t) || s === t) {
+    return 0.95;
+  }
+  if (s.includes(t.replace(/_/g, '')) || s.includes(t)) {
+    return 0.8;
+  }
   const aliases: Record<string, string[]> = {
     cost_usd: ['cost', 'spend', 'amount', 'price', 'total_cost'],
     input_tokens: ['prompt_tokens', 'input', 'tokens_in'],
@@ -161,9 +181,15 @@ function scoreMapping(source: string, target: string, value: unknown): number {
     outcome_type: ['type', 'event_type'],
   };
   const list = aliases[target] ?? [];
-  if (list.some((a) => s.includes(a))) return 0.75;
-  if (target.includes('token') && typeof value === 'number') return 0.4;
-  if (target.includes('cost') && typeof value === 'number') return 0.4;
+  if (list.some((a) => s.includes(a))) {
+    return 0.75;
+  }
+  if (target.includes('token') && typeof value === 'number') {
+    return 0.4;
+  }
+  if (target.includes('cost') && typeof value === 'number') {
+    return 0.4;
+  }
   return 0;
 }
 
@@ -197,7 +223,9 @@ export function toImportRow(record: NormalizedRecord): ImportFlatRow {
   const costKeys = ['cost_usd', 'cost', 'spend', 'amount', 'provider_reported_cost'] as const;
   for (const k of costKeys) {
     const raw = m[k];
-    if (raw === undefined || raw === null || raw === '') continue;
+    if (raw === undefined || raw === null || raw === '') {
+      continue;
+    }
     const parsed = parseCurrency(raw);
     if (parsed !== undefined && parsed > 0) {
       row.cost_usd = parsed;
@@ -243,11 +271,15 @@ export function toImportRow(record: NormalizedRecord): ImportFlatRow {
   assign('is_production_branch', 'is_production_branch');
   assign('source_tool', 'source_tool');
 
-  if (!row.provider && record.provider) row.provider = record.provider;
+  if (!row.provider && record.provider) {
+    row.provider = record.provider;
+  }
   if (!row.platform_display_name && row.provider) {
     row.platform_display_name = row.provider;
   }
-  if (!row.status) row.status = 'ok';
+  if (!row.status) {
+    row.status = 'ok';
+  }
 
   return row;
 }

@@ -14,23 +14,27 @@ describe('field-mapper', () => {
   });
 
   it('applies derived field mapping (sum)', () => {
-    const { metrics } = mapFields(
-      { cache_write_tokens_5m: 10, cache_write_tokens_1h: 5 },
-      [{ type: 'derived', target: 'cache_write_tokens', expression: 'cache_write_tokens_5m + cache_write_tokens_1h' }],
-    );
+    const { metrics } = mapFields({ cache_write_tokens_5m: 10, cache_write_tokens_1h: 5 }, [
+      {
+        type: 'derived',
+        target: 'cache_write_tokens',
+        expression: 'cache_write_tokens_5m + cache_write_tokens_1h',
+      },
+    ]);
     expect(metrics.cache_write_tokens).toBe(15);
   });
 
   it('applies derived cents conversion', () => {
-    const { metrics } = mapFields({ amount: 150 }, [{ type: 'derived', target: 'cost_usd', expression: 'amount / 100' }]);
+    const { metrics } = mapFields({ amount: 150 }, [
+      { type: 'derived', target: 'cost_usd', expression: 'amount / 100' },
+    ]);
     expect(metrics.cost_usd).toBe(1.5);
   });
 
   it('uses fallback fields', () => {
-    const { metrics } = mapFields(
-      { spend: 2.5 },
-      [{ type: 'fallback', target: 'cost_usd', sources: ['cost_usd', 'spend', 'amount'] }],
-    );
+    const { metrics } = mapFields({ spend: 2.5 }, [
+      { type: 'fallback', target: 'cost_usd', sources: ['cost_usd', 'spend', 'amount'] },
+    ]);
     expect(metrics.cost_usd).toBe(2.5);
   });
 

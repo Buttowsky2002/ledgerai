@@ -11,7 +11,10 @@ describe('chart-font', () => {
   });
 
   it('embeds font in spend trend SVG and rasterizes readable labels', async () => {
-    const svg = spendTrendSvg([{ costUsd: 10 }, { costUsd: 25 }], [{ costUsd: 5 }], { width: 400, height: 120 });
+    const svg = spendTrendSvg([{ costUsd: 10 }, { costUsd: 25 }], [{ costUsd: 5 }], {
+      width: 400,
+      height: 120,
+    });
     expect(svgEmbedsChartFont(svg)).toBe(true);
     expect(svg).toContain('DejaVu Sans');
     expect(svg).toContain('$25.00');

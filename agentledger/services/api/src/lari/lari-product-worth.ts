@@ -5,11 +5,13 @@
  * import-only tenants. No LLM calls; all figures are advisory estimates.
  */
 import type { LariActionableRecommendation } from './lari-recommendations.types';
-import { compositeMlScore, monthlyFactor, priorityFromScore, utilizationRatio } from './lari-recommendations';
 import {
-  buildBudgetSuggestions,
-  buildSpendNarrative,
-} from './lari-spend-narrative';
+  compositeMlScore,
+  monthlyFactor,
+  priorityFromScore,
+  utilizationRatio,
+} from './lari-recommendations';
+import { buildBudgetSuggestions, buildSpendNarrative } from './lari-spend-narrative';
 import {
   buildDataCoverage,
   buildOutcomeSourceStatus,
@@ -49,7 +51,7 @@ function seatCostForProvider(
   const factor = monthlyFactor(periodDays);
   return plans
     .filter((p) => normalizeProvider(p.provider) === key)
-    .reduce((sum, p) => sum + (p.contractMonthlyCost / factor), 0);
+    .reduce((sum, p) => sum + p.contractMonthlyCost / factor, 0);
 }
 
 function utilizationForProvider(
@@ -146,21 +148,30 @@ function deriveVerdict(
   if (attributedValue > 0 && worthRatio !== null) {
     const basis: ProductConfidenceBasis = 'outcomes';
     const confidence = Math.min(95, 55 + Math.round(worthRatio * 20));
-    if (worthRatio >= 1.0) return { verdict: 'worth_it', confidence, basis };
-    if (worthRatio >= 0.5) return { verdict: 'marginal', confidence: confidence - 10, basis };
+    if (worthRatio >= 1.0) {
+      return { verdict: 'worth_it', confidence, basis };
+    }
+    if (worthRatio >= 0.5) {
+      return { verdict: 'marginal', confidence: confidence - 10, basis };
+    }
     return { verdict: 'not_worth_it', confidence, basis };
   }
 
   if (isCopilot && copilotRoiPct !== undefined) {
     const basis: ProductConfidenceBasis = 'productivity_proxy';
     const confidence = 45;
-    if (copilotRoiPct >= 20) return { verdict: 'worth_it', confidence: 60, basis };
-    if (copilotRoiPct >= 0) return { verdict: 'marginal', confidence, basis };
+    if (copilotRoiPct >= 20) {
+      return { verdict: 'worth_it', confidence: 60, basis };
+    }
+    if (copilotRoiPct >= 0) {
+      return { verdict: 'marginal', confidence, basis };
+    }
     return { verdict: 'not_worth_it', confidence: 55, basis };
   }
 
   if (calls > 0 || util.utilization > 0) {
-    const basis: ProductConfidenceBasis = util.utilization > 0 && attributedValue > 0 ? 'mixed' : 'utilization';
+    const basis: ProductConfidenceBasis =
+      util.utilization > 0 && attributedValue > 0 ? 'mixed' : 'utilization';
     const confidence = Math.round(25 + util.utilization * 35 + (calls > 0 ? 15 : 0));
     if (util.utilization >= 0.65 && calls > 10) {
       return { verdict: 'marginal', confidence, basis };
@@ -180,7 +191,9 @@ function recommendedBudget(
   util: ReturnType<typeof utilizationForProvider>,
   reclaimableMonthly: number,
 ): number | null {
-  if (monthlyRunRate <= 0) return null;
+  if (monthlyRunRate <= 0) {
+    return null;
+  }
 
   switch (verdict) {
     case 'not_worth_it':
@@ -206,8 +219,12 @@ export function buildProductWorthScorecard(
   );
 
   const productKeys = new Set<string>();
-  for (const p of input.providerSpend) productKeys.add(normalizeProvider(p.provider));
-  for (const p of input.subscriptionPlans) productKeys.add(normalizeProvider(p.provider));
+  for (const p of input.providerSpend) {
+    productKeys.add(normalizeProvider(p.provider));
+  }
+  for (const p of input.subscriptionPlans) {
+    productKeys.add(normalizeProvider(p.provider));
+  }
 
   const products: ProductWorthEntry[] = [];
 
@@ -219,12 +236,18 @@ export function buildProductWorthScorecard(
     const meteredSpend = spendRow?.costUsd ?? 0;
     const seatCost = seatCostForProvider(displayName, input.subscriptionPlans, input.periodDays);
     const totalSpend = usd(meteredSpend + seatCost);
-    if (totalSpend <= 0) continue;
+    if (totalSpend <= 0) {
+      continue;
+    }
 
     const attributedValue = ranking?.attributedValueUsd ?? 0;
     const worthRatio =
       totalSpend > 0 && attributedValue > 0 ? usd(attributedValue / totalSpend) : null;
-    const util = utilizationForProvider(displayName, input.subscriptionPlans, input.userUtilization);
+    const util = utilizationForProvider(
+      displayName,
+      input.subscriptionPlans,
+      input.userUtilization,
+    );
     const calls = spendRow?.calls ?? 0;
 
     const { verdict, confidence, basis } = deriveVerdict(
@@ -240,12 +263,13 @@ export function buildProductWorthScorecard(
     const reclaimable = util.inactiveSeats > 0 ? util.seatCost : 0;
     const topDrivers = topDriversForProvider(displayName, input, util);
 
-    const priorRow = input.priorProviderSpend?.find(
-      (p) => normalizeProvider(p.provider) === key,
-    );
+    const priorRow = input.priorProviderSpend?.find((p) => normalizeProvider(p.provider) === key);
     const priorTotal =
       priorRow !== undefined
-        ? usd(priorRow.costUsd + seatCostForProvider(displayName, input.subscriptionPlans, input.periodDays))
+        ? usd(
+            priorRow.costUsd +
+              seatCostForProvider(displayName, input.subscriptionPlans, input.periodDays),
+          )
         : undefined;
 
     const narrative = buildSpendNarrative({
@@ -363,13 +387,15 @@ const VERDICT_LABEL: Record<ProductWorthVerdict, string> = {
 };
 
 /** Product-level worth verdicts as LARI recommendations. */
-export function productWorthRecs(
-  scorecard: ProductWorthResponse,
-): LariActionableRecommendation[] {
+export function productWorthRecs(scorecard: ProductWorthResponse): LariActionableRecommendation[] {
   const recs: LariActionableRecommendation[] = [];
 
   for (const product of scorecard.products) {
-    if (product.verdict === 'worth_it' && product.worthRatio !== null && product.worthRatio >= 1.5) {
+    if (
+      product.verdict === 'worth_it' &&
+      product.worthRatio !== null &&
+      product.worthRatio >= 1.5
+    ) {
       recs.push({
         id: `product-worth-scale-${normalizeProvider(product.product)}`,
         priority: 'low',
@@ -390,7 +416,9 @@ export function productWorthRecs(
       continue;
     }
 
-    if (product.verdict !== 'marginal' && product.verdict !== 'not_worth_it') continue;
+    if (product.verdict !== 'marginal' && product.verdict !== 'not_worth_it') {
+      continue;
+    }
 
     const mlScore = compositeMlScore([
       { weight: 0.5, value: product.verdict === 'not_worth_it' ? 1 : 0.6 },
@@ -438,14 +466,20 @@ export function budgetSuggestionRecs(
   const recs: LariActionableRecommendation[] = [];
 
   for (const product of scorecard.products) {
-    if (product.recommendedBudgetUsd === null) continue;
-    if (product.monthlyRunRateUsd <= 0) continue;
+    if (product.recommendedBudgetUsd === null) {
+      continue;
+    }
+    if (product.monthlyRunRateUsd <= 0) {
+      continue;
+    }
 
     const delta = product.monthlyRunRateUsd - product.recommendedBudgetUsd;
     const isCut = delta > product.monthlyRunRateUsd * 0.05;
     const isIncrease = product.recommendedBudgetUsd > product.monthlyRunRateUsd * 1.05;
 
-    if (!isCut && !isIncrease) continue;
+    if (!isCut && !isIncrease) {
+      continue;
+    }
 
     const mlScore = compositeMlScore([
       { weight: 0.5, value: Math.min(1, Math.abs(delta) / 500) },

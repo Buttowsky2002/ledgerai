@@ -5,7 +5,9 @@ jest.mock('./github-copilot-client');
 
 describe('GitHubCopilotSyncService integration', () => {
   const mockPrisma = {
-    withTenant: jest.fn(async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) => fn(mockTx)),
+    withTenant: jest.fn(async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+      fn(mockTx),
+    ),
   };
   const mockSecrets = { resolveSecret: jest.fn(async () => 'ghp_test') };
   const mockTx: Record<string, Record<string, jest.Mock>> = {
@@ -90,10 +92,7 @@ describe('GitHubCopilotSyncService integration', () => {
       },
     ]);
 
-    const svc = new GitHubCopilotSyncService(
-      mockPrisma as never,
-      mockSecrets as never,
-    );
+    const svc = new GitHubCopilotSyncService(mockPrisma as never, mockSecrets as never);
     const result = await svc.syncConnection('conn-1', 'tenant-1');
 
     expect(result.ok).toBe(true);

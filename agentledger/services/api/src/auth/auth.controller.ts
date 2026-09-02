@@ -23,6 +23,7 @@ import { AuthService } from './auth.service';
 import { Public } from './decorators';
 import { JwtService } from './jwt.service';
 import { OidcService } from './oidc.service';
+import { accessCookieMaxAgeMs, accessTtlSeconds } from './session-ttl';
 
 class UpdateMeDto {
   @IsOptional()
@@ -34,8 +35,6 @@ class UpdateMeDto {
 const ACCESS_COOKIE = 'al_access';
 const REFRESH_COOKIE = 'al_refresh';
 const OIDC_TX_COOKIE = 'al_oidc_tx';
-const ACCESS_TTL_SECONDS = 15 * 60;
-const ACCESS_COOKIE_MAX_AGE_MS = ACCESS_TTL_SECONDS * 1000; // 15 minutes
 const REFRESH_COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 // Classify the IdP issuer into an identities.source label (manual|scim|okta|
@@ -128,11 +127,16 @@ export class AuthController {
    * client that asked for JSON gets the access token in the body instead — the
    * cookies are set either way so the dashboard BFF works without parsing JSON.
    */
-  private completeLogin(req: Request, res: Response, accessToken: string, refreshToken: string): void {
-    res.cookie(ACCESS_COOKIE, accessToken, cookieOpts(ACCESS_COOKIE_MAX_AGE_MS));
+  private completeLogin(
+    req: Request,
+    res: Response,
+    accessToken: string,
+    refreshToken: string,
+  ): void {
+    res.cookie(ACCESS_COOKIE, accessToken, cookieOpts(accessCookieMaxAgeMs()));
     res.cookie(REFRESH_COOKIE, refreshToken, cookieOpts(REFRESH_COOKIE_MAX_AGE_MS));
     if (wantsJsonResponse(req)) {
-      res.json({ access_token: accessToken, token_type: 'Bearer', expires_in: ACCESS_TTL_SECONDS });
+      res.json({ access_token: accessToken, token_type: 'Bearer', expires_in: accessTtlSeconds() });
       return;
     }
     res.redirect(dashboardUrl());
@@ -164,11 +168,15 @@ export class AuthController {
     if (tx.provider !== provider) {
       throw new BadRequestException('provider mismatch');
     }
-    const { email } = await this.oidc.handleCallback(provider, req.query as Record<string, string>, {
-      state: tx.state,
-      nonce: tx.nonce,
-      codeVerifier: tx.codeVerifier,
-    });
+    const { email } = await this.oidc.handleCallback(
+      provider,
+      req.query as Record<string, string>,
+      {
+        state: tx.state,
+        nonce: tx.nonce,
+        codeVerifier: tx.codeVerifier,
+      },
+    );
     const { accessToken, refreshToken } = await this.auth.loginByEmail(email);
     res.clearCookie(OIDC_TX_COOKIE, oidcTxCookieOpts());
     this.completeLogin(req, res, accessToken, refreshToken);
@@ -225,7 +233,12 @@ export class AuthController {
       throw new BadRequestException('IdP no longer configured');
     }
     const { email, sub } = await this.oidc.handleTenantCallback(
-      { idpId: idp.idp_id, issuer: idp.issuer, clientId: idp.client_id, clientSecretRef: idp.client_secret_ref },
+      {
+        idpId: idp.idp_id,
+        issuer: idp.issuer,
+        clientId: idp.client_id,
+        clientSecretRef: idp.client_secret_ref,
+      },
       req.query as Record<string, string>,
       { state: tx.state, nonce: tx.nonce, codeVerifier: tx.codeVerifier },
     );
@@ -263,9 +276,9 @@ export class AuthController {
       throw new UnauthorizedException('no refresh token');
     }
     const { accessToken } = await this.auth.refresh(refreshToken);
-    res.cookie(ACCESS_COOKIE, accessToken, cookieOpts(ACCESS_COOKIE_MAX_AGE_MS));
+    res.cookie(ACCESS_COOKIE, accessToken, cookieOpts(accessCookieMaxAgeMs()));
     // Explicit 200 (no resource created) — Nest defaults POST to 201.
-    res.status(200).json({ ok: true, expires_in: ACCESS_TTL_SECONDS });
+    res.status(200).json({ ok: true, expires_in: accessTtlSeconds() });
   }
 
   /** Clear both session cookies (access + refresh). */

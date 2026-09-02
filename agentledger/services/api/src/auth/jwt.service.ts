@@ -33,7 +33,7 @@ export class JwtService {
       throw new Error('BADGERIQ_JWT_SECRET (or JWT_SECRET) is required');
     }
     this.secret = new TextEncoder().encode(raw);
-    this.accessTtl = env('BADGERIQ_JWT_ACCESS_TTL') ?? '15m';
+    this.accessTtl = env('BADGERIQ_JWT_ACCESS_TTL') ?? '8h';
     this.refreshTtl = env('BADGERIQ_JWT_REFRESH_TTL') ?? '7d';
   }
 
@@ -48,7 +48,11 @@ export class JwtService {
   /** Verify an access token → Principal. Throws 401 on any failure. */
   async verifyAccess(token: string): Promise<Principal> {
     const payload = await this.verify(token, 'access');
-    return { userId: payload.sub ?? null, tenantId: (payload.tid as string) ?? null, role: (payload.role as string) ?? null };
+    return {
+      userId: payload.sub ?? null,
+      tenantId: (payload.tid as string) ?? null,
+      role: (payload.role as string) ?? null,
+    };
   }
 
   /** Verify a refresh token → claims for re-minting. Throws 401 on any failure. */
@@ -57,7 +61,11 @@ export class JwtService {
     if (!payload.sub || !payload.tid) {
       throw new UnauthorizedException('malformed refresh token');
     }
-    return { userId: payload.sub, tenantId: payload.tid as string, role: (payload.role as string) ?? 'viewer' };
+    return {
+      userId: payload.sub,
+      tenantId: payload.tid as string,
+      role: (payload.role as string) ?? 'viewer',
+    };
   }
 
   /**
@@ -85,7 +93,10 @@ export class JwtService {
       .sign(this.secret);
   }
 
-  private async verify(token: string, expectedTyp: 'access' | 'refresh' | 'oidc_tx'): Promise<JWTPayload> {
+  private async verify(
+    token: string,
+    expectedTyp: 'access' | 'refresh' | 'oidc_tx',
+  ): Promise<JWTPayload> {
     let payload: JWTPayload;
     try {
       ({ payload } = await jwtVerify(token, this.secret, { issuer: ISSUER, audience: AUDIENCE }));

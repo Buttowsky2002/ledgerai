@@ -1,8 +1,4 @@
-import {
-  applyAttributionToMetrics,
-  isUnmapped,
-  resolveAttribution,
-} from './attribution-resolver';
+import { applyAttributionToMetrics, isUnmapped, resolveAttribution } from './attribution-resolver';
 import { UNASSIGNED_USER } from '../types/normalized-usage-event';
 
 describe('attribution-resolver', () => {
@@ -19,19 +15,17 @@ describe('attribution-resolver', () => {
   });
 
   it('resolves via API key mapping', () => {
-    const result = resolveAttribution(
-      { api_key_id: 'key-abc' },
-      [{ mappingType: 'api_key', providerKey: 'key-abc', targetUserId: 'user-mapped' }],
-    );
+    const result = resolveAttribution({ api_key_id: 'key-abc' }, [
+      { mappingType: 'api_key', providerKey: 'key-abc', targetUserId: 'user-mapped' },
+    ]);
     expect(result.userId).toBe('user-mapped');
     expect(result.method).toBe('api_key_mapping');
   });
 
   it('resolves via project mapping', () => {
-    const result = resolveAttribution(
-      { project_id: 'proj-1' },
-      [{ mappingType: 'project', providerKey: 'proj-1', targetUserId: 'user-proj' }],
-    );
+    const result = resolveAttribution({ project_id: 'proj-1' }, [
+      { mappingType: 'project', providerKey: 'proj-1', targetUserId: 'user-proj' },
+    ]);
     expect(result.userId).toBe('user-proj');
     expect(result.method).toBe('project_mapping');
   });

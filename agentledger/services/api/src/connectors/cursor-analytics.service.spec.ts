@@ -56,8 +56,12 @@ describe('CursorAnalyticsService.getSpendSummary', () => {
 
   it('does not fold legacy untagged usage into included usage value', async () => {
     const queryScoped = jest.fn(async (sql: string) => {
-      if (sql.includes('GROUP BY model')) return [];
-      if (sql.includes('toDate(ts) AS day')) return [];
+      if (sql.includes('GROUP BY model')) {
+        return [];
+      }
+      if (sql.includes('toDate(ts) AS day')) {
+        return [];
+      }
       return [
         {
           billed_usd: 0,

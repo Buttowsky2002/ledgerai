@@ -31,12 +31,14 @@ export class GitHubCopilotController {
     private readonly memberSpend: CopilotMemberSpendService,
   ) {}
 
-  @Roles('viewer') @Get('overview')
+  @Roles('viewer')
+  @Get('overview')
   overview(@Query('from') from?: string, @Query('to') to?: string) {
     return this.copilot.getOverview(from, to);
   }
 
-  @Roles('viewer') @Get('member-spend')
+  @Roles('viewer')
+  @Get('member-spend')
   memberSpendView(
     @Query('from') from?: string,
     @Query('to') to?: string,
@@ -62,32 +64,38 @@ export class GitHubCopilotController {
     });
   }
 
-  @Roles('viewer') @Get('connections')
+  @Roles('viewer')
+  @Get('connections')
   listConnections() {
     return this.copilot.listConnections();
   }
 
-  @Roles('viewer') @Get('connections/:id')
+  @Roles('viewer')
+  @Get('connections/:id')
   getConnection(@Param('id') id: string) {
     return this.copilot.getConnection(id);
   }
 
-  @Roles('admin') @Post('connections')
+  @Roles('admin')
+  @Post('connections')
   createConnection(@Body() body: CreateConnectionBody) {
     return this.copilot.createConnection(body);
   }
 
-  @Roles('admin') @Post('connections/test-token')
+  @Roles('admin')
+  @Post('connections/test-token')
   testToken(@Body() body: TestTokenBody) {
     return this.copilot.testToken(body.githubToken, body.orgSlug);
   }
 
-  @Roles('admin') @Patch('connections/:id/roi-assumptions')
+  @Roles('admin')
+  @Patch('connections/:id/roi-assumptions')
   updateAssumptions(@Param('id') id: string, @Body() body: UpdateAssumptionsBody) {
     return this.copilot.updateRoiAssumptions(id, body.roiAssumptions);
   }
 
-  @Roles('admin') @Post('connections/:id/sync')
+  @Roles('admin')
+  @Post('connections/:id/sync')
   syncNow(@Param('id') id: string) {
     return this.copilot.syncNow(id);
   }

@@ -45,7 +45,9 @@ export function enrichProductsWithSources(
 ): ProductWorthEntry[] {
   return products.map((p) => {
     const src = spendBySource.get(normalizeProvider(p.product));
-    if (!src) return p;
+    if (!src) {
+      return p;
+    }
     const total = src.portalImportUsd + src.connectorUsd + src.liveUsd;
     const dominant =
       total <= 0
@@ -99,7 +101,8 @@ export function buildDataCoverage(input: CoverageAssemblyInput): DataCoverageSum
     portalImportUsd: usd(portalImportUsd),
     connectorUsd: usd(connectorUsd),
     liveUsd: usd(liveUsd),
-    portalImportSharePct: totalSpendUsd > 0 ? Math.round((portalImportUsd / totalSpendUsd) * 100) : 0,
+    portalImportSharePct:
+      totalSpendUsd > 0 ? Math.round((portalImportUsd / totalSpendUsd) * 100) : 0,
     importOnlyProducts,
     productsWithoutOutcomes,
     totalOutcomes: outcomeStats.totalOutcomes,

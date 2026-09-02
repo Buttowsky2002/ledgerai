@@ -38,15 +38,12 @@ export function calculateCopilotRoi(input: CopilotRoiInput): CopilotRoiResult {
   const completionMinutesSaved = linesAccepted * a.minutesSavedPerAcceptedLine;
   const chatMinutesSaved = chatTurns * a.minutesSavedPerChatTurn;
   const prMinutesSaved = prSummaryCount * a.minutesSavedPerPrSummary;
-  const grossHoursSaved =
-    (completionMinutesSaved + chatMinutesSaved + prMinutesSaved) / 60;
+  const grossHoursSaved = (completionMinutesSaved + chatMinutesSaved + prMinutesSaved) / 60;
   const adjustedHoursSaved = grossHoursSaved * a.qualityAdjustmentFactor;
   const estimatedValue = adjustedHoursSaved * a.avgEngineerHourlyRate;
 
   const roiPercentage =
-    totalCopilotCost > 0
-      ? ((estimatedValue - totalCopilotCost) / totalCopilotCost) * 100
-      : 0;
+    totalCopilotCost > 0 ? ((estimatedValue - totalCopilotCost) / totalCopilotCost) * 100 : 0;
 
   return {
     assignedSeats,

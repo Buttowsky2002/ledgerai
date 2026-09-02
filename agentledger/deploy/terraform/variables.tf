@@ -78,6 +78,34 @@ variable "enable_custom_domain" {
   default     = false
 }
 
+variable "public_hostname" {
+  description = "Canonical browser-facing hostname (without scheme/path). When set, API OIDC redirects, dashboard links, CloudFront aliases, and ALB host rules use this hostname."
+  type        = string
+  default     = ""
+
+  validation {
+    condition = var.public_hostname == "" || (
+      length(var.public_hostname) <= 253 &&
+      can(regex("^[A-Za-z0-9][A-Za-z0-9.-]*[A-Za-z0-9]$", var.public_hostname)) &&
+      !strcontains(var.public_hostname, "..")
+    )
+    error_message = "public_hostname must be empty or a DNS hostname without a scheme, port, path, or consecutive dots."
+  }
+}
+
+variable "cloudfront_certificate_arn" {
+  description = "Optional ACM certificate ARN for CloudFront aliases. The certificate must be in us-east-1. Kept separate from alb_certificate_arn so edge TLS does not change the CloudFront-to-ALB protocol."
+  type        = string
+  default     = ""
+
+  validation {
+    condition = var.cloudfront_certificate_arn == "" || can(
+      regex("^arn:[^:]+:acm:us-east-1:[0-9]{12}:certificate/[A-Za-z0-9-]+$", var.cloudfront_certificate_arn)
+    )
+    error_message = "cloudfront_certificate_arn must be empty or an ACM certificate ARN in us-east-1."
+  }
+}
+
 variable "alb_certificate_arn" {
   description = "Optional pre-existing ACM certificate ARN for the ALB HTTPS listener (us-east-1). When set, HTTPS is enabled even if enable_custom_domain = false."
   type        = string

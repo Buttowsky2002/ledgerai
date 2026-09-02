@@ -2,6 +2,10 @@
 
 **AI FinOps control plane** — spend attribution, agent unit economics, prompt risk, and risk-adjusted ROI in one system of record. Built from `AI_FinOps_Product_Requirements_and_Market_Research.docx`; architecture rationale in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
+## Where the code lives
+
+The authoritative codebase is the [`agentledger/`](agentledger/) directory: the Go services, the NestJS API, the Next.js dashboard, the SDKs, the schemas, and the deploy assets. The repository root only carries meta files (`.github/`, `docs/`, this README, and a delegating `Makefile`). Run `make <target>` from the root and it forwards to [`agentledger/Makefile`](agentledger/Makefile), or work inside `agentledger/` directly. **The paths in the tables and commands below are relative to `agentledger/`.**
+
 ## What's in this repo
 
 | Path | What it is | Status |

@@ -1,0 +1,8 @@
+# Normalize line endings across platforms. Store LF in the repository and check
+# out LF on every OS (Windows included) so tooling that asserts LF is consistent
+# everywhere: Prettier runs with endOfLine "lf", gofmt/golangci-lint expect LF,
+# and CI (Linux) already checks out LF. Without this, a Windows checkout with
+# core.autocrlf=true rewrites files to CRLF and `npm run format:check` fails
+# locally while passing in CI. text=auto lets git auto-detect binary files and
+# leave them untouched.
+* text=auto eol=lf

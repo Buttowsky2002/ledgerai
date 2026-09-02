@@ -44,9 +44,7 @@ describe('GitHubCopilotClient', () => {
   });
 
   it('returns permission hint on 403 for billing summary', async () => {
-    mockFetch.mockResolvedValueOnce(
-      jsonResponse({ message: 'Forbidden' }, 403),
-    );
+    mockFetch.mockResolvedValueOnce(jsonResponse({ message: 'Forbidden' }, 403));
     await expect(client().fetchBilling()).rejects.toMatchObject({
       status: 403,
       hint: expect.stringContaining('seat management'),
@@ -54,18 +52,17 @@ describe('GitHubCopilotClient', () => {
   });
 
   it('paginates seats', async () => {
-    mockFetch
-      .mockResolvedValueOnce(
-        jsonResponse({
-          seats: [
-            {
-              assignee: { id: 1, login: 'alice' },
-              plan_type: 'business',
-              created_at: '2024-01-01T00:00:00Z',
-            },
-          ],
-        }),
-      );
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse({
+        seats: [
+          {
+            assignee: { id: 1, login: 'alice' },
+            plan_type: 'business',
+            created_at: '2024-01-01T00:00:00Z',
+          },
+        ],
+      }),
+    );
     const seats = await client().fetchAllSeats();
     expect(seats).toHaveLength(1);
     expect(seats[0].githubLogin).toBe('alice');
@@ -99,9 +96,7 @@ describe('GitHubCopilotClient', () => {
 
   it('downloads metrics report from signed URL (legacy download_url)', async () => {
     mockFetch
-      .mockResolvedValueOnce(
-        jsonResponse({ download_url: 'https://signed.example/report.json' }),
-      )
+      .mockResolvedValueOnce(jsonResponse({ download_url: 'https://signed.example/report.json' }))
       .mockResolvedValueOnce(
         jsonResponse(
           [
@@ -125,9 +120,7 @@ describe('GitHubCopilotClient', () => {
 
   it('throws on expired report URL', async () => {
     mockFetch
-      .mockResolvedValueOnce(
-        jsonResponse({ download_url: 'https://signed.example/expired.json' }),
-      )
+      .mockResolvedValueOnce(jsonResponse({ download_url: 'https://signed.example/expired.json' }))
       .mockResolvedValueOnce(jsonResponse({ message: 'gone' }, 403));
     await expect(client().fetchOrg28DayUsage()).rejects.toBeInstanceOf(GitHubCopilotApiError);
   });

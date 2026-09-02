@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { getTenantId } from '../tenant/tenant-context';
@@ -57,7 +53,9 @@ export class GitHubCopilotService {
     const row = await this.prisma.withTenant(tenantId, (tx) =>
       tx.aiProviderConnection.findUnique({ where: { connectionId } }),
     );
-    if (!row) throw new NotFoundException('connection not found');
+    if (!row) {
+      throw new NotFoundException('connection not found');
+    }
     const connector = await this.prisma.withTenant(tenantId, (tx) =>
       tx.connector.findUnique({ where: { connectorId: row.connectorId } }),
     );
@@ -67,8 +65,12 @@ export class GitHubCopilotService {
   async createConnection(dto: CreateCopilotConnectionDto): Promise<CopilotConnectionStatus> {
     const tenantId = this.requireTenant();
     const orgSlug = dto.orgSlug.trim().toLowerCase();
-    if (!orgSlug) throw new BadRequestException('orgSlug is required');
-    if (!dto.githubToken?.trim()) throw new BadRequestException('githubToken is required');
+    if (!orgSlug) {
+      throw new BadRequestException('orgSlug is required');
+    }
+    if (!dto.githubToken?.trim()) {
+      throw new BadRequestException('githubToken is required');
+    }
 
     const client = new GitHubCopilotClient({ token: dto.githubToken.trim(), orgSlug });
     try {
@@ -77,7 +79,9 @@ export class GitHubCopilotService {
       const apiErr = err instanceof GitHubCopilotApiError ? err : null;
       throw new BadRequestException({
         message: apiErr?.message ?? 'GitHub token validation failed',
-        hint: apiErr?.hint ?? 'Provide a token with Members (read), Copilot metrics (read), and Copilot seat management (read) for the organization.',
+        hint:
+          apiErr?.hint ??
+          'Provide a token with Members (read), Copilot metrics (read), and Copilot seat management (read) for the organization.',
         code: apiErr?.code ?? 'token_invalid',
       });
     }
@@ -142,7 +146,9 @@ export class GitHubCopilotService {
     const existing = await this.prisma.withTenant(tenantId, (tx) =>
       tx.aiProviderConnection.findUnique({ where: { connectionId } }),
     );
-    if (!existing) throw new NotFoundException('connection not found');
+    if (!existing) {
+      throw new NotFoundException('connection not found');
+    }
 
     const merged = mergeRoiAssumptions({
       ...(existing.roiAssumptions as Partial<CopilotRoiAssumptions>),
@@ -161,9 +167,17 @@ export class GitHubCopilotService {
     return this.toStatus(updated, connector?.status ?? 'unknown');
   }
 
-  async testToken(token: string, orgSlug: string): Promise<{ ok: boolean; orgName?: string; hint?: string }> {
-    if (!token?.trim()) throw new BadRequestException('token is required');
-    const client = new GitHubCopilotClient({ token: token.trim(), orgSlug: orgSlug.trim().toLowerCase() });
+  async testToken(
+    token: string,
+    orgSlug: string,
+  ): Promise<{ ok: boolean; orgName?: string; hint?: string }> {
+    if (!token?.trim()) {
+      throw new BadRequestException('token is required');
+    }
+    const client = new GitHubCopilotClient({
+      token: token.trim(),
+      orgSlug: orgSlug.trim().toLowerCase(),
+    });
     try {
       const result = await client.validateToken();
       return { ok: true, orgName: result.orgName };
@@ -195,7 +209,8 @@ export class GitHubCopilotService {
         charts: null,
         findings: [],
         connections: [],
-        disclaimer: 'ROI figures are estimates based on configurable assumptions — not exact productivity measures.',
+        disclaimer:
+          'ROI figures are estimates based on configurable assumptions — not exact productivity measures.',
       };
     }
 
@@ -226,14 +241,19 @@ export class GitHubCopilotService {
     );
 
     const activeSeats = seats.filter((s) => {
-      if (!s.isActive) return false;
-      if (!s.lastActivityAt) return false;
+      if (!s.isActive) {
+        return false;
+      }
+      if (!s.lastActivityAt) {
+        return false;
+      }
       return (Date.now() - s.lastActivityAt.getTime()) / 86_400_000 <= 28;
     }).length;
     const inactiveSeats = seats.filter((s) => s.isActive).length - activeSeats;
 
     const aiCreditsUsed = usage.reduce((s, u) => s + Number(u.aiCreditsUsed), 0);
-    const includedCredits = seats.filter((s) => s.isActive).length * assumptions.includedCreditsPerSeat;
+    const includedCredits =
+      seats.filter((s) => s.isActive).length * assumptions.includedCreditsPerSeat;
     const creditUtilizationPct = includedCredits > 0 ? (aiCreditsUsed / includedCredits) * 100 : 0;
 
     const assignedSeatCount = seats.filter((s) => s.isActive).length;
@@ -271,9 +291,14 @@ export class GitHubCopilotService {
     };
 
     const charts = this.buildCharts(seats, usage, roiRows);
-    const userUsageMap = new Map<string, { aiCreditsUsed: number; linesAccepted: number; acceptancesCount: number; teamSlug: string }>();
+    const userUsageMap = new Map<
+      string,
+      { aiCreditsUsed: number; linesAccepted: number; acceptancesCount: number; teamSlug: string }
+    >();
     for (const u of usage) {
-      if (!u.githubLogin) continue;
+      if (!u.githubLogin) {
+        continue;
+      }
       const cur = userUsageMap.get(u.githubLogin) ?? {
         aiCreditsUsed: 0,
         linesAccepted: 0,
@@ -286,7 +311,10 @@ export class GitHubCopilotService {
       userUsageMap.set(u.githubLogin, cur);
     }
 
-    const teamRoiMap = new Map<string, { roiPercentage: number; assignedSeats: number; activeSeats: number }>();
+    const teamRoiMap = new Map<
+      string,
+      { roiPercentage: number; assignedSeats: number; activeSeats: number }
+    >();
     for (const r of roiRows) {
       const team = r.teamSlug || '(org)';
       teamRoiMap.set(team, {
@@ -314,7 +342,8 @@ export class GitHubCopilotService {
       })),
       teamRoi: [...teamRoiMap.entries()].map(([teamSlug, t]) => ({ teamSlug, ...t })),
       assumptions,
-      includedCreditsPerUser: assumptions.includedCreditsPerSeat ?? DEFAULT_INCLUDED_CREDITS_PER_SEAT,
+      includedCreditsPerUser:
+        assumptions.includedCreditsPerSeat ?? DEFAULT_INCLUDED_CREDITS_PER_SEAT,
     });
 
     const connectionStatuses = await this.listConnections();
@@ -333,7 +362,12 @@ export class GitHubCopilotService {
   }
 
   private buildCharts(
-    seats: { assigningTeamSlug: string | null; isActive: boolean; lastActivityAt: Date | null; monthlySeatCost: unknown }[],
+    seats: {
+      assigningTeamSlug: string | null;
+      isActive: boolean;
+      lastActivityAt: Date | null;
+      monthlySeatCost: unknown;
+    }[],
     usage: {
       teamSlug: string;
       feature: string;
@@ -347,10 +381,23 @@ export class GitHubCopilotService {
       activeUsers: number;
       engagedUsers: number;
     }[],
-    roiRows: { teamSlug: string; totalCopilotCost: unknown; roiPercentage: unknown; estimatedValue: unknown }[],
+    roiRows: {
+      teamSlug: string;
+      totalCopilotCost: unknown;
+      roiPercentage: unknown;
+      estimatedValue: unknown;
+    }[],
   ): CopilotOverviewCharts {
-    const spendByTeam = aggregateBy(roiRows, (r) => r.teamSlug || '(org)', (r) => Number(r.totalCopilotCost));
-    const usageByFeature = aggregateBy(usage, (u) => u.feature || '(unknown)', (u) => u.linesAccepted + u.chatTurns);
+    const spendByTeam = aggregateBy(
+      roiRows,
+      (r) => r.teamSlug || '(org)',
+      (r) => Number(r.totalCopilotCost),
+    );
+    const usageByFeature = aggregateBy(
+      usage,
+      (u) => u.feature || '(unknown)',
+      (u) => u.linesAccepted + u.chatTurns,
+    );
     const aiCreditsByUser = aggregateBy(
       usage.filter((u) => u.githubLogin),
       (u) => u.githubLogin,
@@ -377,11 +424,14 @@ export class GitHubCopilotService {
       { bucket: 'Inactive 30d+', seats: 0, wasteUsd: 0 },
     ];
     for (const s of seats) {
-      if (!s.isActive) continue;
+      if (!s.isActive) {
+        continue;
+      }
       const cost = Number(s.monthlySeatCost);
       const days = s.lastActivityAt ? (now - s.lastActivityAt.getTime()) / 86_400_000 : Infinity;
-      if (days <= 14) seatWaste[0].seats += 1;
-      else if (days < 30) {
+      if (days <= 14) {
+        seatWaste[0].seats += 1;
+      } else if (days < 30) {
         seatWaste[1].seats += 1;
         seatWaste[1].wasteUsd += cost;
       } else {
@@ -390,16 +440,19 @@ export class GitHubCopilotService {
       }
     }
 
-    const roiByTeam = aggregateBy(roiRows, (r) => r.teamSlug || '(org)', (r) => Number(r.roiPercentage))
-      .map((r) => ({
-        team: r.key,
-        roiPct: round2(r.count),
-        estimatedValue: round2(
-          roiRows
-            .filter((x) => (x.teamSlug || '(org)') === r.key)
-            .reduce((s, x) => s + Number(x.estimatedValue), 0),
-        ),
-      }));
+    const roiByTeam = aggregateBy(
+      roiRows,
+      (r) => r.teamSlug || '(org)',
+      (r) => Number(r.roiPercentage),
+    ).map((r) => ({
+      team: r.key,
+      roiPct: round2(r.count),
+      estimatedValue: round2(
+        roiRows
+          .filter((x) => (x.teamSlug || '(org)') === r.key)
+          .reduce((s, x) => s + Number(x.estimatedValue), 0),
+      ),
+    }));
 
     const adoptionByDay = new Map<string, { activeUsers: number; engagedUsers: number }>();
     for (const u of usage) {
@@ -411,7 +464,11 @@ export class GitHubCopilotService {
     }
     const adoptionTrend = [...adoptionByDay.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([day, v]) => ({ day: day.slice(5), activeUsers: v.activeUsers, engagedUsers: v.engagedUsers }));
+      .map(([day, v]) => ({
+        day: day.slice(5),
+        activeUsers: v.activeUsers,
+        engagedUsers: v.engagedUsers,
+      }));
 
     return {
       spendByTeam: spendByTeam.map((r) => ({ team: r.key, spend: round2(r.count) })),
@@ -455,7 +512,9 @@ export class GitHubCopilotService {
 
   private requireTenant(): string {
     const tenantId = getTenantId();
-    if (!tenantId) throw new BadRequestException('no tenant in context');
+    if (!tenantId) {
+      throw new BadRequestException('no tenant in context');
+    }
     return tenantId;
   }
 }

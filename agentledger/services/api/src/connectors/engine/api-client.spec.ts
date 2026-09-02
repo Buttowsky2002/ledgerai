@@ -1,4 +1,9 @@
-import { buildAuthHeaders, executeRequest, resetRateLimitClock, executeWithRetry } from './api-client';
+import {
+  buildAuthHeaders,
+  executeRequest,
+  resetRateLimitClock,
+  executeWithRetry,
+} from './api-client';
 import { ConnectorDefinition } from '../types/connector-definition';
 
 const baseDef: ConnectorDefinition = {
@@ -21,9 +26,17 @@ describe('api-client auth headers', () => {
       text: async () => JSON.stringify({ data: [] }),
     });
     resetRateLimitClock();
-    await executeRequest(def, { apiKey: 'key-123' }, {
-      tenant_id: 't1', connector_id: 'c1', sync_start: '', sync_end: '', now: '',
-    });
+    await executeRequest(
+      def,
+      { apiKey: 'key-123' },
+      {
+        tenant_id: 't1',
+        connector_id: 'c1',
+        sync_start: '',
+        sync_end: '',
+        now: '',
+      },
+    );
     const call = (global.fetch as jest.Mock).mock.calls[0];
     const headers = call[1].headers as Record<string, string>;
     expect(headers['x-api-key']).toBe('key-123');
@@ -37,26 +50,38 @@ describe('api-client auth headers', () => {
       text: async () => JSON.stringify({ data: [] }),
     });
     resetRateLimitClock();
-    await executeRequest(def, { bearerToken: 'tok-abc' }, {
-      tenant_id: 't1', connector_id: 'c1', sync_start: '', sync_end: '', now: '',
-    });
+    await executeRequest(
+      def,
+      { bearerToken: 'tok-abc' },
+      {
+        tenant_id: 't1',
+        connector_id: 'c1',
+        sync_start: '',
+        sync_end: '',
+        now: '',
+      },
+    );
     const call = (global.fetch as jest.Mock).mock.calls[0];
     expect(call[1].headers.Authorization).toBe('Bearer tok-abc');
   });
 
   it('builds custom header auth', () => {
-    const headers = buildAuthHeaders('custom_header', { customHeader: { name: 'X-Custom', value: 'val' } });
+    const headers = buildAuthHeaders('custom_header', {
+      customHeader: { name: 'X-Custom', value: 'val' },
+    });
     expect(headers['X-Custom']).toBe('val');
   });
 
   it('encodes array-style query param keys', async () => {
     const def: ConnectorDefinition = {
       ...baseDef,
-      endpoints: [{
-        path: '/cost_report',
-        method: 'GET',
-        queryParams: { 'group_by[]': 'model', limit: '7' },
-      }],
+      endpoints: [
+        {
+          path: '/cost_report',
+          method: 'GET',
+          queryParams: { 'group_by[]': 'model', limit: '7' },
+        },
+      ],
     };
     global.fetch = jest.fn().mockResolvedValue({
       status: 200,
@@ -64,9 +89,17 @@ describe('api-client auth headers', () => {
       text: async () => JSON.stringify({ data: [] }),
     });
     resetRateLimitClock();
-    await executeRequest(def, {}, {
-      tenant_id: 't1', connector_id: 'c1', sync_start: '', sync_end: '', now: '',
-    });
+    await executeRequest(
+      def,
+      {},
+      {
+        tenant_id: 't1',
+        connector_id: 'c1',
+        sync_start: '',
+        sync_end: '',
+        now: '',
+      },
+    );
     const call = (global.fetch as jest.Mock).mock.calls[0];
     expect(String(call[0])).toContain('group_by%5B%5D=model');
   });
@@ -81,7 +114,11 @@ describe('api-client error handling', () => {
     });
     resetRateLimitClock();
     await expect(
-      executeWithRetry(baseDef, {}, { tenant_id: 't', connector_id: 'c', sync_start: '', sync_end: '', now: '' }),
+      executeWithRetry(
+        baseDef,
+        {},
+        { tenant_id: 't', connector_id: 'c', sync_start: '', sync_end: '', now: '' },
+      ),
     ).rejects.toMatchObject({ code: 'AUTH_FAILED' });
   });
 
@@ -89,7 +126,8 @@ describe('api-client error handling', () => {
     global.fetch = jest.fn().mockResolvedValue({
       status: 429,
       headers: new Headers({ 'retry-after': '0' }),
-      text: async () => JSON.stringify({ error: { type: 'rate_limit_error', message: 'too many' } }),
+      text: async () =>
+        JSON.stringify({ error: { type: 'rate_limit_error', message: 'too many' } }),
     });
     resetRateLimitClock();
     await expect(

@@ -7,12 +7,14 @@ import { OutcomesService } from './outcomes.service';
 export class OutcomesController {
   constructor(private readonly outcomes: OutcomesService) {}
 
-  @Roles('viewer') @Get()
+  @Roles('viewer')
+  @Get()
   list(@Query() q: ListOutcomesQueryDto) {
     return this.outcomes.list(q);
   }
 
-  @Roles('analyst') @Post()
+  @Roles('analyst')
+  @Post()
   create(@Body() dto: CreateOutcomeDto) {
     return this.outcomes.create(dto);
   }

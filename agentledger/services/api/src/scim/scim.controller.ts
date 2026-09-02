@@ -50,7 +50,11 @@ export class ScimController {
       sort: { supported: false },
       etag: { supported: false },
       authenticationSchemes: [
-        { type: 'oauthbearertoken', name: 'OAuth Bearer Token', description: 'Per-tenant SCIM bearer token' },
+        {
+          type: 'oauthbearertoken',
+          name: 'OAuth Bearer Token',
+          description: 'Per-tenant SCIM bearer token',
+        },
       ],
     };
   }
@@ -59,8 +63,20 @@ export class ScimController {
   @Header('Content-Type', 'application/scim+json')
   resourceTypes() {
     return [
-      { schemas: ['urn:ietf:params:scim:schemas:core:2.0:ResourceType'], id: 'User', name: 'User', endpoint: '/Users', schema: 'urn:ietf:params:scim:schemas:core:2.0:User' },
-      { schemas: ['urn:ietf:params:scim:schemas:core:2.0:ResourceType'], id: 'Group', name: 'Group', endpoint: '/Groups', schema: 'urn:ietf:params:scim:schemas:core:2.0:Group' },
+      {
+        schemas: ['urn:ietf:params:scim:schemas:core:2.0:ResourceType'],
+        id: 'User',
+        name: 'User',
+        endpoint: '/Users',
+        schema: 'urn:ietf:params:scim:schemas:core:2.0:User',
+      },
+      {
+        schemas: ['urn:ietf:params:scim:schemas:core:2.0:ResourceType'],
+        id: 'Group',
+        name: 'Group',
+        endpoint: '/Groups',
+        schema: 'urn:ietf:params:scim:schemas:core:2.0:Group',
+      },
     ];
   }
 
@@ -83,7 +99,13 @@ export class ScimController {
     @Query('startIndex') startIndex?: string,
     @Query('count') count?: string,
   ) {
-    return this.scim.listUsers(ctx(req), parseUserFilter(filter), parseInt1(startIndex, 1), parseCount(count), base(req));
+    return this.scim.listUsers(
+      ctx(req),
+      parseUserFilter(filter),
+      parseInt1(startIndex, 1),
+      parseCount(count),
+      base(req),
+    );
   }
 
   @Get('Users/:id')
@@ -100,13 +122,21 @@ export class ScimController {
 
   @Put('Users/:id')
   @Header('Content-Type', 'application/scim+json')
-  replaceUser(@Req() req: ScimRequest, @Param('id') id: string, @Body() body: Record<string, unknown>) {
+  replaceUser(
+    @Req() req: ScimRequest,
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>,
+  ) {
     return this.scim.replaceUser(ctx(req), id, body, base(req));
   }
 
   @Patch('Users/:id')
   @Header('Content-Type', 'application/scim+json')
-  patchUser(@Req() req: ScimRequest, @Param('id') id: string, @Body() body: Record<string, unknown>) {
+  patchUser(
+    @Req() req: ScimRequest,
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>,
+  ) {
     return this.scim.patchUser(ctx(req), id, parsePatchOrThrow(body), base(req));
   }
 
@@ -120,7 +150,11 @@ export class ScimController {
 
   @Get('Groups')
   @Header('Content-Type', 'application/scim+json')
-  listGroups(@Req() req: ScimRequest, @Query('startIndex') startIndex?: string, @Query('count') count?: string) {
+  listGroups(
+    @Req() req: ScimRequest,
+    @Query('startIndex') startIndex?: string,
+    @Query('count') count?: string,
+  ) {
     return this.scim.listGroups(ctx(req), parseInt1(startIndex, 1), parseCount(count), base(req));
   }
 
@@ -138,13 +172,21 @@ export class ScimController {
 
   @Put('Groups/:id')
   @Header('Content-Type', 'application/scim+json')
-  replaceGroup(@Req() req: ScimRequest, @Param('id') id: string, @Body() body: Record<string, unknown>) {
+  replaceGroup(
+    @Req() req: ScimRequest,
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>,
+  ) {
     return this.scim.replaceGroup(ctx(req), id, body, base(req));
   }
 
   @Patch('Groups/:id')
   @Header('Content-Type', 'application/scim+json')
-  patchGroup(@Req() req: ScimRequest, @Param('id') id: string, @Body() body: Record<string, unknown>) {
+  patchGroup(
+    @Req() req: ScimRequest,
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>,
+  ) {
     return this.scim.patchGroup(ctx(req), id, parsePatchOrThrow(body), base(req));
   }
 
@@ -187,6 +229,9 @@ function parsePatchOrThrow(body: Record<string, unknown>) {
   try {
     return parsePatch(body);
   } catch (e) {
-    throw new HttpException(scimError(400, String(e instanceof Error ? e.message : e), 'invalidValue'), 400);
+    throw new HttpException(
+      scimError(400, String(e instanceof Error ? e.message : e), 'invalidValue'),
+      400,
+    );
   }
 }

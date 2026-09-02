@@ -1,5 +1,8 @@
 import { prorateMonthlyCost } from '../fixed-costs/fixed-cost-prorate';
 
+/** Cursor Team list price when the Admin API has members but no plan/fixed-cost row. */
+export const DEFAULT_CURSOR_SEAT_USD_PER_MONTH = 40;
+
 export interface CursorFixedCostMonthRow {
   period_month: string;
   cost_usd: number;
@@ -16,10 +19,14 @@ export function resolveCursorSeatUnitCost(row: {
   unit_cost_usd: number;
 }): number {
   const unit = Number(row.unit_cost_usd) || 0;
-  if (unit > 0) return unit;
+  if (unit > 0) {
+    return unit;
+  }
   const seats = Number(row.seats) || 0;
   const cost = Number(row.cost_usd) || 0;
-  if (seats > 0 && cost > 0) return cost / seats;
+  if (seats > 0 && cost > 0) {
+    return cost / seats;
+  }
   return 0;
 }
 
@@ -66,7 +73,9 @@ export function computeCursorSeatLicenseFromFixedCosts(
   let total = 0;
   for (const row of sorted) {
     const unit = resolveCursorSeatUnitCost(row);
-    if (unit <= 0) continue;
+    if (unit <= 0) {
+      continue;
+    }
     total += prorateMonthlyCost(unit * activeMembers, String(row.period_month), from, to);
   }
 
@@ -79,7 +88,11 @@ export function computeCursorSeatLicenseFromFixedCosts(
 
 /** Subscription-plan fallback when no fixed-cost rows match. */
 export function computeCursorSeatLicenseFromPlans(
-  plans: { seats_purchased: number; monthly_price_per_user: number; contract_monthly_cost: number }[],
+  plans: {
+    seats_purchased: number;
+    monthly_price_per_user: number;
+    contract_monthly_cost: number;
+  }[],
   activeMembers: number,
   from: string,
   to: string,
@@ -92,7 +105,9 @@ export function computeCursorSeatLicenseFromPlans(
   const planSeats = plans.reduce((s, p) => s + n(p.seats_purchased), 0);
   const monthlyTotal = plans.reduce((s, p) => {
     const contract = n(p.contract_monthly_cost);
-    if (contract > 0) return s + contract;
+    if (contract > 0) {
+      return s + contract;
+    }
     return s + n(p.monthly_price_per_user) * n(p.seats_purchased);
   }, 0);
   const unit = planSeats > 0 ? monthlyTotal / planSeats : n(plans[0]?.monthly_price_per_user);

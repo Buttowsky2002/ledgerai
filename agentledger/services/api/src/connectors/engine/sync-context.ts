@@ -13,7 +13,10 @@ function unixSec(d: Date): string {
   return String(Math.floor(d.getTime() / 1000));
 }
 
-export function buildTemplateContext(ctx: SyncContext, extra?: Partial<TemplateContext>): TemplateContext {
+export function buildTemplateContext(
+  ctx: SyncContext,
+  extra?: Partial<TemplateContext>,
+): TemplateContext {
   const startDay = new Date(utcDayStart(ctx.syncStart));
   const endDay = new Date(utcDayStart(ctx.syncEnd));
   return {

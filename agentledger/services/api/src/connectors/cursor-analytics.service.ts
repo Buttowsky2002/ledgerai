@@ -114,7 +114,11 @@ export class CursorAnalyticsService {
   constructor(private readonly ch: AnalyticsStore) {}
 
   /** Invoice-grade on-demand overage by day (excludes subscription-included usage value). */
-  async getDailyBilledSpend(tenantId: string, from: string, to: string): Promise<CursorDailySpend[]> {
+  async getDailyBilledSpend(
+    tenantId: string,
+    from: string,
+    to: string,
+  ): Promise<CursorDailySpend[]> {
     const rows = await this.ch.queryScoped<{ day: string; cost_usd: unknown; calls: unknown }>(
       `SELECT
          toDate(ts) AS day,
@@ -357,7 +361,11 @@ export class CursorAnalyticsService {
     }));
   }
 
-  async getSpendSummary(tenantId: string, from: string, to: string): Promise<CursorSpendSummary | null> {
+  async getSpendSummary(
+    tenantId: string,
+    from: string,
+    to: string,
+  ): Promise<CursorSpendSummary | null> {
     const params = { tenant: tenantId, from, to };
 
     const [totals, models, daily] = await Promise.all([
@@ -418,7 +426,9 @@ export class CursorAnalyticsService {
     ]);
 
     const row = totals[0];
-    if (!row) return null;
+    if (!row) {
+      return null;
+    }
 
     const legacyUntagged = Number(row.legacy_calls ?? 0) > 0;
     const billedUsd = usd(Number(row.billed_usd ?? 0));
@@ -426,7 +436,9 @@ export class CursorAnalyticsService {
     const usageValueUsd = usd(Number(row.usage_value_usd ?? 0));
     const legacyUsageUsd = usd(Number(row.legacy_usage_usd ?? 0));
     const totalCalls = Number(row.calls ?? 0);
-    if (totalCalls <= 0 && billedUsd <= 0 && usageValueUsd <= 0 && legacyUsageUsd <= 0) return null;
+    if (totalCalls <= 0 && billedUsd <= 0 && usageValueUsd <= 0 && legacyUsageUsd <= 0) {
+      return null;
+    }
 
     const modelMix: CursorModelMixRow[] = models.map((m) => ({
       model: String(m.model || 'default'),

@@ -36,7 +36,13 @@ describe('generateCopilotFindings', () => {
     const findings = generateCopilotFindings({
       seats: [],
       userUsage: [
-        { githubLogin: 'alice', teamSlug: 'eng', aiCreditsUsed: 1800, linesAccepted: 100, acceptancesCount: 50 },
+        {
+          githubLogin: 'alice',
+          teamSlug: 'eng',
+          aiCreditsUsed: 1800,
+          linesAccepted: 100,
+          acceptancesCount: 50,
+        },
       ],
       teamRoi: [],
       assumptions: DEFAULT_ROI_ASSUMPTIONS,

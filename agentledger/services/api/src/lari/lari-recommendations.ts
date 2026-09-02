@@ -47,7 +47,9 @@ function highestCriticalityTier(...tiers: Array<string | null | undefined>): str
   const normalized = tiers
     .map((tier) => tier?.trim().toLowerCase())
     .filter((tier): tier is string => Boolean(tier && tier in CRITICALITY_DAMPENING));
-  if (normalized.length === 0) return 'standard';
+  if (normalized.length === 0) {
+    return 'standard';
+  }
   return normalized.reduce((highest, tier) =>
     CRITICALITY_DAMPENING[tier]! > CRITICALITY_DAMPENING[highest]! ? tier : highest,
   );
@@ -62,13 +64,17 @@ function criticalityFactor(tier: string): { weight: number; value: number } {
 
 /** Seat utilization in [0,1]. */
 export function utilizationRatio(active: number, purchased: number): number {
-  if (purchased <= 0) return 1;
+  if (purchased <= 0) {
+    return 1;
+  }
   return Math.min(1, Math.max(0, active / purchased));
 }
 
 /** Z-score for the last value in a series; returns 0 when variance is zero. */
 export function zScoreLast(values: number[]): number {
-  if (values.length < 3) return 0;
+  if (values.length < 3) {
+    return 0;
+  }
   const slice = values.slice(0, -1);
   const last = values[values.length - 1]!;
   const mean = slice.reduce((s, v) => s + v, 0) / slice.length;
@@ -80,7 +86,9 @@ export function zScoreLast(values: number[]): number {
 /** Simple OLS slope for evenly spaced points (trend per step). */
 export function linearTrendSlope(values: number[]): number {
   const n = values.length;
-  if (n < 2) return 0;
+  if (n < 2) {
+    return 0;
+  }
   const xMean = (n - 1) / 2;
   const yMean = values.reduce((s, v) => s + v, 0) / n;
   let num = 0;
@@ -94,7 +102,9 @@ export function linearTrendSlope(values: number[]): number {
 
 /** Percentile rank in [0,100] — higher = better efficiency. */
 export function percentileRank(score: number, scores: number[]): number {
-  if (scores.length === 0) return 50;
+  if (scores.length === 0) {
+    return 50;
+  }
   const sorted = [...scores].sort((a, b) => a - b);
   const below = sorted.filter((s) => s < score).length;
   return Math.round((below / sorted.length) * 100);
@@ -103,16 +113,24 @@ export function percentileRank(score: number, scores: number[]): number {
 /** Composite ML urgency score from normalized factors in [0,1]. */
 export function compositeMlScore(factors: { weight: number; value: number }[]): number {
   const totalWeight = factors.reduce((s, f) => s + f.weight, 0);
-  if (totalWeight <= 0) return 0;
+  if (totalWeight <= 0) {
+    return 0;
+  }
   const score =
     factors.reduce((s, f) => s + f.weight * Math.min(1, Math.max(0, f.value)), 0) / totalWeight;
   return Math.round(score * 100);
 }
 
 export function priorityFromScore(score: number): RecommendationPriority {
-  if (score >= 80) return 'critical';
-  if (score >= 60) return 'high';
-  if (score >= 35) return 'medium';
+  if (score >= 80) {
+    return 'critical';
+  }
+  if (score >= 60) {
+    return 'high';
+  }
+  if (score >= 35) {
+    return 'medium';
+  }
   return 'low';
 }
 
@@ -135,7 +153,10 @@ export function rankProviders(
       .filter((r) => r.agentId === row.agentId)
       .reduce((s, r) => s + r.costUsd, 0);
     const share = agentTotal > 0 ? row.costUsd / agentTotal : 0;
-    valueByProvider.set(row.provider, (valueByProvider.get(row.provider) ?? 0) + agentValue * share);
+    valueByProvider.set(
+      row.provider,
+      (valueByProvider.get(row.provider) ?? 0) + agentValue * share,
+    );
   }
 
   const rows = providerSpend.map((p) => {
@@ -177,7 +198,8 @@ function seatRecommendations(input: LariRecommendationsInput): LariActionableRec
     );
     const monthlyWaste = subscriptionPlans.reduce((s, p) => {
       const planUnused = Math.max(0, p.seatsPurchased - p.activeSeats);
-      const perSeat = p.seatsPurchased > 0 ? p.contractMonthlyCost / p.seatsPurchased : p.monthlyPricePerUser;
+      const perSeat =
+        p.seatsPurchased > 0 ? p.contractMonthlyCost / p.seatsPurchased : p.monthlyPricePerUser;
       return s + planUnused * perSeat;
     }, 0);
     const mlScore = compositeMlScore([
@@ -192,7 +214,8 @@ function seatRecommendations(input: LariRecommendationsInput): LariActionableRec
       category: 'seat_optimization',
       title: `Remove ${unused} unused seat${unused === 1 ? '' : 's'}`,
       message: `${seatStats.purchased} seats purchased but only ${seatStats.active} active (${Math.round(util * 100)}% utilization).`,
-      action: 'Deprovision unused seats in your provider admin console or reduce contract seat count at renewal.',
+      action:
+        'Deprovision unused seats in your provider admin console or reduce contract seat count at renewal.',
       estimatedSavingsUsd: usd(monthlyWaste),
       mlScore,
       evidence: [
@@ -300,7 +323,8 @@ function planRecommendations(
         category: 'plan_optimization',
         title: `Route workloads from ${expensive.provider} to ${cheapest.provider}`,
         message: `${expensive.provider} costs $${usd(expensive.cpc)}/call vs $${usd(cheapest.cpc)}/call on ${cheapest.provider} (${Math.round(((expensive.cpc - cheapest.cpc) / expensive.cpc) * 100)}% higher).`,
-        action: 'Shift compatible agent workloads to the lower cost-per-call provider via gateway routing or connector config.',
+        action:
+          'Shift compatible agent workloads to the lower cost-per-call provider via gateway routing or connector config.',
         estimatedSavingsUsd: usd(monthlySavings),
         estimatedImpactUsd: usd(savings),
         mlScore,
@@ -334,7 +358,8 @@ function planRecommendations(
         category: 'plan_optimization',
         title: 'Recent spend spike detected',
         message: `Daily spend z-score ${z.toFixed(1)} — usage is significantly above the prior baseline.`,
-        action: 'Review model mix, rate limits, and agent run frequency; consider downgrading models for non-critical paths.',
+        action:
+          'Review model mix, rate limits, and agent run frequency; consider downgrading models for non-critical paths.',
         mlScore,
         evidence: [
           `z_score=${z.toFixed(2)}`,
@@ -350,7 +375,8 @@ function planRecommendations(
         category: 'plan_optimization',
         title: 'Spend trend is rising',
         message: `Linear trend shows +$${usd(slope)}/day increase — project monthly run-rate before it compounds.`,
-        action: 'Set budget alerts and evaluate prepaid vs pay-as-you-go plans at current trajectory.',
+        action:
+          'Set budget alerts and evaluate prepaid vs pay-as-you-go plans at current trajectory.',
         mlScore: compositeMlScore([
           { weight: 1, value: Math.min(1, slope / 30) },
           criticalityFactor(tier),
@@ -402,7 +428,9 @@ function agentEconomicsRecommendations(
 ): LariActionableRecommendation[] {
   const recs: LariActionableRecommendation[] = [];
   const actionable = agents.filter((a) =>
-    ['pause', 'retire', 'investigate', 'require_approval', 'optimize', 'scale'].includes(a.recommendation),
+    ['pause', 'retire', 'investigate', 'require_approval', 'optimize', 'scale'].includes(
+      a.recommendation,
+    ),
   );
 
   for (const agent of actionable) {
@@ -443,7 +471,8 @@ function agentEconomicsRecommendations(
             : agent.recommendation === 'optimize'
               ? `Review model selection and run frequency${agent.topProvider ? ` on ${agent.topProvider}` : ''}.`
               : 'Review agent runs, outcomes, and risk posture in the agent detail view.',
-      estimatedSavingsUsd: savings !== undefined ? usd(savings * monthlyFactor(periodDays)) : undefined,
+      estimatedSavingsUsd:
+        savings !== undefined ? usd(savings * monthlyFactor(periodDays)) : undefined,
       estimatedImpactUsd: usd(agent.costUsd),
       mlScore,
       evidence: [
@@ -474,10 +503,14 @@ function agentEconomicsRecommendations(
   return recs;
 }
 
-function configurationRecommendations(input: LariRecommendationsInput): LariActionableRecommendation[] {
+function configurationRecommendations(
+  input: LariRecommendationsInput,
+): LariActionableRecommendation[] {
   const recs: LariActionableRecommendation[] = [];
   if (input.unmappedCostUsd > 50) {
-    const mlScore = compositeMlScore([{ weight: 1, value: Math.min(1, input.unmappedCostUsd / 500) }]);
+    const mlScore = compositeMlScore([
+      { weight: 1, value: Math.min(1, input.unmappedCostUsd / 500) },
+    ]);
     recs.push({
       id: 'unmapped-spend',
       priority: priorityFromScore(mlScore),
@@ -514,10 +547,14 @@ export function modelSubstitutionRecs(
   }> = [];
 
   for (const row of modelUsage) {
-    if (row.costUsd < MIN_MODEL_SPEND_USD) continue;
+    if (row.costUsd < MIN_MODEL_SPEND_USD) {
+      continue;
+    }
 
     const totalTokens = row.inputTokens + row.outputTokens;
-    if (totalTokens <= 0) continue;
+    if (totalTokens <= 0) {
+      continue;
+    }
 
     const inputShare = row.inputTokens / totalTokens;
     const actualBlendedPerM = (row.costUsd / totalTokens) * 1_000_000;
@@ -528,16 +565,22 @@ export function modelSubstitutionRecs(
       inputShare,
       priceBook,
     );
-    if (alts.length === 0) continue;
+    if (alts.length === 0) {
+      continue;
+    }
 
     const best = alts[0]!;
     const projected = projectedCostUsd(best, row.inputTokens, row.outputTokens);
     const periodSavings = row.costUsd - projected;
-    if (periodSavings <= 0) continue;
+    if (periodSavings <= 0) {
+      continue;
+    }
 
     const monthlySavings = periodSavings * factor;
     const savingsFloor = Math.max(MIN_MONTHLY_SAVINGS_USD, monthlyRunRate * MIN_SAVINGS_SHARE);
-    if (monthlySavings < savingsFloor) continue;
+    if (monthlySavings < savingsFloor) {
+      continue;
+    }
 
     const incumbentRate = resolveModelRate(row.provider, row.model, priceBook);
     const incumbentListBlended = incumbentRate ? blendedRate(incumbentRate, inputShare) : 0;
@@ -589,7 +632,9 @@ export function userValueRecs(
 ): LariActionableRecommendation[] {
   const users = input.userUtilization ?? [];
   const mode = input.perUserMode ?? 'team';
-  if (users.length === 0) return [];
+  if (users.length === 0) {
+    return [];
+  }
 
   const recs: LariActionableRecommendation[] = [];
   const inactiveWithSeat = users.filter((u) => u.hasSeat && u.status === 'inactive');
@@ -733,10 +778,14 @@ export function userValueRecs(
   }
 
   for (const u of users) {
-    if (!u.dailyCost || u.dailyCost.length < 7) continue;
+    if (!u.dailyCost || u.dailyCost.length < 7) {
+      continue;
+    }
     const z = zScoreLast(u.dailyCost);
     const callSlope = u.dailyCalls ? linearTrendSlope(u.dailyCalls) : 0;
-    if (z <= 3 || callSlope > 0) continue;
+    if (z <= 3 || callSlope > 0) {
+      continue;
+    }
 
     const tier = highestCriticalityTier(u.criticalityTier);
     const mlScore = compositeMlScore([
@@ -750,7 +799,8 @@ export function userValueRecs(
       category: 'user_value',
       title: `Cost spike without usage growth — ${u.displayName}`,
       message: `Daily spend z-score ${z.toFixed(1)} while call volume is flat or declining — review license allocation vs metered usage.`,
-      action: 'Audit recent imports and seat assignments; confirm spend is attributed to active platform use.',
+      action:
+        'Audit recent imports and seat assignments; confirm spend is attributed to active platform use.',
       estimatedImpactUsd: usd(u.costUsd),
       mlScore,
       evidence: [

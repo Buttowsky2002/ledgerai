@@ -1,18 +1,16 @@
 import Link from 'next/link';
-import { Badge, Card, DataTable, PageHeader, Stat, num, usd } from '../../../components/ui';
+import { Badge, Card, PageHeader } from '../../../components/ui';
+import { UserVendorDetailTabs } from '../../../components/users/UserVendorDetailTabs';
 import { proxyApi } from '../../../lib/api';
 import { resolveRange } from '../../../lib/resolve-range';
-import { userTotalSpendUsd } from '../../../lib/user-spend';
+import {
+  userVendorTotal,
+  type VendorSpendSlice,
+  type VendorUsageSlice,
+} from '../../../lib/vendor-spend';
+import { usd } from '../../../components/ui';
 
 export const dynamic = 'force-dynamic';
-
-type ModelBreakdown = {
-  model: string;
-  platform: string;
-  spend_usd: number;
-  calls: number;
-  usage_value_usd?: number;
-};
 
 type UserRow = {
   user_id: string;
@@ -21,12 +19,8 @@ type UserRow = {
   team: string;
   resolved: boolean;
   total_spend_usd: number;
-  cursor_on_demand_usd?: number;
-  cursor_included_usd?: number;
-  calls: number;
-  tokens?: number;
-  models: string[];
-  model_breakdown: ModelBreakdown[];
+  vendor_spend?: Record<string, VendorSpendSlice>;
+  vendor_usage?: Record<string, VendorUsageSlice>;
 };
 
 export default async function UserDetailPage({
@@ -39,21 +33,29 @@ export default async function UserDetailPage({
   const { from, to } = resolveRange(searchParams);
   const userId = decodeURIComponent(params.userId);
   const qs = new URLSearchParams({ from, to });
-  const { data } = await proxyApi(`/v1/analytics/users/${encodeURIComponent(userId)}?${qs.toString()}`);
-  const user = (data ?? null) as UserRow | null;
+
+  const [{ data: userData }, { data: listData }] = await Promise.all([
+    proxyApi(`/v1/analytics/users/${encodeURIComponent(userId)}?${qs.toString()}`),
+    proxyApi(`/v1/analytics/users?${qs.toString()}`),
+  ]);
+
+  const user = (userData ?? null) as UserRow | null;
+  const vendors =
+    (listData as { vendors?: string[] } | null)?.vendors ?? Object.keys(user?.vendor_spend ?? {});
 
   if (!user) {
     return (
       <>
         <PageHeader title="User not found" subtitle={userId} />
-        <Link href={`/users?from=${from}&to=${to}`} className="text-sm text-accent hover:text-accent-soft hover:underline">
+        <Link
+          href={`/users?from=${from}&to=${to}`}
+          className="text-sm text-accent hover:text-accent-soft hover:underline"
+        >
           ← Back to users
         </Link>
       </>
     );
   }
-
-  const breakdown = user.model_breakdown ?? [];
 
   return (
     <>
@@ -61,7 +63,10 @@ export default async function UserDetailPage({
         title={user.display_name}
         subtitle={`${from} → ${to}`}
         actions={
-          <Link href={`/users?from=${from}&to=${to}`} className="text-sm text-muted hover:text-white">
+          <Link
+            href={`/users?from=${from}&to=${to}`}
+            className="text-sm text-muted hover:text-white"
+          >
             ← All users
           </Link>
         }
@@ -76,57 +81,20 @@ export default async function UserDetailPage({
         {user.email && <span className="text-sm text-muted">{user.email}</span>}
         {user.team && <span className="text-sm text-muted">Team: {user.team}</span>}
         <span className="text-xs text-muted">ID: {user.user_id}</span>
+        <span className="text-sm text-gray-200">
+          Total AI cost: <span className="num font-medium">{usd(userVendorTotal(user))}</span>
+        </span>
       </div>
 
-      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-5">
-        <Stat
-          label="Total spend"
-          value={usd(userTotalSpendUsd(user))}
-          accent
-          sub="Overage + included usage value"
+      <Card title="Usage by vendor">
+        <UserVendorDetailTabs
+          userId={user.user_id}
+          from={from}
+          to={to}
+          vendors={vendors}
+          vendorSpend={user.vendor_spend ?? {}}
+          vendorUsage={user.vendor_usage ?? {}}
         />
-        <Stat
-          label="Cursor overage"
-          value={usd(user.cursor_on_demand_usd ?? 0)}
-          sub="On-demand invoice"
-        />
-        <Stat
-          label="Cursor included"
-          value={usd(user.cursor_included_usd ?? 0)}
-          sub="Subscription usage value"
-        />
-        <Stat
-          label="Calls"
-          value={num(user.calls)}
-          sub="Metered + Cursor included events"
-        />
-        <Stat label="Tokens" value={num(user.tokens ?? 0)} sub="Input + output + cache" />
-      </div>
-
-      <Card title="Spend by model">
-        {breakdown.length === 0 ? (
-          <p className="text-sm text-muted">—</p>
-        ) : (
-          <DataTable
-            columns={[
-              { key: 'model', label: 'Model' },
-              { key: 'platform', label: 'Platform' },
-              { key: 'spend', label: 'Metered', align: 'right' },
-              { key: 'included', label: 'Cursor included', align: 'right' },
-              { key: 'calls', label: 'Calls', align: 'right' },
-            ]}
-            rows={breakdown.map((row) => ({
-              model: row.model,
-              platform: row.platform,
-              spend: usd(row.spend_usd),
-              included:
-                row.platform.toLowerCase() === 'cursor' && (row.usage_value_usd ?? 0) > 0
-                  ? usd(row.usage_value_usd ?? 0)
-                  : '—',
-              calls: num(row.calls),
-            }))}
-          />
-        )}
       </Card>
     </>
   );

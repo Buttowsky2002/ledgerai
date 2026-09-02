@@ -27,6 +27,16 @@ export function middleware(request: NextRequest) {
 
   const token = request.cookies.get('al_access')?.value;
   if (!token || !isStructurallyValidJwt(token)) {
+    const refresh = request.cookies.get('al_refresh')?.value;
+    if (refresh && request.nextUrl.pathname !== '/api/auth/refresh') {
+      const refreshTarget = request.nextUrl.clone();
+      refreshTarget.pathname = '/api/auth/refresh';
+      refreshTarget.searchParams.set(
+        'next',
+        `${request.nextUrl.pathname}${request.nextUrl.search}`,
+      );
+      return NextResponse.redirect(refreshTarget);
+    }
     const login = request.nextUrl.clone();
     login.pathname = '/login';
     login.search = '';
@@ -39,6 +49,6 @@ export function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     // Everything except login, invite accept (public), Next internals, favicon, health.
-    '/((?!login|invite/accept|api/invites/accept|_next/static|_next/image|favicon.ico|healthz).*)',
+    '/((?!login|invite/accept|api/invites/accept|api/auth/refresh|_next/static|_next/image|favicon.ico|healthz).*)',
   ],
 };

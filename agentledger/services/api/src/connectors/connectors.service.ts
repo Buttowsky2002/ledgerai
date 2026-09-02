@@ -9,7 +9,6 @@ import { AnalyticsStore } from '../analytics-store/analytics-store';
 import { ConnectorDefinitionsService } from './connector-definitions.service';
 import { ConnectorSecretsService } from './connector-secrets.service';
 import { fetchPreviewPage } from './engine/connector-engine';
-import type { ApiCredentials } from './engine/api-client';
 import { sanitizeForPreview, safeErrorMessage } from './engine/sanitizer';
 import { DEFAULT_BACKFILL_DAYS, resolvePreviewWindow, resolveSyncChunks } from './sync-range';
 import {
@@ -30,6 +29,13 @@ import {
   AZURE_DEVOPS_PRESET_ID,
   AzureDevOpsOutcomesService,
 } from './azure-devops/azure-devops-outcomes.service';
+import { listProjectRepos, parseAdoConfig } from './azure-devops/azure-devops-client';
+import {
+  LOCKED_BUILTIN_PRESETS,
+  applyCreateOverrides,
+  parseCredentials,
+  resolveStoredDefinition,
+} from './connector-config.util';
 
 const DEFAULT_CONNECTOR_SCHEDULE = {
   intervalMinutes: DEFAULT_SYNC_INTERVAL_MINUTES,
@@ -45,14 +51,6 @@ const NO_USER_ATTRIBUTION_WARNING =
   'Analytics API key (read:analytics scope) from claude.ai Organization settings. Admin API keys ' +
   '(sk-ant-admin) only support org-level cost_report, not user_cost_report.';
 
-/** Built-in presets — UI must not override auth, URL, or endpoints from stale form defaults. */
-const LOCKED_BUILTIN_PRESETS = new Set([
-  'anthropic-usage',
-  'openai-usage',
-  'cursor-usage',
-  'azure-devops-outcomes',
-]);
-
 function omitSecretRef<T extends { secretRef?: unknown }>(row: T): Omit<T, 'secretRef'> {
   const { secretRef, ...safe } = row;
   void secretRef;
@@ -60,7 +58,7 @@ function omitSecretRef<T extends { secretRef?: unknown }>(row: T): Omit<T, 'secr
 }
 
 /** Reject overlapping syncs unless the prior run looks stale. */
-const SYNC_IN_PROGRESS_MS = 15 * 60 * 1000;
+const SYNC_IN_PROGRESS_MS = 5 * 60 * 1000;
 /** Brief pause between Anthropic 31-day chunks (rate limiter handles per-request spacing). */
 const ANTHROPIC_CHUNK_PAUSE_MS = 4_000;
 
@@ -84,11 +82,17 @@ function incompleteSyncError(errors: SyncRecordError[]): Error & { code: string 
 
 /** True when cost_report returned day buckets but every results[] array is empty. */
 function anthropicCostBucketsEmpty(raw: unknown): boolean {
-  if (!raw || typeof raw !== 'object') return false;
+  if (!raw || typeof raw !== 'object') {
+    return false;
+  }
   const data = (raw as { data?: unknown }).data;
-  if (!Array.isArray(data) || data.length === 0) return false;
+  if (!Array.isArray(data) || data.length === 0) {
+    return false;
+  }
   return data.every((bucket) => {
-    if (!bucket || typeof bucket !== 'object') return true;
+    if (!bucket || typeof bucket !== 'object') {
+      return true;
+    }
     const results = (bucket as { results?: unknown }).results;
     return !Array.isArray(results) || results.length === 0;
   });
@@ -122,47 +126,6 @@ export class ConnectorsService {
     private readonly ch: AnalyticsStore,
     private readonly azureDevOps: AzureDevOpsOutcomesService,
   ) {}
-
-  private applyCreateOverrides(
-    def: ConnectorDefinition,
-    dto: CreateConnectorDto,
-  ): ConnectorDefinition {
-    const cfg = dto.configJson ?? {};
-    const locked =
-      LOCKED_BUILTIN_PRESETS.has(def.id ?? '') || LOCKED_BUILTIN_PRESETS.has(dto.presetId ?? '');
-    const authType = locked
-      ? def.authType
-      : ((cfg.authType as ConnectorDefinition['authType']) ?? def.authType);
-    const isAnthropicBuiltin = def.id === 'anthropic-usage' || dto.presetId === 'anthropic-usage';
-    let endpoints = def.endpoints ? [...def.endpoints] : [];
-    const endpointPath = cfg.endpointPath as string | undefined;
-    if (endpointPath && !isAnthropicBuiltin && !locked) {
-      if (endpoints.length > 0) {
-        endpoints[0] = { ...endpoints[0], path: endpointPath };
-      } else {
-        endpoints = [{ path: endpointPath, method: 'GET' }];
-      }
-    }
-    return {
-      ...def,
-      baseUrl: locked ? def.baseUrl : (dto.baseUrl ?? def.baseUrl),
-      authType,
-      authHeaderName:
-        authType === 'api_key_header' ? (def.authHeaderName ?? 'x-api-key') : def.authHeaderName,
-      endpoints,
-    };
-  }
-
-  private resolveStoredDefinition(cfg: Record<string, unknown>): ConnectorDefinition | undefined {
-    if (!cfg?.definition) return undefined;
-    const def = { ...(cfg.definition as ConnectorDefinition) };
-    if (cfg.baseUrl) def.baseUrl = String(cfg.baseUrl);
-    const endpointPath = cfg.endpointPath as string | undefined;
-    if (endpointPath && def.endpoints?.[0]) {
-      def.endpoints = [{ ...def.endpoints[0], path: endpointPath }];
-    }
-    return def;
-  }
 
   private mergeBuiltinDefinition(kind: string, cfg: Record<string, unknown>): ConnectorDefinition {
     const fresh = this.definitions.getBuiltin(kind);
@@ -221,7 +184,7 @@ export class ConnectorsService {
             status: 'connected',
             lastSyncAt: new Date(),
             lastSyncCompletedAt: new Date(),
-            lastSuccessAt: result.recordsImported > 0 ? new Date() : undefined,
+            lastSuccessAt: new Date(),
             lastError: null,
             lastErrorCode: null,
             lastErrorMessageSafe: null,
@@ -249,7 +212,9 @@ export class ConnectorsService {
         emptyWarning:
           result.recordsFetched === 0
             ? 'Connected, but no completed work items or merged PRs were found in the lookback window. Check organization/project and PAT scopes (Code read, Work Items read).'
-            : undefined,
+            : result.warnings?.length
+              ? result.warnings.join(' ')
+              : undefined,
       };
     } catch (e) {
       const rawMsg = e instanceof Error ? e.message : 'Azure DevOps sync failed';
@@ -294,27 +259,11 @@ export class ConnectorsService {
     if (row.kind && this.definitions.listBuiltin().some((p) => p.id === row.kind)) {
       return this.mergeBuiltinDefinition(row.kind, cfg);
     }
-    const fromConfig = this.resolveStoredDefinition(cfg);
-    if (fromConfig) return fromConfig;
+    const fromConfig = resolveStoredDefinition(cfg);
+    if (fromConfig) {
+      return fromConfig;
+    }
     throw new BadRequestException('connector has no definition');
-  }
-
-  private parseCredentials(secret: string | undefined, authType?: string): ApiCredentials {
-    if (!secret) return {};
-    const trimmed = secret.trim();
-    if (authType === 'basic_auth') {
-      if (!trimmed.includes(':')) {
-        return { username: trimmed, password: '' };
-      }
-      const [username, ...rest] = trimmed.split(':');
-      return { username, password: rest.join(':') };
-    }
-    if (authType === 'custom_header') {
-      const [name, ...rest] = trimmed.split('=');
-      return { customHeader: { name, value: rest.join('=') } };
-    }
-    if (authType === 'bearer_token') return { bearerToken: trimmed };
-    return { apiKey: trimmed };
   }
 
   /** Encrypted connector secret first; Anthropic Admin env fallback for headless sync only. */
@@ -324,7 +273,9 @@ export class ConnectorsService {
     inlineSecret?: string,
   ): Promise<string | undefined> {
     const stored = inlineSecret ?? (await this.secrets.resolveSecret(row.secretRef));
-    if (stored?.trim()) return stored.trim();
+    if (stored?.trim()) {
+      return stored.trim();
+    }
     if (
       (definition.provider === 'anthropic' || row.kind === 'anthropic-usage') &&
       process.env.ANTHROPIC_ADMIN_API_KEY?.trim()
@@ -384,22 +335,26 @@ export class ConnectorsService {
     const row = await this.prisma.withTenant(getTenantId(), (tx) =>
       tx.connector.findUnique({ where: { connectorId: id } }),
     );
-    if (!row) throw new NotFoundException('connector not found');
+    if (!row) {
+      throw new NotFoundException('connector not found');
+    }
     const safe = omitSecretRef(row);
     return safe;
   }
 
   async create(dto: CreateConnectorDto) {
     const tenantId = getTenantId();
-    if (!tenantId) throw new BadRequestException('no tenant in context');
+    if (!tenantId) {
+      throw new BadRequestException('no tenant in context');
+    }
 
     let definitionId = dto.connectorDefinitionId;
     let definition: ConnectorDefinition | undefined;
 
     if (dto.presetId) {
-      definition = this.applyCreateOverrides(this.definitions.getBuiltin(dto.presetId), dto);
+      definition = applyCreateOverrides(this.definitions.getBuiltin(dto.presetId), dto);
     } else if (definitionId) {
-      definition = this.applyCreateOverrides(await this.definitions.get(definitionId), dto);
+      definition = applyCreateOverrides(await this.definitions.get(definitionId), dto);
     }
 
     const secretRef = dto.authSecret?.trim()
@@ -470,13 +425,17 @@ export class ConnectorsService {
       const existing = await this.prisma.withTenant(tenantId!, (tx) =>
         tx.connector.findUnique({ where: { connectorId: id } }),
       );
-      if (existing?.secretRef) await this.secrets.deleteSecret(existing.secretRef);
+      if (existing?.secretRef) {
+        await this.secrets.deleteSecret(existing.secretRef);
+      }
       secretRef = await this.secrets.storeSecret(dto.authSecret.trim());
     }
 
     return this.prisma.withTenant(tenantId!, async (tx) => {
       const before = await tx.connector.findUnique({ where: { connectorId: id } });
-      if (!before) throw new NotFoundException('connector not found');
+      if (!before) {
+        throw new NotFoundException('connector not found');
+      }
 
       const updated = await tx.connector.update({
         where: { connectorId: id },
@@ -512,8 +471,12 @@ export class ConnectorsService {
   async delete(id: string) {
     return this.prisma.withTenant(getTenantId(), async (tx) => {
       const before = await tx.connector.findUnique({ where: { connectorId: id } });
-      if (!before) throw new NotFoundException('connector not found');
-      if (before.secretRef) await this.secrets.deleteSecret(before.secretRef);
+      if (!before) {
+        throw new NotFoundException('connector not found');
+      }
+      if (before.secretRef) {
+        await this.secrets.deleteSecret(before.secretRef);
+      }
       await tx.connector.delete({ where: { connectorId: id } });
       await recordAudit(tx, { action: 'delete', object: `connector:${id}`, before, after: null });
       return { deleted: true };
@@ -534,12 +497,45 @@ export class ConnectorsService {
     const row = await this.prisma.withTenant(getTenantId(), (tx) =>
       tx.connector.findUnique({ where: { connectorId: id } }),
     );
-    if (!row) throw new NotFoundException('connector not found');
+    if (!row) {
+      throw new NotFoundException('connector not found');
+    }
+
+    // ADO uses WIQL/PRs — not the generic REST preview engine.
+    if (row.kind === AZURE_DEVOPS_PRESET_ID) {
+      const definitionBase = await this.resolveDefinition(row);
+      const secret = await this.resolveProviderSecret(row, definitionBase, inlineSecret);
+      if (!secret?.trim()) {
+        throw new BadRequestException('connector has no credentials');
+      }
+      try {
+        const cfg = parseAdoConfig((row.config ?? {}) as Record<string, unknown>);
+        const repos = await listProjectRepos(fetch, { pat: secret.trim() }, cfg);
+        return {
+          ok: true,
+          sampleRecords: repos.slice(0, 5).map((r) => ({
+            id: r.id,
+            name: r.name,
+            record_type: 'azure_devops_repo',
+          })),
+          normalizedPreview: [],
+          errors: [],
+          warning:
+            repos.length === 0
+              ? `PAT authenticated, but no git repos found in ${cfg.organization}/${cfg.project}. Check project name and Code (read) scope.`
+              : `PAT ok — found ${repos.length} repo(s) in ${cfg.organization}/${cfg.project}. Click Sync outcomes to import merged PRs and completed work items.`,
+          previewSpendUsd: 0,
+        };
+      } catch (e) {
+        const msg = safeErrorMessage(e instanceof Error ? e.message : 'ADO preview failed');
+        throw new BadRequestException(msg);
+      }
+    }
 
     const definitionBase = await this.resolveDefinition(row);
     const secret = await this.resolveProviderSecret(row, definitionBase, inlineSecret);
     const definition = applyAnthropicKeyRouting(definitionBase, secret);
-    const creds = this.parseCredentials(secret, definition.authType);
+    const creds = parseCredentials(secret, definition.authType);
 
     const maxDaysPerRequest = definition.syncRange?.maxDaysPerRequest ?? undefined;
     const { syncStart, syncEnd } = resolvePreviewWindow(
@@ -636,13 +632,17 @@ export class ConnectorsService {
     const row = await this.prisma.withTenant(tenantId!, (tx) =>
       tx.connector.findUnique({ where: { connectorId: id } }),
     );
-    if (!row) throw new NotFoundException('connector not found');
+    if (!row) {
+      throw new NotFoundException('connector not found');
+    }
     if (row.kind === 'github-copilot-business') {
       throw new BadRequestException(
         'GitHub Copilot Business uses the dedicated Copilot sync API. Open Overview → GitHub Copilot Business → Sync now, or POST /v1/github-copilot/connections/:connectionId/sync.',
       );
     }
-    if (!row.enabled) throw new BadRequestException('connector is disabled');
+    if (!row.enabled) {
+      throw new BadRequestException('connector is disabled');
+    }
 
     if (row.status === 'syncing' && row.lastSyncStartedAt) {
       const elapsed = Date.now() - row.lastSyncStartedAt.getTime();
@@ -690,7 +690,7 @@ export class ConnectorsService {
       throw new BadRequestException('connector has no credentials');
     }
     const definition = applyAnthropicKeyRouting(definitionBase, secret);
-    const creds = this.parseCredentials(secret, definition.authType);
+    const creds = parseCredentials(secret, definition.authType);
 
     const cfg = (row.config ?? {}) as Record<string, unknown>;
     const handoff = readConnectorHandoff(cfg);
@@ -779,7 +779,9 @@ export class ConnectorsService {
         requestCount += fetched.requestCount;
         allRecords = allRecords.concat(fetched.records);
         allErrors = allErrors.concat(fetched.errors);
-        if (fetched.entities.length > 0) allEntities = fetched.entities;
+        if (fetched.entities.length > 0) {
+          allEntities = fetched.entities;
+        }
         stepsCompleted = fetched.stepsCompleted;
         capabilities = fetched.capabilities;
         usersDetected = fetched.usersDetected;
@@ -801,7 +803,9 @@ export class ConnectorsService {
 
         if (definition.provider !== 'cursor') {
           const importRows = fetched.records.map(toImportRow);
-          if (!importRows.length) continue;
+          if (!importRows.length) {
+            continue;
+          }
           const chunkSummary = await this.importService.importEvents({
             events: importRows as unknown as Record<string, unknown>[],
           });

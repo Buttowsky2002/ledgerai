@@ -1,5 +1,11 @@
 import type { Request } from 'express';
-import { cookieOpts, cookieSameSite, dashboardUrl, oidcTxCookieOpts, wantsJsonResponse } from './auth.controller';
+import {
+  cookieOpts,
+  cookieSameSite,
+  dashboardUrl,
+  oidcTxCookieOpts,
+  wantsJsonResponse,
+} from './auth.controller';
 
 /**
  * Unit coverage for the session-cookie security logic (no DB required). The
@@ -141,7 +147,9 @@ describe('auth cookie helpers', () => {
       }) as unknown as Request;
 
     it('is false for a browser navigation (text/html Accept)', () => {
-      expect(wantsJsonResponse(mk({}, 'text/html,application/xhtml+xml,application/xml;q=0.9'))).toBe(false);
+      expect(
+        wantsJsonResponse(mk({}, 'text/html,application/xhtml+xml,application/xml;q=0.9')),
+      ).toBe(false);
     });
 
     it('is true with ?response=json', () => {

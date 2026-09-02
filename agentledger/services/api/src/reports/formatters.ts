@@ -5,7 +5,9 @@ export const usd = (n: number): number => Math.round((n + Number.EPSILON) * 100)
 
 /** Format currency to cents for tables (always 2 decimals). */
 export function formatUsdExact(n: number): string {
-  if (!Number.isFinite(n)) return '$0.00';
+  if (!Number.isFinite(n)) {
+    return '$0.00';
+  }
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
@@ -16,7 +18,9 @@ export function formatUsdExact(n: number): string {
 
 /** Format currency to cents for display. Humanizes large values in summary contexts. */
 export function formatUsd(n: number): string {
-  if (!Number.isFinite(n)) return '$0.00';
+  if (!Number.isFinite(n)) {
+    return '$0.00';
+  }
   const abs = Math.abs(n);
   if (abs >= 1_000_000) {
     return `${n < 0 ? '-' : ''}$${(abs / 1_000_000).toFixed(1)}M`;
@@ -58,7 +62,9 @@ export function buildOneLiner(data: {
   if (data.totalCost > 0) {
     parts.push(`AI spend was ${formatUsd(data.totalCost)}`);
     const change = formatPeriodChange(data.priorCost, data.totalCost, data.pctChange, formatPct);
-    if (change) parts.push(change);
+    if (change) {
+      parts.push(change);
+    }
   }
   if (data.calls > 0) {
     parts.push(`${formatInt(data.calls)} model calls`);
@@ -77,7 +83,9 @@ export function buildOneLiner(data: {
 
 /** Guard for tests: one-liner must not contain absurd period % when prior is immaterial. */
 export function oneLinerHasImmateralPct(priorCost: number, oneLiner: string): boolean {
-  if (priorCost >= 1) return false;
+  if (priorCost >= 1) {
+    return false;
+  }
   return /[+-]?\d+\.?\d*%/.test(oneLiner.replace(/LARI \d+%/, ''));
 }
 

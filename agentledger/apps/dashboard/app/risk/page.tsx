@@ -15,7 +15,9 @@ export default async function RiskPage() {
   )) as unknown as RiskRow[];
 
   const total = rows.reduce((s, r) => s + Number(r.events), 0);
-  const blocked = rows.filter((r) => r.dlp_action === 'block').reduce((s, r) => s + Number(r.events), 0);
+  const blocked = rows
+    .filter((r) => r.dlp_action === 'block')
+    .reduce((s, r) => s + Number(r.events), 0);
 
   return (
     <>

@@ -36,7 +36,16 @@ function env(name: string): string | undefined {
 
 // Keys that may carry raw prompt/response content — stripped from every event
 // unless contentCapture is explicitly enabled (defense in depth, CLAUDE.md rule 2).
-const CONTENT_KEYS = ['content', 'prompt', 'completion', 'messages', 'input', 'output', 'response', 'text'];
+const CONTENT_KEYS = [
+  'content',
+  'prompt',
+  'completion',
+  'messages',
+  'input',
+  'output',
+  'response',
+  'text',
+];
 
 /** Options for the LedgerAI client. */
 export interface LedgerAIOptions {
@@ -91,7 +100,14 @@ export interface LlmCallInput {
   costUsd?: number;
   latencyMs?: number;
   operationName?: string; // gen_ai.operation.name (default "chat")
-  status?: 'ok' | 'upstream_error' | 'blocked_dlp' | 'blocked_budget' | 'blocked_rate' | 'blocked_policy' | 'blocked_tool';
+  status?:
+    | 'ok'
+    | 'upstream_error'
+    | 'blocked_dlp'
+    | 'blocked_budget'
+    | 'blocked_rate'
+    | 'blocked_policy'
+    | 'blocked_tool';
   agentId?: string;
   runId?: string;
   stepId?: string;
@@ -140,7 +156,9 @@ type Ctx = { agentId?: string; runId?: string; stepId?: string };
 
 function genId(prefix: string): string {
   const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
-  const id = c?.randomUUID ? c.randomUUID().replace(/-/g, '') : Math.random().toString(16).slice(2).padEnd(16, '0');
+  const id = c?.randomUUID
+    ? c.randomUUID().replace(/-/g, '')
+    : Math.random().toString(16).slice(2).padEnd(16, '0');
   return `${prefix}_${id.slice(0, 24)}`;
 }
 
@@ -156,8 +174,12 @@ export function otelLlmAttributes(c: LlmCallInput): Record<string, string | numb
     'gen_ai.request.model': c.model,
     'gen_ai.operation.name': c.operationName ?? 'chat',
   };
-  if (c.inputTokens != null) a['gen_ai.usage.input_tokens'] = nonNegInt(c.inputTokens);
-  if (c.outputTokens != null) a['gen_ai.usage.output_tokens'] = nonNegInt(c.outputTokens);
+  if (c.inputTokens != null) {
+    a['gen_ai.usage.input_tokens'] = nonNegInt(c.inputTokens);
+  }
+  if (c.outputTokens != null) {
+    a['gen_ai.usage.output_tokens'] = nonNegInt(c.outputTokens);
+  }
   return a;
 }
 
@@ -240,7 +262,12 @@ export class LedgerAI {
 
   constructor(opts: LedgerAIOptions = {}) {
     this.apiKey = opts.apiKey ?? env('LEDGERAI_KEY') ?? env('AGENTLEDGER_API_KEY');
-    const base = (opts.baseUrl ?? env('LEDGERAI_URL') ?? env('AGENTLEDGER_COLLECTOR_URL') ?? 'http://localhost:8090').replace(/\/+$/, '');
+    const base = (
+      opts.baseUrl ??
+      env('LEDGERAI_URL') ??
+      env('AGENTLEDGER_COLLECTOR_URL') ??
+      'http://localhost:8090'
+    ).replace(/\/+$/, '');
     this.eventsUrl = base.endsWith('/v1/events') ? base : `${base}/v1/events`;
     this.failOpen = opts.failOpen ?? true;
     this.tenantId = opts.tenantId ?? env('LEDGERAI_TENANT_ID');
@@ -421,13 +448,17 @@ export class LedgerAI {
 
   /** Await all buffered events to be sent. In fail-closed mode, throws on failure. */
   async flush(): Promise<void> {
-    if (this.buffer.length === 0) return;
+    if (this.buffer.length === 0) {
+      return;
+    }
     const batch = this.buffer.splice(0, this.buffer.length);
     try {
       await this.send(batch);
     } catch (err) {
       this.log(`flush failed: dropped ${batch.length} event(s)`, err);
-      if (!this.failOpen) throw err;
+      if (!this.failOpen) {
+        throw err;
+      }
     }
   }
 
@@ -470,11 +501,15 @@ export class LedgerAI {
   private async send(batch: LedgerEvent[]): Promise<void> {
     const body = batch.map((e) => JSON.stringify(e)).join('\n');
     const headers: Record<string, string> = { 'Content-Type': 'application/x-ndjson' };
-    if (this.apiKey) headers.Authorization = `Bearer ${this.apiKey}`;
+    if (this.apiKey) {
+      headers.Authorization = `Bearer ${this.apiKey}`;
+    }
 
     let lastErr: unknown;
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
-      if (attempt > 0) await delay(Math.min(250, 50 * attempt));
+      if (attempt > 0) {
+        await delay(Math.min(250, 50 * attempt));
+      }
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), this.timeoutMs);
       try {
@@ -484,7 +519,9 @@ export class LedgerAI {
           body,
           signal: controller.signal,
         });
-        if (res.ok) return; // 202 Accepted (or any 2xx)
+        if (res.ok) {
+          return;
+        } // 202 Accepted (or any 2xx)
         if (res.status >= 500 && attempt < this.maxRetries) {
           lastErr = new Error(`ledgerai sink HTTP ${res.status}`);
           continue; // retry server errors
@@ -492,7 +529,9 @@ export class LedgerAI {
         throw new Error(`ledgerai sink HTTP ${res.status}`);
       } catch (err) {
         lastErr = err;
-        if (attempt >= this.maxRetries) break;
+        if (attempt >= this.maxRetries) {
+          break;
+        }
       } finally {
         clearTimeout(timer);
       }
@@ -505,7 +544,9 @@ function stripContent(ev: LedgerEvent): LedgerEvent {
   let copy: LedgerEvent | undefined;
   for (const k of CONTENT_KEYS) {
     if (k in ev) {
-      if (!copy) copy = { ...ev };
+      if (!copy) {
+        copy = { ...ev };
+      }
       delete copy[k];
     }
   }

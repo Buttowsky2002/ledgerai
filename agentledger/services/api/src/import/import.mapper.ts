@@ -29,32 +29,52 @@ export interface MappedRow {
 const RISK_SEVERITIES = ['low', 'medium', 'high', 'critical'];
 
 function str(v: unknown, field: string): string | undefined {
-  if (v === undefined || v === null || v === '') return undefined;
-  if (typeof v === 'string') return v;
-  if (typeof v === 'number') return String(v);
+  if (v === undefined || v === null || v === '') {
+    return undefined;
+  }
+  if (typeof v === 'string') {
+    return v;
+  }
+  if (typeof v === 'number') {
+    return String(v);
+  }
   throw new ImportRowError(`field "${field}" must be a string`);
 }
 
 function num(v: unknown, field: string): number | undefined {
-  if (v === undefined || v === null || v === '') return undefined;
+  if (v === undefined || v === null || v === '') {
+    return undefined;
+  }
   const n = typeof v === 'number' ? v : Number(v);
-  if (!Number.isFinite(n)) throw new ImportRowError(`field "${field}" must be a number`);
-  if (n < 0) throw new ImportRowError(`field "${field}" must be >= 0`);
+  if (!Number.isFinite(n)) {
+    throw new ImportRowError(`field "${field}" must be a number`);
+  }
+  if (n < 0) {
+    throw new ImportRowError(`field "${field}" must be >= 0`);
+  }
   return n;
 }
 
 /** An attribution confidence in [0,1]; defaults to 1 when absent. */
 function confidence(v: unknown): number {
   const c = num(v, 'attribution_confidence');
-  if (c === undefined) return 1;
-  if (c > 1) throw new ImportRowError(`field "attribution_confidence" must be between 0 and 1`);
+  if (c === undefined) {
+    return 1;
+  }
+  if (c > 1) {
+    throw new ImportRowError(`field "attribution_confidence" must be between 0 and 1`);
+  }
   return c;
 }
 
 function isoTs(v: unknown): string {
-  if (v === undefined || v === null || v === '') return new Date().toISOString();
+  if (v === undefined || v === null || v === '') {
+    return new Date().toISOString();
+  }
   const d = new Date(typeof v === 'number' ? v : String(v));
-  if (Number.isNaN(d.getTime())) throw new ImportRowError(`field "timestamp" is not a valid date/time`);
+  if (Number.isNaN(d.getTime())) {
+    throw new ImportRowError(`field "timestamp" is not a valid date/time`);
+  }
   return d.toISOString();
 }
 
@@ -74,12 +94,51 @@ const CODING_AGENT_ALIASES: Record<string, string> = {
 function codingAgentProvider(provider: string | undefined, toolName: string): string | undefined {
   const probe = `${provider ?? ''} ${toolName}`.toLowerCase();
   for (const [alias, canonical] of Object.entries(CODING_AGENT_ALIASES)) {
-    if (probe.includes(alias)) return canonical;
+    if (probe.includes(alias)) {
+      return canonical;
+    }
   }
   return undefined;
 }
 
-export function mapRow(data: unknown): MappedRow {
+/**
+ * Every field parsed once from a raw row, shared by the per-signal builders below.
+ * mapRow used to inline all of this plus every event's object literal in one
+ * function (cyclomatic complexity 85); parsing and each builder are now separate
+ * pure units so no single function carries the whole mapping's branch weight.
+ */
+interface ImportRowContext {
+  r: Record<string, unknown>;
+  ts: string;
+  idempotencyKey?: string;
+  teamId: string;
+  userId: string;
+  agentId: string;
+  runId: string;
+  provider?: string;
+  platformDisplayName?: string;
+  model?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  costUsd?: number;
+  usageValueUsd?: number;
+  costSource: string;
+  meteredCostUsdRaw?: number;
+  operationName?: string;
+  callStatus: string;
+  toolName?: string;
+  outcomeType?: string;
+  outcomeValueUsd?: number;
+  riskSeverity?: string;
+  commitHash?: string;
+  isCommitAttribution: boolean;
+  hasUsage: boolean;
+}
+
+/** Parse + validate every supported field once, and decide which signals are present. */
+function parseImportRow(data: unknown): ImportRowContext {
   if (typeof data !== 'object' || data === null || Array.isArray(data)) {
     throw new ImportRowError('row is not a JSON object');
   }
@@ -141,108 +200,164 @@ export function mapRow(data: unknown): MappedRow {
     );
   }
 
-  const events: MappedEvent[] = [];
+  return {
+    r,
+    ts,
+    idempotencyKey,
+    teamId,
+    userId,
+    agentId,
+    runId,
+    provider,
+    platformDisplayName,
+    model,
+    inputTokens,
+    outputTokens,
+    cacheReadTokens,
+    cacheWriteTokens,
+    costUsd,
+    usageValueUsd,
+    costSource,
+    meteredCostUsdRaw,
+    operationName,
+    callStatus,
+    toolName,
+    outcomeType,
+    outcomeValueUsd,
+    riskSeverity,
+    commitHash,
+    isCommitAttribution,
+    hasUsage: !!hasUsage,
+  };
+}
 
-  if (isCommitAttribution) {
-    const linesTotal = Math.round(num(r.lines_total, 'lines_total') ?? 0);
-    const linesAi = Math.round(num(r.lines_ai, 'lines_ai') ?? 0);
-    const aiShare =
-      num(r.ai_share_pct, 'ai_share_pct') ??
-      (linesTotal > 0 ? Math.round((linesAi / linesTotal) * 10_000) / 100 : 0);
-    const isProd = r.is_production_branch;
-    events.push({
-      table: 'coding_commit_attribution',
-      row: {
-        source_tool: str(r.source_tool, 'source_tool') ?? provider ?? 'cursor',
-        commit_hash: commitHash,
-        identity_email: str(r.user_email, 'user_email') ?? userId,
-        user_id: userId,
-        repo: str(r.repo, 'repo') ?? '',
-        branch: str(r.branch, 'branch') ?? '',
-        committed_at: ts,
-        lines_total: linesTotal,
-        lines_ai: linesAi,
-        ai_source: str(r.ai_source, 'ai_source') ?? '',
-        ai_share_pct: aiShare,
-        is_production_branch:
-          isProd === true || isProd === 1 || isProd === 'true' || isProd === '1' ? 1 : 0,
-        source_record_id: idempotencyKey ?? '',
-        ingested_at: new Date().toISOString(),
-      },
-    });
-  }
-  if (hasUsage) {
-    events.push({
-      table: 'llm_calls',
-      row: {
-        call_id: id('call', idempotencyKey),
-        ts,
-        team_id: teamId,
-        user_id: userId,
-        agent_id: agentId,
-        run_id: runId,
-        provider: provider ?? '',
-        request_model: model ?? '',
-        response_model: model ?? '',
-        operation_name: operationName ?? 'chat',
-        input_tokens: Math.round(inputTokens ?? 0),
-        output_tokens: Math.round(outputTokens ?? 0),
-        cache_read_tokens: Math.round(cacheReadTokens ?? 0),
-        cache_write_tokens: Math.round(cacheWriteTokens ?? 0),
-        cost_usd: costUsd ?? 0,
-        usage_value_usd: usageValueUsd ?? costUsd ?? 0,
-        metered_cost_usd:
-          meteredCostUsdRaw ??
-          computeMeteredCostUsd({
-            provider: provider ?? '',
-            cost_usd: costUsd ?? 0,
-            cost_source: costSource,
-            operation_name: operationName ?? '',
-            usage_value_usd: usageValueUsd,
-            product: str(r.product, 'product') ?? '',
-          }),
-        cost_source: costSource,
-        status: callStatus,
-        app_id: platformDisplayName ?? provider ?? '',
-        // A risk severity on a usage row marks the call as risk-flagged so it
-        // rolls into risk_daily (which counts rows where dlp_action != 'allow').
-        dlp_action: riskSeverity ? 'warn' : 'allow',
-        risk_severity: riskSeverity ?? '',
-        source: str(r.source, 'source') ?? 'sdk',
-        import_run_id: str(r.import_run_id, 'import_run_id') ?? '',
-      },
-    });
-  }
+function buildCommitAttributionEvent(ctx: ImportRowContext): MappedEvent {
+  const { r, provider, userId, ts, idempotencyKey, commitHash } = ctx;
+  const linesTotal = Math.round(num(r.lines_total, 'lines_total') ?? 0);
+  const linesAi = Math.round(num(r.lines_ai, 'lines_ai') ?? 0);
+  const aiShare =
+    num(r.ai_share_pct, 'ai_share_pct') ??
+    (linesTotal > 0 ? Math.round((linesAi / linesTotal) * 10_000) / 100 : 0);
+  const isProd = r.is_production_branch;
+  return {
+    table: 'coding_commit_attribution',
+    row: {
+      source_tool: str(r.source_tool, 'source_tool') ?? provider ?? 'cursor',
+      commit_hash: commitHash,
+      identity_email: str(r.user_email, 'user_email') ?? userId,
+      user_id: userId,
+      repo: str(r.repo, 'repo') ?? '',
+      branch: str(r.branch, 'branch') ?? '',
+      committed_at: ts,
+      lines_total: linesTotal,
+      lines_ai: linesAi,
+      ai_source: str(r.ai_source, 'ai_source') ?? '',
+      ai_share_pct: aiShare,
+      is_production_branch:
+        isProd === true || isProd === 1 || isProd === 'true' || isProd === '1' ? 1 : 0,
+      source_record_id: idempotencyKey ?? '',
+      ingested_at: new Date().toISOString(),
+    },
+  };
+}
 
-  if (outcomeType) {
-    const explicitOutcomeId = str(r.outcome_id, 'outcome_id');
-    const explicitSourceSystem = str(r.source_system, 'source_system');
-    events.push({
-      table: 'outcomes',
-      row: {
-        outcome_id: explicitOutcomeId ?? id('out', idempotencyKey, '_out'),
-        ts,
-        source_system:
-          explicitSourceSystem ??
-          (str(r.source, 'source') === 'api' ? 'api' : 'import'),
-        outcome_type: outcomeType,
-        team_id: teamId,
-        user_id: userId,
-        run_id: runId,
-        business_value_usd: outcomeValueUsd ?? 0,
-        quality_score: 0,
-        // Imported outcomes are asserted by the operator → full attribution.
-        // Confidence is a probability feeding finance-grade ROI (headline cutoff
-        // 0.5, used as a value multiplier), so it is bounded to [0,1] — `num`
-        // already rejects < 0; reject > 1 here rather than silently inflate ROI.
-        attribution_confidence: confidence(r.attribution_confidence),
-        completion_status: 'completed',
-      },
-    });
-  }
+function buildLlmCallEvent(ctx: ImportRowContext): MappedEvent {
+  const {
+    r,
+    ts,
+    teamId,
+    userId,
+    agentId,
+    runId,
+    provider,
+    platformDisplayName,
+    model,
+    inputTokens,
+    outputTokens,
+    cacheReadTokens,
+    cacheWriteTokens,
+    costUsd,
+    usageValueUsd,
+    costSource,
+    meteredCostUsdRaw,
+    operationName,
+    callStatus,
+    riskSeverity,
+    idempotencyKey,
+  } = ctx;
+  return {
+    table: 'llm_calls',
+    row: {
+      call_id: id('call', idempotencyKey),
+      ts,
+      team_id: teamId,
+      user_id: userId,
+      agent_id: agentId,
+      run_id: runId,
+      provider: provider ?? '',
+      request_model: model ?? '',
+      response_model: model ?? '',
+      operation_name: operationName ?? 'chat',
+      input_tokens: Math.round(inputTokens ?? 0),
+      output_tokens: Math.round(outputTokens ?? 0),
+      cache_read_tokens: Math.round(cacheReadTokens ?? 0),
+      cache_write_tokens: Math.round(cacheWriteTokens ?? 0),
+      cost_usd: costUsd ?? 0,
+      usage_value_usd: usageValueUsd ?? costUsd ?? 0,
+      metered_cost_usd:
+        meteredCostUsdRaw ??
+        computeMeteredCostUsd({
+          provider: provider ?? '',
+          cost_usd: costUsd ?? 0,
+          cost_source: costSource,
+          operation_name: operationName ?? '',
+          usage_value_usd: usageValueUsd,
+          product: str(r.product, 'product') ?? '',
+        }),
+      cost_source: costSource,
+      status: callStatus,
+      app_id: platformDisplayName ?? provider ?? '',
+      // A risk severity on a usage row marks the call as risk-flagged so it
+      // rolls into risk_daily (which counts rows where dlp_action != 'allow').
+      dlp_action: riskSeverity ? 'warn' : 'allow',
+      risk_severity: riskSeverity ?? '',
+      source: str(r.source, 'source') ?? 'sdk',
+      import_run_id: str(r.import_run_id, 'import_run_id') ?? '',
+    },
+  };
+}
 
-  if (toolName) {
-    events.push({
+function buildOutcomeEvent(ctx: ImportRowContext): MappedEvent {
+  const { r, ts, teamId, userId, runId, outcomeType, outcomeValueUsd, idempotencyKey } = ctx;
+  const explicitOutcomeId = str(r.outcome_id, 'outcome_id');
+  const explicitSourceSystem = str(r.source_system, 'source_system');
+  return {
+    table: 'outcomes',
+    row: {
+      outcome_id: explicitOutcomeId ?? id('out', idempotencyKey, '_out'),
+      ts,
+      source_system: explicitSourceSystem ?? (str(r.source, 'source') === 'api' ? 'api' : 'import'),
+      outcome_type: outcomeType,
+      team_id: teamId,
+      user_id: userId,
+      run_id: runId,
+      business_value_usd: outcomeValueUsd ?? 0,
+      quality_score: 0,
+      // Imported outcomes are asserted by the operator → full attribution.
+      // Confidence is a probability feeding finance-grade ROI (headline cutoff
+      // 0.5, used as a value multiplier), so it is bounded to [0,1] — `num`
+      // already rejects < 0; reject > 1 here rather than silently inflate ROI.
+      attribution_confidence: confidence(r.attribution_confidence),
+      completion_status: 'completed',
+    },
+  };
+}
+
+function buildToolCallEvents(ctx: ImportRowContext): MappedEvent[] {
+  const { r, ts, teamId, userId, agentId, runId, provider, toolName, costUsd, idempotencyKey } =
+    ctx;
+  const events: MappedEvent[] = [
+    {
       table: 'agent_tool_calls',
       row: {
         agent_id: agentId,
@@ -252,59 +367,82 @@ export function mapRow(data: unknown): MappedRow {
         mcp_server: '',
         ts,
       },
-    });
-    const codingProvider = codingAgentProvider(provider, toolName);
-    if (codingProvider) {
-      const linesAccepted = num(r.lines_accepted, 'lines_accepted');
-      const linesAdded = num(r.lines_added, 'lines_added');
-      const linesDeleted = num(r.lines_deleted, 'lines_deleted');
-      const linesCommitted = num(r.lines_committed, 'lines_committed');
-      const tabsAccepted = num(r.tabs_accepted, 'tabs_accepted');
-      const composerRequests = num(r.composer_requests, 'composer_requests');
-      const chatRequests = num(r.chat_requests, 'chat_requests');
-      events.push({
-        table: 'coding_agent_daily',
-        row: {
-          day: ts.slice(0, 10),
-          provider: codingProvider,
-          user_id: userId,
-          team_id: teamId,
-          agent_id: agentId,
-          cost_usd: costUsd ?? 0,
-          sessions: 1,
-          requests: Math.max(1, Math.round(composerRequests ?? 0) + Math.round(chatRequests ?? 0)),
-          lines_accepted: Math.round(linesAccepted ?? 0),
-          lines_added: Math.round(linesAdded ?? 0),
-          lines_deleted: Math.round(linesDeleted ?? 0),
-          // Committed LOC comes from Enterprise commit attribution only — never
-          // alias editor totalLinesAdded as "committed".
-          lines_committed: Math.round(linesCommitted ?? 0),
-          tabs_accepted: Math.round(tabsAccepted ?? 0),
-          composer_requests: Math.round(composerRequests ?? 0),
-          chat_requests: Math.round(chatRequests ?? 0),
-        },
-      });
-    }
-  }
-
-  // A standalone risk signal (no usage row to ride on) becomes a risk_event.
-  if (riskSeverity !== undefined && !hasUsage) {
+    },
+  ];
+  const codingProvider = codingAgentProvider(provider, toolName ?? '');
+  if (codingProvider) {
+    const linesAccepted = num(r.lines_accepted, 'lines_accepted');
+    const linesAdded = num(r.lines_added, 'lines_added');
+    const linesDeleted = num(r.lines_deleted, 'lines_deleted');
+    const linesCommitted = num(r.lines_committed, 'lines_committed');
+    const tabsAccepted = num(r.tabs_accepted, 'tabs_accepted');
+    const composerRequests = num(r.composer_requests, 'composer_requests');
+    const chatRequests = num(r.chat_requests, 'chat_requests');
     events.push({
-      table: 'risk_events',
+      table: 'coding_agent_daily',
       row: {
-        event_id: id('risk', idempotencyKey, '_risk'),
+        day: ts.slice(0, 10),
+        provider: codingProvider,
+        user_id: userId,
+        team_id: teamId,
         agent_id: agentId,
-        run_id: runId,
-        category: 'imported',
-        // risk_events severity vocabulary is low|medium|high.
-        severity: riskSeverity === 'critical' ? 'high' : riskSeverity,
-        detail: 'imported risk signal',
-        occurrences: 1,
-        first_seen: ts,
-        detected_at: ts,
+        cost_usd: costUsd ?? 0,
+        sessions: 1,
+        requests: Math.max(1, Math.round(composerRequests ?? 0) + Math.round(chatRequests ?? 0)),
+        lines_accepted: Math.round(linesAccepted ?? 0),
+        lines_added: Math.round(linesAdded ?? 0),
+        lines_deleted: Math.round(linesDeleted ?? 0),
+        // Committed LOC comes from Enterprise commit attribution only — never
+        // alias editor totalLinesAdded as "committed".
+        lines_committed: Math.round(linesCommitted ?? 0),
+        tabs_accepted: Math.round(tabsAccepted ?? 0),
+        composer_requests: Math.round(composerRequests ?? 0),
+        chat_requests: Math.round(chatRequests ?? 0),
       },
     });
   }
+  return events;
+}
 
-  return { idempotencyKey, events };
+function buildRiskEvent(ctx: ImportRowContext): MappedEvent {
+  const { ts, agentId, runId, riskSeverity, idempotencyKey } = ctx;
+  return {
+    table: 'risk_events',
+    row: {
+      event_id: id('risk', idempotencyKey, '_risk'),
+      agent_id: agentId,
+      run_id: runId,
+      category: 'imported',
+      // risk_events severity vocabulary is low|medium|high.
+      severity: riskSeverity === 'critical' ? 'high' : riskSeverity,
+      detail: 'imported risk signal',
+      occurrences: 1,
+      first_seen: ts,
+      detected_at: ts,
+    },
+  };
+}
+
+export function mapRow(data: unknown): MappedRow {
+  const ctx = parseImportRow(data);
+  const events: MappedEvent[] = [];
+
+  if (ctx.isCommitAttribution) {
+    events.push(buildCommitAttributionEvent(ctx));
+  }
+  if (ctx.hasUsage) {
+    events.push(buildLlmCallEvent(ctx));
+  }
+  if (ctx.outcomeType) {
+    events.push(buildOutcomeEvent(ctx));
+  }
+  if (ctx.toolName) {
+    events.push(...buildToolCallEvents(ctx));
+  }
+  // A standalone risk signal (no usage row to ride on) becomes a risk_event.
+  if (ctx.riskSeverity !== undefined && !ctx.hasUsage) {
+    events.push(buildRiskEvent(ctx));
+  }
+
+  return { idempotencyKey: ctx.idempotencyKey, events };
 }

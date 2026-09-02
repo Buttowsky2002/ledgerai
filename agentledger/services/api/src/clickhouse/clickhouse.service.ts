@@ -39,13 +39,19 @@ export function requireTenantFilter(sql: string): void {
 @Injectable()
 export class ClickHouseService extends AnalyticsStore {
   private readonly logger = new Logger(ClickHouseService.name);
-  private readonly url = (env('BADGERIQ_CLICKHOUSE_URL') ?? 'http://localhost:8123').replace(/\/$/, '');
+  private readonly url = (env('BADGERIQ_CLICKHOUSE_URL') ?? 'http://localhost:8123').replace(
+    /\/$/,
+    '',
+  );
   private readonly db = env('BADGERIQ_CLICKHOUSE_DB') ?? 'agentledger';
   private readonly user = env('BADGERIQ_CLICKHOUSE_USER') ?? 'default';
   private readonly password = env('BADGERIQ_CLICKHOUSE_PASSWORD') ?? '';
 
   /** Run a query with bound parameters. Returns the JSON `data` rows. */
-  async query<T = Record<string, unknown>>(sql: string, params: Record<string, ChParam> = {}): Promise<T[]> {
+  async query<T = Record<string, unknown>>(
+    sql: string,
+    params: Record<string, ChParam> = {},
+  ): Promise<T[]> {
     const qs = new URLSearchParams({ database: this.db, default_format: 'JSON' });
     for (const [k, v] of Object.entries(params)) {
       qs.set(`param_${k}`, String(v));
@@ -105,7 +111,10 @@ export class ClickHouseService extends AnalyticsStore {
    * (spend/allocation/modelMix/…), which compose these scoped queries — callers
    * should not hand-write ad-hoc scoped SQL.
    */
-  async queryScoped<T = Record<string, unknown>>(sql: string, params: Record<string, ChParam> = {}): Promise<T[]> {
+  async queryScoped<T = Record<string, unknown>>(
+    sql: string,
+    params: Record<string, ChParam> = {},
+  ): Promise<T[]> {
     const tenantId = getTenantId();
     if (!tenantId) {
       throw new Error('no tenant in context');
@@ -130,7 +139,9 @@ export class ClickHouseService extends AnalyticsStore {
    * timestamps (best_effort). Callers stamp tenant_id from the principal.
    */
   async insertRows(table: string, rows: Record<string, unknown>[]): Promise<void> {
-    if (rows.length === 0) return;
+    if (rows.length === 0) {
+      return;
+    }
     const qs = new URLSearchParams({
       database: this.db,
       date_time_input_format: 'best_effort',

@@ -8,7 +8,9 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     { method: 'PATCH', body },
   );
   if (!ok) {
-    return NextResponse.json(data ?? { error: 'update failed' }, { status: status >= 400 ? status : 502 });
+    return NextResponse.json(data ?? { error: 'update failed' }, {
+      status: status >= 400 ? status : 502,
+    });
   }
   return NextResponse.json(data);
 }

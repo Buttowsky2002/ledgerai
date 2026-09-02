@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { IBM_Plex_Mono, IBM_Plex_Sans } from 'next/font/google';
 import { ReactNode } from 'react';
 import { Sidebar } from '../components/Sidebar';
+import { SessionRefresh } from '../components/SessionRefresh';
 import { env } from '../lib/env';
 import './globals.css';
 
@@ -29,6 +30,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   // Show a banner when running on seeded demo data (BADGERIQ_DEMO_MODE=true).
   const demoMode = env('BADGERIQ_DEMO_MODE') === 'true';
+  const devTenant = Boolean(env('BADGERIQ_DEV_TENANT_ID'));
   return (
     <html lang="en" className={`${sans.variable} ${mono.variable}`}>
       <body>
@@ -36,12 +38,14 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <Sidebar />
           <main className="flex-1 p-8">
             <div className="mx-auto max-w-[1400px]">
+              {!devTenant && <SessionRefresh />}
               {demoMode && (
                 <div
                   role="status"
                   className="mb-4 rounded border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm text-amber-300"
                 >
-                  <strong>Demo mode</strong> — seeded sample data for evaluation, not a live deployment.
+                  <strong>Demo mode</strong> — seeded sample data for evaluation, not a live
+                  deployment.
                 </div>
               )}
               {children}

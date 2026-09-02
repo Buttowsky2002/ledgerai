@@ -10,7 +10,11 @@ export function shouldSurfaceLegacyImportAudit(opts: {
   /** Audit ids already purged via Delete (object portal-import:audit:<id>). */
   purgedAuditIds: Set<string>;
 }): boolean {
-  if (opts.importRunId && opts.knownRunIds.has(opts.importRunId)) return false;
-  if (opts.purgedAuditIds.has(String(opts.auditId))) return false;
+  if (opts.importRunId && opts.knownRunIds.has(opts.importRunId)) {
+    return false;
+  }
+  if (opts.purgedAuditIds.has(String(opts.auditId))) {
+    return false;
+  }
   return true;
 }

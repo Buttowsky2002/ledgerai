@@ -37,7 +37,9 @@ export class DesignPartnerOnboardingService {
     try {
       for (const file of readdirSync(PRESETS_DIR).filter((f) => f.endsWith('.json'))) {
         const id = file.replace(/\.json$/, '');
-        const raw = JSON.parse(readFileSync(join(PRESETS_DIR, file), 'utf8')) as DesignPartnerProfile;
+        const raw = JSON.parse(
+          readFileSync(join(PRESETS_DIR, file), 'utf8'),
+        ) as DesignPartnerProfile;
         this.presets.set(id, raw);
       }
     } catch {
@@ -114,9 +116,7 @@ export class DesignPartnerOnboardingService {
 
     const lari = await this.lariSummaries(profile);
     const ready =
-      counts.outcomesStamped >= profile.outcomes.length &&
-      counts.vRoiRows > 0 &&
-      lari.length > 0;
+      counts.outcomesStamped >= profile.outcomes.length && counts.vRoiRows > 0 && lari.length > 0;
 
     return {
       preset: dto.preset,
@@ -175,7 +175,10 @@ export class DesignPartnerOnboardingService {
     };
   }
 
-  private presentationWindow(override?: { from?: string; to?: string }): { from: string; to: string } {
+  private presentationWindow(override?: { from?: string; to?: string }): {
+    from: string;
+    to: string;
+  } {
     const today = new Date();
     const start = new Date(today);
     start.setUTCDate(start.getUTCDate() - 90);
@@ -186,10 +189,7 @@ export class DesignPartnerOnboardingService {
     };
   }
 
-  private validateBootstrapIds(
-    runs: { runId: string }[],
-    outcomes: { outcomeId: string }[],
-  ): void {
+  private validateBootstrapIds(runs: { runId: string }[], outcomes: { outcomeId: string }[]): void {
     for (const r of runs) {
       if (!r.runId.startsWith(BOOTSTRAP_RUN_PREFIX)) {
         throw new BadRequestException(`runId must start with "${BOOTSTRAP_RUN_PREFIX}"`);
@@ -276,7 +276,10 @@ export class DesignPartnerOnboardingService {
   }
 
   private async triggerAttribution(): Promise<boolean> {
-    const base = (env('BADGERIQ_ATTRIBUTION_WORKER_URL') ?? 'http://localhost:8096').replace(/\/$/, '');
+    const base = (env('BADGERIQ_ATTRIBUTION_WORKER_URL') ?? 'http://localhost:8096').replace(
+      /\/$/,
+      '',
+    );
     try {
       const res = await fetch(`${base}/run`, { method: 'POST' });
       if (!res.ok) {
@@ -319,8 +322,10 @@ export class DesignPartnerOnboardingService {
       );
       vRoiRows = Number(vroiRows[0]?.cnt ?? 0);
 
-      const edgeRows = await this.prisma.withTenant(tenantId, (tx) =>
-        tx.$queryRaw<{ cnt: bigint }[]>`SELECT count(*)::bigint AS cnt FROM attribution_edges`,
+      const edgeRows = await this.prisma.withTenant(
+        tenantId,
+        (tx) =>
+          tx.$queryRaw<{ cnt: bigint }[]>`SELECT count(*)::bigint AS cnt FROM attribution_edges`,
       );
       attributionEdges = Number(edgeRows[0]?.cnt ?? 0);
 

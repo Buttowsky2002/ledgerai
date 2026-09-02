@@ -34,8 +34,12 @@ export interface CursorSpendSummary {
 }
 
 function seatSourceLabel(source: CursorSpendSummary['seatSource']): string {
-  if (source === 'fixed_costs') return 'Fixed overhead';
-  if (source === 'subscription_plan') return 'Subscription plan';
+  if (source === 'fixed_costs') {
+    return 'Fixed overhead';
+  }
+  if (source === 'subscription_plan') {
+    return 'Subscription plan';
+  }
   return 'Not configured';
 }
 
@@ -66,28 +70,41 @@ export function CursorPlatformDetail({
     let cancelled = false;
     setLoading(true);
     setLoadError(false);
-    fetch(`/api/analytics/cursor-spend?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, {
-      cache: 'no-store',
-    })
+    fetch(
+      `/api/analytics/cursor-spend?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+      {
+        cache: 'no-store',
+      },
+    )
       .then(async (r) => {
         if (!r.ok) {
-          if (!cancelled) setLoadError(true);
+          if (!cancelled) {
+            setLoadError(true);
+          }
           return null;
         }
         const text = await r.text();
-        if (!text) return null;
+        if (!text) {
+          return null;
+        }
         try {
           return JSON.parse(text) as CursorSpendSummary | null;
         } catch {
-          if (!cancelled) setLoadError(true);
+          if (!cancelled) {
+            setLoadError(true);
+          }
           return null;
         }
       })
       .then((json) => {
-        if (!cancelled) setData(json);
+        if (!cancelled) {
+          setData(json);
+        }
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       });
     return () => {
       cancelled = true;
@@ -150,11 +167,7 @@ export function CursorPlatformDetail({
           value={num(data.totalCalls)}
           sub={`${num(data.onDemandCalls)} on-demand / ${num(data.includedCalls)} included`}
         />
-        <Stat
-          label="Tokens"
-          value={num(data.totalTokens ?? 0)}
-          sub="Input + output + cache"
-        />
+        <Stat label="Tokens" value={num(data.totalTokens ?? 0)} sub="Input + output + cache" />
       </div>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">

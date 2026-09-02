@@ -71,7 +71,9 @@ export class ConnectorSecretsService {
     try {
       return { plaintext: this.decryptWith(this.key, ciphertext), usedLegacy: false };
     } catch (primaryErr) {
-      if (!this.legacyJwtKey) throw primaryErr;
+      if (!this.legacyJwtKey) {
+        throw primaryErr;
+      }
       try {
         return { plaintext: this.decryptWith(this.legacyJwtKey, ciphertext), usedLegacy: true };
       } catch {
@@ -82,7 +84,9 @@ export class ConnectorSecretsService {
 
   async storeSecret(plaintext: string): Promise<string> {
     const tenantId = getTenantId();
-    if (!tenantId) throw new Error('no tenant in context');
+    if (!tenantId) {
+      throw new Error('no tenant in context');
+    }
     const ciphertext = this.encrypt(plaintext);
     const row = await this.prisma.withTenant(tenantId, (tx) =>
       tx.connectorSecret.create({ data: { tenantId, ciphertext } }),
@@ -91,13 +95,19 @@ export class ConnectorSecretsService {
   }
 
   async resolveSecret(secretRef: string | null | undefined): Promise<string | undefined> {
-    if (!secretRef) return undefined;
+    if (!secretRef) {
+      return undefined;
+    }
     const tenantId = getTenantId();
-    if (!tenantId) return undefined;
+    if (!tenantId) {
+      return undefined;
+    }
     const row = await this.prisma.withTenant(tenantId, (tx) =>
       tx.connectorSecret.findUnique({ where: { secretId: secretRef } }),
     );
-    if (!row) return undefined;
+    if (!row) {
+      return undefined;
+    }
     // Audit decrypt/use only — never log ciphertext or plaintext.
     logSecurityEventFromContext('connector.secret_access', {
       secretId: secretRef,
@@ -123,7 +133,9 @@ export class ConnectorSecretsService {
 
   async deleteSecret(secretRef: string): Promise<void> {
     const tenantId = getTenantId();
-    if (!tenantId) return;
+    if (!tenantId) {
+      return;
+    }
     await this.prisma.withTenant(tenantId, (tx) =>
       tx.connectorSecret.deleteMany({ where: { secretId: secretRef } }),
     );

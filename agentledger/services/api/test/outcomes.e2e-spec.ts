@@ -11,12 +11,18 @@ const CH = process.env.AGENTLEDGER_CLICKHOUSE_URL ?? 'http://localhost:8123';
 /** Direct ClickHouse insert (bypasses the API) to seed runs the outcomes link to. */
 async function chInsert(table: string, rows: object[]): Promise<void> {
   const body =
-    `INSERT INTO agentledger.${table} FORMAT JSONEachRow\n` + rows.map((r) => JSON.stringify(r)).join('\n');
-  const res = await fetch(`${CH}/?date_time_input_format=best_effort&input_format_skip_unknown_fields=1`, {
-    method: 'POST',
-    body,
-  });
-  if (!res.ok) throw new Error(`CH insert failed: ${res.status} ${await res.text()}`);
+    `INSERT INTO agentledger.${table} FORMAT JSONEachRow\n` +
+    rows.map((r) => JSON.stringify(r)).join('\n');
+  const res = await fetch(
+    `${CH}/?date_time_input_format=best_effort&input_format_skip_unknown_fields=1`,
+    {
+      method: 'POST',
+      body,
+    },
+  );
+  if (!res.ok) {
+    throw new Error(`CH insert failed: ${res.status} ${await res.text()}`);
+  }
 }
 
 /**
@@ -45,13 +51,19 @@ describe('Outcomes + agent ROI (/v1/outcomes, /v1/agents/:id/roi)', () => {
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+    );
     await app.init();
     jwt = app.get(JwtService);
     prisma = app.get(PrismaService);
 
-    await prisma.withTenant(tenantA, (tx) => tx.tenant.create({ data: { tenantId: tenantA, name: 'oc-a' } }));
-    await prisma.withTenant(tenantB, (tx) => tx.tenant.create({ data: { tenantId: tenantB, name: 'oc-b' } }));
+    await prisma.withTenant(tenantA, (tx) =>
+      tx.tenant.create({ data: { tenantId: tenantA, name: 'oc-a' } }),
+    );
+    await prisma.withTenant(tenantB, (tx) =>
+      tx.tenant.create({ data: { tenantId: tenantB, name: 'oc-b' } }),
+    );
 
     // Seed the agent run (the cost side of the chain) for tenant A.
     await chInsert('agent_runs', [
@@ -76,7 +88,8 @@ describe('Outcomes + agent ROI (/v1/outcomes, /v1/agents/:id/roi)', () => {
     await app.close();
   });
 
-  const tok = (tenant: string, role = 'analyst') => jwt.mintAccess({ userId: randomUUID(), tenantId: tenant, role });
+  const tok = (tenant: string, role = 'analyst') =>
+    jwt.mintAccess({ userId: randomUUID(), tenantId: tenant, role });
   const bearer = (t: string) => ({ Authorization: `Bearer ${t}` });
 
   it('rejects unauthenticated reads (401)', async () => {
@@ -113,7 +126,9 @@ describe('Outcomes + agent ROI (/v1/outcomes, /v1/agents/:id/roi)', () => {
       .query({ agentId })
       .set(bearer(await tok(tenantA, 'viewer')));
     expect(list.status).toBe(200);
-    const row = (list.body as Record<string, unknown>[]).find((r) => r.outcome_id === create.body.outcome_id);
+    const row = (list.body as Record<string, unknown>[]).find(
+      (r) => r.outcome_id === create.body.outcome_id,
+    );
     expect(row).toBeDefined();
     expect(Number(row!.value_usd)).toBe(500);
     expect(Number(row!.cost_usd)).toBe(2.5); // the linked run's AI cost

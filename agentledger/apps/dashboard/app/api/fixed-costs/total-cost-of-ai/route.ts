@@ -6,7 +6,9 @@ export async function GET(req: NextRequest) {
   const path = qs ? `/v1/fixed-costs/total-cost-of-ai?${qs}` : '/v1/fixed-costs/total-cost-of-ai';
   const { ok, status, data } = await proxyApi(path);
   if (!ok) {
-    return NextResponse.json(data ?? { error: 'total cost failed' }, { status: status >= 400 ? status : 502 });
+    return NextResponse.json(data ?? { error: 'total cost failed' }, {
+      status: status >= 400 ? status : 502,
+    });
   }
   return NextResponse.json(data);
 }

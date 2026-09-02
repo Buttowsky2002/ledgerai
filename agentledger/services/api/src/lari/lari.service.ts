@@ -60,7 +60,13 @@ const SEVERITY_PROBABILITY: Record<RiskSeverity, number> = {
   critical: 0.5,
 };
 
-const SEVERITY_RANK: Record<RiskSeverity, number> = { none: 0, low: 1, medium: 2, high: 3, critical: 4 };
+const SEVERITY_RANK: Record<RiskSeverity, number> = {
+  none: 0,
+  low: 1,
+  medium: 2,
+  high: 3,
+  critical: 4,
+};
 
 /** Days between two ISO dates (>= 0). */
 function daysBetween(fromIso: string, toIso: string): number {
@@ -81,14 +87,24 @@ export function buildAgentROIInput(a: AssembleInputs): AgentROIInput {
   const outcomes: OutcomeLink[] = a.vroi.map((row) => {
     const edge = a.edges.get(row.outcome_id);
     const m = a.meta.get(row.outcome_id);
-    const hasBaseline = edge?.counterfactualDelta !== null && edge?.counterfactualDelta !== undefined;
+    const hasBaseline =
+      edge?.counterfactualDelta !== null && edge?.counterfactualDelta !== undefined;
     const incrementalityFactor = hasBaseline ? clamp01(n(edge!.counterfactualDelta)) : 1.0;
     const method = (edge?.attributionMethod ??
-      (n(row.attribution_confidence) >= 0.99 ? 'deterministic' : 'probabilistic')) as OutcomeLink['attributionMethod'];
+      (n(row.attribution_confidence) >= 0.99
+        ? 'deterministic'
+        : 'probabilistic')) as OutcomeLink['attributionMethod'];
     const sourceSystem = m?.source_system ?? '';
     const source: OutcomeLink['outcome']['source'] =
-      sourceSystem === 'manual' ? 'manual' : sourceSystem === 'api' ? 'api' : method === 'deterministic' ? 'deterministic' : 'connector';
-    const verified = m?.completion_status === 'completed' && source !== 'manual' && source !== 'api';
+      sourceSystem === 'manual'
+        ? 'manual'
+        : sourceSystem === 'api'
+          ? 'api'
+          : method === 'deterministic'
+            ? 'deterministic'
+            : 'connector';
+    const verified =
+      m?.completion_status === 'completed' && source !== 'manual' && source !== 'api';
     return {
       outcome: {
         outcomeId: row.outcome_id,
@@ -118,16 +134,22 @@ export function buildAgentROIInput(a: AssembleInputs): AgentROIInput {
     amortizedBuildCostUsd: 0,
   };
 
-  const riskExposurePct = a.vroi.reduce((mx, r) => Math.max(mx, clamp01(n(r.risk_exposure_pct))), 0);
+  const riskExposurePct = a.vroi.reduce(
+    (mx, r) => Math.max(mx, clamp01(n(r.risk_exposure_pct))),
+    0,
+  );
 
   // Confidence sub-scores (documented heuristics derived from coverage).
   const withEdge = outcomes.filter((o) => o.evidenceRefs.length > 0).length;
   const deterministic = outcomes.filter((o) => o.attributionMethod === 'deterministic').length;
   const verified = outcomes.filter((o) => o.outcome.verified).length;
   const avgAttribution = outcomes.reduce((s, o) => s + o.attributionConfidence, 0) / count;
-  const nonzeroCost = [cost.tokenCostUsd, cost.humanReviewCostUsd, cost.infraCostUsd, cost.amortizedBuildCostUsd].filter(
-    (c) => c > 0,
-  ).length;
+  const nonzeroCost = [
+    cost.tokenCostUsd,
+    cost.humanReviewCostUsd,
+    cost.infraCostUsd,
+    cost.amortizedBuildCostUsd,
+  ].filter((c) => c > 0).length;
   const latest = a.vroi.reduce((mx, r) => (r.outcome_ts > mx ? r.outcome_ts : mx), a.from);
   const recency = outcomes.length ? Math.exp(-daysBetween(latest, a.to) / 30) : 0;
 
@@ -230,8 +252,12 @@ export class LariService {
     // attribution_edges has no Prisma model (worker-owned table) — read via raw SQL
     // inside withTenant so RLS scopes to the tenant (no tenant_id in the query),
     // mirroring AttributionService. Empty on data not yet scored by the engine.
-    const edges = await this.prisma.withTenant(tenantId, (tx) =>
-      tx.$queryRaw<{ outcome_id: string; counterfactual_delta: number | null; attribution_method: string }[]>`
+    const edges = await this.prisma.withTenant(
+      tenantId,
+      (tx) =>
+        tx.$queryRaw<
+          { outcome_id: string; counterfactual_delta: number | null; attribution_method: string }[]
+        >`
         SELECT outcome_id, counterfactual_delta, attribution_method
         FROM attribution_edges WHERE agent_id = ${agentId}`,
     );
@@ -242,7 +268,8 @@ export class LariService {
         e.outcome_id,
         {
           outcomeId: e.outcome_id,
-          counterfactualDelta: e.counterfactual_delta === null ? null : Number(e.counterfactual_delta),
+          counterfactualDelta:
+            e.counterfactual_delta === null ? null : Number(e.counterfactual_delta),
           attributionMethod: e.attribution_method,
         },
       ]),
@@ -269,8 +296,12 @@ export class LariService {
   private topSeverity(rows: { severity: string; events: number }[]): RiskSeverity {
     let top: RiskSeverity = 'none';
     for (const row of rows) {
-      const s = (['low', 'medium', 'high', 'critical'].includes(row.severity) ? row.severity : 'none') as RiskSeverity;
-      if (SEVERITY_RANK[s] > SEVERITY_RANK[top]) top = s;
+      const s = (
+        ['low', 'medium', 'high', 'critical'].includes(row.severity) ? row.severity : 'none'
+      ) as RiskSeverity;
+      if (SEVERITY_RANK[s] > SEVERITY_RANK[top]) {
+        top = s;
+      }
     }
     return top;
   }

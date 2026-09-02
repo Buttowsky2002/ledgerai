@@ -50,14 +50,20 @@ function enumerateDays(from: string, to: string): string[] {
 export class CopilotAnalyticsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getSpendSummary(tenantId: string, from: string, to: string): Promise<CopilotSpendSummary | null> {
+  async getSpendSummary(
+    tenantId: string,
+    from: string,
+    to: string,
+  ): Promise<CopilotSpendSummary | null> {
     const connections = await this.prisma.withTenant(tenantId, (tx) =>
       tx.aiProviderConnection.findMany({
         where: { tenantId, provider: COPILOT_PROVIDER },
         select: { connectionId: true, roiAssumptions: true },
       }),
     );
-    if (connections.length === 0) return null;
+    if (connections.length === 0) {
+      return null;
+    }
 
     const connectionIds = connections.map((c) => c.connectionId);
     const assumptions = mergeRoiAssumptions(
@@ -250,7 +256,9 @@ export class CopilotAnalyticsService {
         select: { connectionId: true },
       }),
     );
-    if (connections.length === 0) return [];
+    if (connections.length === 0) {
+      return [];
+    }
 
     const connectionIds = connections.map((c) => c.connectionId);
     const start = new Date(`${from}T00:00:00.000Z`);
@@ -293,10 +301,15 @@ export class CopilotAnalyticsService {
     });
 
     if (memberSpend.length > 0) {
-      const byLogin = new Map<string, { cost: number; calls: number; modelWeights: Map<string, number> }>();
+      const byLogin = new Map<
+        string,
+        { cost: number; calls: number; modelWeights: Map<string, number> }
+      >();
       for (const row of memberSpend) {
         const login = row.githubLogin?.trim();
-        if (!login) continue;
+        if (!login) {
+          continue;
+        }
         const acc = byLogin.get(login) ?? { cost: 0, calls: 0, modelWeights: new Map() };
         acc.cost += Number(row.totalAllocatedCost);
         acc.calls += row.linesAccepted + row.chatTurns + row.prSummaryCount;
@@ -304,10 +317,13 @@ export class CopilotAnalyticsService {
       }
       for (const row of usage) {
         const login = row.githubLogin?.trim();
-        if (!login) continue;
+        if (!login) {
+          continue;
+        }
         const acc = byLogin.get(login) ?? { cost: 0, calls: 0, modelWeights: new Map() };
         const model = row.model?.trim() || row.feature?.trim() || 'copilot-business';
-        const weight = row.linesAccepted + row.chatTurns + row.acceptancesCount + row.prSummaryCount;
+        const weight =
+          row.linesAccepted + row.chatTurns + row.acceptancesCount + row.prSummaryCount;
         acc.modelWeights.set(model, (acc.modelWeights.get(model) ?? 0) + weight);
         byLogin.set(login, acc);
       }
@@ -332,13 +348,17 @@ export class CopilotAnalyticsService {
     }
 
     const summary = await this.getSpendSummary(tenantId, from, to);
-    if (!summary || summary.totalCostUsd <= 0) return [];
+    if (!summary || summary.totalCostUsd <= 0) {
+      return [];
+    }
 
     type Acc = { weight: number; calls: number; modelWeights: Map<string, number> };
     const byUser = new Map<string, Acc>();
     for (const row of usage) {
       const login = row.githubLogin?.trim();
-      if (!login) continue;
+      if (!login) {
+        continue;
+      }
       const weight = row.linesAccepted + row.chatTurns + row.acceptancesCount + row.prSummaryCount;
       const calls = row.acceptancesCount + row.chatTurns + row.prSummaryCount;
       const model = row.model?.trim() || row.feature?.trim() || 'copilot-business';

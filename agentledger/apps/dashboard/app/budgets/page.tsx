@@ -21,8 +21,14 @@ export default async function BudgetsPage() {
   const { from, to } = defaultRange();
   const api = apiClient();
   const [burn, budgets] = await Promise.all([
-    fetchData(api.GET('/v1/analytics/burndown', { params: { query: { from, to } } }), []) as Promise<unknown> as Promise<BurnRow[]>,
-    fetchData(api.GET('/v1/budgets', { params: { query: { limit: '100', offset: '0' } } }), []) as Promise<unknown> as Promise<Budget[]>,
+    fetchData(
+      api.GET('/v1/analytics/burndown', { params: { query: { from, to } } }),
+      [],
+    ) as Promise<unknown> as Promise<BurnRow[]>,
+    fetchData(
+      api.GET('/v1/budgets', { params: { query: { limit: '100', offset: '0' } } }),
+      [],
+    ) as Promise<unknown> as Promise<Budget[]>,
   ]);
   const chart = burn.map((r) => ({ hour: r.hour, cumulative: Number(r.cumulative_cost_usd) }));
 

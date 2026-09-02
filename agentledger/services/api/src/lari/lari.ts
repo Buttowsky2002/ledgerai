@@ -62,7 +62,8 @@ const usd = (n: number): number => round(n, 2);
 export function calculateAttributedIncrementalValue(outcomes: OutcomeLink[]): number {
   return outcomes.reduce(
     (sum, l) =>
-      sum + l.outcome.grossValueUsd * clamp01(l.attributionConfidence) * clamp01(l.incrementalityFactor),
+      sum +
+      l.outcome.grossValueUsd * clamp01(l.attributionConfidence) * clamp01(l.incrementalityFactor),
     0,
   );
 }
@@ -181,7 +182,9 @@ function buildLedger(
       `× conf ${clamp01(l.attributionConfidence)} × incr ${clamp01(l.incrementalityFactor)} = ` +
       `$${usd(l.outcome.grossValueUsd * clamp01(l.attributionConfidence) * clamp01(l.incrementalityFactor))}`,
   );
-  if (valueDrivers.length === 0) valueDrivers.push('no attributed outcomes in the period');
+  if (valueDrivers.length === 0) {
+    valueDrivers.push('no attributed outcomes in the period');
+  }
 
   const costDrivers = [
     `tokens $${usd(cost.tokenCostUsd)}`,
@@ -217,14 +220,27 @@ function buildLedger(
   );
 
   const limitations: string[] = [];
-  if (input.outcomes.some((l) => l.incrementalityFactor >= 1))
-    limitations.push('one or more outcomes used full incrementality (no counterfactual baseline) — may overstate value');
-  if (input.outcomes.some((l) => l.outcome.source === 'manual' || l.outcome.source === 'api'))
-    limitations.push('manual/API-asserted outcomes present — discounted by attribution confidence, not independently verified');
-  if (calculateFullyLoadedCost(cost) <= (input.epsilon ?? DEFAULT_EPSILON))
-    limitations.push('near-zero fully-loaded cost — LARI ratio floored by epsilon and reads as very large');
-  limitations.push('expected risk loss assumes a single independent incident per period (exposure × probability)');
-  limitations.push('uncertainty reserve scales linearly with (1 − confidence); it is a holdback, not a measured loss');
+  if (input.outcomes.some((l) => l.incrementalityFactor >= 1)) {
+    limitations.push(
+      'one or more outcomes used full incrementality (no counterfactual baseline) — may overstate value',
+    );
+  }
+  if (input.outcomes.some((l) => l.outcome.source === 'manual' || l.outcome.source === 'api')) {
+    limitations.push(
+      'manual/API-asserted outcomes present — discounted by attribution confidence, not independently verified',
+    );
+  }
+  if (calculateFullyLoadedCost(cost) <= (input.epsilon ?? DEFAULT_EPSILON)) {
+    limitations.push(
+      'near-zero fully-loaded cost — LARI ratio floored by epsilon and reads as very large',
+    );
+  }
+  limitations.push(
+    'expected risk loss assumes a single independent incident per period (exposure × probability)',
+  );
+  limitations.push(
+    'uncertainty reserve scales linearly with (1 − confidence); it is a holdback, not a measured loss',
+  );
 
   return {
     valueDrivers,
@@ -255,7 +271,10 @@ export function calculateRiskAdjustedROI(input: AgentROIInput): AgentROIResult {
   );
 
   const netValueUsd =
-    attributedIncrementalValueUsd - fullyLoadedCostUsd - expectedRiskLossUsd - uncertaintyReserveUsd;
+    attributedIncrementalValueUsd -
+    fullyLoadedCostUsd -
+    expectedRiskLossUsd -
+    uncertaintyReserveUsd;
   const lari = netValueUsd / Math.max(fullyLoadedCostUsd, epsilon);
 
   const recommendation = recommendAgentAction({

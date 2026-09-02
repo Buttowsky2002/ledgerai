@@ -7,9 +7,6 @@ import {
   calculateMemberDailySpend,
   calculateMemberDailySpendSeatOnly,
   usageScore,
-  type MemberDailyUsage,
-  type MemberSeatInfo,
-  type OrgDailyOverage,
 } from './github-copilot-member-spend';
 import {
   aggregateBillingByUserDay,
@@ -19,6 +16,11 @@ import {
   calculateMemberDailySpendWithBilling,
 } from './github-copilot-billing';
 import { calculateCopilotRoi, mergeRoiAssumptions } from './github-copilot-roi';
+import {
+  buildMemberSpendAggregates,
+  buildRoiDayTeamAggregates,
+  buildTeamSeatCounts,
+} from './github-copilot-sync.util';
 import {
   CopilotBillingLineRow,
   CopilotMemberRow,
@@ -146,20 +148,29 @@ export class GitHubCopilotSyncService {
           const daily = await client.fetchUsers1DayUsage(dayStr);
           usageRows.push(...daily);
         } catch (err) {
-          if (err instanceof GitHubCopilotApiError && err.status === 404) continue;
+          if (err instanceof GitHubCopilotApiError && err.status === 404) {
+            continue;
+          }
           this.logger.warn(`users-1-day sync skipped for ${dayStr}: ${safeMsg(err)}`);
         }
       }
 
-      usageRowsImported = await this.upsertUsage(tenantId, conn.connectionId, conn.orgSlug, usageRows);
+      usageRowsImported = await this.upsertUsage(
+        tenantId,
+        conn.connectionId,
+        conn.orgSlug,
+        usageRows,
+      );
 
       try {
-        const seatLogins = (await this.prisma.withTenant(tenantId, (tx) =>
-          tx.githubCopilotSeat.findMany({
-            where: { tenantId, connectionId: conn.connectionId, isActive: true },
-            select: { githubLogin: true },
-          }),
-        )).map((s) => s.githubLogin);
+        const seatLogins = (
+          await this.prisma.withTenant(tenantId, (tx) =>
+            tx.githubCopilotSeat.findMany({
+              where: { tenantId, connectionId: conn.connectionId, isActive: true },
+              select: { githubLogin: true },
+            }),
+          )
+        ).map((s) => s.githubLogin);
         const billingLines = await client.fetchAiCreditUsageForLookback(seatLogins, 35);
         billingRowsImported = await this.upsertBillingLines(
           tenantId,
@@ -175,7 +186,12 @@ export class GitHubCopilotSyncService {
         }
       }
 
-      roiRowsComputed = await this.computeRoiDaily(tenantId, conn.connectionId, conn.orgSlug, assumptions);
+      roiRowsComputed = await this.computeRoiDaily(
+        tenantId,
+        conn.connectionId,
+        conn.orgSlug,
+        assumptions,
+      );
       memberSpendRowsComputed = await this.computeMemberSpendDaily(
         tenantId,
         conn.connectionId,
@@ -333,7 +349,9 @@ export class GitHubCopilotSyncService {
     let count = 0;
     await this.prisma.withTenant(tenantId, async (tx) => {
       for (const s of seats) {
-        if (!s.githubUserId || !s.githubLogin) continue;
+        if (!s.githubUserId || !s.githubLogin) {
+          continue;
+        }
         await tx.githubCopilotSeat.upsert({
           where: {
             tenantId_connectionId_githubUserId: {
@@ -461,68 +479,9 @@ export class GitHubCopilotSyncService {
       tx.githubCopilotUsageDaily.findMany({ where: { tenantId, connectionId } }),
     );
 
-    const byDateTeam = new Map<
-      string,
-      {
-        teamSlug: string;
-        usageDate: string;
-        linesAccepted: number;
-        chatTurns: number;
-        prSummaryCount: number;
-        aiCreditsUsed: number;
-        activeUsers: number;
-        engagedUsers: number;
-      }
-    >();
+    const byDateTeam = buildRoiDayTeamAggregates(usage, seats.length);
 
-    for (const u of usage) {
-      const day = u.usageDate.toISOString().slice(0, 10);
-      const team = u.teamSlug || '';
-      const key = `${day}|${team}`;
-      const cur = byDateTeam.get(key) ?? {
-        teamSlug: team,
-        usageDate: day,
-        linesAccepted: 0,
-        chatTurns: 0,
-        prSummaryCount: 0,
-        aiCreditsUsed: 0,
-        activeUsers: 0,
-        engagedUsers: 0,
-      };
-      cur.linesAccepted += u.linesAccepted;
-      cur.chatTurns += u.chatTurns;
-      cur.prSummaryCount += u.prSummaryCount;
-      cur.aiCreditsUsed += Number(u.aiCreditsUsed);
-      cur.activeUsers = Math.max(cur.activeUsers, u.activeUsers);
-      cur.engagedUsers = Math.max(cur.engagedUsers, u.engagedUsers);
-      byDateTeam.set(key, cur);
-    }
-
-    const teamSeatCounts = new Map<string, { assigned: number; active: number }>();
-    for (const s of seats) {
-      const team = s.assigningTeamSlug ?? '';
-      const cur = teamSeatCounts.get(team) ?? { assigned: 0, active: 0 };
-      cur.assigned += 1;
-      if (s.isActive && s.lastActivityAt) {
-        const days = (Date.now() - s.lastActivityAt.getTime()) / 86_400_000;
-        if (days <= 28) cur.active += 1;
-      }
-      teamSeatCounts.set(team, cur);
-    }
-
-    if (byDateTeam.size === 0 && seats.length > 0) {
-      const today = new Date().toISOString().slice(0, 10);
-      byDateTeam.set(`${today}|`, {
-        teamSlug: '',
-        usageDate: today,
-        linesAccepted: 0,
-        chatTurns: 0,
-        prSummaryCount: 0,
-        aiCreditsUsed: 0,
-        activeUsers: 0,
-        engagedUsers: 0,
-      });
-    }
+    const teamSeatCounts = buildTeamSeatCounts(seats, Date.now());
 
     let count = 0;
     await this.prisma.withTenant(tenantId, async (tx) => {
@@ -735,105 +694,12 @@ export class GitHubCopilotSyncService {
     );
     const billingMonthsByUser = billingMonthsFromUserDay(billingByUserDay);
 
-    const seatByLogin = new Map<string, MemberSeatInfo>();
-    for (const s of seats) {
-      seatByLogin.set(s.githubLogin, {
-        githubLogin: s.githubLogin,
-        monthlySeatCost: Number(s.monthlySeatCost),
-        lastActivityAt: s.lastActivityAt,
-        isActive: s.isActive,
-        assigningTeamSlug: s.assigningTeamSlug,
-      });
-    }
-
-    const primaryTeamByLogin = new Map<string, string>();
-    for (const mt of memberTeams) {
-      if (!primaryTeamByLogin.has(mt.githubLogin)) {
-        primaryTeamByLogin.set(mt.githubLogin, mt.teamSlug);
-      }
-    }
-    for (const s of seats) {
-      if (s.assigningTeamSlug && !primaryTeamByLogin.has(s.githubLogin)) {
-        primaryTeamByLogin.set(s.githubLogin, s.assigningTeamSlug);
-      }
-    }
-
-    const overageByDay = new Map<string, OrgDailyOverage>();
-    for (const r of roiRows) {
-      const day = r.usageDate.toISOString().slice(0, 10);
-      const cur = overageByDay.get(day) ?? {
-        usageDate: day,
-        totalOverageCost: 0,
-        totalOrgAiCreditsUsed: 0,
-      };
-      cur.totalOverageCost += Number(r.overageEstimate);
-      cur.totalOrgAiCreditsUsed += Number(r.aiCreditsUsed);
-      overageByDay.set(day, cur);
-    }
-
-    const usageByLoginDay = new Map<string, MemberDailyUsage>();
-    for (const u of usage) {
-      if (!u.githubLogin) continue;
-      const day = u.usageDate.toISOString().slice(0, 10);
-      const teamSlug = primaryTeamByLogin.get(u.githubLogin) ?? u.teamSlug ?? '';
-      const key = `${day}|${u.githubLogin}`;
-      const cur = usageByLoginDay.get(key) ?? {
-        githubLogin: u.githubLogin,
-        teamSlug,
-        usageDate: day,
-        aiCreditsUsed: 0,
-        linesAccepted: 0,
-        chatTurns: 0,
-        prSummaryCount: 0,
-      };
-      cur.aiCreditsUsed += Number(u.aiCreditsUsed);
-      cur.linesAccepted += u.linesAccepted;
-      cur.chatTurns += u.chatTurns;
-      cur.prSummaryCount += u.prSummaryCount;
-      usageByLoginDay.set(key, cur);
-    }
-
-    // Backfill every active seat for each day we have org usage/ROI data so member
-    // totals reconcile with org-level allocated spend (seat cost applies daily per seat).
-    const allDays = new Set<string>();
-    for (const u of usage) {
-      allDays.add(u.usageDate.toISOString().slice(0, 10));
-    }
-    for (const r of roiRows) {
-      allDays.add(r.usageDate.toISOString().slice(0, 10));
-    }
-    if (allDays.size === 0) {
-      for (let d = 0; d < 28; d++) {
-        const day = new Date();
-        day.setUTCDate(day.getUTCDate() - d);
-        allDays.add(day.toISOString().slice(0, 10));
-      }
-    }
-
-    for (const day of allDays) {
-      for (const s of seats) {
-        if (!s.isActive) continue;
-        const key = `${day}|${s.githubLogin}`;
-        if (!usageByLoginDay.has(key)) {
-          usageByLoginDay.set(key, {
-            githubLogin: s.githubLogin,
-            teamSlug: primaryTeamByLogin.get(s.githubLogin) ?? s.assigningTeamSlug ?? '',
-            usageDate: day,
-            aiCreditsUsed: 0,
-            linesAccepted: 0,
-            chatTurns: 0,
-            prSummaryCount: 0,
-          });
-        }
-      }
-    }
-
-    const byDay = new Map<string, MemberDailyUsage[]>();
-    for (const u of usageByLoginDay.values()) {
-      const list = byDay.get(u.usageDate) ?? [];
-      list.push(u);
-      byDay.set(u.usageDate, list);
-    }
+    const { seatByLogin, overageByDay, byDay } = buildMemberSpendAggregates({
+      seats,
+      usage,
+      roiRows,
+      memberTeams,
+    });
 
     let count = 0;
     const now = new Date();

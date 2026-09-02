@@ -1,21 +1,19 @@
+import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { Badge, Card, DataTable, PageHeader, num, usd } from '../../components/ui';
-import { SourceMixCell } from '../../components/SourceMixCell';
-import { SpendBillingCell } from '../../components/SpendBillingCell';
+import { Badge, Card, DataTable, PageHeader } from '../../components/ui';
+import { VendorSpendCell } from '../../components/VendorSpendCell';
 import { proxyApi } from '../../lib/api';
 import { resolveRange } from '../../lib/resolve-range';
-import { discoverModelFamilies } from '../../lib/model-family';
-import { userTotalSpendUsd } from '../../lib/user-spend';
+import { vendorLabel } from '../../lib/fixed-cost-catalog';
+import {
+  sumVendorColumns,
+  userVendorTotal,
+  vendorShortLabel,
+  type VendorSpendSlice,
+} from '../../lib/vendor-spend';
+import { usd } from '../../components/ui';
 
 export const dynamic = 'force-dynamic';
-
-type ModelBreakdown = {
-  model: string;
-  platform: string;
-  spend_usd: number;
-  calls: number;
-  usage_value_usd?: number;
-};
 
 type UserRow = {
   user_id: string;
@@ -24,20 +22,15 @@ type UserRow = {
   team: string;
   resolved: boolean;
   total_spend_usd: number;
-  portal_import_usd?: number;
-  connector_usd?: number;
-  cursor_on_demand_usd?: number;
-  cursor_included_usd?: number;
-  calls: number;
-  tokens?: number;
-  models: string[];
-  model_breakdown: ModelBreakdown[];
+  vendor_spend?: Record<string, VendorSpendSlice>;
 };
 
 type UsersResponse = {
   from: string;
   to: string;
   users: UserRow[];
+  vendors: string[];
+  org_billing?: { total_cost_of_ai: number };
   sources?: { llm_call_users: number; copilot_members: number; cursor_members?: number };
 };
 
@@ -48,26 +41,8 @@ const MEMBER_TABS = [
 ] as const;
 type MemberTab = (typeof MEMBER_TABS)[number]['id'];
 
-const MODEL_CHIP_LIMIT = 3;
-
 function isEmailLike(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
-}
-
-function ModelChips({ families }: { families: string[] }) {
-  if (families.length === 0) return <>—</>;
-  const shown = families.slice(0, MODEL_CHIP_LIMIT);
-  const rest = families.length - shown.length;
-  return (
-    <span className="inline-flex flex-wrap gap-1">
-      {shown.map((label) => (
-        <Badge key={label} tone="neutral">
-          {label}
-        </Badge>
-      ))}
-      {rest > 0 && <span className="text-xs text-muted">and {rest} more</span>}
-    </span>
-  );
 }
 
 export default async function UsersPage({
@@ -81,11 +56,17 @@ export default async function UsersPage({
     ? (searchParams.tab as MemberTab)
     : 'all';
   const qs = new URLSearchParams({ from, to });
-  if (q) qs.set('q', q);
+  if (q) {
+    qs.set('q', q);
+  }
 
   const { ok, data } = await proxyApi(`/v1/analytics/users?${qs.toString()}`);
-  const payload = (ok && data && typeof data === 'object' ? data : { users: [] }) as UsersResponse;
+  const payload = (
+    ok && data && typeof data === 'object' ? data : { users: [], vendors: [] }
+  ) as UsersResponse;
   const allUsers = payload.users ?? [];
+  const vendors = payload.vendors ?? [];
+  const orgTotal = payload.org_billing?.total_cost_of_ai;
   const sources = payload.sources;
   const users =
     tab === 'linked'
@@ -98,8 +79,12 @@ export default async function UsersPage({
 
   const tabHref = (next: MemberTab, keepQ = true) => {
     const params = new URLSearchParams({ from, to });
-    if (next !== 'all') params.set('tab', next);
-    if (keepQ && q) params.set('q', q);
+    if (next !== 'all') {
+      params.set('tab', next);
+    }
+    if (keepQ && q) {
+      params.set('q', q);
+    }
     return `/users?${params.toString()}`;
   };
 
@@ -115,6 +100,31 @@ export default async function UsersPage({
       ? `${allUsers.length} members · ${sources.llm_call_users} metered · ${sources.cursor_members ?? 0} Cursor · ${sources.copilot_members} Copilot`
       : `${allUsers.length} members`;
 
+  const vendorTotals = sumVendorColumns(users, vendors);
+  const directoryTotal = users.reduce((s, u) => s + userVendorTotal(u), 0);
+
+  const columns = [
+    { key: 'user', label: 'User' },
+    { key: 'email', label: 'Email' },
+    { key: 'team', label: 'Team' },
+    ...vendors.map((v) => ({
+      key: `vendor_${v}`,
+      label: vendorShortLabel(v),
+      align: 'right' as const,
+    })),
+    { key: 'total', label: 'Total $', align: 'right' as const },
+  ];
+
+  const footerRow: Record<string, ReactNode> = {
+    user: <span className="text-xs uppercase tracking-wide text-muted">Grand total</span>,
+    email: '',
+    team: '',
+    total: usd(orgTotal ?? directoryTotal),
+  };
+  for (const v of vendors) {
+    footerRow[`vendor_${v}`] = <VendorSpendCell slice={vendorTotals[v]} />;
+  }
+
   return (
     <>
       <PageHeader
@@ -122,26 +132,28 @@ export default async function UsersPage({
         subtitle={`${tabSubtitle} · ${sourceNote}`}
         actions={
           <div className="flex flex-wrap justify-end gap-2">
-              {MEMBER_TABS.map((t) => {
-                const count =
-                  t.id === 'all'
-                    ? allUsers.length
-                    : t.id === 'linked'
-                      ? allUsers.filter((u) => u.resolved).length
-                      : allUsers.filter((u) => !u.resolved).length;
-                return (
-                  <Link
-                    key={t.id}
-                    href={tabHref(t.id)}
-                    className={`rounded px-3 py-1.5 text-sm ${
-                      t.id === tab ? 'bg-accent/20 text-white' : 'border border-edge text-muted hover:bg-white/5'
-                    }`}
-                  >
-                    {t.label}
-                    <span className="ml-1.5 text-xs text-muted">({count})</span>
-                  </Link>
-                );
-              })}
+            {MEMBER_TABS.map((t) => {
+              const count =
+                t.id === 'all'
+                  ? allUsers.length
+                  : t.id === 'linked'
+                    ? allUsers.filter((u) => u.resolved).length
+                    : allUsers.filter((u) => !u.resolved).length;
+              return (
+                <Link
+                  key={t.id}
+                  href={tabHref(t.id)}
+                  className={`rounded px-3 py-1.5 text-sm ${
+                    t.id === tab
+                      ? 'bg-accent/20 text-white'
+                      : 'border border-edge text-muted hover:bg-white/5'
+                  }`}
+                >
+                  {t.label}
+                  <span className="ml-1.5 text-xs text-muted">({count})</span>
+                </Link>
+              );
+            })}
           </div>
         }
       />
@@ -149,7 +161,8 @@ export default async function UsersPage({
       {loadError && (
         <Card title="Could not load users">
           <p className="text-sm text-warn">
-            The users API returned an error. Restart the API service if you recently deployed this feature.
+            The users API returned an error. Restart the API service if you recently deployed this
+            feature.
           </p>
         </Card>
       )}
@@ -184,45 +197,41 @@ export default async function UsersPage({
       </Card>
 
       <Card title={`Member directory · ${MEMBER_TABS.find((t) => t.id === tab)?.label ?? 'All'}`}>
+        {vendors.length > 0 && (
+          <p className="mb-3 text-xs text-muted">
+            Vendors: {vendors.map((v) => vendorLabel(v)).join(' · ')} — click a user for usage
+            detail
+          </p>
+        )}
         <DataTable
-          columns={[
-            { key: 'user', label: 'User' },
-            { key: 'email', label: 'Email' },
-            { key: 'team', label: 'Team' },
-            { key: 'spend', label: 'Total spend', align: 'right' },
-            { key: 'cursor', label: 'Cursor', align: 'right' },
-            { key: 'sources', label: 'Sources' },
-            { key: 'calls', label: 'Calls (incl. Cursor)', align: 'right' },
-            { key: 'tokens', label: 'Tokens', align: 'right' },
-            { key: 'models', label: 'Models used' },
-          ]}
-          rows={users.map((u) => ({
-            user: (
-              <span className="inline-flex flex-wrap items-center gap-2">
-                <Link href={`/users/${encodeURIComponent(u.user_id)}?from=${from}&to=${to}`} className="text-accent hover:text-accent-soft hover:underline">
-                  {u.display_name}
-                </Link>
-                {showUnlinkedBadge && !u.resolved && (
-                  <Badge tone="warn" dot>
-                    unlinked
-                  </Badge>
-                )}
-              </span>
-            ),
-            email: u.email || (isEmailLike(u.user_id) ? u.user_id : '—'),
-            team: u.team || '—',
-            spend: usd(userTotalSpendUsd(u)),
-            cursor: (
-              <SpendBillingCell
-                cursorOnDemandUsd={u.cursor_on_demand_usd}
-                cursorIncludedUsd={u.cursor_included_usd}
-              />
-            ),
-            sources: <SourceMixCell portalUsd={u.portal_import_usd} connectorUsd={u.connector_usd} />,
-            calls: num(u.calls),
-            tokens: num(u.tokens ?? 0),
-            models: <ModelChips families={discoverModelFamilies(u.model_breakdown)} />,
-          }))}
+          columns={columns}
+          rows={users.map((u) => {
+            const row: Record<string, ReactNode> = {
+              user: (
+                <span className="inline-flex flex-wrap items-center gap-2">
+                  <Link
+                    href={`/users/${encodeURIComponent(u.user_id)}?from=${from}&to=${to}`}
+                    className="text-accent hover:text-accent-soft hover:underline"
+                  >
+                    {u.display_name}
+                  </Link>
+                  {showUnlinkedBadge && !u.resolved && (
+                    <Badge tone="warn" dot>
+                      unlinked
+                    </Badge>
+                  )}
+                </span>
+              ),
+              email: u.email || (isEmailLike(u.user_id) ? u.user_id : '—'),
+              team: u.team || '—',
+              total: usd(userVendorTotal(u)),
+            };
+            for (const v of vendors) {
+              row[`vendor_${v}`] = <VendorSpendCell slice={u.vendor_spend?.[v]} />;
+            }
+            return row;
+          })}
+          footerRows={[footerRow]}
         />
       </Card>
     </>

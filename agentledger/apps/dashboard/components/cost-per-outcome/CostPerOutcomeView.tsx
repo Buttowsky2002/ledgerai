@@ -11,6 +11,7 @@ import { Card, DataTable, PageHeader, Stat, num, usd } from '@/components/ui';
 import { fetchCfoView } from '@/lib/api/lari';
 import { rangeHref, type DateBounds } from '@/lib/date-range';
 import { forecastHorizonLabel } from '@/lib/forecast-horizon';
+import { usdPerMonth } from '@/lib/usd-per-month';
 import type { CostBasisMode, CfoViewResponse } from '@/types/lari';
 
 const BASIS_OPTIONS: { value: CostBasisMode; label: string }[] = [
@@ -25,9 +26,10 @@ function CostStackStrip({ data }: { data: CfoViewResponse }) {
   const s = data.costProvenance.stack;
   return (
     <p className="mb-4 rounded-lg border border-edge bg-panel/50 px-4 py-2 text-xs text-muted">
-      Projected ({forecastHorizonLabel(data.summary.forecastDays)}): tokens {usd(s.tokenUsageUsd)} · fixed cost{' '}
-      {usd(s.fixedCostUsd)} · coding agents {usd(s.codingAgentUsd)} · Copilot {usd(s.copilotUsd)} · overhead{' '}
-      {usd(s.qaEvalOverheadUsd)} · observed window {usd(data.summary.observedFullyLoadedCost)}
+      Projected ({forecastHorizonLabel(data.summary.forecastDays)}): tokens {usd(s.tokenUsageUsd)} ·
+      fixed cost {usd(s.fixedCostUsd)} · coding agents {usd(s.codingAgentUsd)} · Copilot{' '}
+      {usd(s.copilotUsd)} · overhead {usd(s.qaEvalOverheadUsd)} · observed window{' '}
+      {usd(data.summary.observedFullyLoadedCost)}
     </p>
   );
 }
@@ -63,10 +65,14 @@ export function CostPerOutcomeView({
         }
       })
       .catch(() => {
-        if (!cancelled) setError(true);
+        if (!cancelled) {
+          setError(true);
+        }
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       });
     return () => {
       cancelled = true;
@@ -121,7 +127,9 @@ export function CostPerOutcomeView({
                     basis: opt.value,
                   })}
                   className={`rounded px-3 py-1.5 text-sm ${
-                    opt.value === costBasis ? 'bg-accent/20 text-white' : 'border border-edge text-muted hover:bg-white/5'
+                    opt.value === costBasis
+                      ? 'bg-accent/20 text-white'
+                      : 'border border-edge text-muted hover:bg-white/5'
                   }`}
                 >
                   {opt.label}
@@ -129,7 +137,10 @@ export function CostPerOutcomeView({
               ))}
             </div>
             <Link
-              href={rangeHref('/cfo', from, to, { horizon: String(forecastDays), basis: costBasis })}
+              href={rangeHref('/cfo', from, to, {
+                horizon: String(forecastDays),
+                basis: costBasis,
+              })}
               className="text-sm text-accent hover:underline"
             >
               Full CFO view →
@@ -181,10 +192,14 @@ export function CostPerOutcomeView({
             />
             <Stat
               label="Fixed cost (seats)"
-              value={usd(data.costProvenance.stack.fixedCostUsd)}
-              sub="fixed_costs licenses & subscriptions"
+              value={usdPerMonth(data.summary.monthlySeatRunRateUsd)}
+              sub={`${forecastHorizonLabel(data.summary.forecastDays)} projected ${usd(data.costProvenance.stack.fixedCostUsd)}`}
             />
-            <Stat label="Business value" value={usd(data.summary.businessValue)} sub="outcomes + Copilot + Cursor activity" />
+            <Stat
+              label="Business value"
+              value={usd(data.summary.businessValue)}
+              sub="outcomes + Copilot + Cursor activity"
+            />
           </>
         ) : null}
       </div>
@@ -194,9 +209,10 @@ export function CostPerOutcomeView({
       {noOutcomesButSpend && (
         <Card title="Spend without attributed outcomes">
           <p className="text-sm text-muted">
-            {usd(data!.summary.fullyLoadedCost)} projected for {forecastHorizonLabel(data!.summary.forecastDays)} from
-            token/API meter data and fixed seat costs, but no linked outcomes in the run-rate window. LARI recommendations
-            below still flag wasted seats and model right-sizing.
+            {usd(data!.summary.fullyLoadedCost)} projected for{' '}
+            {forecastHorizonLabel(data!.summary.forecastDays)} from token/API meter data and fixed
+            seat costs, but no linked outcomes in the run-rate window. LARI recommendations below
+            still flag wasted seats and model right-sizing.
           </p>
         </Card>
       )}
@@ -204,7 +220,10 @@ export function CostPerOutcomeView({
       {!loading && data && data.warnings.length > 0 && (
         <div className="mb-4 space-y-2">
           {data.warnings.map((w) => (
-            <p key={w} className="rounded-lg border border-warn/30 bg-warn/10 px-4 py-2 text-xs text-warn">
+            <p
+              key={w}
+              className="rounded-lg border border-warn/30 bg-warn/10 px-4 py-2 text-xs text-warn"
+            >
               {w}
             </p>
           ))}
@@ -217,7 +236,9 @@ export function CostPerOutcomeView({
 
       <Card title="Cost by model ($/1M tokens from usage)">
         {loading ? (
-          <div className="flex h-[280px] animate-pulse items-center justify-center text-sm text-muted">Loading chart…</div>
+          <div className="flex h-[280px] animate-pulse items-center justify-center text-sm text-muted">
+            Loading chart…
+          </div>
         ) : modelChart.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted">
             No model usage in this run-rate window — connect a provider or import usage data.
@@ -231,7 +252,9 @@ export function CostPerOutcomeView({
         {loading ? (
           <div className="animate-pulse py-8 text-center text-sm text-muted">Loading table…</div>
         ) : (data?.modelBreakdown ?? []).length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted">No model usage in this run-rate window.</p>
+          <p className="py-8 text-center text-sm text-muted">
+            No model usage in this run-rate window.
+          </p>
         ) : (
           <DataTable
             columns={[

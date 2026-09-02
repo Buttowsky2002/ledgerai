@@ -33,7 +33,8 @@ type OutcomeRow = {
   occurred_at?: string;
 };
 
-const pct = (n: number | undefined): string => (typeof n === 'number' ? `${(n * 100).toFixed(0)}%` : '—');
+const pct = (n: number | undefined): string =>
+  typeof n === 'number' ? `${(n * 100).toFixed(0)}%` : '—';
 
 export default async function AgentDetailPage({ params }: { params: { agentId: string } }) {
   const { from, to } = defaultRange();
@@ -77,7 +78,11 @@ export default async function AgentDetailPage({ params }: { params: { agentId: s
       <div className="mb-6 grid grid-cols-4 gap-4">
         <Stat label="Outcomes" value={num(sum.outcomes_count)} />
         <Stat label="Value" value={usd(sum.value_usd)} sub={`net ${usd(sum.net_value_usd)}`} />
-        <Stat label="Cost / success" value={usd(sum.cost_per_success ?? undefined)} sub={`avg conf ${pct(sum.attribution_confidence_avg)}`} />
+        <Stat
+          label="Cost / success"
+          value={usd(sum.cost_per_success ?? undefined)}
+          sub={`avg conf ${pct(sum.attribution_confidence_avg)}`}
+        />
         <Stat label="Risk-adjusted ROI" value={usd(sum.risk_adjusted_roi)} />
       </div>
 
@@ -98,7 +103,10 @@ export default async function AgentDetailPage({ params }: { params: { agentId: s
             value_usd: usd(o.value_usd),
             confidence: pct(o.confidence),
             evidence: (
-              <a className="text-accent hover:text-accent-soft hover:underline" href={`/attribution?outcome=${encodeURIComponent(o.outcome_id)}`}>
+              <a
+                className="text-accent hover:text-accent-soft hover:underline"
+                href={`/attribution?outcome=${encodeURIComponent(o.outcome_id)}`}
+              >
                 view signals →
               </a>
             ),
@@ -113,7 +121,10 @@ export default async function AgentDetailPage({ params }: { params: { agentId: s
               { key: 'status', label: 'Status' },
               { key: 'runs', label: 'Runs', align: 'right' },
             ]}
-            rows={(detail.statusMix ?? []).map((row) => ({ status: row.status, runs: num(row.runs) }))}
+            rows={(detail.statusMix ?? []).map((row) => ({
+              status: row.status,
+              runs: num(row.runs),
+            }))}
           />
         </Card>
       </div>

@@ -26,7 +26,13 @@ describe('Attribution audit (RLS)', () => {
     process.env.AGENTLEDGER_SEED_DSN ??
     'postgres://agentledger:dev_only_change_me@localhost:5432/agentledger?sslmode=disable';
   const contribs = JSON.stringify([
-    { signal: 'temporal_proximity', signal_type: 'temporal', value: 0.8, weighted_log_odds: 1.9, evidence_ref: 'gap=12m' },
+    {
+      signal: 'temporal_proximity',
+      signal_type: 'temporal',
+      value: 0.8,
+      weighted_log_odds: 1.9,
+      evidence_ref: 'gap=12m',
+    },
   ]);
 
   beforeAll(async () => {
@@ -59,7 +65,7 @@ describe('Attribution audit (RLS)', () => {
     await app.close();
   });
 
-  it('returns only the requesting tenant\'s edge for a shared outcome_id', async () => {
+  it("returns only the requesting tenant's edge for a shared outcome_id", async () => {
     const a = await request(app.getHttpServer())
       .get(`/v1/attribution/edges?outcomeId=${encodeURIComponent(outcome)}`)
       .set('x-tenant-id', tenantA);
@@ -78,7 +84,7 @@ describe('Attribution audit (RLS)', () => {
     expect(b.body[0].agent_id).toBe('agentB');
   });
 
-  it('tenant A never sees tenant B\'s edge (RLS fails closed)', async () => {
+  it("tenant A never sees tenant B's edge (RLS fails closed)", async () => {
     const a = await request(app.getHttpServer())
       .get(`/v1/attribution/edges?outcomeId=${encodeURIComponent(outcome)}`)
       .set('x-tenant-id', tenantA);
@@ -86,7 +92,7 @@ describe('Attribution audit (RLS)', () => {
     expect(agents).not.toContain('agentB');
   });
 
-  it('honors the confidence floor (A\'s 0.8 edge excluded at minConfidence 0.9)', async () => {
+  it("honors the confidence floor (A's 0.8 edge excluded at minConfidence 0.9)", async () => {
     const res = await request(app.getHttpServer())
       .get(`/v1/attribution/edges?outcomeId=${encodeURIComponent(outcome)}&minConfidence=0.9`)
       .set('x-tenant-id', tenantA);

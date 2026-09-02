@@ -73,7 +73,9 @@ describe('AuthMiddleware dev tenant-header handling', () => {
   it('a valid Bearer token is used and the dev header is never consulted', async () => {
     process.env.NODE_ENV = 'development';
     process.env.LEDGERAI_DEV_TRUST_HEADER = 'true';
-    const verifyAccess = jest.fn().mockResolvedValue({ tenantId: 't', userId: 'u', role: 'viewer' });
+    const verifyAccess = jest
+      .fn()
+      .mockResolvedValue({ tenantId: 't', userId: 'u', role: 'viewer' });
     const p = await resolvePrincipal(
       { authorization: 'Bearer good.token', 'x-tenant-id': validTenant },
       { verifyAccess },

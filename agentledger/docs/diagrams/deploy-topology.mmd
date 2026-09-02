@@ -1,0 +1,40 @@
+%% Source of truth: agentledger/docs/diagrams (see docker-compose.yml).
+%% Startup/dependency graph. An arrow A --> B reads "A depends_on B"
+%% (B must be healthy/started/completed before A), taken verbatim from the
+%% depends_on: blocks in docker-compose.yml. This is NOT data-flow direction;
+%% for how events move, see data-plane-ingest.mmd.
+flowchart TD
+    subgraph stores["Stateful backing services"]
+        postgres["postgres"]
+        clickhouse["clickhouse"]
+        redpanda["redpanda"]
+        redis["redis"]
+    end
+
+    pg_dev_init["pg-dev-init"] --> postgres
+
+    collector["collector"] --> redpanda
+    litellm_adapter["litellm-adapter"] --> collector
+    ch_insert["ch-insert"] --> clickhouse
+    ch_insert --> redpanda
+    reconcile["reconcile"] --> clickhouse
+    risk_engine["risk-engine"] --> clickhouse
+    risk_enrichment["risk-enrichment"] --> clickhouse
+    attribution["attribution"] --> postgres
+    attribution --> clickhouse
+    slack_alerter["slack-alerter"] --> postgres
+    slack_alerter --> clickhouse
+    connector_sync["connector-sync"] --> postgres
+    connector_sync --> clickhouse
+    outcome_sync["outcome-sync"] --> postgres
+    outcome_sync --> clickhouse
+    pricesync["pricesync"]
+
+    gateway["gateway"] --> clickhouse
+    gateway --> redis
+
+    api["api"] --> postgres
+    api --> pg_dev_init
+    api --> clickhouse
+
+    dashboard["dashboard"] --> api

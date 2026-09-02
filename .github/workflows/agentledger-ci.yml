@@ -141,6 +141,7 @@ jobs:
       - run: npm ci
       - run: npm run prisma:generate
       - run: npm run lint
+      - run: npm run format:check
       - run: npm run build
       - run: npm test
       # Production-dep audit (--omit=dev). Remains soft-fail until NestJS 11 clears
@@ -170,6 +171,7 @@ jobs:
         run: |
           npm ci
           npm run lint
+          npm run format:check
           npm test
           npm run build
       # Blocking for new highs once Next majors clear remaining advisories (fix only
@@ -197,6 +199,7 @@ jobs:
           cache-dependency-path: agentledger/packages/sdk-typescript/package-lock.json
       - run: npm ci
       - run: npm run lint
+      - run: npm run format:check
       - run: npm test
       - run: npm run build
       # SDK has zero production deps — blocking audit is safe (Phase 10).

@@ -132,13 +132,19 @@ function defaultRange(): { from: string; to: string } {
 }
 
 function formatApiError(body: Record<string, unknown>, fallback: string): string {
-  if (typeof body.detail === 'string') return body.detail;
+  if (typeof body.detail === 'string') {
+    return body.detail;
+  }
   const msg = body.message;
-  if (typeof msg === 'string') return msg;
+  if (typeof msg === 'string') {
+    return msg;
+  }
   if (msg && typeof msg === 'object' && !Array.isArray(msg)) {
     const nested = msg as Record<string, unknown>;
     const parts: string[] = [];
-    if (typeof nested.message === 'string') parts.push(nested.message);
+    if (typeof nested.message === 'string') {
+      parts.push(nested.message);
+    }
     if (Array.isArray(nested.errors)) {
       parts.push(...nested.errors.map((e) => (typeof e === 'string' ? e : JSON.stringify(e))));
     }
@@ -149,7 +155,9 @@ function formatApiError(body: Record<string, unknown>, fallback: string): string
         }
       }
     }
-    if (parts.length) return parts.join(' · ');
+    if (parts.length) {
+      return parts.join(' · ');
+    }
   }
   return fallback;
 }
@@ -164,13 +172,23 @@ function readHandoff(config?: Record<string, unknown>) {
   };
 }
 
-function rolesToMapping(roles: Record<string, string>, costUnit: 'usd' | 'cents', reportThroughDay?: string | null): ColumnMapping | null {
+function rolesToMapping(
+  roles: Record<string, string>,
+  costUnit: 'usd' | 'cents',
+  reportThroughDay?: string | null,
+): ColumnMapping | null {
   const byRole: Record<string, string> = {};
   for (const [header, role] of Object.entries(roles)) {
-    if (role && role !== 'ignore') byRole[role] = header;
+    if (role && role !== 'ignore') {
+      byRole[role] = header;
+    }
   }
-  if (!byRole.cost) return null;
-  if (!byRole.date && !reportThroughDay) return null;
+  if (!byRole.cost) {
+    return null;
+  }
+  if (!byRole.date && !reportThroughDay) {
+    return null;
+  }
   return {
     ...(byRole.date ? { date: byRole.date } : {}),
     cost: byRole.cost,
@@ -189,10 +207,16 @@ function rolesToMapping(roles: Record<string, string>, costUnit: 'usd' | 'cents'
 
 function mappingToRoles(mapping: ColumnMapping | null, headers: string[]): Record<string, string> {
   const roles: Record<string, string> = {};
-  for (const h of headers) roles[h] = 'ignore';
-  if (!mapping) return roles;
+  for (const h of headers) {
+    roles[h] = 'ignore';
+  }
+  if (!mapping) {
+    return roles;
+  }
   const set = (role: string, header?: string) => {
-    if (header && headers.includes(header)) roles[header] = role;
+    if (header && headers.includes(header)) {
+      roles[header] = role;
+    }
   };
   set('date', mapping.date);
   set('cost', mapping.cost);
@@ -207,10 +231,19 @@ function mappingToRoles(mapping: ColumnMapping | null, headers: string[]): Recor
   return roles;
 }
 
-function dayStatus(portal: number, api: number): { label: string; tone: 'pos' | 'warn' | 'info' | 'neutral' } {
-  if (portal > 0 && api > 0) return { label: 'Overlap risk', tone: 'warn' };
-  if (portal > 0) return { label: 'Portal only', tone: 'info' };
-  if (api > 0) return { label: 'API only', tone: 'pos' };
+function dayStatus(
+  portal: number,
+  api: number,
+): { label: string; tone: 'pos' | 'warn' | 'info' | 'neutral' } {
+  if (portal > 0 && api > 0) {
+    return { label: 'Overlap risk', tone: 'warn' };
+  }
+  if (portal > 0) {
+    return { label: 'Portal only', tone: 'info' };
+  }
+  if (api > 0) {
+    return { label: 'API only', tone: 'pos' };
+  }
   return { label: '—', tone: 'neutral' };
 }
 
@@ -246,7 +279,9 @@ export function BillingImportClient() {
   const loadConnectors = useCallback(async () => {
     const res = await fetch('/api/connectors');
     const body = (await res.json()) as Connector[] | { error?: string };
-    if (!res.ok) return;
+    if (!res.ok) {
+      return;
+    }
     const list = Array.isArray(body) ? body : [];
     setConnectors(list);
   }, []);
@@ -257,7 +292,9 @@ export function BillingImportClient() {
       const qs = new URLSearchParams({ from: rangeFrom, to: rangeTo });
       const res = await fetch(`/api/analytics/source-reconciliation?${qs}`);
       const body = (await res.json()) as Reconciliation | Record<string, unknown>;
-      if (res.ok) setReconciliation(body as Reconciliation);
+      if (res.ok) {
+        setReconciliation(body as Reconciliation);
+      }
     } finally {
       setLoadingRecon(false);
     }
@@ -268,7 +305,9 @@ export function BillingImportClient() {
     try {
       const res = await fetch('/api/portal-import/runs?limit=40');
       const body = (await res.json()) as { runs?: ImportRun[] };
-      if (res.ok) setImportRuns(body.runs ?? []);
+      if (res.ok) {
+        setImportRuns(body.runs ?? []);
+      }
     } finally {
       setLoadingRuns(false);
     }
@@ -298,12 +337,16 @@ export function BillingImportClient() {
       }),
     });
     const body = (await res.json()) as PortalPreview & Record<string, unknown>;
-    if (!res.ok) throw new Error(formatApiError(body, 'Preview failed'));
+    if (!res.ok) {
+      throw new Error(formatApiError(body, 'Preview failed'));
+    }
     return body as PortalPreview;
   }, []);
 
   async function onFilesSelected(fileList: FileList | null) {
-    if (!fileList?.length) return;
+    if (!fileList?.length) {
+      return;
+    }
     setError(null);
     setUploadResult(null);
     setPreviewing(true);
@@ -342,11 +385,10 @@ export function BillingImportClient() {
     }
   }
 
-  async function refreshActivePreview(
-    roles: Record<string, string>,
-    costUnit: 'usd' | 'cents',
-  ) {
-    if (!activeFile) return;
+  async function refreshActivePreview(roles: Record<string, string>, costUnit: 'usd' | 'cents') {
+    if (!activeFile) {
+      return;
+    }
     const reportThroughDay =
       activeFile.mapping?.reportThroughDay ?? activeFile.preview?.format?.reportTo ?? null;
     const mapping = rolesToMapping(roles, costUnit, reportThroughDay);
@@ -356,9 +398,7 @@ export function BillingImportClient() {
       const preview = await runPreview(activeFile, mapping);
       setStagedFiles((prev) =>
         prev.map((f, i) =>
-          i === activeFileIdx
-            ? { ...f, preview, mapping, headerRoles: roles, costUnit }
-            : f,
+          i === activeFileIdx ? { ...f, preview, mapping, headerRoles: roles, costUnit } : f,
         ),
       );
     } catch (e) {
@@ -369,13 +409,17 @@ export function BillingImportClient() {
   }
 
   function updateHeaderRole(header: string, role: string) {
-    if (!activeFile) return;
+    if (!activeFile) {
+      return;
+    }
     const roles = { ...activeFile.headerRoles, [header]: role };
     void refreshActivePreview(roles, activeFile.costUnit);
   }
 
   function applyMappingToAllFiles() {
-    if (!activeFile?.mapping) return;
+    if (!activeFile?.mapping) {
+      return;
+    }
     setStagedFiles((prev) =>
       prev.map((f, i) =>
         i === activeFileIdx
@@ -391,7 +435,9 @@ export function BillingImportClient() {
   }
 
   async function onProviderChange(provider: string) {
-    if (!activeFile) return;
+    if (!activeFile) {
+      return;
+    }
     const updated = { ...activeFile, provider };
     setStagedFiles((prev) => prev.map((f, i) => (i === activeFileIdx ? updated : f)));
     setPreviewing(true);
@@ -427,7 +473,10 @@ export function BillingImportClient() {
             return {
               name: f.name,
               csv: f.csv,
-              mapping: f.mapping ?? rolesToMapping(f.headerRoles, f.costUnit, reportThroughDay) ?? undefined,
+              mapping:
+                f.mapping ??
+                rolesToMapping(f.headerRoles, f.costUnit, reportThroughDay) ??
+                undefined,
               provider: f.provider || f.preview?.provider || undefined,
             };
           }),
@@ -456,16 +505,20 @@ export function BillingImportClient() {
   async function onDeleteRun(run: ImportRun) {
     const label = run.legacy
       ? `legacy import (${run.dateRange.from ?? '?'} → ${run.dateRange.to ?? '?'})`
-      : run.fileNames[0] ?? run.provider;
+      : (run.fileNames[0] ?? run.provider);
     const msg = run.legacy
       ? `Delete all portal import spend for ${label}? This removes every import row in that date window for the listed provider(s) — not just one file.`
       : `Delete imported spend for "${label}"? This removes ${run.rowsImported} rows (${usd(run.totalCostUsd)}) from platform totals.`;
-    if (!window.confirm(msg)) return;
+    if (!window.confirm(msg)) {
+      return;
+    }
 
     setDeletingRunId(run.id);
     setError(null);
     try {
-      const res = await fetch(`/api/portal-import/runs/${encodeURIComponent(run.id)}`, { method: 'DELETE' });
+      const res = await fetch(`/api/portal-import/runs/${encodeURIComponent(run.id)}`, {
+        method: 'DELETE',
+      });
       const body = (await res.json()) as Record<string, unknown>;
       if (!res.ok) {
         setError(formatApiError(body, 'Delete failed'));
@@ -502,9 +555,7 @@ export function BillingImportClient() {
           ? 'Legacy import (audit log)'
           : '—';
     const range =
-      run.dateRange.from && run.dateRange.to
-        ? `${run.dateRange.from} → ${run.dateRange.to}`
-        : '—';
+      run.dateRange.from && run.dateRange.to ? `${run.dateRange.from} → ${run.dateRange.to}` : '—';
     return {
       when: new Date(run.createdAt).toLocaleString(),
       provider: (
@@ -551,12 +602,22 @@ export function BillingImportClient() {
       />
 
       {error && (
-        <div className="mb-6 rounded-lg border border-neg/30 bg-neg/10 px-4 py-3 text-sm text-neg">{error}</div>
+        <div className="mb-6 rounded-lg border border-neg/30 bg-neg/10 px-4 py-3 text-sm text-neg">
+          {error}
+        </div>
       )}
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
-        <Stat label="Portal total" value={usd(reconciliation?.summary.portalTotalUsd)} sub="CSV imports" />
-        <Stat label="API total" value={usd(reconciliation?.summary.apiTotalUsd)} sub="Connector sync" />
+        <Stat
+          label="Portal total"
+          value={usd(reconciliation?.summary.portalTotalUsd)}
+          sub="CSV imports"
+        />
+        <Stat
+          label="API total"
+          value={usd(reconciliation?.summary.apiTotalUsd)}
+          sub="Connector sync"
+        />
         <Stat
           label="Overlap days"
           value={String(reconciliation?.summary.overlapDays ?? 0)}
@@ -565,16 +626,18 @@ export function BillingImportClient() {
         />
       </div>
 
-      <Card title="Upload CSVs" subtitle="Select one or more files. Each file is analyzed before import.">
+      <Card
+        title="Upload CSVs"
+        subtitle="Select one or more files. Each file is analyzed before import."
+      >
         <div className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             {hasAnthropicImport && (
               <label className="block text-sm">
-                <span className="mb-1 block text-muted">
-                  Anthropic API sync handoff (optional)
-                </span>
+                <span className="mb-1 block text-muted">Anthropic API sync handoff (optional)</span>
                 <span className="mb-2 block text-xs text-muted">
-                  Only updates connector sync dates after Anthropic imports — does not set the billing provider.
+                  Only updates connector sync dates after Anthropic imports — does not set the
+                  billing provider.
                 </span>
                 <select
                   className="w-full rounded-lg border border-edge bg-black/20 px-3 py-2 text-sm"
@@ -610,7 +673,9 @@ export function BillingImportClient() {
                   type="button"
                   onClick={() => setActiveFileIdx(i)}
                   className={`rounded-md px-3 py-1.5 text-xs ${
-                    i === activeFileIdx ? 'bg-accent/30 text-white' : 'bg-white/5 text-muted hover:bg-white/10'
+                    i === activeFileIdx
+                      ? 'bg-accent/30 text-white'
+                      : 'bg-white/5 text-muted hover:bg-white/10'
                   }`}
                 >
                   {f.name}
@@ -668,10 +733,12 @@ export function BillingImportClient() {
                 : activeFile.preview.requiresProvider
                   ? 'Select a billing provider below — imports are stamped with the provider you choose, not the Anthropic connector.'
                   : activeFile.preview.skippedZeroCost > 0
-                  ? `${activeFile.preview.skippedZeroCost} rows have zero/missing cost — verify the cost column or switch cost unit to cents.`
-                  : 'Could not parse importable rows — adjust column mapping below.'}
+                    ? `${activeFile.preview.skippedZeroCost} rows have zero/missing cost — verify the cost column or switch cost unit to cents.`
+                    : 'Could not parse importable rows — adjust column mapping below.'}
               {activeFile.preview.parseErrors[0] && (
-                <div className="mt-1 text-xs opacity-90">{activeFile.preview.parseErrors[0].message}</div>
+                <div className="mt-1 text-xs opacity-90">
+                  {activeFile.preview.parseErrors[0].message}
+                </div>
               )}
             </div>
           )}
@@ -701,7 +768,10 @@ export function BillingImportClient() {
               <select
                 value={activeFile.costUnit}
                 onChange={(e) =>
-                  void refreshActivePreview(activeFile.headerRoles, e.target.value as 'usd' | 'cents')
+                  void refreshActivePreview(
+                    activeFile.headerRoles,
+                    e.target.value as 'usd' | 'cents',
+                  )
                 }
                 className="rounded border border-edge bg-black/20 px-2 py-1 text-sm text-gray-200"
               >
@@ -760,7 +830,9 @@ export function BillingImportClient() {
 
           {previewRows.length > 0 && (
             <>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">Parsed preview</h3>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
+                Parsed preview
+              </h3>
               <DataTable
                 columns={[
                   { key: 'day', label: 'Day' },
@@ -847,7 +919,9 @@ export function BillingImportClient() {
         }
       >
         {importRuns.length === 0 && !loadingRuns ? (
-          <p className="text-sm text-muted">No import runs yet. Imports after this deploy are tracked individually.</p>
+          <p className="text-sm text-muted">
+            No import runs yet. Imports after this deploy are tracked individually.
+          </p>
         ) : (
           <DataTable
             columns={[
@@ -881,11 +955,21 @@ export function BillingImportClient() {
         <div className="mb-4 flex flex-wrap items-end gap-3">
           <label className="text-sm">
             <span className="mb-1 block text-xs text-muted">From</span>
-            <input type="date" value={rangeFrom} onChange={(e) => setRangeFrom(e.target.value)} className="rounded-lg border border-edge bg-black/20 px-3 py-2 text-sm" />
+            <input
+              type="date"
+              value={rangeFrom}
+              onChange={(e) => setRangeFrom(e.target.value)}
+              className="rounded-lg border border-edge bg-black/20 px-3 py-2 text-sm"
+            />
           </label>
           <label className="text-sm">
             <span className="mb-1 block text-xs text-muted">To</span>
-            <input type="date" value={rangeTo} onChange={(e) => setRangeTo(e.target.value)} className="rounded-lg border border-edge bg-black/20 px-3 py-2 text-sm" />
+            <input
+              type="date"
+              value={rangeTo}
+              onChange={(e) => setRangeTo(e.target.value)}
+              className="rounded-lg border border-edge bg-black/20 px-3 py-2 text-sm"
+            />
           </label>
         </div>
         <DataTable

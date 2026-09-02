@@ -8,7 +8,6 @@ import {
   AI_VENDORS,
   PLAN_TIERS,
   PLAN_TIER_LABELS,
-  aggregateByVendor,
   costTypeForTier,
   defaultUnitUsd,
   lineItemFor,
@@ -16,6 +15,7 @@ import {
   vendorLabel,
   type PlanTier,
 } from '@/lib/fixed-cost-catalog';
+import { latestMonthlyTotalsByVendor, priorSeatEntryForVendor } from '@/lib/overview-seat-monthly';
 import {
   createFixedCost,
   deleteFixedCost,
@@ -25,6 +25,13 @@ import {
   updateFixedCost,
 } from '@/lib/api/fixed-costs';
 import type { FixedCostRow, FixedCostType, FixedCostVendor } from '@/types/fixed-costs';
+import {
+  formatSeatDeltaSummary,
+  formatSignedUsd,
+  seatPriceDelta,
+  type SeatPriceDelta,
+  type SeatSnapshot,
+} from '@/lib/seat-price-delta';
 
 function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -42,7 +49,9 @@ function monthInputValue(periodMonth: string): string {
 }
 
 function periodMonthFromInput(monthValue: string): string {
-  if (!monthValue) return '';
+  if (!monthValue) {
+    return '';
+  }
   return `${monthValue}-01`;
 }
 
@@ -52,6 +61,52 @@ type EditKey = {
   costType: FixedCostType;
   lineItem?: string;
 };
+
+function snapshotFromForm(
+  seats: string,
+  unitCostUsd: string,
+  costUsd: string,
+): SeatSnapshot | null {
+  const s = seats === '' ? 0 : Number(seats);
+  const u = unitCostUsd === '' ? 0 : Number(unitCostUsd);
+  const c = costUsd === '' ? 0 : Number(costUsd);
+  if (!Number.isFinite(s) || !Number.isFinite(u) || !Number.isFinite(c)) {
+    return null;
+  }
+  return { seats: s, unitCostUsd: u, costUsd: c };
+}
+
+function SeatImpactCallout({ delta }: { delta: SeatPriceDelta }) {
+  const up = delta.usdDelta > 0 || (delta.usdDelta === 0 && delta.seatDelta > 0);
+  const tone = up ? 'text-warn' : 'text-pos';
+  const seatLine = delta.prior
+    ? `${delta.prior.seats} → ${delta.current.seats} seats (${delta.seatDelta > 0 ? '+' : ''}${delta.seatDelta})`
+    : `${delta.current.seats} seat${delta.current.seats === 1 ? '' : 's'}`;
+  const costLine = delta.prior
+    ? `${usd(delta.prior.costUsd)} → ${usd(delta.current.costUsd)}/mo (${formatSignedUsd(delta.usdDelta)})`
+    : `${usd(delta.current.costUsd)}/mo`;
+  return (
+    <div className="rounded-lg border border-edge bg-canvas px-4 py-3">
+      <p className="text-xs uppercase tracking-wide text-muted">Seat impact</p>
+      <p className={`mt-1 num text-sm font-medium ${tone}`}>
+        {seatLine} · {costLine}
+      </p>
+      {delta.usdFromSeats !== 0 && (
+        <p className="mt-1 text-xs text-muted">
+          {formatSignedUsd(delta.usdFromSeats)} from seats
+          {delta.usdFromRate !== 0
+            ? ` · ${formatSignedUsd(delta.usdFromRate)} from unit price`
+            : ''}
+        </p>
+      )}
+      {delta.usdFromSeats === 0 && delta.usdFromRate !== 0 && (
+        <p className="mt-1 text-xs text-muted">
+          {formatSignedUsd(delta.usdFromRate)} from unit price
+        </p>
+      )}
+    </div>
+  );
+}
 
 export function FixedOverheadClient() {
   const [rangeFrom, setRangeFrom] = useState(() => defaultRange().from);
@@ -73,13 +128,29 @@ export function FixedOverheadClient() {
   const [costManual, setCostManual] = useState(false);
   const [customLineItem, setCustomLineItem] = useState('');
   const [note, setNote] = useState('');
+  const [baseline, setBaseline] = useState<SeatSnapshot | null>(null);
 
   const lineItem = useMemo(
     () => lineItemFor(vendor, planTier, vendor === 'other' ? customLineItem : undefined),
     [vendor, planTier, customLineItem],
   );
 
-  const vendorTotals = useMemo(() => aggregateByVendor(rows), [rows]);
+  const vendorTotals = useMemo(() => latestMonthlyTotalsByVendor(rows), [rows]);
+
+  const liveDelta = useMemo(() => {
+    const current = snapshotFromForm(seats, unitCostUsd, costUsd);
+    if (!current) {
+      return null;
+    }
+    if (current.seats === 0 && current.costUsd === 0) {
+      return null;
+    }
+    const delta = seatPriceDelta(current, baseline);
+    if (delta.seatDelta === 0 && delta.usdDelta === 0) {
+      return null;
+    }
+    return delta;
+  }, [seats, unitCostUsd, costUsd, baseline]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -93,7 +164,9 @@ export function FixedOverheadClient() {
       setRows(list.rows);
       setImpact(combinedAiCost(metered, totals.rows));
       const loadErr = list.error ?? totals.error;
-      if (loadErr) setError(loadErr);
+      if (loadErr) {
+        setError(loadErr);
+      }
     } finally {
       setLoading(false);
     }
@@ -104,24 +177,57 @@ export function FixedOverheadClient() {
   }, [load]);
 
   useEffect(() => {
-    if (costManual) return;
+    if (costManual) {
+      return;
+    }
     const s = Number(seats);
     const u = Number(unitCostUsd);
-    if (seats !== '' && unitCostUsd !== '' && Number.isFinite(s) && Number.isFinite(u) && s >= 0 && u >= 0) {
+    if (
+      seats !== '' &&
+      unitCostUsd !== '' &&
+      Number.isFinite(s) &&
+      Number.isFinite(u) &&
+      s >= 0 &&
+      u >= 0
+    ) {
       setCostUsd(String(s * u));
     }
   }, [seats, unitCostUsd, costManual]);
 
   useEffect(() => {
-    if (editKey) return;
+    if (editKey) {
+      return;
+    }
+    const costType = costTypeForTier(planTier);
+    const prior = priorSeatEntryForVendor(rows, vendor, {
+      beforeMonth: billingMonth,
+      lineItem,
+      costType,
+    });
+    if (prior) {
+      setSeats(prior.seats > 0 ? String(prior.seats) : '');
+      setUnitCostUsd(prior.unit_cost_usd > 0 ? String(prior.unit_cost_usd) : '');
+      setCostManual(false);
+      setBaseline({
+        seats: prior.seats,
+        unitCostUsd: prior.unit_cost_usd,
+        costUsd: prior.cost_usd,
+      });
+      return;
+    }
     const def = defaultUnitUsd(vendor, planTier);
+    setSeats('');
     if (def !== null) {
       setUnitCostUsd(String(def));
-      if (planTier === 'free') setCostUsd('0');
+      if (planTier === 'free') {
+        setCostUsd('0');
+      }
     } else {
       setUnitCostUsd('');
     }
-  }, [vendor, planTier, editKey]);
+    setCostManual(false);
+    setBaseline(null);
+  }, [vendor, planTier, billingMonth, lineItem, rows, editKey]);
 
   function resetForm() {
     setEditKey(null);
@@ -135,6 +241,7 @@ export function FixedOverheadClient() {
     setCustomLineItem('');
     setNote('');
     setError(null);
+    setBaseline(null);
   }
 
   function startEdit(row: FixedCostRow) {
@@ -153,10 +260,17 @@ export function FixedOverheadClient() {
     setUnitCostUsd(row.unit_cost_usd > 0 ? String(row.unit_cost_usd) : '');
     setCostUsd(String(row.cost_usd));
     setCostManual(true);
-    if (parsed.vendor === 'other') setCustomLineItem(row.line_item || '');
+    if (parsed.vendor === 'other') {
+      setCustomLineItem(row.line_item || '');
+    }
     setNote(row.note || '');
     setError(null);
     setSuccess(null);
+    setBaseline({
+      seats: row.seats > 0 ? row.seats : 0,
+      unitCostUsd: row.unit_cost_usd > 0 ? row.unit_cost_usd : 0,
+      costUsd: Number(row.cost_usd) || 0,
+    });
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -206,6 +320,14 @@ export function FixedOverheadClient() {
 
     setSaving(true);
     try {
+      const existingForMonth = rows.find(
+        (row) =>
+          monthInputValue(String(row.period_month)) === billingMonth &&
+          row.vendor === vendor &&
+          row.cost_type === costType &&
+          (row.line_item || '') === lineItem,
+      );
+
       const result = editKey
         ? await updateFixedCost({
             ...payload,
@@ -214,7 +336,15 @@ export function FixedOverheadClient() {
             costType: editKey.costType,
             lineItem: editKey.lineItem ?? payload.lineItem,
           })
-        : await createFixedCost(payload);
+        : existingForMonth
+          ? await updateFixedCost({
+              ...payload,
+              periodMonth: String(existingForMonth.period_month).slice(0, 10),
+              vendor: existingForMonth.vendor,
+              costType: existingForMonth.cost_type,
+              lineItem: existingForMonth.line_item || undefined,
+            })
+          : await createFixedCost(payload);
 
       if (!result.ok) {
         const hint =
@@ -225,7 +355,16 @@ export function FixedOverheadClient() {
         return;
       }
 
-      setSuccess(editKey ? 'Fixed overhead updated.' : 'Fixed overhead saved.');
+      const current = snapshotFromForm(seats, unitCostUsd, costUsd);
+      const delta = current ? seatPriceDelta(current, baseline) : null;
+      const summary =
+        delta && (delta.seatDelta !== 0 || delta.usdDelta !== 0)
+          ? formatSeatDeltaSummary(delta)
+          : null;
+      setSuccess(
+        (editKey ? 'Fixed overhead updated.' : 'Fixed overhead saved.') +
+          (summary ? ` ${summary}` : ''),
+      );
       resetForm();
       await load();
     } finally {
@@ -235,7 +374,9 @@ export function FixedOverheadClient() {
 
   async function onDelete(row: FixedCostRow) {
     const label = `${String(row.period_month).slice(0, 7)} · ${row.line_item || vendorLabel(row.vendor)}`;
-    if (!window.confirm(`Delete fixed overhead entry?\n\n${label}`)) return;
+    if (!window.confirm(`Delete fixed overhead entry?\n\n${label}`)) {
+      return;
+    }
 
     setError(null);
     setSuccess(null);
@@ -272,10 +413,18 @@ export function FixedOverheadClient() {
     total: usd(r.cost_usd),
     actions: (
       <div className="flex justify-end gap-2">
-        <button type="button" className="text-xs text-accent hover:underline" onClick={() => startEdit(r)}>
+        <button
+          type="button"
+          className="text-xs text-accent hover:underline"
+          onClick={() => startEdit(r)}
+        >
           Edit
         </button>
-        <button type="button" className="text-xs text-neg hover:underline" onClick={() => void onDelete(r)}>
+        <button
+          type="button"
+          className="text-xs text-neg hover:underline"
+          onClick={() => void onDelete(r)}
+        >
           Delete
         </button>
       </div>
@@ -296,8 +445,17 @@ export function FixedOverheadClient() {
       />
 
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Stat label="Total cost of AI" value={usd(impact.total)} accent sub={`${rangeFrom} → ${rangeTo}`} />
-        <Stat label="Attributable (metered)" value={usd(impact.attributable)} sub="Gateway & connector usage" />
+        <Stat
+          label="Total cost of AI"
+          value={usd(impact.total)}
+          accent
+          sub={`${rangeFrom} → ${rangeTo}`}
+        />
+        <Stat
+          label="Attributable (metered)"
+          value={usd(impact.attributable)}
+          sub="Gateway & connector usage"
+        />
         <Stat
           label="Fixed overhead"
           value={usd(impact.fixed)}
@@ -307,15 +465,18 @@ export function FixedOverheadClient() {
       </div>
 
       {vendorTotals.length > 0 && (
-        <Card title="Overhead by vendor" subtitle="Fixed spend in selected range — matches Overview breakdown">
+        <Card
+          title="Overhead by vendor"
+          subtitle="Latest monthly run-rate per vendor — matches Overview"
+        >
           <div className="flex flex-wrap gap-3">
             {vendorTotals.map((v) => (
               <div
                 key={v.vendor}
                 className="rounded-lg border border-edge bg-panel px-4 py-3 min-w-[8rem]"
               >
-                <p className="text-xs text-muted">{v.label}</p>
-                <p className="num text-lg font-semibold text-gray-100">{usd(v.total)}</p>
+                <p className="text-xs text-muted">{vendorLabel(v.vendor)}</p>
+                <p className="num text-lg font-semibold text-gray-100">{usd(v.total)}/mo</p>
               </div>
             ))}
           </div>
@@ -323,6 +484,12 @@ export function FixedOverheadClient() {
       )}
 
       <Card title={editKey ? 'Edit entry' : 'Add seats & plan'} subtitle={`Saving as: ${lineItem}`}>
+        {!editKey && baseline && (
+          <p className="mb-4 text-xs text-muted">
+            Pre-filled from {String(baseline.seats)} seats · {usd(baseline.costUsd)}/mo in the prior
+            billing month — adjust if seats or price changed.
+          </p>
+        )}
         <form onSubmit={(e) => void onSubmit(e)} className="space-y-5">
           <div>
             <span className="mb-2 block text-sm text-muted">Vendor</span>
@@ -368,7 +535,9 @@ export function FixedOverheadClient() {
               </p>
             )}
             {planTier === 'free' && (
-              <p className="mt-2 text-xs text-muted">Free tier — cost defaults to $0 unless you track paid add-ons.</p>
+              <p className="mt-2 text-xs text-muted">
+                Free tier — cost defaults to $0 unless you track paid add-ons.
+              </p>
             )}
           </div>
 
@@ -451,6 +620,8 @@ export function FixedOverheadClient() {
               />
             </label>
           </div>
+
+          {liveDelta && <SeatImpactCallout delta={liveDelta} />}
 
           <label className="block text-sm">
             <span className="mb-1 block text-muted">Note (optional)</span>

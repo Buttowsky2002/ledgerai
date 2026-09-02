@@ -6,7 +6,8 @@ import { FormEvent, KeyboardEvent, useState } from 'react';
 // Match the field/button styling used by settings/forms.tsx.
 const FIELD =
   'rounded border border-edge bg-ink px-2 py-1.5 text-sm text-gray-100 placeholder:text-muted focus:border-accent focus:outline-none';
-const BTN = 'rounded bg-accent/20 px-3 py-1.5 text-sm text-white hover:bg-accent/30 disabled:opacity-50';
+const BTN =
+  'rounded bg-accent/20 px-3 py-1.5 text-sm text-white hover:bg-accent/30 disabled:opacity-50';
 
 /** POST helper mirroring settings/forms.tsx useCreate(). */
 function usePost(url: string) {
@@ -117,7 +118,9 @@ export function AddIdpForm() {
 
   function commitDomain() {
     const d = domainDraft.trim().toLowerCase().replace(/,$/, '');
-    if (d && !domains.includes(d)) setDomains([...domains, d]);
+    if (d && !domains.includes(d)) {
+      setDomains([...domains, d]);
+    }
     setDomainDraft('');
   }
   function onDomainKey(e: KeyboardEvent<HTMLInputElement>) {
@@ -132,8 +135,17 @@ export function AddIdpForm() {
     // Fold any half-typed domain still in the input into the list before submitting.
     const emailDomains = [...domains];
     const pending = domainDraft.trim().toLowerCase().replace(/,$/, '');
-    if (pending && !emailDomains.includes(pending)) emailDomains.push(pending);
-    const ok = await post({ issuer, clientId, clientSecretRef, emailDomains, jitEnabled, defaultApiRole });
+    if (pending && !emailDomains.includes(pending)) {
+      emailDomains.push(pending);
+    }
+    const ok = await post({
+      issuer,
+      clientId,
+      clientSecretRef,
+      emailDomains,
+      jitEnabled,
+      defaultApiRole,
+    });
     if (ok) {
       setIssuer('');
       setClientId('');
@@ -207,7 +219,11 @@ export function AddIdpForm() {
         </label>
         <label className="flex items-center gap-1.5 text-sm text-gray-100">
           Default role
-          <select className={FIELD} value={defaultApiRole} onChange={(e) => setRole(e.target.value)}>
+          <select
+            className={FIELD}
+            value={defaultApiRole}
+            onChange={(e) => setRole(e.target.value)}
+          >
             {['viewer', 'analyst', 'admin'].map((r) => (
               <option key={r} value={r}>
                 {r}
