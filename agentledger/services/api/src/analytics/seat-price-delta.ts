@@ -134,9 +134,11 @@ function toProrateRows(rows: FixedCostSeatRow[]): ProrateSeatRow[] {
  */
 export function vendorSeatChanges(
   rows: FixedCostSeatRow[],
-  _from: string,
-  _to: string,
+  from: string,
+  to: string,
 ): { latestMonth: string | null; changes: Record<string, VendorSeatChange> } {
+  void from;
+  void to;
   const mapped = toProrateRows(rows);
   const currentByVendor = latestSeatByVendor(mapped);
   let latestMonth: string | null = null;

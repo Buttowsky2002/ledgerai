@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { JwtService } from '../src/auth/jwt.service';
+import { accessTtlSeconds } from '../src/auth/session-ttl';
 import { PrismaService } from '../src/prisma/prisma.service';
 
 /**
@@ -139,7 +140,7 @@ describe('Auth + RBAC', () => {
       .post('/auth/refresh')
       .set('Cookie', `al_refresh=${refresh}`);
     expect(res.status).toBe(200); // @Res() + res.json() → Express default 200
-    expect(res.body).toMatchObject({ ok: true, expires_in: 15 * 60 });
+    expect(res.body).toMatchObject({ ok: true, expires_in: accessTtlSeconds() });
     expect(res.body.access_token).toBeUndefined(); // token lives only in the httpOnly cookie
 
     const accessEntry = findCookie(res, 'al_access');

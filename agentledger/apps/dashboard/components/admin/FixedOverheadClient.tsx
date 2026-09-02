@@ -486,8 +486,8 @@ export function FixedOverheadClient() {
       <Card title={editKey ? 'Edit entry' : 'Add seats & plan'} subtitle={`Saving as: ${lineItem}`}>
         {!editKey && baseline && (
           <p className="mb-4 text-xs text-muted">
-            Pre-filled from {String(baseline.seats)} seats · {usd(baseline.costUsd)}/mo in the
-            prior billing month — adjust if seats or price changed.
+            Pre-filled from {String(baseline.seats)} seats · {usd(baseline.costUsd)}/mo in the prior
+            billing month — adjust if seats or price changed.
           </p>
         )}
         <form onSubmit={(e) => void onSubmit(e)} className="space-y-5">

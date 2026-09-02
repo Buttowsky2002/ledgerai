@@ -20,11 +20,7 @@ type Props = {
 };
 
 /** Per-vendor seat subscriptions at the top of Overview (same data as admin fixed overhead). */
-export function OverviewSeatSubscriptions({
-  vendors,
-  seatChangeUsd = 0,
-  billingMonth,
-}: Props) {
+export function OverviewSeatSubscriptions({ vendors, seatChangeUsd = 0, billingMonth }: Props) {
   const seatVendors = vendors.filter((v) => v.seat_usd > 0);
   if (seatVendors.length === 0) {
     return (
@@ -41,8 +37,8 @@ export function OverviewSeatSubscriptions({
     <div className="mb-6">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs font-medium uppercase tracking-wider text-muted">
-          Seat subscriptions · {billingMonth ? monthLabel(`${billingMonth}-01`) : 'monthly'} (seats ×
-          unit)
+          Seat subscriptions · {billingMonth ? monthLabel(`${billingMonth}-01`) : 'monthly'} (seats
+          × unit)
         </p>
         {seatChangeUsd !== 0 && (
           <p className={`text-xs ${seatChangeUsd > 0 ? 'text-warn' : 'text-pos'}`}>

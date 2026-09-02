@@ -435,7 +435,8 @@ export default async function OverviewPage({
           accent
           sub={
             <>
-              {usd(attributableCost)} metered · {usdPerMonth(Math.round(monthlySeatRunRate * 100) / 100)} fixed
+              {usd(attributableCost)} metered ·{' '}
+              {usdPerMonth(Math.round(monthlySeatRunRate * 100) / 100)} fixed
               {billingMonthCount > 1 && (
                 <span className="mt-0.5 block text-muted">
                   {usd(fixedOverhead)} subscriptions across {billingMonthCount} billing months

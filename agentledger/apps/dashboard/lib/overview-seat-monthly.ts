@@ -39,10 +39,7 @@ export function latestBillingMonthInRange(from: string, to: string): string {
 }
 
 /** Sum monthly seat $ for one billing month from admin fixed_costs rows. */
-export function monthlySeatTotalForMonth(
-  rows: FixedCostSeatRow[],
-  billingMonth: string,
-): number {
+export function monthlySeatTotalForMonth(rows: FixedCostSeatRow[], billingMonth: string): number {
   const prefix = billingMonth.slice(0, 7);
   const total = rows.reduce((s, row) => {
     if (monthKey(String(row.period_month ?? '')) !== prefix) {
@@ -106,7 +103,10 @@ function sumLineItemsByVendor(
   billingMonth: string,
 ): Map<string, { seat_usd: number; seats: number; period_month: string }> {
   const limit = billingMonth.slice(0, 7);
-  const best = new Map<string, { vendor: string; month: string; seat_usd: number; seats: number }>();
+  const best = new Map<
+    string,
+    { vendor: string; month: string; seat_usd: number; seats: number }
+  >();
   for (const row of rows) {
     const month = monthKey(String(row.period_month ?? ''));
     if (!month || month > limit) {
@@ -237,7 +237,11 @@ export type SeatEntrySnapshot = {
  */
 export function priorSeatEntryForVendor(
   rows: Array<
-    FixedCostSeatRow & { line_item?: string | null; cost_type?: string | null; unit_cost_usd?: number | string | null }
+    FixedCostSeatRow & {
+      line_item?: string | null;
+      cost_type?: string | null;
+      unit_cost_usd?: number | string | null;
+    }
   >,
   vendor: string,
   opts?: { beforeMonth?: string; lineItem?: string; costType?: string },
@@ -248,7 +252,11 @@ export function priorSeatEntryForVendor(
   let best: SeatEntrySnapshot | null = null;
 
   for (const row of rows) {
-    if (String(row.vendor ?? '').trim().toLowerCase() !== vendorKey) {
+    if (
+      String(row.vendor ?? '')
+        .trim()
+        .toLowerCase() !== vendorKey
+    ) {
       continue;
     }
     if (opts?.lineItem != null && String(row.line_item ?? '') !== opts.lineItem) {
@@ -288,7 +296,11 @@ export function latestMonthlyTotalsByVendor(
  * month in range at each vendor's latest config on or before that month; for a
  * single-month range, uses current monthly run-rate (matches admin overhead).
  */
-export function periodSeatTotalForRange(rows: FixedCostSeatRow[], from: string, to: string): number {
+export function periodSeatTotalForRange(
+  rows: FixedCostSeatRow[],
+  from: string,
+  to: string,
+): number {
   const months = billingMonthsInRange(from, to);
   if (months.length === 1) {
     return currentMonthlySeatRunRate(rows);

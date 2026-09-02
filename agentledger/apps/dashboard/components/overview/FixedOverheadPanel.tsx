@@ -166,9 +166,8 @@ export async function FixedOverheadPanel({
     }
     // Connector-only seats (Cursor/GitHub) not in admin fixed_costs.
     monthlySeatRunRate = Math.round((monthlySeatRunRate + row.seat_usd) * 100) / 100;
-    periodSeatTotalUsd = Math.round(
-      (periodSeatTotalUsd + row.seat_usd * Math.max(billingMonthCount, 1)) * 100,
-    ) / 100;
+    periodSeatTotalUsd =
+      Math.round((periodSeatTotalUsd + row.seat_usd * Math.max(billingMonthCount, 1)) * 100) / 100;
   }
 
   const grandSeat = periodSeatTotalUsd;
