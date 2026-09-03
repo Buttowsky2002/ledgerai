@@ -1,0 +1,105 @@
+[33m╷[0m[0m
+[33m│[0m [0m[1m[33mWarning: [0m[0m[1mDeprecated Parameter[0m
+[33m│[0m [0m
+[33m│[0m [0m[0mThe parameter "dynamodb_table" is deprecated. Use parameter "use_lockfile"
+[33m│[0m [0minstead.
+[33m╵[0m[0m
+[0m[1maws_ecs_cluster.main: Refreshing state... [id=arn:aws:ecs:us-east-1:995475749441:cluster/badgeriq-pilot-cluster][0m
+[0m[1mmodule.postgres.aws_secretsmanager_secret.postgres: Refreshing state... [id=arn:aws:secretsmanager:us-east-1:995475749441:secret:badgeriq/pilot/postgres-Dwki9p][0m
+[0m[1mmodule.network.aws_vpc.main: Refreshing state... [id=vpc-0470b777b2539325c][0m
+[0m[1mmodule.clickhouse_secret.aws_secretsmanager_secret.clickhouse: Refreshing state... [id=arn:aws:secretsmanager:us-east-1:995475749441:secret:badgeriq/pilot/clickhouse-DT81ZB][0m
+[0m[1mmodule.network.data.aws_availability_zones.available: Reading...[0m[0m
+[0m[1mmodule.api.data.aws_region.current: Reading...[0m[0m
+[0m[1maws_iam_role.ecs_execution: Refreshing state... [id=badgeriq-pilot-ecs-execution][0m
+[0m[1mmodule.api.data.aws_region.current: Read complete after 0s [id=us-east-1][0m
+[0m[1mmodule.network.data.aws_availability_zones.available: Read complete after 0s [id=us-east-1][0m
+[0m[1maws_wafv2_web_acl.edge[0]: Refreshing state... [id=414d2f59-2ae5-4e25-9f1a-6c2f11593818][0m
+[0m[1maws_security_group.alb: Refreshing state... [id=sg-05761b56382116621][0m
+[0m[1mmodule.network.aws_subnet.public[2]: Refreshing state... [id=subnet-097233973d9c77741][0m
+[0m[1mmodule.network.aws_subnet.public[1]: Refreshing state... [id=subnet-04fee1926a3c83779][0m
+[0m[1mmodule.network.aws_security_group.ecs_tasks: Refreshing state... [id=sg-08d8357cd48f13e0c][0m
+[0m[1mmodule.network.aws_subnet.private[1]: Refreshing state... [id=subnet-09839bb5592552bed][0m
+[0m[1mmodule.network.aws_subnet.private[0]: Refreshing state... [id=subnet-00a08f22fa5821bfe][0m
+[0m[1mmodule.network.aws_subnet.public[0]: Refreshing state... [id=subnet-0055516d8eba5f2d9][0m
+[0m[1mmodule.redpanda.aws_service_discovery_private_dns_namespace.main: Refreshing state... [id=ns-aiugbbdxi67d6whi][0m
+[0m[1mmodule.network.aws_subnet.private[2]: Refreshing state... [id=subnet-08f88d9221e75a779][0m
+[0m[1mmodule.api.aws_cloudwatch_log_group.svc: Refreshing state... [id=/ecs/badgeriq-pilot/api][0m
+[0m[1maws_lb.main: Refreshing state... [id=arn:aws:elasticloadbalancing:us-east-1:995475749441:loadbalancer/app/badgeriq-pilot-alb/d51ac1772d57ae95][0m
+[0m[1mmodule.api.aws_service_discovery_service.svc: Refreshing state... [id=srv-zlsjik5do4i7j6g7][0m
+[0m[1mmodule.api.aws_lb_target_group.svc[0]: Refreshing state... [id=arn:aws:elasticloadbalancing:us-east-1:995475749441:targetgroup/badgeriq-pilot-api/3153dc43d24c02ad][0m
+[0m[1maws_lb_listener.http: Refreshing state... [id=arn:aws:elasticloadbalancing:us-east-1:995475749441:listener/app/badgeriq-pilot-alb/d51ac1772d57ae95/1aca63a993559a5d][0m
+[0m[1maws_cloudfront_distribution.main[0]: Refreshing state... [id=E3LOPYZO7YU7L9][0m
+[0m[1mmodule.api.aws_ecs_task_definition.svc: Refreshing state... [id=badgeriq-pilot-api][0m
+[0m[1mmodule.api.aws_lb_listener_rule.svc[0]: Refreshing state... [id=arn:aws:elasticloadbalancing:us-east-1:995475749441:listener-rule/app/badgeriq-pilot-alb/d51ac1772d57ae95/1aca63a993559a5d/c3daf14c46360619][0m
+[0m[1mmodule.api.aws_ecs_service.svc: Refreshing state... [id=arn:aws:ecs:us-east-1:995475749441:service/badgeriq-pilot-cluster/badgeriq-pilot-api][0m
+
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  [33m~[0m update in-place[0m
+[31m-[0m/[32m+[0m destroy and then create replacement[0m
+
+Terraform will perform the following actions:
+
+[1m  # module.api.aws_ecs_service.svc[0m will be updated in-place
+[0m  [33m~[0m[0m resource "aws_ecs_service" "svc" {
+        id                                 = "arn:aws:ecs:us-east-1:995475749441:service/badgeriq-pilot-cluster/badgeriq-pilot-api"
+        name                               = "badgeriq-pilot-api"
+        tags                               = {
+            "app.kubernetes.io/part-of" = "agentledger"
+            "environment"               = "pilot"
+            "managed_by"                = "terraform"
+            "project"                   = "badgeriq"
+        }
+      [33m~[0m[0m task_definition                    = "arn:aws:ecs:us-east-1:995475749441:task-definition/badgeriq-pilot-api:44" -> (known after apply)
+        [90m# (16 unchanged attributes hidden)[0m[0m
+
+        [90m# (5 unchanged blocks hidden)[0m[0m
+    }
+
+[1m  # module.api.aws_ecs_task_definition.svc[0m must be [1m[31mreplaced[0m
+[0m[31m-[0m/[32m+[0m[0m resource "aws_ecs_task_definition" "svc" {
+      [33m~[0m[0m arn                      = "arn:aws:ecs:us-east-1:995475749441:task-definition/badgeriq-pilot-api:44" -> (known after apply)
+      [33m~[0m[0m arn_without_revision     = "arn:aws:ecs:us-east-1:995475749441:task-definition/badgeriq-pilot-api" -> (known after apply)
+      [33m~[0m[0m container_definitions    = (sensitive value) [31m# forces replacement[0m[0m
+      [33m~[0m[0m enable_fault_injection   = false -> (known after apply)
+      [33m~[0m[0m id                       = "badgeriq-pilot-api" -> (known after apply)
+      [33m~[0m[0m revision                 = 44 -> (known after apply)
+        tags                     = {
+            "app.kubernetes.io/part-of" = "agentledger"
+            "environment"               = "pilot"
+            "managed_by"                = "terraform"
+            "project"                   = "badgeriq"
+        }
+        [90m# (12 unchanged attributes hidden)[0m[0m
+    }
+
+[1mPlan:[0m [0m1 to add, 1 to change, 1 to destroy.
+[33m╷[0m[0m
+[33m│[0m [0m[1m[33mWarning: [0m[0m[1mValue for undeclared variable[0m
+[33m│[0m [0m
+[33m│[0m [0m[0mThe root module does not declare a variable named "oidc_google_secret_arn"
+[33m│[0m [0mbut a value was found in file "pilot.auto.tfvars". If you meant to use this
+[33m│[0m [0mvalue, add a "variable" block to the configuration.
+[33m│[0m [0m
+[33m│[0m [0mTo silence these warnings, use TF_VAR_... environment variables to provide
+[33m│[0m [0mcertain "global" settings to all configurations in your organization. To
+[33m│[0m [0mreduce the verbosity of these warnings, use the -compact-warnings option.
+[33m╵[0m[0m
+[33m╷[0m[0m
+[33m│[0m [0m[1m[33mWarning: [0m[0m[1mResource targeting is in effect[0m
+[33m│[0m [0m
+[33m│[0m [0m[0mYou are creating a plan with the -target option, which means that the
+[33m│[0m [0mresult of this plan may not represent all of the changes requested by the
+[33m│[0m [0mcurrent configuration.
+[33m│[0m [0m
+[33m│[0m [0mThe -target option is not for routine use, and is provided only for
+[33m│[0m [0mexceptional situations such as recovering from errors or mistakes, or when
+[33m│[0m [0mTerraform specifically suggests to use it as part of an error message.
+[33m╵[0m[0m
+[90m
+─────────────────────────────────────────────────────────────────────────────[0m
+
+Saved the plan to: tfplan-0.1.38-api
+
+To perform exactly these actions, run the following command to apply:
+    terraform apply "tfplan-0.1.38-api"

@@ -1,0 +1,6 @@
+﻿[33mΓò╖[0m[0m
+[33mΓöé[0m [0m[1m[33mWarning: [0m[0m[1mDeprecated Parameter[0m
+[33mΓöé[0m [0m
+[33mΓöé[0m [0m[0mThe parameter "dynamodb_table" is deprecated. Use parameter "use_lockfile"
+[33mΓöé[0m [0minstead.
+[33mΓò╡[0m[0m

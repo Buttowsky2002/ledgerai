@@ -1,0 +1,72 @@
+[33m╷[0m[0m
+[33m│[0m [0m[1m[33mWarning: [0m[0m[1mDeprecated Parameter[0m
+[33m│[0m [0m
+[33m│[0m [0m[0mThe parameter "dynamodb_table" is deprecated. Use parameter "use_lockfile"
+[33m│[0m [0minstead.
+[33m╵[0m[0m
+[0m[1mmodule.collector.aws_ecs_task_definition.svc: Destroying... [id=badgeriq-pilot-collector][0m[0m
+[0m[1mmodule.collector.aws_ecs_task_definition.svc: Destruction complete after 1s[0m
+[0m[1mmodule.collector.aws_ecs_task_definition.svc: Creating...[0m[0m
+[0m[1mmodule.collector.aws_ecs_task_definition.svc: Creation complete after 0s [id=badgeriq-pilot-collector][0m
+[0m[1mmodule.collector.aws_ecs_service.svc: Modifying... [id=arn:aws:ecs:us-east-1:995475749441:service/badgeriq-pilot-cluster/badgeriq-pilot-collector][0m[0m
+[0m[1mmodule.collector.aws_ecs_service.svc: Modifications complete after 1s [id=arn:aws:ecs:us-east-1:995475749441:service/badgeriq-pilot-cluster/badgeriq-pilot-collector][0m
+[33m╷[0m[0m
+[33m│[0m [0m[1m[33mWarning: [0m[0m[1mValue for undeclared variable[0m
+[33m│[0m [0m
+[33m│[0m [0m[0mThe root module does not declare a variable named "oidc_google_secret_arn"
+[33m│[0m [0mbut a value was found in file "pilot.auto.tfvars". If you meant to use this
+[33m│[0m [0mvalue, add a "variable" block to the configuration.
+[33m│[0m [0m
+[33m│[0m [0mTo silence these warnings, use TF_VAR_... environment variables to provide
+[33m│[0m [0mcertain "global" settings to all configurations in your organization. To
+[33m│[0m [0mreduce the verbosity of these warnings, use the -compact-warnings option.
+[33m╵[0m[0m
+[33m╷[0m[0m
+[33m│[0m [0m[1m[33mWarning: [0m[0m[1mApplied changes may be incomplete[0m
+[33m│[0m [0m
+[33m│[0m [0m[0mThe plan was created with the -target option in effect, so some changes
+[33m│[0m [0mrequested in the configuration may have been ignored and the output values
+[33m│[0m [0mmay not be fully updated. Run the following command to verify that no other
+[33m│[0m [0mchanges are pending:
+[33m│[0m [0m    terraform plan
+[33m│[0m [0m
+[33m│[0m [0mNote that the -target option is not suitable for routine use, and is
+[33m│[0m [0mprovided only for exceptional situations such as recovering from errors or
+[33m│[0m [0mmistakes, or when Terraform specifically suggests to use it as part of an
+[33m│[0m [0merror message.
+[33m╵[0m[0m
+[0m[1m[32m
+Apply complete! Resources: 1 added, 1 changed, 1 destroyed.[0m
+[0m[1m[32m
+Outputs:
+
+[0malb_arn = "arn:aws:elasticloadbalancing:us-east-1:995475749441:loadbalancer/app/badgeriq-pilot-alb/d51ac1772d57ae95"
+alb_dns_name = "badgeriq-pilot-alb-2063006558.us-east-1.elb.amazonaws.com"
+alb_https_enabled = false
+alb_url = "https://d1e2lzkoizqhk6.cloudfront.net"
+allowed_host_headers = tolist([
+  "badgeriq.studiodesigner.com",
+  "d1e2lzkoizqhk6.cloudfront.net",
+])
+clickhouse_secret_arn = <sensitive>
+cloudfront_domain_name = "d1e2lzkoizqhk6.cloudfront.net"
+ecs_cluster_arn = "arn:aws:ecs:us-east-1:995475749441:cluster/badgeriq-pilot-cluster"
+ecs_execution_role_arn = "arn:aws:iam::995475749441:role/badgeriq-pilot-ecs-execution"
+ecs_task_security_group_id = "sg-08d8357cd48f13e0c"
+pilot_url = "https://badgeriq.studiodesigner.com"
+postgres_address = "badgeriq-pilot-postgres.cyww9sgswtfq.us-east-1.rds.amazonaws.com"
+postgres_dsn_secret_arn = <sensitive>
+private_subnet_ids = [
+  "subnet-00a08f22fa5821bfe",
+  "subnet-09839bb5592552bed",
+  "subnet-08f88d9221e75a779",
+]
+public_subnet_ids = [
+  "subnet-0055516d8eba5f2d9",
+  "subnet-04fee1926a3c83779",
+  "subnet-097233973d9c77741",
+]
+redpanda_broker_endpoint = "redpanda.badgeriq.local:9092"
+redpanda_efs_filesystem_id = "fs-03d92be7fdc8c3426"
+vpc_id = "vpc-0470b777b2539325c"
+waf_web_acl_arn = "arn:aws:wafv2:us-east-1:995475749441:global/webacl/badgeriq-pilot-edge/414d2f59-2ae5-4e25-9f1a-6c2f11593818"
