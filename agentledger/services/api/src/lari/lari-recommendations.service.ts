@@ -14,6 +14,12 @@ import { COPILOT_PROVIDER } from '../github-copilot/github-copilot.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { getPerUserAnalyticsMode } from '../tenant/per-user-analytics';
 import { getTenantId } from '../tenant/tenant-context';
+import {
+  latestSeatByVendor,
+  seatLookupFromDate,
+  seatLookupToDate,
+  type FixedCostSeatRow,
+} from '../fixed-costs/fixed-cost-prorate';
 import { generateLariRecommendations } from './lari-recommendations';
 import {
   AgentEconomicsHighlight,
@@ -28,6 +34,7 @@ type Range = { from: string; to: string };
 
 const n = (v: unknown): number => (typeof v === 'number' ? v : Number(v) || 0);
 const MS_DAY = 86_400_000;
+const roundUsd = (v: number): number => Math.round((v + Number.EPSILON) * 100) / 100;
 
 /**
  * Assembles data from the analytics store (Postgres in production) + control-plane Postgres
@@ -89,9 +96,11 @@ export class LariRecommendationsService {
       agentIds,
       agentProviderSpend,
       modelUsageRows,
+      providerActiveUsers,
       priceBook,
       seatStats,
       subscriptionPlans,
+      fallbackPlans,
       copilotInactive,
       perUserMode,
       copilotRoiPct,
@@ -130,9 +139,20 @@ export class LariRecommendationsService {
         cost_usd: number;
         calls: number;
       }>(RECONCILED_MODEL_USAGE_SQL, params),
+      this.ch.queryScoped<{ provider: string; active_users: number }>(
+        `SELECT provider, countDistinct(if(user_id = '', NULL, user_id)) AS active_users
+         FROM llm_calls
+         WHERE tenant_id = {tenant:String}
+           AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
+           AND ${LLM_CALLS_METERED_SCOPE}
+           AND ${EFFECTIVE_METERED_COST_USD} > 0
+         GROUP BY provider`,
+        params,
+      ),
       this.loadPriceBookAt(r.to),
       this.seatStats(tenantId),
       this.subscriptionPlans(tenantId),
+      this.fallbackPlansFromFixedCosts(r),
       this.copilotInactiveSeats(tenantId),
       getPerUserAnalyticsMode(this.prisma, tenantId),
       this.copilotPortfolioRoiPct(tenantId, r),
@@ -146,12 +166,42 @@ export class LariRecommendationsService {
       r,
     );
 
+    const activeByProvider = new Map<string, number>();
+    for (const row of providerActiveUsers) {
+      const provider = String(row.provider || '')
+        .trim()
+        .toLowerCase();
+      if (!provider) {
+        continue;
+      }
+      activeByProvider.set(provider, n(row.active_users));
+    }
+
+    const planSource = subscriptionPlans.length > 0 ? subscriptionPlans : fallbackPlans;
+    const normalizedPlans = planSource.map((plan) => {
+      const provider = String(plan.provider || '')
+        .trim()
+        .toLowerCase();
+      const activeSeats =
+        plan.activeSeats > 0
+          ? plan.activeSeats
+          : Math.min(plan.seatsPurchased, activeByProvider.get(provider) ?? 0);
+      return { ...plan, provider, activeSeats };
+    });
+    const normalizedSeatStats =
+      seatStats.purchased > 0
+        ? seatStats
+        : {
+            purchased: normalizedPlans.reduce((s, plan) => s + n(plan.seatsPurchased), 0),
+            active: normalizedPlans.reduce((s, plan) => s + n(plan.activeSeats), 0),
+          };
+
     return {
       from: r.from,
       to: r.to,
       periodDays,
-      seatStats,
-      subscriptionPlans,
+      seatStats: normalizedSeatStats,
+      subscriptionPlans: normalizedPlans,
       providerSpend: providerSpend.map((p) => ({
         provider: String(p.provider),
         costUsd: n(p.cost_usd),
@@ -183,6 +233,47 @@ export class LariRecommendationsService {
       perUserMode,
       copilotRoiPct,
     };
+  }
+
+  private async fallbackPlansFromFixedCosts(r: Range) {
+    const seatFrom = seatLookupFromDate(r.to);
+    const seatTo = seatLookupToDate(r.to);
+    const rows = await this.ch.queryScoped<{
+      period_month: string;
+      vendor: string;
+      cost_usd: unknown;
+      seats: unknown;
+      line_item: string;
+      cost_type: string;
+    }>(
+      `SELECT period_month, vendor, cost_type, line_item, seats, cost_usd
+       FROM agentledger.fixed_costs FINAL
+       WHERE tenant_id = {tenant:String}
+         AND period_month >= toDate({seatFrom:String})
+         AND period_month <= toStartOfMonth(toDate({seatTo:String}))
+         AND attributable = 0`,
+      { ...r, seatFrom, seatTo },
+    );
+    const mapped: FixedCostSeatRow[] = rows.map((row) => ({
+      period_month: String(row.period_month),
+      vendor: String(row.vendor).trim().toLowerCase(),
+      cost_usd: n(row.cost_usd),
+      seats: n(row.seats),
+      line_item: String(row.line_item ?? ''),
+      cost_type: String(row.cost_type ?? ''),
+    }));
+    return [...latestSeatByVendor(mapped).entries()]
+      .filter(([, snap]) => snap.seat_usd > 0 || snap.seats > 0)
+      .map(([vendor, snap]) => ({
+        planId: `fixed:${vendor}`,
+        provider: vendor,
+        planName: `${vendor} fixed seats`,
+        seatsPurchased: snap.seats > 0 ? snap.seats : 0,
+        contractMonthlyCost: roundUsd(snap.seat_usd),
+        monthlyPricePerUser: snap.seats > 0 ? roundUsd(snap.seat_usd / Math.max(1, snap.seats)) : 0,
+        activeSeats: 0,
+        criticalityTier: 'standard',
+      }));
   }
 
   private async buildAgentEconomics(

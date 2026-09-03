@@ -58,6 +58,7 @@ export function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     // Everything except login, invite accept (public), Next internals, favicon, health.
-    '/((?!login|invite/accept|api/invites/accept|api/auth/refresh|_next/static|_next/image|favicon.ico|healthz).*)',
+    // Portal CSV uploads skip Edge middleware so large JSON bodies are not 413'd.
+    '/((?!login|invite/accept|api/invites/accept|api/auth/refresh|api/portal-import|_next/static|_next/image|favicon.ico|healthz).*)',
   ],
 };

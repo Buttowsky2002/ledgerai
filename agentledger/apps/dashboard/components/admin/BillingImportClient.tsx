@@ -37,6 +37,7 @@ type FormatInfo = {
 
 type PortalPreview = {
   headers: string[];
+  sampleRawRows?: string[][];
   format?: FormatInfo;
   mapping: ColumnMapping | null;
   provider?: string | null;
@@ -169,10 +170,16 @@ async function readJsonResponse(res: Response): Promise<Record<string, unknown>>
   const text = await res.text();
   const trimmed = text.trim();
   if (!trimmed || trimmed.startsWith('<')) {
+    if (res.status === 401) {
+      throw new Error('Session expired — refresh the page and sign in again.');
+    }
+    if (res.status === 403) {
+      throw new Error(
+        'Upload was blocked at the edge (HTTP 403). The billing CSV is larger than the firewall body limit.',
+      );
+    }
     throw new Error(
-      res.status === 401
-        ? 'Session expired — refresh the page and sign in again.'
-        : 'Upload failed — the server returned a web page instead of JSON. Refresh and try again, or split a large CSV.',
+      `Upload failed — the server returned a web page instead of JSON (HTTP ${res.status || 'unknown'}). Refresh and try again, or split a large CSV.`,
     );
   }
   try {
@@ -272,6 +279,26 @@ function mappingToRoles(mapping: ColumnMapping | null, headers: string[]): Recor
   set('input_tokens', mapping.input_tokens);
   set('output_tokens', mapping.output_tokens);
   return roles;
+}
+
+function assignExclusiveRole(
+  current: Record<string, string>,
+  headers: string[],
+  header: string,
+  role: string,
+): Record<string, string> {
+  const next: Record<string, string> = { ...current };
+  if (!role || role === 'ignore') {
+    next[header] = 'ignore';
+    return next;
+  }
+  for (const h of headers) {
+    if (h !== header && next[h] === role) {
+      next[h] = 'ignore';
+    }
+  }
+  next[header] = role;
+  return next;
 }
 
 function dayStatus(
@@ -454,7 +481,12 @@ export function BillingImportClient() {
     if (!activeFile) {
       return;
     }
-    const roles = { ...activeFile.headerRoles, [header]: role };
+    const roles = assignExclusiveRole(
+      activeFile.headerRoles,
+      activeFile.preview?.headers ?? [],
+      header,
+      role,
+    );
     void refreshActivePreview(roles, activeFile.costUnit);
   }
 
@@ -531,6 +563,14 @@ export function BillingImportClient() {
         return;
       }
       setUploadResult(body as UploadResult);
+      if (!dryRun && Number(body.imported ?? 0) === 0) {
+        setError(
+          formatApiError(
+            body,
+            'Import completed with 0 rows written. Check mapping, cost column, and Import history.',
+          ),
+        );
+      }
       if (!dryRun) {
         await loadConnectors();
         await loadReconciliation();
@@ -855,13 +895,7 @@ export function BillingImportClient() {
                       </select>
                     </td>
                     <td className="text-xs text-muted">
-                      {activeFile.preview?.preview[0]
-                        ? String(
-                            (activeFile.preview.preview[0] as Record<string, unknown>)[
-                              header.toLowerCase().replace(/\s+/g, '_')
-                            ] ?? '—',
-                          )
-                        : '—'}
+                      {String(activeFile.preview?.sampleRawRows?.[0]?.[idx] ?? '—')}
                     </td>
                   </tr>
                 ))}

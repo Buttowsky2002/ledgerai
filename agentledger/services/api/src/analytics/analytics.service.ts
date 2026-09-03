@@ -1432,7 +1432,7 @@ export class AnalyticsService {
     const overageUsdByVendor: Record<string, number> = {};
     for (const row of platformRows) {
       const vendor = platformToVendor(String(row.platform));
-      if (vendor === 'github' || vendor === 'cursor') {
+      if (vendor === 'github') {
         continue;
       }
       overageUsdByVendor[vendor] = (overageUsdByVendor[vendor] ?? 0) + n(row.cost_usd);
@@ -1465,8 +1465,10 @@ export class AnalyticsService {
         }
       }
       if (cursorSummary.meteredOverageUsd > 0) {
-        overageUsdByVendor.cursor =
-          (overageUsdByVendor.cursor ?? 0) + cursorSummary.meteredOverageUsd;
+        overageUsdByVendor.cursor = Math.max(
+          overageUsdByVendor.cursor ?? 0,
+          cursorSummary.meteredOverageUsd,
+        );
       }
     }
 

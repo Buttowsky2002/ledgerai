@@ -1,0 +1,660 @@
+[33m╷[0m[0m
+[33m│[0m [0m[1m[33mWarning: [0m[0m[1mDeprecated Parameter[0m
+[33m│[0m [0m
+[33m│[0m [0m[0mThe parameter "dynamodb_table" is deprecated. Use parameter "use_lockfile"
+[33m│[0m [0minstead.
+[33m╵[0m[0m
+[0m[1mmodule.postgres.random_password.superuser: Refreshing state... [id=none][0m
+[0m[1mmodule.postgres.random_password.app_role: Refreshing state... [id=none][0m
+[0m[1mmodule.connector_sync.data.aws_region.current: Reading...[0m[0m
+[0m[1mmodule.network.data.aws_availability_zones.available: Reading...[0m[0m
+[0m[1mmodule.api.data.aws_region.current: Reading...[0m[0m
+[0m[1mmodule.clickhouse_secret.aws_secretsmanager_secret.clickhouse: Refreshing state... [id=arn:aws:secretsmanager:us-east-1:995475749441:secret:badgeriq/pilot/clickhouse-DT81ZB][0m
+[0m[1mmodule.postgres.aws_secretsmanager_secret.postgres: Refreshing state... [id=arn:aws:secretsmanager:us-east-1:995475749441:secret:badgeriq/pilot/postgres-Dwki9p][0m
+[0m[1mmodule.redpanda.data.aws_region.current: Reading...[0m[0m
+[0m[1mdata.aws_ec2_managed_prefix_list.cloudfront[0]: Reading...[0m[0m
+[0m[1mmodule.litellm_adapter.data.aws_region.current: Reading...[0m[0m
+[0m[1mmodule.redpanda.aws_cloudwatch_log_group.redpanda: Refreshing state... [id=/ecs/badgeriq-pilot/redpanda][0m
+[0m[1mmodule.connector_sync.data.aws_region.current: Read complete after 0s [id=us-east-1][0m
+[0m[1mmodule.api.data.aws_region.current: Read complete after 0s [id=us-east-1][0m
+[0m[1mmodule.litellm_adapter.data.aws_region.current: Read complete after 0s [id=us-east-1][0m
+[0m[1mmodule.redpanda.data.aws_region.current: Read complete after 0s [id=us-east-1][0m
+[0m[1mmodule.network.aws_eip.nat[0]: Refreshing state... [id=eipalloc-0a008735b09673870][0m
+[0m[1mmodule.reconcile.data.aws_region.current: Reading...[0m[0m
+[0m[1mmodule.collector.data.aws_region.current: Reading...[0m[0m
+[0m[1mmodule.reconcile.data.aws_region.current: Read complete after 0s [id=us-east-1][0m
+[0m[1mmodule.attribution.data.aws_region.current: Reading...[0m[0m
+[0m[1mmodule.collector.data.aws_region.current: Read complete after 0s [id=us-east-1][0m
+[0m[1mmodule.postgres.aws_kms_key.postgres: Refreshing state... [id=99451144-9ed5-41ad-adc6-d3885fbebc9e][0m
+[0m[1mmodule.attribution.data.aws_region.current: Read complete after 0s [id=us-east-1][0m
+[0m[1maws_ecs_cluster.main: Refreshing state... [id=arn:aws:ecs:us-east-1:995475749441:cluster/badgeriq-pilot-cluster][0m
+[0m[1mmodule.redpanda.aws_efs_file_system.redpanda: Refreshing state... [id=fs-03d92be7fdc8c3426][0m
+[0m[1mmodule.network.data.aws_availability_zones.available: Read complete after 1s [id=us-east-1][0m
+[0m[1mmodule.network.aws_vpc.main: Refreshing state... [id=vpc-0470b777b2539325c][0m
+[0m[1mmodule.risk_engine.data.aws_region.current: Reading...[0m[0m
+[0m[1mmodule.risk_engine.data.aws_region.current: Read complete after 0s [id=us-east-1][0m
+[0m[1mmodule.outcome_sync.data.aws_region.current: Reading...[0m[0m
+[0m[1mmodule.outcome_sync.data.aws_region.current: Read complete after 0s [id=us-east-1][0m
+[0m[1mmodule.dashboard.data.aws_region.current: Reading...[0m[0m
+[0m[1mmodule.dashboard.data.aws_region.current: Read complete after 0s [id=us-east-1][0m
+[0m[1mmodule.ch_insert.data.aws_region.current: Reading...[0m[0m
+[0m[1mmodule.ch_insert.data.aws_region.current: Read complete after 0s [id=us-east-1][0m
+[0m[1mmodule.redpanda.aws_iam_role.redpanda_task_execution: Refreshing state... [id=badgeriq-pilot-rp-exec-20260714231627606700000001][0m
+[0m[1mmodule.postgres.aws_iam_role.rds_monitoring: Refreshing state... [id=badgeriq-pilot-rds-monitoring][0m
+[0m[1mmodule.redpanda.aws_iam_role.redpanda_task: Refreshing state... [id=badgeriq-pilot-rp-task-20260714231627610900000003][0m
+[0m[1maws_iam_role.ecs_execution: Refreshing state... [id=badgeriq-pilot-ecs-execution][0m
+[0m[1mmodule.postgres.aws_db_parameter_group.main: Refreshing state... [id=badgeriq-pilot-pg16-20260714232317316300000003][0m
+[0m[1mmodule.gateway.data.aws_region.current: Reading...[0m[0m
+[0m[1mmodule.gateway.data.aws_region.current: Read complete after 0s [id=us-east-1][0m
+[0m[1mmodule.clickhouse_secret.aws_secretsmanager_secret_version.clickhouse: Refreshing state... [id=arn:aws:secretsmanager:us-east-1:995475749441:secret:badgeriq/pilot/clickhouse-DT81ZB|terraform-20260724184754718900000001][0m
+[0m[1mmodule.postgres.aws_kms_alias.postgres: Refreshing state... [id=alias/badgeriq-pilot-postgres][0m
+[0m[1mmodule.redpanda.aws_efs_access_point.redpanda: Refreshing state... [id=fsap-0d80e1b4ec6b253e7][0m
+[0m[1mdata.aws_ec2_managed_prefix_list.cloudfront[0]: Read complete after 1s [id=pl-3b927c52][0m
+[0m[1maws_wafv2_web_acl.edge[0]: Refreshing state... [id=414d2f59-2ae5-4e25-9f1a-6c2f11593818][0m
+[0m[1mmodule.redpanda.aws_iam_role_policy_attachment.redpanda_exec_default: Refreshing state... [id=badgeriq-pilot-rp-exec-20260714231627606700000001-20260714231628150800000006][0m
+[0m[1mmodule.postgres.aws_iam_role_policy_attachment.rds_monitoring: Refreshing state... [id=badgeriq-pilot-rds-monitoring-20260714231628155300000007][0m
+[0m[1maws_iam_role_policy.ecs_exec_secrets: Refreshing state... [id=badgeriq-pilot-ecs-execution:secrets-access][0m
+[0m[1maws_iam_role_policy_attachment.ecs_exec_managed: Refreshing state... [id=badgeriq-pilot-ecs-execution-20260716200756836500000006][0m
+[0m[1mmodule.redpanda.aws_iam_role_policy.redpanda_efs: Refreshing state... [id=badgeriq-pilot-rp-task-20260714231627610900000003:efs-access][0m
+[0m[1mmodule.redpanda.aws_ecs_task_definition.redpanda: Refreshing state... [id=badgeriq-pilot-redpanda][0m
+[0m[1mmodule.network.aws_route_table.private[0]: Refreshing state... [id=rtb-00158f4ccdf59432c][0m
+[0m[1mmodule.network.aws_security_group.vpc_endpoints: Refreshing state... [id=sg-09e26420c0a3c5d1e][0m
+[0m[1mmodule.network.aws_internet_gateway.main: Refreshing state... [id=igw-04e400c46061c41f1][0m
+[0m[1mmodule.network.aws_security_group.ecs_tasks: Refreshing state... [id=sg-08d8357cd48f13e0c][0m
+[0m[1mmodule.network.aws_subnet.public[0]: Refreshing state... [id=subnet-0055516d8eba5f2d9][0m
+[0m[1mmodule.network.aws_subnet.public[2]: Refreshing state... [id=subnet-097233973d9c77741][0m
+[0m[1maws_security_group.alb: Refreshing state... [id=sg-05761b56382116621][0m
+[0m[1mmodule.network.aws_route_table.public: Refreshing state... [id=rtb-05304247a5e93f49b][0m
+[0m[1mmodule.network.aws_subnet.public[1]: Refreshing state... [id=subnet-04fee1926a3c83779][0m
+[0m[1mmodule.network.aws_subnet.private[0]: Refreshing state... [id=subnet-00a08f22fa5821bfe][0m
+[0m[1mmodule.network.aws_subnet.private[1]: Refreshing state... [id=subnet-09839bb5592552bed][0m
+[0m[1mmodule.network.aws_subnet.private[2]: Refreshing state... [id=subnet-08f88d9221e75a779][0m
+[0m[1mmodule.postgres.aws_security_group.postgres: Refreshing state... [id=sg-08e07ffce11a35251][0m
+[0m[1mmodule.redpanda.aws_security_group.efs: Refreshing state... [id=sg-03ef78a001582233f][0m
+[0m[1mmodule.redpanda.aws_service_discovery_private_dns_namespace.main: Refreshing state... [id=ns-aiugbbdxi67d6whi][0m
+[0m[1mmodule.network.aws_vpc_endpoint.s3: Refreshing state... [id=vpce-03e14a4dac671b8a0][0m
+[0m[1mmodule.network.aws_vpc_security_group_ingress_rule.ecs_api_from_ecs: Refreshing state... [id=sgr-0d6a9553010e583f2][0m
+[0m[1mmodule.network.aws_vpc_security_group_egress_rule.ecs_all_out: Refreshing state... [id=sgr-00e2f45666d5860bb][0m
+[0m[1mmodule.network.aws_vpc_security_group_ingress_rule.vpce_from_vpc: Refreshing state... [id=sgr-07249978bf0f7fca1][0m
+[0m[1maws_vpc_security_group_ingress_rule.alb_http_cloudfront[0]: Refreshing state... [id=sgr-09a8952495c918ce3][0m
+[0m[1mmodule.network.aws_route.public_internet: Refreshing state... [id=r-rtb-05304247a5e93f49b1080289494][0m
+[0m[1maws_vpc_security_group_egress_rule.alb_to_ecs: Refreshing state... [id=sgr-0c80f2f0eb3d12596][0m
+[0m[1maws_vpc_security_group_ingress_rule.ecs_from_alb: Refreshing state... [id=sgr-059e54af11d3fed4a][0m
+[0m[1mmodule.network.aws_route_table_association.public[2]: Refreshing state... [id=rtbassoc-0b1b34c5d90a46be5][0m
+[0m[1mmodule.network.aws_route_table_association.public[0]: Refreshing state... [id=rtbassoc-0a94e6c97c3af105e][0m
+[0m[1mmodule.network.aws_nat_gateway.main[0]: Refreshing state... [id=nat-0725e11e127e80d28][0m
+[0m[1mmodule.network.aws_route_table_association.public[1]: Refreshing state... [id=rtbassoc-0a3a400e8de87951f][0m
+[0m[1mmodule.postgres.aws_vpc_security_group_egress_rule.postgres_out: Refreshing state... [id=sgr-0ca8d65013d5e4da6][0m
+[0m[1mmodule.redpanda.aws_vpc_security_group_egress_rule.efs_out: Refreshing state... [id=sgr-01eabbc1ae7322d1b][0m
+[0m[1mmodule.network.aws_vpc_endpoint.secretsmanager: Refreshing state... [id=vpce-011cc1bab0d75be08][0m
+[0m[1mmodule.network.aws_vpc_endpoint.logs: Refreshing state... [id=vpce-0cc6848562885b48e][0m
+[0m[1mmodule.network.aws_route_table_association.private[2]: Refreshing state... [id=rtbassoc-07c20ca9d90faf3d1][0m
+[0m[1mmodule.network.aws_route_table_association.private[0]: Refreshing state... [id=rtbassoc-0224052746fadcb1b][0m
+[0m[1mmodule.network.aws_vpc_endpoint.ecr_api: Refreshing state... [id=vpce-099b6afa54ecf942c][0m
+[0m[1mmodule.network.aws_vpc_endpoint.ecr_dkr: Refreshing state... [id=vpce-08e3534eec9d725c6][0m
+[0m[1mmodule.network.aws_route_table_association.private[1]: Refreshing state... [id=rtbassoc-0f76f0d05629a63ad][0m
+[0m[1mmodule.postgres.aws_vpc_security_group_ingress_rule.postgres_from_ecs: Refreshing state... [id=sgr-096118c73a6e51faa][0m
+[0m[1mmodule.redpanda.aws_vpc_security_group_ingress_rule.redpanda_from_ecs: Refreshing state... [id=sgr-02e6f898b3df2480e][0m
+[0m[1mmodule.redpanda.aws_vpc_security_group_ingress_rule.efs_from_ecs: Refreshing state... [id=sgr-062e869bf712ca171][0m
+[0m[1maws_lb.main: Refreshing state... [id=arn:aws:elasticloadbalancing:us-east-1:995475749441:loadbalancer/app/badgeriq-pilot-alb/d51ac1772d57ae95][0m
+[0m[1mmodule.network.aws_route.private_nat[0]: Refreshing state... [id=r-rtb-00158f4ccdf59432c1080289494][0m
+[0m[1mmodule.redpanda.aws_service_discovery_service.redpanda: Refreshing state... [id=srv-iaryxu7fofu4svbj][0m
+[0m[1mmodule.postgres.aws_db_subnet_group.main: Refreshing state... [id=badgeriq-pilot-postgres][0m
+[0m[1mmodule.redpanda.aws_efs_mount_target.redpanda[1]: Refreshing state... [id=fsmt-00c1de2e313c79307][0m
+[0m[1mmodule.redpanda.aws_efs_mount_target.redpanda[2]: Refreshing state... [id=fsmt-0575e45c64df279d8][0m
+[0m[1mmodule.redpanda.aws_efs_mount_target.redpanda[0]: Refreshing state... [id=fsmt-0be4b8750adbb0a5b][0m
+[0m[1mmodule.postgres.aws_db_instance.main: Refreshing state... [id=db-2T5BZDWKRPXSQO66BN7BVJ7ZLE][0m
+[0m[1mmodule.outcome_sync.aws_cloudwatch_log_group.svc: Refreshing state... [id=/ecs/badgeriq-pilot/outcome-sync][0m
+[0m[1mmodule.outcome_sync.aws_service_discovery_service.svc: Refreshing state... [id=srv-q6sc2ckaoc6feso4][0m
+[0m[1mmodule.postgres.aws_secretsmanager_secret_version.postgres: Refreshing state... [id=arn:aws:secretsmanager:us-east-1:995475749441:secret:badgeriq/pilot/postgres-Dwki9p|terraform-20260714233453660800000006][0m
+[0m[1mmodule.attribution.aws_cloudwatch_log_group.svc: Refreshing state... [id=/ecs/badgeriq-pilot/attribution][0m
+[0m[1mmodule.gateway.aws_service_discovery_service.svc: Refreshing state... [id=srv-womr35wzva3ou6j2][0m
+[0m[1mmodule.connector_sync.aws_service_discovery_service.svc: Refreshing state... [id=srv-sqaql23mddoistep][0m
+[0m[1mmodule.collector.aws_service_discovery_service.svc: Refreshing state... [id=srv-bocsa62z2i2ahptu][0m
+[0m[1mmodule.connector_sync.aws_cloudwatch_log_group.svc: Refreshing state... [id=/ecs/badgeriq-pilot/connector-sync][0m
+[0m[1mmodule.collector.aws_cloudwatch_log_group.svc: Refreshing state... [id=/ecs/badgeriq-pilot/collector][0m
+[0m[1mmodule.risk_engine.aws_cloudwatch_log_group.svc: Refreshing state... [id=/ecs/badgeriq-pilot/risk-engine][0m
+[0m[1mmodule.risk_engine.aws_service_discovery_service.svc: Refreshing state... [id=srv-f76pwbr4nzx6cfn3][0m
+[0m[1mmodule.dashboard.aws_service_discovery_service.svc: Refreshing state... [id=srv-cuaywycrq3ahbo4h][0m
+[0m[1mmodule.api.aws_service_discovery_service.svc: Refreshing state... [id=srv-zlsjik5do4i7j6g7][0m
+[0m[1mmodule.gateway.aws_cloudwatch_log_group.svc: Refreshing state... [id=/ecs/badgeriq-pilot/gateway][0m
+[0m[1mmodule.reconcile.aws_cloudwatch_log_group.svc: Refreshing state... [id=/ecs/badgeriq-pilot/reconcile][0m
+[0m[1mmodule.reconcile.aws_service_discovery_service.svc: Refreshing state... [id=srv-may3mxinipzfuzz3][0m
+[0m[1mmodule.api.aws_cloudwatch_log_group.svc: Refreshing state... [id=/ecs/badgeriq-pilot/api][0m
+[0m[1mmodule.gateway.aws_lb_target_group.svc[0]: Refreshing state... [id=arn:aws:elasticloadbalancing:us-east-1:995475749441:targetgroup/badgeriq-pilot-gateway/1e3a1b32e56218a1][0m
+[0m[1mmodule.dashboard.aws_lb_target_group.svc[0]: Refreshing state... [id=arn:aws:elasticloadbalancing:us-east-1:995475749441:targetgroup/badgeriq-pilot-dashboard/27e06a11197414ec][0m
+[0m[1mmodule.ch_insert.aws_cloudwatch_log_group.svc: Refreshing state... [id=/ecs/badgeriq-pilot/ch-insert][0m
+[0m[1mmodule.litellm_adapter.aws_cloudwatch_log_group.svc: Refreshing state... [id=/ecs/badgeriq-pilot/litellm-adapter][0m
+[0m[1mmodule.api.aws_lb_target_group.svc[0]: Refreshing state... [id=arn:aws:elasticloadbalancing:us-east-1:995475749441:targetgroup/badgeriq-pilot-api/3153dc43d24c02ad][0m
+[0m[1mmodule.attribution.aws_service_discovery_service.svc: Refreshing state... [id=srv-w3cm2cspgtrkea2p][0m
+[0m[1mmodule.dashboard.aws_cloudwatch_log_group.svc: Refreshing state... [id=/ecs/badgeriq-pilot/dashboard][0m
+[0m[1mmodule.ch_insert.aws_service_discovery_service.svc: Refreshing state... [id=srv-zaaihtx535djcvmy][0m
+[0m[1mmodule.litellm_adapter.aws_service_discovery_service.svc: Refreshing state... [id=srv-3oxfpdqdxrcof4hj][0m
+[0m[1mmodule.redpanda.aws_ecs_service.redpanda: Refreshing state... [id=arn:aws:ecs:us-east-1:995475749441:service/badgeriq-pilot-cluster/badgeriq-pilot-redpanda][0m
+[0m[1mmodule.outcome_sync.aws_ecs_task_definition.svc: Refreshing state... [id=badgeriq-pilot-outcome-sync][0m
+[0m[1mmodule.attribution.aws_ecs_task_definition.svc: Refreshing state... [id=badgeriq-pilot-attribution][0m
+[0m[1mmodule.connector_sync.aws_ecs_task_definition.svc: Refreshing state... [id=badgeriq-pilot-connector-sync][0m
+[0m[1mmodule.collector.aws_ecs_task_definition.svc: Refreshing state... [id=badgeriq-pilot-collector][0m
+[0m[1mmodule.risk_engine.aws_ecs_task_definition.svc: Refreshing state... [id=badgeriq-pilot-risk-engine][0m
+[0m[1mmodule.gateway.aws_ecs_task_definition.svc: Refreshing state... [id=badgeriq-pilot-gateway][0m
+[0m[1maws_lb_listener.http: Refreshing state... [id=arn:aws:elasticloadbalancing:us-east-1:995475749441:listener/app/badgeriq-pilot-alb/d51ac1772d57ae95/1aca63a993559a5d][0m
+[0m[1mmodule.reconcile.aws_ecs_task_definition.svc: Refreshing state... [id=badgeriq-pilot-reconcile][0m
+[0m[1mmodule.litellm_adapter.aws_ecs_task_definition.svc: Refreshing state... [id=badgeriq-pilot-litellm-adapter][0m
+[0m[1mmodule.ch_insert.aws_ecs_task_definition.svc: Refreshing state... [id=badgeriq-pilot-ch-insert][0m
+[0m[1mmodule.outcome_sync.aws_ecs_service.svc: Refreshing state... [id=arn:aws:ecs:us-east-1:995475749441:service/badgeriq-pilot-cluster/badgeriq-pilot-outcome-sync][0m
+[0m[1mmodule.attribution.aws_ecs_service.svc: Refreshing state... [id=arn:aws:ecs:us-east-1:995475749441:service/badgeriq-pilot-cluster/badgeriq-pilot-attribution][0m
+[0m[1mmodule.risk_engine.aws_ecs_service.svc: Refreshing state... [id=arn:aws:ecs:us-east-1:995475749441:service/badgeriq-pilot-cluster/badgeriq-pilot-risk-engine][0m
+[0m[1mmodule.connector_sync.aws_ecs_service.svc: Refreshing state... [id=arn:aws:ecs:us-east-1:995475749441:service/badgeriq-pilot-cluster/badgeriq-pilot-connector-sync][0m
+[0m[1mmodule.collector.aws_ecs_service.svc: Refreshing state... [id=arn:aws:ecs:us-east-1:995475749441:service/badgeriq-pilot-cluster/badgeriq-pilot-collector][0m
+[0m[1mmodule.gateway.aws_ecs_service.svc: Refreshing state... [id=arn:aws:ecs:us-east-1:995475749441:service/badgeriq-pilot-cluster/badgeriq-pilot-gateway][0m
+[0m[1mmodule.reconcile.aws_ecs_service.svc: Refreshing state... [id=arn:aws:ecs:us-east-1:995475749441:service/badgeriq-pilot-cluster/badgeriq-pilot-reconcile][0m
+[0m[1mmodule.ch_insert.aws_ecs_service.svc: Refreshing state... [id=arn:aws:ecs:us-east-1:995475749441:service/badgeriq-pilot-cluster/badgeriq-pilot-ch-insert][0m
+[0m[1mmodule.litellm_adapter.aws_ecs_service.svc: Refreshing state... [id=arn:aws:ecs:us-east-1:995475749441:service/badgeriq-pilot-cluster/badgeriq-pilot-litellm-adapter][0m
+[0m[1maws_cloudfront_distribution.main[0]: Refreshing state... [id=E3LOPYZO7YU7L9][0m
+[0m[1maws_lb_listener_rule.api_health: Refreshing state... [id=arn:aws:elasticloadbalancing:us-east-1:995475749441:listener-rule/app/badgeriq-pilot-alb/d51ac1772d57ae95/1aca63a993559a5d/68983d1f52d7d32d][0m
+[0m[1mmodule.dashboard.aws_ecs_task_definition.svc: Refreshing state... [id=badgeriq-pilot-dashboard][0m
+[0m[1mmodule.gateway.aws_lb_listener_rule.svc[0]: Refreshing state... [id=arn:aws:elasticloadbalancing:us-east-1:995475749441:listener-rule/app/badgeriq-pilot-alb/d51ac1772d57ae95/1aca63a993559a5d/9a8877b229760c07][0m
+[0m[1maws_lb_listener_rule.scim: Refreshing state... [id=arn:aws:elasticloadbalancing:us-east-1:995475749441:listener-rule/app/badgeriq-pilot-alb/d51ac1772d57ae95/1aca63a993559a5d/ca8492816df8e7a7][0m
+[0m[1mmodule.api.aws_ecs_task_definition.svc: Refreshing state... [id=badgeriq-pilot-api][0m
+[0m[1mmodule.dashboard.aws_lb_listener_rule.svc[0]: Refreshing state... [id=arn:aws:elasticloadbalancing:us-east-1:995475749441:listener-rule/app/badgeriq-pilot-alb/d51ac1772d57ae95/1aca63a993559a5d/c686912ababe5e1c][0m
+[0m[1mmodule.api.aws_lb_listener_rule.svc[0]: Refreshing state... [id=arn:aws:elasticloadbalancing:us-east-1:995475749441:listener-rule/app/badgeriq-pilot-alb/d51ac1772d57ae95/1aca63a993559a5d/c3daf14c46360619][0m
+[0m[1mmodule.api.aws_ecs_service.svc: Refreshing state... [id=arn:aws:ecs:us-east-1:995475749441:service/badgeriq-pilot-cluster/badgeriq-pilot-api][0m
+[0m[1mmodule.dashboard.aws_ecs_service.svc: Refreshing state... [id=arn:aws:ecs:us-east-1:995475749441:service/badgeriq-pilot-cluster/badgeriq-pilot-dashboard][0m
+
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  [33m~[0m update in-place[0m
+[31m-[0m/[32m+[0m destroy and then create replacement[0m
+
+Terraform will perform the following actions:
+
+[1m  # module.api.aws_ecs_service.svc[0m will be updated in-place
+[0m  [33m~[0m[0m resource "aws_ecs_service" "svc" {
+        id                                 = "arn:aws:ecs:us-east-1:995475749441:service/badgeriq-pilot-cluster/badgeriq-pilot-api"
+        name                               = "badgeriq-pilot-api"
+        tags                               = {
+            "app.kubernetes.io/part-of" = "agentledger"
+            "environment"               = "pilot"
+            "managed_by"                = "terraform"
+            "project"                   = "badgeriq"
+        }
+      [33m~[0m[0m task_definition                    = "arn:aws:ecs:us-east-1:995475749441:task-definition/badgeriq-pilot-api:42" -> (known after apply)
+        [90m# (16 unchanged attributes hidden)[0m[0m
+
+        [90m# (5 unchanged blocks hidden)[0m[0m
+    }
+
+[1m  # module.api.aws_ecs_task_definition.svc[0m must be [1m[31mreplaced[0m
+[0m[31m-[0m/[32m+[0m[0m resource "aws_ecs_task_definition" "svc" {
+      [33m~[0m[0m arn                      = "arn:aws:ecs:us-east-1:995475749441:task-definition/badgeriq-pilot-api:42" -> (known after apply)
+      [33m~[0m[0m arn_without_revision     = "arn:aws:ecs:us-east-1:995475749441:task-definition/badgeriq-pilot-api" -> (known after apply)
+      [33m~[0m[0m container_definitions    = (sensitive value) [31m# forces replacement[0m[0m
+      [33m~[0m[0m enable_fault_injection   = false -> (known after apply)
+      [33m~[0m[0m id                       = "badgeriq-pilot-api" -> (known after apply)
+      [33m~[0m[0m revision                 = 42 -> (known after apply)
+        tags                     = {
+            "app.kubernetes.io/part-of" = "agentledger"
+            "environment"               = "pilot"
+            "managed_by"                = "terraform"
+            "project"                   = "badgeriq"
+        }
+        [90m# (12 unchanged attributes hidden)[0m[0m
+    }
+
+[1m  # module.attribution.aws_ecs_service.svc[0m will be updated in-place
+[0m  [33m~[0m[0m resource "aws_ecs_service" "svc" {
+        id                                 = "arn:aws:ecs:us-east-1:995475749441:service/badgeriq-pilot-cluster/badgeriq-pilot-attribution"
+        name                               = "badgeriq-pilot-attribution"
+        tags                               = {
+            "app.kubernetes.io/part-of" = "agentledger"
+            "environment"               = "pilot"
+            "managed_by"                = "terraform"
+            "project"                   = "badgeriq"
+        }
+      [33m~[0m[0m task_definition                    = "arn:aws:ecs:us-east-1:995475749441:task-definition/badgeriq-pilot-attribution:25" -> (known after apply)
+        [90m# (16 unchanged attributes hidden)[0m[0m
+
+        [90m# (4 unchanged blocks hidden)[0m[0m
+    }
+
+[1m  # module.attribution.aws_ecs_task_definition.svc[0m must be [1m[31mreplaced[0m
+[0m[31m-[0m/[32m+[0m[0m resource "aws_ecs_task_definition" "svc" {
+      [33m~[0m[0m arn                      = "arn:aws:ecs:us-east-1:995475749441:task-definition/badgeriq-pilot-attribution:25" -> (known after apply)
+      [33m~[0m[0m arn_without_revision     = "arn:aws:ecs:us-east-1:995475749441:task-definition/badgeriq-pilot-attribution" -> (known after apply)
+      [33m~[0m[0m container_definitions    = (sensitive value) [31m# forces replacement[0m[0m
+      [33m~[0m[0m enable_fault_injection   = false -> (known after apply)
+      [33m~[0m[0m id                       = "badgeriq-pilot-attribution" -> (known after apply)
+      [33m~[0m[0m revision                 = 25 -> (known after apply)
+        tags                     = {
+            "app.kubernetes.io/part-of" = "agentledger"
+            "environment"               = "pilot"
+            "managed_by"                = "terraform"
+            "project"                   = "badgeriq"
+        }
+        [90m# (12 unchanged attributes hidden)[0m[0m
+    }
+
+[1m  # module.ch_insert.aws_ecs_service.svc[0m will be updated in-place
+[0m  [33m~[0m[0m resource "aws_ecs_service" "svc" {
+        id                                 = "arn:aws:ecs:us-east-1:995475749441:service/badgeriq-pilot-cluster/badgeriq-pilot-ch-insert"
+        name                               = "badgeriq-pilot-ch-insert"
+        tags                               = {
+            "app.kubernetes.io/part-of" = "agentledger"
+            "environment"               = "pilot"
+            "managed_by"                = "terraform"
+            "project"                   = "badgeriq"
+        }
+      [33m~[0m[0m task_definition                    = "arn:aws:ecs:us-east-1:995475749441:task-definition/badgeriq-pilot-ch-insert:25" -> (known after apply)
+        [90m# (16 unchanged attributes hidden)[0m[0m
+
+        [90m# (4 unchanged blocks hidden)[0m[0m
+    }
+
+[1m  # module.ch_insert.aws_ecs_task_definition.svc[0m must be [1m[31mreplaced[0m
+[0m[31m-[0m/[32m+[0m[0m resource "aws_ecs_task_definition" "svc" {
+      [33m~[0m[0m arn                      = "arn:aws:ecs:us-east-1:995475749441:task-definition/badgeriq-pilot-ch-insert:25" -> (known after apply)
+      [33m~[0m[0m arn_without_revision     = "arn:aws:ecs:us-east-1:995475749441:task-definition/badgeriq-pilot-ch-insert" -> (known after apply)
+      [33m~[0m[0m container_definitions    = (sensitive value) [31m# forces replacement[0m[0m
+      [33m~[0m[0m enable_fault_injection   = false -> (known after apply)
+      [33m~[0m[0m id                       = "badgeriq-pilot-ch-insert" -> (known after apply)
+      [33m~[0m[0m revision                 = 25 -> (known after apply)
+        tags                     = {
+            "app.kubernetes.io/part-of" = "agentledger"
+            "environment"               = "pilot"
+            "managed_by"                = "terraform"
+            "project"                   = "badgeriq"
+        }
+        [90m# (12 unchanged attributes hidden)[0m[0m
+    }
+
+[1m  # module.clickhouse_secret.aws_secretsmanager_secret_version.clickhouse[0m must be [1m[31mreplaced[0m
+[0m[31m-[0m/[32m+[0m[0m resource "aws_secretsmanager_secret_version" "clickhouse" {
+      [33m~[0m[0m arn                  = "arn:aws:secretsmanager:us-east-1:995475749441:secret:badgeriq/pilot/clickhouse-DT81ZB" -> (known after apply)
+      [32m+[0m[0m has_secret_string_wo = (known after apply)
+      [33m~[0m[0m id                   = "arn:aws:secretsmanager:us-east-1:995475749441:secret:badgeriq/pilot/clickhouse-DT81ZB|terraform-20260724184754718900000001" -> (known after apply)
+      [33m~[0m[0m secret_string        = (sensitive value) [31m# forces replacement[0m[0m
+      [33m~[0m[0m version_id           = "terraform-20260724184754718900000001" -> (known after apply)
+      [33m~[0m[0m version_stages       = [
+          [31m-[0m[0m "AWSCURRENT",
+        ] -> (known after apply)
+        [90m# (3 unchanged attributes hidden)[0m[0m
+    }
+
+[1m  # module.collector.aws_ecs_service.svc[0m will be updated in-place
+[0m  [33m~[0m[0m resource "aws_ecs_service" "svc" {
+        id                                 = "arn:aws:ecs:us-east-1:995475749441:service/badgeriq-pilot-cluster/badgeriq-pilot-collector"
+        name                               = "badgeriq-pilot-collector"
+        tags                               = {
+            "app.kubernetes.io/part-of" = "agentledger"
+            "environment"               = "pilot"
+            "managed_by"                = "terraform"
+            "project"                   = "badgeriq"
+        }
+      [33m~[0m[0m task_definition                    = "arn:aws:ecs:us-east-1:995475749441:task-definition/badgeriq-pilot-collector:25" -> (known after apply)
+        [90m# (16 unchanged attributes hidden)[0m[0m
+
+        [90m# (4 unchanged blocks hidden)[0m[0m
+    }
+
+[1m  # module.collector.aws_ecs_task_definition.svc[0m must be [1m[31mreplaced[0m
+[0m[31m-[0m/[32m+[0m[0m resource "aws_ecs_task_definition" "svc" {
+      [33m~[0m[0m arn                      = "arn:aws:ecs:us-east-1:995475749441:task-definition/badgeriq-pilot-collector:25" -> (known after apply)
+      [33m~[0m[0m arn_without_revision     = "arn:aws:ecs:us-east-1:995475749441:task-definition/badgeriq-pilot-collector" -> (known after apply)
+      [33m~[0m[0m container_definitions    = jsonencode(
+          [33m~[0m[0m [
+              [33m~[0m[0m {
+                  [33m~[0m[0m image                 = "ghcr.io/buttowsky2002/ledgerai-collector:0.1.33-pilot" [33m->[0m[0m "ghcr.io/buttowsky2002/ledgerai-collector:0.1.34-pilot"
+                  [31m-[0m[0m mountPoints           = []
+                    name                  = "collector"
+                  [33m~[0m[0m portMappings          = [
+                      [33m~[0m[0m {
+                          [31m-[0m[0m hostPort      = 8090
+                            [90m# (2 unchanged attributes hidden)[0m[0m
+                        },
+                    ]
+                  [31m-[0m[0m systemControls        = []
+                  [31m-[0m[0m volumesFrom           = []
+                    [90m# (6 unchanged attributes hidden)[0m[0m
+                },
+            ] [31m# forces replacement[0m[0m
+        )
+      [33m~[0m[0m enable_fault_injection   = false -> (known after apply)
+      [33m~[0m[0m id                       = "badgeriq-pilot-collector" -> (known after apply)
+      [33m~[0m[0m revision                 = 25 -> (known after apply)
+        tags                     = {
+            "app.kubernetes.io/part-of" = "agentledger"
+            "environment"               = "pilot"
+            "managed_by"                = "terraform"
+            "project"                   = "badgeriq"
+        }
+        [90m# (12 unchanged attributes hidden)[0m[0m
+    }
+
+[1m  # module.connector_sync.aws_ecs_service.svc[0m will be updated in-place
+[0m  [33m~[0m[0m resource "aws_ecs_service" "svc" {
+        id                                 = "arn:aws:ecs:us-east-1:995475749441:service/badgeriq-pilot-cluster/badgeriq-pilot-connector-sync"
+        name                               = "badgeriq-pilot-connector-sync"
+        tags                               = {
+            "app.kubernetes.io/part-of" = "agentledger"
+            "environment"               = "pilot"
+            "managed_by"                = "terraform"
+            "project"                   = "badgeriq"
+        }
+      [33m~[0m[0m task_definition                    = "arn:aws:ecs:us-east-1:995475749441:task-definition/badgeriq-pilot-connector-sync:25" -> (known after apply)
+        [90m# (16 unchanged attributes hidden)[0m[0m
+
+        [90m# (4 unchanged blocks hidden)[0m[0m
+    }
+
+[1m  # module.connector_sync.aws_ecs_task_definition.svc[0m must be [1m[31mreplaced[0m
+[0m[31m-[0m/[32m+[0m[0m resource "aws_ecs_task_definition" "svc" {
+      [33m~[0m[0m arn                      = "arn:aws:ecs:us-east-1:995475749441:task-definition/badgeriq-pilot-connector-sync:25" -> (known after apply)
+      [33m~[0m[0m arn_without_revision     = "arn:aws:ecs:us-east-1:995475749441:task-definition/badgeriq-pilot-connector-sync" -> (known after apply)
+      [33m~[0m[0m container_definitions    = (sensitive value) [31m# forces replacement[0m[0m
+      [33m~[0m[0m enable_fault_injection   = false -> (known after apply)
+      [33m~[0m[0m id                       = "badgeriq-pilot-connector-sync" -> (known after apply)
+      [33m~[0m[0m revision                 = 25 -> (known after apply)
+        tags                     = {
+            "app.kubernetes.io/part-of" = "agentledger"
+            "environment"               = "pilot"
+            "managed_by"                = "terraform"
+            "project"                   = "badgeriq"
+        }
+        [90m# (12 unchanged attributes hidden)[0m[0m
+    }
+
+[1m  # module.dashboard.aws_ecs_service.svc[0m will be updated in-place
+[0m  [33m~[0m[0m resource "aws_ecs_service" "svc" {
+        id                                 = "arn:aws:ecs:us-east-1:995475749441:service/badgeriq-pilot-cluster/badgeriq-pilot-dashboard"
+        name                               = "badgeriq-pilot-dashboard"
+        tags                               = {
+            "app.kubernetes.io/part-of" = "agentledger"
+            "environment"               = "pilot"
+            "managed_by"                = "terraform"
+            "project"                   = "badgeriq"
+        }
+      [33m~[0m[0m task_definition                    = "arn:aws:ecs:us-east-1:995475749441:task-definition/badgeriq-pilot-dashboard:34" -> (known after apply)
+        [90m# (16 unchanged attributes hidden)[0m[0m
+
+        [90m# (5 unchanged blocks hidden)[0m[0m
+    }
+
+[1m  # module.dashboard.aws_ecs_task_definition.svc[0m must be [1m[31mreplaced[0m
+[0m[31m-[0m/[32m+[0m[0m resource "aws_ecs_task_definition" "svc" {
+      [33m~[0m[0m arn                      = "arn:aws:ecs:us-east-1:995475749441:task-definition/badgeriq-pilot-dashboard:34" -> (known after apply)
+      [33m~[0m[0m arn_without_revision     = "arn:aws:ecs:us-east-1:995475749441:task-definition/badgeriq-pilot-dashboard" -> (known after apply)
+      [33m~[0m[0m container_definitions    = jsonencode(
+          [33m~[0m[0m [
+              [33m~[0m[0m {
+                  [33m~[0m[0m environment           = [
+                        [90m# (2 unchanged elements hidden)[0m[0m
+                        {
+                            name  = "BADGERIQ_ENV"
+                            value = "production"
+                        },
+                      [33m~[0m[0m {
+                            name  = "BADGERIQ_PUBLIC_URL"
+                          [33m~[0m[0m value = "https://d1e2lzkoizqhk6.cloudfront.net" [33m->[0m[0m "https://badgeriq.studiodesigner.com"
+                        },
+                        {
+                            name  = "NODE_ENV"
+                            value = "production"
+                        },
+                    ]
+                  [33m~[0m[0m image                 = "ghcr.io/buttowsky2002/ledgerai-dashboard:0.1.33-pilot" [33m->[0m[0m "ghcr.io/buttowsky2002/ledgerai-dashboard:0.1.34-pilot"
+                  [31m-[0m[0m mountPoints           = []
+                    name                  = "dashboard"
+                  [33m~[0m[0m portMappings          = [
+                      [33m~[0m[0m {
+                          [31m-[0m[0m hostPort      = 3000
+                            [90m# (2 unchanged attributes hidden)[0m[0m
+                        },
+                    ]
+                  [31m-[0m[0m systemControls        = []
+                  [31m-[0m[0m volumesFrom           = []
+                    [90m# (5 unchanged attributes hidden)[0m[0m
+                },
+            ] [31m# forces replacement[0m[0m
+        )
+      [33m~[0m[0m enable_fault_injection   = false -> (known after apply)
+      [33m~[0m[0m id                       = "badgeriq-pilot-dashboard" -> (known after apply)
+      [33m~[0m[0m revision                 = 34 -> (known after apply)
+        tags                     = {
+            "app.kubernetes.io/part-of" = "agentledger"
+            "environment"               = "pilot"
+            "managed_by"                = "terraform"
+            "project"                   = "badgeriq"
+        }
+        [90m# (12 unchanged attributes hidden)[0m[0m
+    }
+
+[1m  # module.gateway.aws_ecs_service.svc[0m will be updated in-place
+[0m  [33m~[0m[0m resource "aws_ecs_service" "svc" {
+        id                                 = "arn:aws:ecs:us-east-1:995475749441:service/badgeriq-pilot-cluster/badgeriq-pilot-gateway"
+        name                               = "badgeriq-pilot-gateway"
+        tags                               = {
+            "app.kubernetes.io/part-of" = "agentledger"
+            "environment"               = "pilot"
+            "managed_by"                = "terraform"
+            "project"                   = "badgeriq"
+        }
+      [33m~[0m[0m task_definition                    = "arn:aws:ecs:us-east-1:995475749441:task-definition/badgeriq-pilot-gateway:27" -> (known after apply)
+        [90m# (16 unchanged attributes hidden)[0m[0m
+
+        [90m# (5 unchanged blocks hidden)[0m[0m
+    }
+
+[1m  # module.gateway.aws_ecs_task_definition.svc[0m must be [1m[31mreplaced[0m
+[0m[31m-[0m/[32m+[0m[0m resource "aws_ecs_task_definition" "svc" {
+      [33m~[0m[0m arn                      = "arn:aws:ecs:us-east-1:995475749441:task-definition/badgeriq-pilot-gateway:27" -> (known after apply)
+      [33m~[0m[0m arn_without_revision     = "arn:aws:ecs:us-east-1:995475749441:task-definition/badgeriq-pilot-gateway" -> (known after apply)
+      [33m~[0m[0m container_definitions    = (sensitive value) [31m# forces replacement[0m[0m
+      [33m~[0m[0m enable_fault_injection   = false -> (known after apply)
+      [33m~[0m[0m id                       = "badgeriq-pilot-gateway" -> (known after apply)
+      [33m~[0m[0m revision                 = 27 -> (known after apply)
+        tags                     = {
+            "app.kubernetes.io/part-of" = "agentledger"
+            "environment"               = "pilot"
+            "managed_by"                = "terraform"
+            "project"                   = "badgeriq"
+        }
+        [90m# (12 unchanged attributes hidden)[0m[0m
+    }
+
+[1m  # module.litellm_adapter.aws_ecs_service.svc[0m will be updated in-place
+[0m  [33m~[0m[0m resource "aws_ecs_service" "svc" {
+        id                                 = "arn:aws:ecs:us-east-1:995475749441:service/badgeriq-pilot-cluster/badgeriq-pilot-litellm-adapter"
+        name                               = "badgeriq-pilot-litellm-adapter"
+        tags                               = {
+            "app.kubernetes.io/part-of" = "agentledger"
+            "environment"               = "pilot"
+            "managed_by"                = "terraform"
+            "project"                   = "badgeriq"
+        }
+      [33m~[0m[0m task_definition                    = "arn:aws:ecs:us-east-1:995475749441:task-definition/badgeriq-pilot-litellm-adapter:25" -> (known after apply)
+        [90m# (16 unchanged attributes hidden)[0m[0m
+
+        [90m# (4 unchanged blocks hidden)[0m[0m
+    }
+
+[1m  # module.litellm_adapter.aws_ecs_task_definition.svc[0m must be [1m[31mreplaced[0m
+[0m[31m-[0m/[32m+[0m[0m resource "aws_ecs_task_definition" "svc" {
+      [33m~[0m[0m arn                      = "arn:aws:ecs:us-east-1:995475749441:task-definition/badgeriq-pilot-litellm-adapter:25" -> (known after apply)
+      [33m~[0m[0m arn_without_revision     = "arn:aws:ecs:us-east-1:995475749441:task-definition/badgeriq-pilot-litellm-adapter" -> (known after apply)
+      [33m~[0m[0m container_definitions    = jsonencode(
+          [33m~[0m[0m [
+              [33m~[0m[0m {
+                  [33m~[0m[0m image                 = "ghcr.io/buttowsky2002/ledgerai-litellm-adapter:0.1.33-pilot" [33m->[0m[0m "ghcr.io/buttowsky2002/ledgerai-litellm-adapter:0.1.34-pilot"
+                  [31m-[0m[0m mountPoints           = []
+                    name                  = "litellm-adapter"
+                  [33m~[0m[0m portMappings          = [
+                      [33m~[0m[0m {
+                          [31m-[0m[0m hostPort      = 8097
+                            [90m# (2 unchanged attributes hidden)[0m[0m
+                        },
+                    ]
+                  [31m-[0m[0m systemControls        = []
+                  [31m-[0m[0m volumesFrom           = []
+                    [90m# (6 unchanged attributes hidden)[0m[0m
+                },
+            ] [31m# forces replacement[0m[0m
+        )
+      [33m~[0m[0m enable_fault_injection   = false -> (known after apply)
+      [33m~[0m[0m id                       = "badgeriq-pilot-litellm-adapter" -> (known after apply)
+      [33m~[0m[0m revision                 = 25 -> (known after apply)
+        tags                     = {
+            "app.kubernetes.io/part-of" = "agentledger"
+            "environment"               = "pilot"
+            "managed_by"                = "terraform"
+            "project"                   = "badgeriq"
+        }
+        [90m# (12 unchanged attributes hidden)[0m[0m
+    }
+
+[1m  # module.outcome_sync.aws_ecs_service.svc[0m will be updated in-place
+[0m  [33m~[0m[0m resource "aws_ecs_service" "svc" {
+        id                                 = "arn:aws:ecs:us-east-1:995475749441:service/badgeriq-pilot-cluster/badgeriq-pilot-outcome-sync"
+        name                               = "badgeriq-pilot-outcome-sync"
+        tags                               = {
+            "app.kubernetes.io/part-of" = "agentledger"
+            "environment"               = "pilot"
+            "managed_by"                = "terraform"
+            "project"                   = "badgeriq"
+        }
+      [33m~[0m[0m task_definition                    = "arn:aws:ecs:us-east-1:995475749441:task-definition/badgeriq-pilot-outcome-sync:25" -> (known after apply)
+        [90m# (16 unchanged attributes hidden)[0m[0m
+
+        [90m# (4 unchanged blocks hidden)[0m[0m
+    }
+
+[1m  # module.outcome_sync.aws_ecs_task_definition.svc[0m must be [1m[31mreplaced[0m
+[0m[31m-[0m/[32m+[0m[0m resource "aws_ecs_task_definition" "svc" {
+      [33m~[0m[0m arn                      = "arn:aws:ecs:us-east-1:995475749441:task-definition/badgeriq-pilot-outcome-sync:25" -> (known after apply)
+      [33m~[0m[0m arn_without_revision     = "arn:aws:ecs:us-east-1:995475749441:task-definition/badgeriq-pilot-outcome-sync" -> (known after apply)
+      [33m~[0m[0m container_definitions    = (sensitive value) [31m# forces replacement[0m[0m
+      [33m~[0m[0m enable_fault_injection   = false -> (known after apply)
+      [33m~[0m[0m id                       = "badgeriq-pilot-outcome-sync" -> (known after apply)
+      [33m~[0m[0m revision                 = 25 -> (known after apply)
+        tags                     = {
+            "app.kubernetes.io/part-of" = "agentledger"
+            "environment"               = "pilot"
+            "managed_by"                = "terraform"
+            "project"                   = "badgeriq"
+        }
+        [90m# (12 unchanged attributes hidden)[0m[0m
+    }
+
+[1m  # module.postgres.aws_db_parameter_group.main[0m will be updated in-place
+[0m  [33m~[0m[0m resource "aws_db_parameter_group" "main" {
+        id           = "badgeriq-pilot-pg16-20260714232317316300000003"
+        name         = "badgeriq-pilot-pg16-20260714232317316300000003"
+        tags         = {
+            "app.kubernetes.io/part-of" = "agentledger"
+            "environment"               = "pilot"
+            "managed_by"                = "terraform"
+            "project"                   = "badgeriq"
+        }
+        [90m# (6 unchanged attributes hidden)[0m[0m
+
+      [31m-[0m[0m parameter {
+          [31m-[0m[0m apply_method = "pending-reboot" [90m-> null[0m[0m
+          [31m-[0m[0m name         = "rds.force_ssl" [90m-> null[0m[0m
+          [31m-[0m[0m value        = "1" [90m-> null[0m[0m
+        }
+      [32m+[0m[0m parameter {
+          [32m+[0m[0m apply_method = "immediate"
+          [32m+[0m[0m name         = "rds.force_ssl"
+          [32m+[0m[0m value        = "1"
+        }
+
+        [90m# (1 unchanged block hidden)[0m[0m
+    }
+
+[1m  # module.reconcile.aws_ecs_service.svc[0m will be updated in-place
+[0m  [33m~[0m[0m resource "aws_ecs_service" "svc" {
+        id                                 = "arn:aws:ecs:us-east-1:995475749441:service/badgeriq-pilot-cluster/badgeriq-pilot-reconcile"
+        name                               = "badgeriq-pilot-reconcile"
+        tags                               = {
+            "app.kubernetes.io/part-of" = "agentledger"
+            "environment"               = "pilot"
+            "managed_by"                = "terraform"
+            "project"                   = "badgeriq"
+        }
+      [33m~[0m[0m task_definition                    = "arn:aws:ecs:us-east-1:995475749441:task-definition/badgeriq-pilot-reconcile:25" -> (known after apply)
+        [90m# (16 unchanged attributes hidden)[0m[0m
+
+        [90m# (4 unchanged blocks hidden)[0m[0m
+    }
+
+[1m  # module.reconcile.aws_ecs_task_definition.svc[0m must be [1m[31mreplaced[0m
+[0m[31m-[0m/[32m+[0m[0m resource "aws_ecs_task_definition" "svc" {
+      [33m~[0m[0m arn                      = "arn:aws:ecs:us-east-1:995475749441:task-definition/badgeriq-pilot-reconcile:25" -> (known after apply)
+      [33m~[0m[0m arn_without_revision     = "arn:aws:ecs:us-east-1:995475749441:task-definition/badgeriq-pilot-reconcile" -> (known after apply)
+      [33m~[0m[0m container_definitions    = (sensitive value) [31m# forces replacement[0m[0m
+      [33m~[0m[0m enable_fault_injection   = false -> (known after apply)
+      [33m~[0m[0m id                       = "badgeriq-pilot-reconcile" -> (known after apply)
+      [33m~[0m[0m revision                 = 25 -> (known after apply)
+        tags                     = {
+            "app.kubernetes.io/part-of" = "agentledger"
+            "environment"               = "pilot"
+            "managed_by"                = "terraform"
+            "project"                   = "badgeriq"
+        }
+        [90m# (12 unchanged attributes hidden)[0m[0m
+    }
+
+[1m  # module.risk_engine.aws_ecs_service.svc[0m will be updated in-place
+[0m  [33m~[0m[0m resource "aws_ecs_service" "svc" {
+        id                                 = "arn:aws:ecs:us-east-1:995475749441:service/badgeriq-pilot-cluster/badgeriq-pilot-risk-engine"
+        name                               = "badgeriq-pilot-risk-engine"
+        tags                               = {
+            "app.kubernetes.io/part-of" = "agentledger"
+            "environment"               = "pilot"
+            "managed_by"                = "terraform"
+            "project"                   = "badgeriq"
+        }
+      [33m~[0m[0m task_definition                    = "arn:aws:ecs:us-east-1:995475749441:task-definition/badgeriq-pilot-risk-engine:25" -> (known after apply)
+        [90m# (16 unchanged attributes hidden)[0m[0m
+
+        [90m# (4 unchanged blocks hidden)[0m[0m
+    }
+
+[1m  # module.risk_engine.aws_ecs_task_definition.svc[0m must be [1m[31mreplaced[0m
+[0m[31m-[0m/[32m+[0m[0m resource "aws_ecs_task_definition" "svc" {
+      [33m~[0m[0m arn                      = "arn:aws:ecs:us-east-1:995475749441:task-definition/badgeriq-pilot-risk-engine:25" -> (known after apply)
+      [33m~[0m[0m arn_without_revision     = "arn:aws:ecs:us-east-1:995475749441:task-definition/badgeriq-pilot-risk-engine" -> (known after apply)
+      [33m~[0m[0m container_definitions    = (sensitive value) [31m# forces replacement[0m[0m
+      [33m~[0m[0m enable_fault_injection   = false -> (known after apply)
+      [33m~[0m[0m id                       = "badgeriq-pilot-risk-engine" -> (known after apply)
+      [33m~[0m[0m revision                 = 25 -> (known after apply)
+        tags                     = {
+            "app.kubernetes.io/part-of" = "agentledger"
+            "environment"               = "pilot"
+            "managed_by"                = "terraform"
+            "project"                   = "badgeriq"
+        }
+        [90m# (12 unchanged attributes hidden)[0m[0m
+    }
+
+[1mPlan:[0m [0m12 to add, 12 to change, 12 to destroy.
+
+Changes to Outputs:
+  [33m~[0m[0m pilot_url                  = "https://pilot.badgeriq.app" [33m->[0m[0m "https://badgeriq.studiodesigner.com"
+[33m╷[0m[0m
+[33m│[0m [0m[1m[33mWarning: [0m[0m[1mValue for undeclared variable[0m
+[33m│[0m [0m
+[33m│[0m [0m[0mThe root module does not declare a variable named "oidc_google_secret_arn"
+[33m│[0m [0mbut a value was found in file "pilot.auto.tfvars". If you meant to use this
+[33m│[0m [0mvalue, add a "variable" block to the configuration.
+[33m│[0m [0m
+[33m│[0m [0mTo silence these warnings, use TF_VAR_... environment variables to provide
+[33m│[0m [0mcertain "global" settings to all configurations in your organization. To
+[33m│[0m [0mreduce the verbosity of these warnings, use the -compact-warnings option.
+[33m╵[0m[0m
+[90m
+─────────────────────────────────────────────────────────────────────────────[0m
+
+Saved the plan to: tfplan-0.1.34
+
+To perform exactly these actions, run the following command to apply:
+    terraform apply "tfplan-0.1.34"
