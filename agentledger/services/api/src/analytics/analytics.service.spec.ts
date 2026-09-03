@@ -965,3 +965,75 @@ describe('AnalyticsService.cursorSpend', () => {
     expect(result?.seatLicenseUsd).toBe(0);
   });
 });
+
+describe('AnalyticsService.vendorBilling', () => {
+  it('keeps cursor overage from metered platform spend when cursor admin summary is unavailable', async () => {
+    const ch = { queryScoped: jest.fn(async () => []) } as unknown as ClickHouseService;
+    const svc = new AnalyticsService(
+      ch,
+      { withTenant: jest.fn() } as unknown as PrismaService,
+      {} as LariService,
+      { getSpendSummary: jest.fn(async () => null) } as unknown as CopilotAnalyticsService,
+      emptyCopilotMemberSpend(),
+      emptyCursorAnalytics() as never,
+      emptyCursorProductivity() as never,
+    );
+    jest.spyOn(svc, 'platformSpend').mockResolvedValueOnce([
+      { platform: 'cursor', cost_usd: 214.72, calls: 44 },
+      { platform: 'anthropic', cost_usd: 245.04, calls: 17 },
+    ]);
+    jest.spyOn(svc, 'platformSpend').mockResolvedValueOnce([]);
+    jest.spyOn(svc, 'cursorSpend').mockResolvedValue(null);
+
+    const result = await svc.vendorBilling('2026-08-01', '2026-08-31');
+    expect(result.vendors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ vendor: 'cursor', budget_overage_usd: 214.72 }),
+        expect.objectContaining({ vendor: 'anthropic', budget_overage_usd: 245.04 }),
+      ]),
+    );
+  });
+
+  it('uses the higher cursor billed overage instead of double-counting', async () => {
+    const ch = { queryScoped: jest.fn(async () => []) } as unknown as ClickHouseService;
+    const svc = new AnalyticsService(
+      ch,
+      { withTenant: jest.fn() } as unknown as PrismaService,
+      {} as LariService,
+      { getSpendSummary: jest.fn(async () => null) } as unknown as CopilotAnalyticsService,
+      emptyCopilotMemberSpend(),
+      emptyCursorAnalytics() as never,
+      emptyCursorProductivity() as never,
+    );
+    jest.spyOn(svc, 'platformSpend').mockResolvedValueOnce([
+      { platform: 'cursor', cost_usd: 100, calls: 11 },
+    ]);
+    jest.spyOn(svc, 'platformSpend').mockResolvedValueOnce([]);
+    jest.spyOn(svc, 'cursorSpend').mockResolvedValue({
+      billedUsd: 170.12,
+      meteredOverageUsd: 170.12,
+      usageValueUsd: 0,
+      seatLicenseUsd: 0,
+      seatUnitUsdPerMonth: 0,
+      seatCount: 0,
+      seatSource: 'none',
+      activeMembersInRange: 0,
+      totalTokens: 0,
+      legacyUntagged: false,
+      daily: [],
+      modelMix: [],
+      platform: { platform: 'cursor', cost_usd: 170.12, calls: 0 },
+      disclaimer: '',
+      includedCalls: 0,
+      onDemandCalls: 0,
+      totalCalls: 0,
+    });
+
+    const result = await svc.vendorBilling('2026-08-01', '2026-08-31');
+    expect(result.vendors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ vendor: 'cursor', budget_overage_usd: 170.12 }),
+      ]),
+    );
+  });
+});

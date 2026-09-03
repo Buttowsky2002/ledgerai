@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { middleware } from '../middleware';
+import { config, middleware } from '../middleware';
 import { isStructurallyValidJwt } from '../lib/jwt-structure';
 
 function b64url(obj: unknown): string {
@@ -143,5 +143,10 @@ describe('middleware', () => {
       }),
     );
     expect(res.status).toBe(400);
+  });
+
+  it('skips Edge middleware for portal CSV uploads so large bodies are not 413\'d', () => {
+    expect(config.matcher).toHaveLength(1);
+    expect(config.matcher[0]).toContain('api/portal-import');
   });
 });

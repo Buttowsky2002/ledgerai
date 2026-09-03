@@ -303,6 +303,8 @@ export class PortalImportService {
         duplicateSkipped += summary.skipped;
       }
 
+      await this.syncImportedUsersToIdentities(tenantId, allRows);
+
       if (opts?.connectorId && providersUsed.has('anthropic')) {
         await this.updateConnectorHandoff(tenantId, opts.connectorId, globalMax);
       }
@@ -423,6 +425,110 @@ export class PortalImportService {
 
       importRunId,
     };
+  }
+
+  private normalizeAlias(raw: unknown): string | null {
+    if (typeof raw !== 'string') {
+      return null;
+    }
+    const v = raw.trim();
+    if (!v || v.toLowerCase() === 'unassigned') {
+      return null;
+    }
+    return v;
+  }
+
+  private collectIdentityCandidates(rows: Record<string, unknown>[]) {
+    const out = new Map<string, { displayName?: string; aliases: Set<string> }>();
+    for (const row of rows) {
+      const emailRaw = typeof row.user_email === 'string' ? row.user_email.trim().toLowerCase() : '';
+      if (!emailRaw || !emailRaw.includes('@')) {
+        continue;
+      }
+      const displayName =
+        typeof row.user_name === 'string' && row.user_name.trim() ? row.user_name.trim() : undefined;
+      const current = out.get(emailRaw) ?? { aliases: new Set<string>() };
+      if (!current.displayName && displayName) {
+        current.displayName = displayName;
+      }
+      const aliases = [
+        this.normalizeAlias(row.user_id),
+        this.normalizeAlias(row.provider_user_id),
+        this.normalizeAlias(row.account_uuid),
+      ];
+      for (const alias of aliases) {
+        if (alias && alias.toLowerCase() !== emailRaw) {
+          current.aliases.add(alias);
+        }
+      }
+      out.set(emailRaw, current);
+    }
+    return out;
+  }
+
+  private mergeAliases(existing: unknown, incoming: Set<string>): string[] {
+    const out = new Set<string>();
+    if (Array.isArray(existing)) {
+      for (const a of existing) {
+        const alias = this.normalizeAlias(a);
+        if (alias) {
+          out.add(alias);
+        }
+      }
+    }
+    for (const a of incoming) {
+      const alias = this.normalizeAlias(a);
+      if (alias) {
+        out.add(alias);
+      }
+    }
+    return [...out];
+  }
+
+  private async syncImportedUsersToIdentities(
+    tenantId: string,
+    rows: Record<string, unknown>[],
+  ): Promise<void> {
+    const candidates = this.collectIdentityCandidates(rows);
+    if (candidates.size === 0) {
+      return;
+    }
+    const emails = [...candidates.keys()];
+    await this.prisma.withTenant(tenantId, async (tx) => {
+      const existingRows = await tx.identity.findMany({
+        where: { email: { in: emails } },
+        select: { email: true, displayName: true, aliases: true },
+      });
+      const existing = new Map(existingRows.map((row) => [row.email.toLowerCase(), row]));
+      for (const email of emails) {
+        const candidate = candidates.get(email);
+        if (!candidate) {
+          continue;
+        }
+        const row = existing.get(email);
+        const aliases = this.mergeAliases(row?.aliases, candidate.aliases);
+        if (!row) {
+          await tx.identity.create({
+            data: {
+              tenantId,
+              email,
+              displayName: candidate.displayName,
+              source: 'portal_import',
+              aliases: aliases as Prisma.InputJsonValue,
+            },
+          });
+          continue;
+        }
+        const displayName = row.displayName ?? candidate.displayName ?? undefined;
+        await tx.identity.update({
+          where: { tenantId_email: { tenantId, email } },
+          data: {
+            displayName,
+            aliases: aliases as Prisma.InputJsonValue,
+          },
+        });
+      }
+    });
   }
 
   async listImportRuns(limit = 50): Promise<{ runs: PortalImportRunItem[] }> {

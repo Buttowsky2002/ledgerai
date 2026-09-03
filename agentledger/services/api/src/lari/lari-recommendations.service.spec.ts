@@ -70,4 +70,50 @@ describe('LariRecommendationsService', () => {
     expect(sqls.some((s) => s.includes('FROM spend_daily'))).toBe(false);
     expect(sqls.some((s) => s.includes('spend_daily_by_user'))).toBe(false);
   });
+
+  it('falls back to fixed-cost seat plans and active metered users when ai_seats are empty', async () => {
+    queryScoped.mockImplementation(
+      (async (sql: string) => {
+        if (sql.includes('platform AS provider')) {
+          return [{ provider: 'anthropic', cost_usd: 500, calls: 80 }];
+        }
+        if (sql.includes('countDistinct(if(user_id =')) {
+          return [{ provider: 'anthropic', active_users: 4 }];
+        }
+        if (sql.includes('FROM agentledger.fixed_costs FINAL')) {
+          return [
+            {
+              period_month: '2026-08-01',
+              vendor: 'anthropic',
+              cost_type: 'subscription',
+              line_item: 'Claude Team',
+              seats: 10,
+              cost_usd: 250,
+            },
+          ];
+        }
+        return [];
+      }) as never,
+    );
+
+    const emptyPrisma = {
+      priceBook: { findMany: jest.fn(async () => []) },
+      withTenant: jest.fn(async (_t: string, fn: (tx: unknown) => unknown) =>
+        fn({
+          $queryRaw: jest.fn(async () => []),
+          aiProviderConnection: { findMany: jest.fn(async () => []) },
+          tenant: {
+            findUnique: jest.fn(async () => ({ complianceFlags: {} })),
+          },
+        }),
+      ),
+    } as unknown as PrismaService;
+    const svc = new LariRecommendationsService(ch, emptyPrisma, lari, userValue);
+    const input = await svc.assembleEngineInput('tenant-1', '2026-08-01', '2026-08-31');
+    const plan = input.subscriptionPlans.find((p) => p.provider === 'anthropic');
+    expect(plan).toBeDefined();
+    expect(plan?.seatsPurchased).toBe(10);
+    expect(plan?.activeSeats).toBe(4);
+    expect(input.seatStats).toEqual({ purchased: 10, active: 4 });
+  });
 });
