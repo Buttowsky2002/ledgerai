@@ -15,6 +15,20 @@ describe('datesFromFileName', () => {
       to: '2026-06-25',
     });
   });
+
+  it('parses a single ISO date as report end', () => {
+    expect(datesFromFileName('anthropic-spend-2026-08-31.csv')).toEqual({
+      from: '2026-08-31',
+      to: '2026-08-31',
+    });
+  });
+
+  it('parses year-month as the full billing month', () => {
+    expect(datesFromFileName('spend-report-2026-08.csv')).toEqual({
+      from: '2026-08-01',
+      to: '2026-08-31',
+    });
+  });
 });
 
 describe('detectPortalCsvFormat', () => {
