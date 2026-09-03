@@ -51,7 +51,12 @@ type PortalPreview = {
   dateRange: { from: string | null; to: string | null };
   parseErrors: { line: number; message: string }[];
   preview: Record<string, unknown>[];
-  suggestion?: { missingRequired?: string[]; inferredCostUnit?: 'usd' | 'cents' };
+  suggestion?: {
+    byHeader?: Record<string, string | undefined>;
+    mapping?: Partial<ColumnMapping>;
+    missingRequired?: string[];
+    inferredCostUnit?: 'usd' | 'cents';
+  };
 };
 
 type StagedFile = {
@@ -63,6 +68,11 @@ type StagedFile = {
   costUnit: 'usd' | 'cents';
   /** User-selected billing provider when format is ambiguous. */
   provider: string;
+  /**
+   * Stamp day when the CSV has no date column (Anthropic spend reports).
+   * Taken from filename when possible; otherwise the user must set it.
+   */
+  reportThroughDay: string;
 };
 
 type UploadResult = {
@@ -255,6 +265,52 @@ function rolesToMapping(
   };
 }
 
+function needsReportThroughDay(file: StagedFile): boolean {
+  const hasDateColumn = Object.values(file.headerRoles).includes('date');
+  if (hasDateColumn) {
+    return false;
+  }
+  // Anthropic spend reports (and similar) have no per-row date.
+  if (file.preview?.format?.billable === false) {
+    return false;
+  }
+  return true;
+}
+
+function importBlockReason(files: StagedFile[]): string | null {
+  if (files.length === 0) {
+    return 'Choose one or more CSV files first.';
+  }
+  const reasons = files.map((f) => {
+    const name = f.name;
+    if (!f.preview) {
+      return `${name}: still analyzing — wait for preview to finish.`;
+    }
+    if (f.preview.format?.billable === false) {
+      return `${name}: not a billable spend export (Cursor analytics / usage lines). Use a provider billing CSV.`;
+    }
+    if (f.preview.requiresProvider || (!f.provider && !f.preview.provider)) {
+      return `${name}: select a billing provider above.`;
+    }
+    if (needsReportThroughDay(f) && !f.reportThroughDay) {
+      return `${name}: set Report end date — this CSV has no date column and the filename has no dates.`;
+    }
+    if (!f.preview.importable) {
+      if (f.preview.skippedZeroCost > 0) {
+        return `${name}: all rows have zero/missing cost — map Cost to total_net_spend_usd (not gross).`;
+      }
+      const err = f.preview.parseErrors[0]?.message;
+      return `${name}: ${err ?? 'no importable rows — check column mapping.'}`;
+    }
+    return null;
+  });
+  const blocked = reasons.filter((r): r is string => r != null);
+  if (blocked.length === files.length) {
+    return blocked[0] ?? 'Import is blocked — fix the warnings above.';
+  }
+  return null;
+}
+
 function mappingToRoles(mapping: ColumnMapping | null, headers: string[]): Record<string, string> {
   const roles: Record<string, string> = {};
   for (const h of headers) {
@@ -279,6 +335,43 @@ function mappingToRoles(mapping: ColumnMapping | null, headers: string[]): Recor
   set('input_tokens', mapping.input_tokens);
   set('output_tokens', mapping.output_tokens);
   return roles;
+}
+
+/** Prefer confirmed mapping; if stamp-date is the only blocker, keep suggested Cost/User roles. */
+function rolesFromPreview(preview: PortalPreview): Record<string, string> {
+  if (preview.mapping) {
+    return mappingToRoles(preview.mapping, preview.headers);
+  }
+  const byHeader = preview.suggestion?.byHeader;
+  if (byHeader) {
+    const roles: Record<string, string> = {};
+    for (const h of preview.headers) {
+      const role = byHeader[h];
+      roles[h] = role && role !== 'skip' ? role : 'ignore';
+    }
+    return roles;
+  }
+  const suggested = preview.suggestion?.mapping;
+  if (suggested?.cost) {
+    return mappingToRoles(
+      {
+        cost: suggested.cost,
+        costUnit: suggested.costUnit ?? preview.suggestion?.inferredCostUnit ?? 'usd',
+        date: suggested.date,
+        model: suggested.model,
+        product: suggested.product,
+        user: suggested.user,
+        user_name: suggested.user_name,
+        user_id: suggested.user_id,
+        account_uuid: suggested.account_uuid,
+        input_tokens: suggested.input_tokens,
+        output_tokens: suggested.output_tokens,
+        reportThroughDay: suggested.reportThroughDay,
+      },
+      preview.headers,
+    );
+  }
+  return mappingToRoles(null, preview.headers);
 }
 
 function assignExclusiveRole(
@@ -431,18 +524,22 @@ export function BillingImportClient() {
           headerRoles: {},
           costUnit: 'usd',
           provider: '',
+          reportThroughDay: '',
         };
         const preview = await runPreview(stub);
         const mapping = preview.mapping;
         const costUnit = mapping?.costUnit ?? preview.suggestion?.inferredCostUnit ?? 'usd';
         const provider = preview.provider ?? '';
+        const reportThroughDay =
+          mapping?.reportThroughDay ?? preview.format?.reportTo ?? preview.dateRange.to ?? '';
         next.push({
           ...stub,
           preview,
           mapping,
           costUnit,
           provider,
-          headerRoles: mappingToRoles(mapping, preview.headers),
+          reportThroughDay,
+          headerRoles: rolesFromPreview(preview),
         });
       }
       setStagedFiles(next);
@@ -454,20 +551,40 @@ export function BillingImportClient() {
     }
   }
 
-  async function refreshActivePreview(roles: Record<string, string>, costUnit: 'usd' | 'cents') {
+  async function refreshActivePreview(
+    roles: Record<string, string>,
+    costUnit: 'usd' | 'cents',
+    reportThroughDay?: string,
+  ) {
     if (!activeFile) {
       return;
     }
-    const reportThroughDay =
-      activeFile.mapping?.reportThroughDay ?? activeFile.preview?.format?.reportTo ?? null;
-    const mapping = rolesToMapping(roles, costUnit, reportThroughDay);
+    const stampDay =
+      reportThroughDay ??
+      activeFile.reportThroughDay ??
+      activeFile.mapping?.reportThroughDay ??
+      activeFile.preview?.format?.reportTo ??
+      null;
+    const mapping = rolesToMapping(roles, costUnit, stampDay);
     setPreviewing(true);
     setError(null);
     try {
-      const preview = await runPreview(activeFile, mapping);
+      const preview = await runPreview(
+        { ...activeFile, reportThroughDay: stampDay ?? '' },
+        mapping,
+      );
       setStagedFiles((prev) =>
         prev.map((f, i) =>
-          i === activeFileIdx ? { ...f, preview, mapping, headerRoles: roles, costUnit } : f,
+          i === activeFileIdx
+            ? {
+                ...f,
+                preview,
+                mapping,
+                headerRoles: roles,
+                costUnit,
+                reportThroughDay: stampDay ?? f.reportThroughDay,
+              }
+            : f,
         ),
       );
     } catch (e) {
@@ -503,6 +620,7 @@ export function BillingImportClient() {
               mapping: activeFile.mapping,
               headerRoles: mappingToRoles(activeFile.mapping, f.preview?.headers ?? []),
               costUnit: activeFile.costUnit,
+              reportThroughDay: activeFile.reportThroughDay || f.reportThroughDay,
             },
       ),
     );
@@ -533,6 +651,11 @@ export function BillingImportClient() {
       setError('Choose one or more CSV files first');
       return;
     }
+    const block = importBlockReason(stagedFiles);
+    if (block) {
+      setError(block);
+      return;
+    }
     setUploading(true);
     setError(null);
     setUploadResult(null);
@@ -543,13 +666,16 @@ export function BillingImportClient() {
         body: JSON.stringify({
           files: stagedFiles.map((f) => {
             const reportThroughDay =
-              f.mapping?.reportThroughDay ?? f.preview?.format?.reportTo ?? null;
+              f.reportThroughDay ||
+              f.mapping?.reportThroughDay ||
+              f.preview?.format?.reportTo ||
+              null;
             return {
               name: f.name,
               csv: f.csv,
               mapping:
-                f.mapping ??
                 rolesToMapping(f.headerRoles, f.costUnit, reportThroughDay) ??
+                f.mapping ??
                 undefined,
               provider: f.provider || f.preview?.provider || undefined,
             };
@@ -616,8 +742,10 @@ export function BillingImportClient() {
     (f) =>
       f.preview?.importable &&
       f.preview?.format?.billable !== false &&
-      !f.preview?.requiresProvider,
+      !f.preview?.requiresProvider &&
+      (!needsReportThroughDay(f) || Boolean(f.reportThroughDay)),
   );
+  const blockReason = importBlockReason(stagedFiles);
   const previewRows = (activeFile?.preview?.preview ?? []).map((r) => ({
     day: String(r.timestamp ?? '').slice(0, 10),
     user: String(r.user_id ?? '—'),
@@ -813,9 +941,11 @@ export function BillingImportClient() {
                 ? 'This file is not billable — use a provider spend/billing export CSV instead.'
                 : activeFile.preview.requiresProvider
                   ? 'Select a billing provider below — imports are stamped with the provider you choose, not the Anthropic connector.'
-                  : activeFile.preview.skippedZeroCost > 0
-                    ? `${activeFile.preview.skippedZeroCost} rows have zero/missing cost — verify the cost column or switch cost unit to cents.`
-                    : 'Could not parse importable rows — adjust column mapping below.'}
+                  : needsReportThroughDay(activeFile) && !activeFile.reportThroughDay
+                    ? 'This CSV has no date column and the filename has no dates. Set Report end date below so each row can be stamped.'
+                    : activeFile.preview.skippedZeroCost > 0
+                      ? `${activeFile.preview.skippedZeroCost} rows have zero/missing cost — verify the cost column or switch cost unit to cents.`
+                      : 'Could not parse importable rows — adjust column mapping below.'}
               {activeFile.preview.parseErrors[0] && (
                 <div className="mt-1 text-xs opacity-90">
                   {activeFile.preview.parseErrors[0].message}
@@ -844,6 +974,27 @@ export function BillingImportClient() {
                 ))}
               </select>
             </label>
+            {needsReportThroughDay(activeFile) && (
+              <label className="flex items-center gap-2 text-sm text-muted">
+                Report end date:
+                <input
+                  type="date"
+                  value={activeFile.reportThroughDay}
+                  onChange={(e) => {
+                    const day = e.target.value;
+                    setStagedFiles((prev) =>
+                      prev.map((f, i) =>
+                        i === activeFileIdx ? { ...f, reportThroughDay: day } : f,
+                      ),
+                    );
+                    if (day) {
+                      void refreshActivePreview(activeFile.headerRoles, activeFile.costUnit, day);
+                    }
+                  }}
+                  className="rounded border border-edge bg-black/20 px-2 py-1 text-sm text-gray-200"
+                />
+              </label>
+            )}
             <label className="flex items-center gap-2 text-sm text-muted">
               Cost unit:
               <select
@@ -942,6 +1093,7 @@ export function BillingImportClient() {
             Dry run
           </button>
         </div>
+        {!canImport && blockReason && <p className="mt-3 text-sm text-warn">{blockReason}</p>}
 
         {uploadResult && (
           <div className="mt-4 rounded-lg border border-pos/20 bg-pos/5 px-4 py-3 text-sm">

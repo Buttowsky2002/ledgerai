@@ -51,6 +51,23 @@ export function datesFromFileName(fileName: string | undefined): {
       to: `${usRange[4]}-${usRange[5]}-${usRange[6]}`,
     };
   }
+  // Single ISO date in the name → treat as report end (Anthropic spend reports).
+  const singleIso = fileName.match(/(?<!\d)(\d{4}-\d{2}-\d{2})(?!\d)/);
+  if (singleIso) {
+    return { from: singleIso[1], to: singleIso[1] };
+  }
+  // Year-month only (2026-08 / 2026_08) → last day of that month.
+  const yearMonth = fileName.match(/(?<!\d)(\d{4})[-_](\d{2})(?!\d)/);
+  if (yearMonth) {
+    const y = Number(yearMonth[1]);
+    const m = Number(yearMonth[2]);
+    if (m >= 1 && m <= 12) {
+      const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+      const to = `${yearMonth[1]}-${yearMonth[2]}-${String(last).padStart(2, '0')}`;
+      const from = `${yearMonth[1]}-${yearMonth[2]}-01`;
+      return { from, to };
+    }
+  }
   return { from: null, to: null };
 }
 
