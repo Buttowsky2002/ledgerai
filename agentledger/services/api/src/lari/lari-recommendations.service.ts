@@ -168,7 +168,9 @@ export class LariRecommendationsService {
 
     const activeByProvider = new Map<string, number>();
     for (const row of providerActiveUsers) {
-      const provider = String(row.provider || '').trim().toLowerCase();
+      const provider = String(row.provider || '')
+        .trim()
+        .toLowerCase();
       if (!provider) {
         continue;
       }
@@ -177,9 +179,13 @@ export class LariRecommendationsService {
 
     const planSource = subscriptionPlans.length > 0 ? subscriptionPlans : fallbackPlans;
     const normalizedPlans = planSource.map((plan) => {
-      const provider = String(plan.provider || '').trim().toLowerCase();
+      const provider = String(plan.provider || '')
+        .trim()
+        .toLowerCase();
       const activeSeats =
-        plan.activeSeats > 0 ? plan.activeSeats : Math.min(plan.seatsPurchased, activeByProvider.get(provider) ?? 0);
+        plan.activeSeats > 0
+          ? plan.activeSeats
+          : Math.min(plan.seatsPurchased, activeByProvider.get(provider) ?? 0);
       return { ...plan, provider, activeSeats };
     });
     const normalizedSeatStats =
@@ -264,8 +270,7 @@ export class LariRecommendationsService {
         planName: `${vendor} fixed seats`,
         seatsPurchased: snap.seats > 0 ? snap.seats : 0,
         contractMonthlyCost: roundUsd(snap.seat_usd),
-        monthlyPricePerUser:
-          snap.seats > 0 ? roundUsd(snap.seat_usd / Math.max(1, snap.seats)) : 0,
+        monthlyPricePerUser: snap.seats > 0 ? roundUsd(snap.seat_usd / Math.max(1, snap.seats)) : 0,
         activeSeats: 0,
         criticalityTier: 'standard',
       }));

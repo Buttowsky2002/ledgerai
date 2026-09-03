@@ -441,12 +441,15 @@ export class PortalImportService {
   private collectIdentityCandidates(rows: Record<string, unknown>[]) {
     const out = new Map<string, { displayName?: string; aliases: Set<string> }>();
     for (const row of rows) {
-      const emailRaw = typeof row.user_email === 'string' ? row.user_email.trim().toLowerCase() : '';
+      const emailRaw =
+        typeof row.user_email === 'string' ? row.user_email.trim().toLowerCase() : '';
       if (!emailRaw || !emailRaw.includes('@')) {
         continue;
       }
       const displayName =
-        typeof row.user_name === 'string' && row.user_name.trim() ? row.user_name.trim() : undefined;
+        typeof row.user_name === 'string' && row.user_name.trim()
+          ? row.user_name.trim()
+          : undefined;
       const current = out.get(emailRaw) ?? { aliases: new Set<string>() };
       if (!current.displayName && displayName) {
         current.displayName = displayName;

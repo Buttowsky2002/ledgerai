@@ -1005,9 +1005,9 @@ describe('AnalyticsService.vendorBilling', () => {
       emptyCursorAnalytics() as never,
       emptyCursorProductivity() as never,
     );
-    jest.spyOn(svc, 'platformSpend').mockResolvedValueOnce([
-      { platform: 'cursor', cost_usd: 100, calls: 11 },
-    ]);
+    jest
+      .spyOn(svc, 'platformSpend')
+      .mockResolvedValueOnce([{ platform: 'cursor', cost_usd: 100, calls: 11 }]);
     jest.spyOn(svc, 'platformSpend').mockResolvedValueOnce([]);
     jest.spyOn(svc, 'cursorSpend').mockResolvedValue({
       billedUsd: 170.12,

@@ -72,29 +72,27 @@ describe('LariRecommendationsService', () => {
   });
 
   it('falls back to fixed-cost seat plans and active metered users when ai_seats are empty', async () => {
-    queryScoped.mockImplementation(
-      (async (sql: string) => {
-        if (sql.includes('platform AS provider')) {
-          return [{ provider: 'anthropic', cost_usd: 500, calls: 80 }];
-        }
-        if (sql.includes('countDistinct(if(user_id =')) {
-          return [{ provider: 'anthropic', active_users: 4 }];
-        }
-        if (sql.includes('FROM agentledger.fixed_costs FINAL')) {
-          return [
-            {
-              period_month: '2026-08-01',
-              vendor: 'anthropic',
-              cost_type: 'subscription',
-              line_item: 'Claude Team',
-              seats: 10,
-              cost_usd: 250,
-            },
-          ];
-        }
-        return [];
-      }) as never,
-    );
+    queryScoped.mockImplementation((async (sql: string) => {
+      if (sql.includes('platform AS provider')) {
+        return [{ provider: 'anthropic', cost_usd: 500, calls: 80 }];
+      }
+      if (sql.includes('countDistinct(if(user_id =')) {
+        return [{ provider: 'anthropic', active_users: 4 }];
+      }
+      if (sql.includes('FROM agentledger.fixed_costs FINAL')) {
+        return [
+          {
+            period_month: '2026-08-01',
+            vendor: 'anthropic',
+            cost_type: 'subscription',
+            line_item: 'Claude Team',
+            seats: 10,
+            cost_usd: 250,
+          },
+        ];
+      }
+      return [];
+    }) as never);
 
     const emptyPrisma = {
       priceBook: { findMany: jest.fn(async () => []) },

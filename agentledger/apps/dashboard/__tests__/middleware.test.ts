@@ -145,7 +145,7 @@ describe('middleware', () => {
     expect(res.status).toBe(400);
   });
 
-  it('skips Edge middleware for portal CSV uploads so large bodies are not 413\'d', () => {
+  it("skips Edge middleware for portal CSV uploads so large bodies are not 413'd", () => {
     expect(config.matcher).toHaveLength(1);
     expect(config.matcher[0]).toContain('api/portal-import');
   });
