@@ -46,6 +46,7 @@ type PortalPreview = {
   parsed: number;
   skipped: number;
   skippedZeroCost: number;
+  activityOnly?: number;
   usersDetected: number;
   totalCostUsd: number;
   dateRange: { from: string | null; to: string | null };
@@ -296,8 +297,8 @@ function importBlockReason(files: StagedFile[]): string | null {
       return `${name}: set Report end date — this CSV has no date column and the filename has no dates.`;
     }
     if (!f.preview.importable) {
-      if (f.preview.skippedZeroCost > 0) {
-        return `${name}: all rows have zero/missing cost — map Cost to total_net_spend_usd (not gross).`;
+      if (f.preview.skippedZeroCost > 0 && (f.preview.parsed ?? 0) === 0) {
+        return `${name}: cost column values are blank — map Cost to total_net_spend_usd.`;
       }
       const err = f.preview.parseErrors[0]?.message;
       return `${name}: ${err ?? 'no importable rows — check column mapping.'}`;
@@ -943,8 +944,8 @@ export function BillingImportClient() {
                   ? 'Select a billing provider below — imports are stamped with the provider you choose, not the Anthropic connector.'
                   : needsReportThroughDay(activeFile) && !activeFile.reportThroughDay
                     ? 'This CSV has no date column and the filename has no dates. Set Report end date below so each row can be stamped.'
-                    : activeFile.preview.skippedZeroCost > 0
-                      ? `${activeFile.preview.skippedZeroCost} rows have zero/missing cost — verify the cost column or switch cost unit to cents.`
+                    : activeFile.preview.skippedZeroCost > 0 && activeFile.preview.parsed === 0
+                      ? `${activeFile.preview.skippedZeroCost} rows have blank cost cells — verify the cost column mapping.`
                       : 'Could not parse importable rows — adjust column mapping below.'}
               {activeFile.preview.parseErrors[0] && (
                 <div className="mt-1 text-xs opacity-90">
@@ -1015,6 +1016,11 @@ export function BillingImportClient() {
               <span className="text-sm text-muted">
                 {activeFile.preview.parsed} rows · {activeFile.preview.usersDetected} users ·{' '}
                 {usd(activeFile.preview.totalCostUsd)}
+                {(activeFile.preview.activityOnly ?? 0) > 0 && activeFile.preview.totalCostUsd <= 0
+                  ? ' · roster/activity (no billed spend)'
+                  : (activeFile.preview.activityOnly ?? 0) > 0
+                    ? ` · ${activeFile.preview.activityOnly} activity-only ($0)`
+                    : ''}
               </span>
             )}
           </div>

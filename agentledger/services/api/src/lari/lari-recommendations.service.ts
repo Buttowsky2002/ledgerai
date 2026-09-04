@@ -5,6 +5,7 @@ import { UserValueService } from '../analytics/user-value.service';
 import {
   EFFECTIVE_METERED_COST_USD,
   LLM_CALLS_METERED_SCOPE,
+  PORTAL_IMPORT_ACTIVITY,
   RECONCILED_MODEL_USAGE_SQL,
   RECONCILED_PROVIDER_SPEND_SQL,
   RECONCILED_TENANT_DAILY_SPEND_SQL,
@@ -145,7 +146,10 @@ export class LariRecommendationsService {
          WHERE tenant_id = {tenant:String}
            AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
            AND ${LLM_CALLS_METERED_SCOPE}
-           AND ${EFFECTIVE_METERED_COST_USD} > 0
+           AND (
+             ${EFFECTIVE_METERED_COST_USD} > 0
+             OR ${PORTAL_IMPORT_ACTIVITY}
+           )
          GROUP BY provider`,
         params,
       ),

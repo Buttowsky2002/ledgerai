@@ -43,6 +43,8 @@ export interface PortalPreviewResult {
   parsed: number;
   skipped: number;
   skippedZeroCost: number;
+  /** Rows kept with $0 cost for roster / seat-included activity. */
+  activityOnly: number;
   usersDetected: number;
   totalCostUsd: number;
   dateRange: { from: string | null; to: string | null };
@@ -172,6 +174,9 @@ export function buildPortalPreviewResult(
     skipped: parsed.stats.skipped,
 
     skippedZeroCost: parsed.stats.skippedZeroCost,
+
+    /** Rows kept with $0 cost for roster / seat-included activity. */
+    activityOnly: parsed.rows.filter((r) => Number(r.cost_usd ?? 0) <= 0).length,
 
     usersDetected: parsed.stats.usersDetected,
 
