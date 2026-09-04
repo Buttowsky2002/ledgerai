@@ -678,7 +678,7 @@ export function userValueRecs(
         priority: priorityFromScore(mlScore),
         category: 'user_value',
         title: `Reclaim ${group.count} unused ${group.provider} seat${group.count === 1 ? '' : 's'}`,
-        message: `${group.count} provisioned seat${group.count === 1 ? '' : 's'} on "${group.planName}" show no metered activity in-range — est. $${usd(group.savings)}/month in reclaimable license spend.`,
+        message: `${group.count} provisioned seat${group.count === 1 ? '' : 's'} on "${group.planName}" show no activity in-range — est. $${usd(group.savings)}/month in reclaimable license spend.`,
         action: 'Review seat assignments and deprovision unused licenses before renewal.',
         estimatedSavingsUsd: usd(group.savings),
         mlScore,
