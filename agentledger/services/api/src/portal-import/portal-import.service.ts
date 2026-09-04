@@ -441,8 +441,13 @@ export class PortalImportService {
   private collectIdentityCandidates(rows: Record<string, unknown>[]) {
     const out = new Map<string, { displayName?: string; aliases: Set<string> }>();
     for (const row of rows) {
-      const emailRaw =
+      const emailFromCol =
         typeof row.user_email === 'string' ? row.user_email.trim().toLowerCase() : '';
+      const emailFromUserId =
+        typeof row.user_id === 'string' && String(row.user_id).includes('@')
+          ? String(row.user_id).trim().toLowerCase()
+          : '';
+      const emailRaw = emailFromCol.includes('@') ? emailFromCol : emailFromUserId;
       if (!emailRaw || !emailRaw.includes('@')) {
         continue;
       }

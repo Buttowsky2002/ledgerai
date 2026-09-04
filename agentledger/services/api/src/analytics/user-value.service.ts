@@ -249,9 +249,11 @@ export class UserValueService {
           user.dailyCalls = new Map();
         }
         const cost = n(row.cost_usd);
+        const calls = n(row.calls);
         user.dailyCost.set(day, (user.dailyCost.get(day) ?? 0) + cost);
-        user.dailyCalls.set(day, (user.dailyCalls.get(day) ?? 0) + n(row.calls));
-        if (cost > 0) {
+        user.dailyCalls.set(day, (user.dailyCalls.get(day) ?? 0) + calls);
+        // Portal $0 roster/activity days still count as presence for seat utilization.
+        if (cost > 0 || calls > 0) {
           const key = resolveKey(rawUserId);
           const days = activeDaysByKey.get(key) ?? new Set<string>();
           days.add(day);
@@ -264,7 +266,7 @@ export class UserValueService {
         if (!rawUserId || rawUserId === 'Unassigned') {
           continue;
         }
-        if (n(row.cost_usd) <= 0) {
+        if (n(row.cost_usd) <= 0 && n(row.calls) <= 0) {
           continue;
         }
         const key = resolveKey(rawUserId);

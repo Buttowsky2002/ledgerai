@@ -335,6 +335,13 @@ describe('AnalyticsService.users', () => {
           { key: 'cursor-user-99', cost_usd: 8, calls: 2, portal_import_usd: 0, connector_usd: 8 },
           { key: 'orphan-handle', cost_usd: 4, calls: 1, portal_import_usd: 0, connector_usd: 4 },
           { key: 'zero-spend', cost_usd: 0, calls: 0, portal_import_usd: 0, connector_usd: 0 },
+          {
+            key: 'roster-only@acme.test',
+            cost_usd: 0,
+            calls: 7,
+            portal_import_usd: 0,
+            connector_usd: 0,
+          },
         ];
       }
       return [];
@@ -355,13 +362,26 @@ describe('AnalyticsService.users', () => {
   }
 
   it('merges totals with model breakdown and resolves identities', async () => {
-    const { svc } = usersHarness();
+    const { svc, queryScoped } = usersHarness();
     const result = await svc.users('2026-06-01', '2026-06-30');
+    expect(
+      queryScoped.mock.calls.some(
+        (c) =>
+          typeof c[0] === 'string' &&
+          c[0].includes('(cost_usd > 0 OR calls > 0)') &&
+          c[0].includes('key, cost_usd, calls, portal_import_usd'),
+      ),
+    ).toBe(true);
     expect(result.users.map((u) => u.user_id)).toEqual([
       uuidAlice,
       'cursor-user-99',
       'orphan-handle',
+      'roster-only@acme.test',
     ]);
+    expect(result.users.find((u) => u.user_id === 'roster-only@acme.test')).toMatchObject({
+      total_spend_usd: 0,
+      calls: 7,
+    });
     const alice = result.users[0];
     expect(alice).toMatchObject({
       display_name: 'Alice Smith',

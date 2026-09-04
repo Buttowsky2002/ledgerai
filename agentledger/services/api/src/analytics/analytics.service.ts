@@ -1593,7 +1593,8 @@ export class AnalyticsService {
       }>(
         `SELECT key, cost_usd, calls, portal_import_usd, connector_usd
          FROM (${RECONCILED_USER_DAY_SPEND_SQL}) AS reconciled
-         WHERE ${this.userSpendExcludeKey()} AND cost_usd > 0 ${userFilter}
+         WHERE ${this.userSpendExcludeKey()}
+           AND (cost_usd > 0 OR calls > 0) ${userFilter}
          ORDER BY cost_usd DESC`,
         params,
       ),
