@@ -60,7 +60,8 @@ function parseCost(raw: string, unit: 'usd' | 'cents'): number | undefined {
     return undefined;
   }
   const usd = unit === 'cents' ? n / 100 : n;
-  return usd > 0 ? usd : undefined;
+  // Allow $0 — seat-included / roster activity still imports for identity + usage.
+  return usd;
 }
 
 function parseDay(raw: string): string | undefined {
@@ -248,6 +249,7 @@ function parseGrid(
         ? Number(cells[mapping.output_tokens]) || 0
         : 0;
 
+    const isActivityOnly = cost <= 0;
     const row: Record<string, unknown> = {
       idempotency_key: portalRowIdempotencyKey(
         provider,
@@ -265,7 +267,9 @@ function parseGrid(
       model,
       product: product || undefined,
       cost_usd: cost,
-      cost_source: 'portal_billing',
+      // $0 rows are roster/usage presence — never billable metered spend.
+      cost_source: isActivityOnly ? 'portal_activity' : 'portal_billing',
+      metered_cost_usd: isActivityOnly ? 0 : cost,
       user_id: userLabel,
       source: PORTAL_IMPORT_SOURCE,
       status: 'ok',

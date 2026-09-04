@@ -4,13 +4,32 @@
  * subscription-included usage value (e.g. Cursor Included rows).
  */
 
-export const NON_METERED_COST_SOURCES = ['pricebook_estimate', 'cursor_usage_value'] as const;
+export const NON_METERED_COST_SOURCES = [
+  'pricebook_estimate',
+  'cursor_usage_value',
+  // Portal CSV $0 roster/activity rows — presence only, never billable.
+  'portal_activity',
+] as const;
 
 /** Providers whose spend is sourced from Postgres, not llm_calls aggregates. */
 export const POSTGRES_METERED_PROVIDERS = ['github_copilot'] as const;
 
 /** ClickHouse scope: exclude Postgres-sourced providers from llm_calls rollups. */
 export const LLM_CALLS_METERED_SCOPE = `provider NOT IN ('github_copilot')`;
+
+/**
+ * Portal CSV rows that should count as activity/presence (billing or $0 roster).
+ * Cost reconciliation still keys off portal_usd > 0 so $0 activity never blanks
+ * connector API spend for the same user+day.
+ */
+export const PORTAL_IMPORT_ACTIVITY = `(
+  llm_calls.source = 'portal_import'
+  AND (
+    llm_calls.metered_cost_usd > 0
+    OR llm_calls.cost_source = 'portal_activity'
+    OR (llm_calls.input_tokens + llm_calls.output_tokens) > 0
+  )
+)`;
 
 /**
  * Effective metered USD for one llm_calls row (handles legacy rows before metered_cost_usd backfill).
@@ -30,7 +49,7 @@ export const EFFECTIVE_METERED_COST_USD = `if(
       llm_calls.provider = 'cursor',
       if(llm_calls.operation_name = 'cursor:on_demand', llm_calls.cost_usd, 0),
       if(
-        llm_calls.cost_source IN ('pricebook_estimate', 'cursor_usage_value'),
+        llm_calls.cost_source IN ('pricebook_estimate', 'cursor_usage_value', 'portal_activity'),
         0,
         llm_calls.cost_usd
       )
@@ -59,7 +78,7 @@ export const RECONCILED_USER_DAY_SPEND_SQL = `
         ${EFFECTIVE_METERED_COST_USD},
         llm_calls.source NOT IN ('portal_import', 'api')
       ) AS other_usd,
-      countIf(${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source = 'portal_import') AS portal_calls,
+      countIf(${PORTAL_IMPORT_ACTIVITY}) AS portal_calls,
       countIf(${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source = 'api') AS api_calls,
       countIf(
         ${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source NOT IN ('portal_import', 'api')
@@ -88,7 +107,7 @@ export const RECONCILED_USER_DAILY_SPEND_SQL = `
         ${EFFECTIVE_METERED_COST_USD},
         llm_calls.source NOT IN ('portal_import', 'api')
       ) AS other_usd,
-      countIf(${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source = 'portal_import') AS portal_calls,
+      countIf(${PORTAL_IMPORT_ACTIVITY}) AS portal_calls,
       countIf(${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source = 'api') AS api_calls,
       countIf(
         ${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source NOT IN ('portal_import', 'api')
@@ -131,7 +150,7 @@ export const RECONCILED_USER_MODEL_BREAKDOWN_SQL = `
         ${EFFECTIVE_METERED_COST_USD},
         llm_calls.source NOT IN ('portal_import', 'api')
       ) AS other_usd,
-      countIf(${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source = 'portal_import') AS portal_calls,
+      countIf(${PORTAL_IMPORT_ACTIVITY}) AS portal_calls,
       countIf(${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source = 'api') AS api_calls,
       countIf(
         ${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source NOT IN ('portal_import', 'api')
@@ -179,7 +198,7 @@ export const PROVIDER_SOURCE_BREAKDOWN_SQL = `
       ${EFFECTIVE_METERED_COST_USD},
       llm_calls.source NOT IN ('portal_import', 'api')
     ) AS live_usd,
-    countIf(${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source = 'portal_import') AS portal_import_calls,
+    countIf(${PORTAL_IMPORT_ACTIVITY}) AS portal_import_calls,
     countIf(${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source = 'api') AS connector_calls,
     countIf(
       ${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source NOT IN ('portal_import', 'api')
@@ -210,8 +229,8 @@ export const RECONCILED_MODEL_USAGE_SQL = `
   SELECT
     provider,
     model,
-    sum((CASE WHEN portal_usd > 0 THEN portal_in ELSE api_in END) + other_in) AS input_tokens,
-    sum((CASE WHEN portal_usd > 0 THEN portal_out ELSE api_out END) + other_out) AS output_tokens,
+    sum((CASE WHEN portal_usd > 0 OR portal_calls > 0 THEN portal_in ELSE api_in END) + other_in) AS input_tokens,
+    sum((CASE WHEN portal_usd > 0 OR portal_calls > 0 THEN portal_out ELSE api_out END) + other_out) AS output_tokens,
     sum((CASE WHEN portal_usd > 0 THEN portal_usd ELSE api_usd END) + other_usd) AS cost_usd,
     sum((CASE WHEN portal_calls > 0 THEN portal_calls ELSE api_calls END) + other_calls) AS calls
   FROM (
@@ -223,7 +242,7 @@ export const RECONCILED_MODEL_USAGE_SQL = `
       sumIf(input_tokens, llm_calls.source = 'portal_import') AS portal_in,
       sumIf(output_tokens, llm_calls.source = 'portal_import') AS portal_out,
       sumIf(${EFFECTIVE_METERED_COST_USD}, llm_calls.source = 'portal_import') AS portal_usd,
-      countIf(${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source = 'portal_import') AS portal_calls,
+      countIf(${PORTAL_IMPORT_ACTIVITY}) AS portal_calls,
       sumIf(input_tokens, llm_calls.source = 'api') AS api_in,
       sumIf(output_tokens, llm_calls.source = 'api') AS api_out,
       sumIf(${EFFECTIVE_METERED_COST_USD}, llm_calls.source = 'api') AS api_usd,
@@ -269,7 +288,7 @@ export const RECONCILED_COST_BASIS_TOTALS_SQL = `
         ${EFFECTIVE_METERED_COST_USD},
         llm_calls.source NOT IN ('portal_import', 'api')
       ) AS other_usd,
-      countIf(${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source = 'portal_import') AS portal_calls,
+      countIf(${PORTAL_IMPORT_ACTIVITY}) AS portal_calls,
       countIf(${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source = 'api') AS api_calls,
       countIf(
         ${EFFECTIVE_METERED_COST_USD} > 0 AND llm_calls.source NOT IN ('portal_import', 'api')

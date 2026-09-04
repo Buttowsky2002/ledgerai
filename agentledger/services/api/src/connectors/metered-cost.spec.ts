@@ -69,6 +69,17 @@ describe('metered-cost', () => {
     ).toBe(0);
   });
 
+  it('excludes portal_activity roster rows from metered spend', () => {
+    expect(isNonMeteredCostSource('portal_activity')).toBe(true);
+    expect(
+      computeMeteredCostUsd({
+        provider: 'anthropic',
+        cost_usd: 0,
+        cost_source: 'portal_activity',
+      }),
+    ).toBe(0);
+  });
+
   it('reconciled LARI SQL prefers portal_import over api per day', () => {
     for (const sql of [
       RECONCILED_USER_DAILY_SPEND_SQL,
@@ -82,8 +93,9 @@ describe('metered-cost', () => {
     }
     expect(RECONCILED_USER_DAILY_SPEND_SQL).toContain('AS calls');
     // Reconcile CASEs must live outside the portal/api aggregate SELECT (PG alias rules).
+    // $0 portal activity still wins tokens/calls via portal_calls; cost stays portal_usd > 0.
     expect(RECONCILED_MODEL_USAGE_SQL).toContain(
-      'sum((CASE WHEN portal_usd > 0 THEN portal_in ELSE api_in END)',
+      'sum((CASE WHEN portal_usd > 0 OR portal_calls > 0 THEN portal_in ELSE api_in END)',
     );
     expect(RECONCILED_MODEL_USAGE_SQL).not.toMatch(
       /AS portal_usd[\s\S]*CASE WHEN portal_usd[\s\S]*AS per_day_model/,

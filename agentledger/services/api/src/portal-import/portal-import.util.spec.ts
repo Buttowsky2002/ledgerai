@@ -127,6 +127,19 @@ describe('buildPortalPreviewResult', () => {
     expect(result.providerConflictMessage).toBeUndefined();
     expect(result.sampleRawRows).toEqual([['1', '2', '3']]);
     expect(result.dateRange).toEqual({ from: '2026-06-01', to: '2026-06-30' });
+    expect(result.activityOnly).toBe(1);
+  });
+
+  it('counts activity-only rows when cost is zero', () => {
+    const parsed = makeParsed({
+      rows: [
+        { user_id: 'a', cost_usd: 0 },
+        { user_id: 'b', cost_usd: 12 },
+      ],
+    });
+    const result = buildPortalPreviewResult(parsed, []);
+    expect(result.activityOnly).toBe(1);
+    expect(result.importable).toBe(true);
   });
 
   it('is not importable when there are no rows', () => {

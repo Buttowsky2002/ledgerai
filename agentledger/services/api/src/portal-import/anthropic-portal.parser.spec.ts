@@ -116,7 +116,30 @@ describe('parseAnthropicPortalCsv', () => {
       user_id: 'brandon@studiodesigner.com',
       user_email: 'brandon@studiodesigner.com',
       cost_usd: 19.18,
+      cost_source: 'portal_billing',
       timestamp: '2026-06-24T12:00:00.000Z',
+    });
+  });
+
+  it('keeps $0 spend rows as roster/activity (not billed)', () => {
+    const csv = [
+      'user_email,account_uuid,product,model,total_prompt_tokens,total_completion_tokens,total_net_spend_usd,user_id',
+      'tim@studiodesigner.com,045c90c8-7efd-4f4a-af22-da55d4d66847,Chat,claude-sonnet-5,452114,4965,0.0,user_011',
+      'tim@studiodesigner.com,045c90c8-7efd-4f4a-af22-da55d4d66847,Claude Code,claude-haiku-4-5,1064,32,0.0,user_011',
+    ].join('\n');
+    const fileName =
+      'spend-report-fb01cd94-335a-4e06-80cd-af774ef7f65e-2026-08-01-to-2026-08-31.csv';
+    const result = parseAnthropicPortalCsv(csv, undefined, fileName);
+    expect(result.stats.parsed).toBe(2);
+    expect(result.stats.totalCostUsd).toBe(0);
+    expect(result.stats.usersDetected).toBe(1);
+    expect(result.rows[0]).toMatchObject({
+      cost_usd: 0,
+      cost_source: 'portal_activity',
+      metered_cost_usd: 0,
+      user_email: 'tim@studiodesigner.com',
+      input_tokens: 452114,
+      timestamp: '2026-08-31T12:00:00.000Z',
     });
   });
 

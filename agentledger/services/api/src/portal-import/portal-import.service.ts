@@ -206,7 +206,7 @@ export class PortalImportService {
       if (parsed.rows.length === 0) {
         const hint =
           parsed.stats.skippedZeroCost > 0 && parsed.stats.dataRows > 0
-            ? 'all data rows have zero or missing cost — check cost column mapping or cost unit (USD vs cents)'
+            ? 'all data rows have missing cost values — map Cost to total_net_spend_usd (blank cells cannot be imported)'
             : (parsed.errors[0]?.message ?? 'no importable rows');
 
         fileResults.push(buildRejectedFileResult(file.name, parsed, hint));
