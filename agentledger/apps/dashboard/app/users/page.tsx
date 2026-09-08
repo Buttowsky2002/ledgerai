@@ -1,19 +1,23 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { Badge, Card, DataTable, PageHeader } from '../../components/ui';
+import { Badge, Card, DataTable, PageHeader, usd } from '../../components/ui';
+import { TablePager } from '../../components/TablePager';
+import { UtilizationStatusBadge } from '../../components/UtilizationStatusBadge';
 import { VendorSpendCell } from '../../components/VendorSpendCell';
 import { proxyApi } from '../../lib/api';
 import { resolveRange } from '../../lib/resolve-range';
 import { vendorLabel } from '../../lib/fixed-cost-catalog';
+import { paginateItems, parsePageParam, USERS_PAGE_SIZE } from '../../lib/table-pager';
 import {
   sumVendorColumns,
   userVendorTotal,
   vendorShortLabel,
   type VendorSpendSlice,
 } from '../../lib/vendor-spend';
-import { usd } from '../../components/ui';
 
 export const dynamic = 'force-dynamic';
+
+type UtilizationStatus = 'active' | 'low_use' | 'inactive';
 
 type UserRow = {
   user_id: string;
@@ -23,6 +27,10 @@ type UserRow = {
   resolved: boolean;
   total_spend_usd: number;
   vendor_spend?: Record<string, VendorSpendSlice>;
+  status?: UtilizationStatus;
+  has_seat?: boolean;
+  utilization_score?: number;
+  seat_monthly_cost_usd?: number;
 };
 
 type UsersResponse = {
@@ -41,20 +49,42 @@ const MEMBER_TABS = [
 ] as const;
 type MemberTab = (typeof MEMBER_TABS)[number]['id'];
 
+const STATUS_TABS = [
+  { id: 'all', label: 'Any status' },
+  { id: 'active', label: 'Active' },
+  { id: 'low_use', label: 'Low use' },
+  { id: 'inactive', label: 'Inactive' },
+] as const;
+type StatusTab = (typeof STATUS_TABS)[number]['id'];
+
 function isEmailLike(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
+function isStatusTab(v: string | undefined): v is StatusTab {
+  return STATUS_TABS.some((t) => t.id === v);
 }
 
 export default async function UsersPage({
   searchParams,
 }: {
-  searchParams: { from?: string; to?: string; q?: string; tab?: string };
+  searchParams: {
+    from?: string;
+    to?: string;
+    q?: string;
+    tab?: string;
+    status?: string;
+    page?: string;
+  };
 }) {
   const { from, to } = resolveRange(searchParams);
   const q = searchParams.q?.trim() ?? '';
   const tab: MemberTab = MEMBER_TABS.some((t) => t.id === searchParams.tab)
     ? (searchParams.tab as MemberTab)
     : 'all';
+  const status: StatusTab = isStatusTab(searchParams.status) ? searchParams.status : 'all';
+  const page = parsePageParam(searchParams.page);
+
   const qs = new URLSearchParams({ from, to });
   if (q) {
     qs.set('q', q);
@@ -68,32 +98,59 @@ export default async function UsersPage({
   const vendors = payload.vendors ?? [];
   const orgTotal = payload.org_billing?.total_cost_of_ai;
   const sources = payload.sources;
-  const users =
+
+  let users =
     tab === 'linked'
       ? allUsers.filter((u) => u.resolved)
       : tab === 'unlinked'
         ? allUsers.filter((u) => !u.resolved)
         : allUsers;
-  const loadError = !ok;
-  const showUnlinkedBadge = tab !== 'linked' && users.some((u) => !u.resolved);
+  if (status !== 'all') {
+    users = users.filter((u) => u.status === status);
+  }
 
-  const tabHref = (next: MemberTab, keepQ = true) => {
+  const pageSlice = paginateItems(users, page, USERS_PAGE_SIZE);
+  const loadError = !ok;
+  const showUnlinkedBadge = tab !== 'linked' && pageSlice.items.some((u) => !u.resolved);
+
+  const buildHref = (opts: {
+    nextTab?: MemberTab;
+    nextStatus?: StatusTab;
+    nextPage?: number;
+    keepQ?: boolean;
+  }) => {
     const params = new URLSearchParams({ from, to });
-    if (next !== 'all') {
-      params.set('tab', next);
+    const nextTab = opts.nextTab ?? tab;
+    const nextStatus = opts.nextStatus ?? status;
+    if (nextTab !== 'all') {
+      params.set('tab', nextTab);
     }
-    if (keepQ && q) {
+    if (nextStatus !== 'all') {
+      params.set('status', nextStatus);
+    }
+    if (opts.keepQ !== false && q) {
       params.set('q', q);
+    }
+    if (opts.nextPage != null && opts.nextPage > 1) {
+      params.set('page', String(opts.nextPage));
     }
     return `/users?${params.toString()}`;
   };
+
+  const tabHref = (next: MemberTab, keepQ = true) =>
+    buildHref({ nextTab: next, nextStatus: status, keepQ });
+  const statusHref = (next: StatusTab) => buildHref({ nextStatus: next, nextPage: 1 });
+
+  const inactiveSeats = allUsers.filter((u) => u.has_seat && u.status === 'inactive').length;
+  const activeUsers = allUsers.filter((u) => u.status === 'active').length;
+  const lowUseUsers = allUsers.filter((u) => u.status === 'low_use').length;
 
   const tabSubtitle =
     tab === 'linked'
       ? 'Linked members'
       : tab === 'unlinked'
         ? 'Unlinked handles'
-        : 'Discovered users with spend';
+        : 'Discovered users · spend + seat utilization';
 
   const sourceNote =
     sources != null
@@ -107,6 +164,7 @@ export default async function UsersPage({
     { key: 'user', label: 'User' },
     { key: 'email', label: 'Email' },
     { key: 'team', label: 'Team' },
+    { key: 'status', label: 'Status' },
     ...vendors.map((v) => ({
       key: `vendor_${v}`,
       label: vendorShortLabel(v),
@@ -119,6 +177,7 @@ export default async function UsersPage({
     user: <span className="text-xs uppercase tracking-wide text-muted">Grand total</span>,
     email: '',
     team: '',
+    status: '',
     total: usd(orgTotal ?? directoryTotal),
   };
   for (const v of vendors) {
@@ -167,11 +226,57 @@ export default async function UsersPage({
         </Card>
       )}
 
+      <Card
+        title="Utilization (LARI)"
+        subtitle="Seat & usage presence — same engine as CFO / product worth"
+      >
+        <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="rounded-lg border border-edge/70 px-3 py-2">
+            <div className="text-[11px] uppercase tracking-wide text-muted">Active</div>
+            <div className="mt-1 text-lg font-semibold tabular-nums text-pos">{activeUsers}</div>
+          </div>
+          <div className="rounded-lg border border-edge/70 px-3 py-2">
+            <div className="text-[11px] uppercase tracking-wide text-muted">Low use</div>
+            <div className="mt-1 text-lg font-semibold tabular-nums text-warn">{lowUseUsers}</div>
+          </div>
+          <div className="rounded-lg border border-edge/70 px-3 py-2">
+            <div className="text-[11px] uppercase tracking-wide text-muted">Inactive seats</div>
+            <div className="mt-1 text-lg font-semibold tabular-nums text-neg">{inactiveSeats}</div>
+          </div>
+          <div className="rounded-lg border border-edge/70 px-3 py-2">
+            <div className="text-[11px] uppercase tracking-wide text-muted">Showing</div>
+            <div className="mt-1 text-lg font-semibold tabular-nums">{users.length}</div>
+            <div className="text-[11px] text-muted">after filters</div>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {STATUS_TABS.map((t) => {
+            const count =
+              t.id === 'all' ? allUsers.length : allUsers.filter((u) => u.status === t.id).length;
+            return (
+              <Link
+                key={t.id}
+                href={statusHref(t.id)}
+                className={`rounded px-3 py-1.5 text-sm ${
+                  t.id === status
+                    ? 'bg-accent/20 text-white'
+                    : 'border border-edge text-muted hover:bg-white/5'
+                }`}
+              >
+                {t.label}
+                <span className="ml-1.5 text-xs text-muted">({count})</span>
+              </Link>
+            );
+          })}
+        </div>
+      </Card>
+
       <Card title="Search">
         <form method="get" className="flex flex-wrap items-end gap-3">
           <input type="hidden" name="from" value={from} />
           <input type="hidden" name="to" value={to} />
           {tab !== 'all' && <input type="hidden" name="tab" value={tab} />}
+          {status !== 'all' && <input type="hidden" name="status" value={status} />}
           <label className="flex min-w-[16rem] flex-1 flex-col gap-1 text-sm">
             <span className="text-muted">Name, email, or team</span>
             <input
@@ -189,7 +294,10 @@ export default async function UsersPage({
             Search
           </button>
           {q && (
-            <Link href={tabHref(tab, false)} className="pb-2 text-sm text-muted hover:text-white">
+            <Link
+              href={buildHref({ keepQ: false, nextPage: 1 })}
+              className="pb-2 text-sm text-muted hover:text-white"
+            >
               Clear
             </Link>
           )}
@@ -200,39 +308,56 @@ export default async function UsersPage({
         {vendors.length > 0 && (
           <p className="mb-3 text-xs text-muted">
             Vendors: {vendors.map((v) => vendorLabel(v)).join(' · ')} — click a user for usage
-            detail
+            detail · {USERS_PAGE_SIZE} per page
           </p>
         )}
-        <DataTable
-          columns={columns}
-          rows={users.map((u) => {
-            const row: Record<string, ReactNode> = {
-              user: (
-                <span className="inline-flex flex-wrap items-center gap-2">
-                  <Link
-                    href={`/users/${encodeURIComponent(u.user_id)}?from=${from}&to=${to}`}
-                    className="text-accent hover:text-accent-soft hover:underline"
-                  >
-                    {u.display_name}
-                  </Link>
-                  {showUnlinkedBadge && !u.resolved && (
-                    <Badge tone="warn" dot>
-                      unlinked
-                    </Badge>
-                  )}
-                </span>
-              ),
-              email: u.email || (isEmailLike(u.user_id) ? u.user_id : '—'),
-              team: u.team || '—',
-              total: usd(userVendorTotal(u)),
-            };
-            for (const v of vendors) {
-              row[`vendor_${v}`] = <VendorSpendCell slice={u.vendor_spend?.[v]} />;
-            }
-            return row;
-          })}
-          footerRows={[footerRow]}
-        />
+        {pageSlice.items.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted">No users match this filter.</p>
+        ) : (
+          <>
+            <DataTable
+              columns={columns}
+              rows={pageSlice.items.map((u) => {
+                const row: Record<string, ReactNode> = {
+                  user: (
+                    <span className="inline-flex flex-wrap items-center gap-2">
+                      <Link
+                        href={`/users/${encodeURIComponent(u.user_id)}?from=${from}&to=${to}`}
+                        className="text-accent hover:text-accent-soft hover:underline"
+                      >
+                        {u.display_name}
+                      </Link>
+                      {showUnlinkedBadge && !u.resolved && (
+                        <Badge tone="warn" dot>
+                          unlinked
+                        </Badge>
+                      )}
+                      {u.has_seat && (
+                        <Badge tone="info" dot>
+                          seat
+                        </Badge>
+                      )}
+                    </span>
+                  ),
+                  email: u.email || (isEmailLike(u.user_id) ? u.user_id : '—'),
+                  team: u.team || '—',
+                  status: u.status ? <UtilizationStatusBadge status={u.status} /> : '—',
+                  total: usd(userVendorTotal(u)),
+                };
+                for (const v of vendors) {
+                  row[`vendor_${v}`] = <VendorSpendCell slice={u.vendor_spend?.[v]} />;
+                }
+                return row;
+              })}
+              footerRows={[footerRow]}
+            />
+            <TablePager
+              slice={pageSlice}
+              hrefForPage={(p) => buildHref({ nextPage: p })}
+              label="members"
+            />
+          </>
+        )}
       </Card>
     </>
   );

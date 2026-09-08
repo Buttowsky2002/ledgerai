@@ -1,16 +1,19 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { DateRangePicker } from '@/components/DateRangePicker';
 import { BarChartClient } from '@/components/charts';
 import { LariRecommendationsPanel } from '@/components/lari/LariRecommendationsPanel';
+import { TablePager } from '@/components/TablePager';
+import { UtilizationStatusBadge } from '@/components/UtilizationStatusBadge';
 import { Card, DataTable, PageHeader, Stat, usd } from '@/components/ui';
 import { ForecastHorizonLinks, forecastContextLabel } from '@/components/ForecastHorizonLinks';
 import { CostPerOutcomeStat } from '@/components/cfo/CostPerOutcomeStat';
 import { fetchCfoView, fetchUserValue } from '@/lib/api/lari';
 import { rangeHref, type DateBounds } from '@/lib/date-range';
 import { forecastHorizonLabel } from '@/lib/forecast-horizon';
+import { paginateItems, USERS_PAGE_SIZE } from '@/lib/table-pager';
 import { usdPerMonth } from '@/lib/usd-per-month';
 import type { CostBasisMode, CfoViewResponse, UserValueResponse } from '@/types/lari';
 
@@ -44,17 +47,6 @@ function UtilizationMeter({ score }: { score: number }) {
   );
 }
 
-function StatusBadge({ status }: { status: 'active' | 'low_use' | 'inactive' }) {
-  const label = status === 'low_use' ? 'low use' : status;
-  const tone =
-    status === 'active'
-      ? 'text-pos border-pos/40 bg-pos/10'
-      : status === 'low_use'
-        ? 'text-warn border-warn/40 bg-warn/10'
-        : 'text-neg border-neg/40 bg-neg/10';
-  return <span className={`rounded border px-2 py-0.5 text-xs capitalize ${tone}`}>{label}</span>;
-}
-
 function PlatformUtilizationCard({
   from,
   to,
@@ -66,6 +58,16 @@ function PlatformUtilizationCard({
   data: UserValueResponse | null;
   loading: boolean;
 }) {
+  const [page, setPage] = useState(1);
+  const individualUsers = data?.mode === 'individual' ? data.users : [];
+  useEffect(() => {
+    setPage(1);
+  }, [from, to, individualUsers.length]);
+  const pageSlice = useMemo(
+    () => paginateItems(individualUsers, page, USERS_PAGE_SIZE),
+    [individualUsers, page],
+  );
+
   const empty =
     !loading &&
     data &&
@@ -132,26 +134,29 @@ function PlatformUtilizationCard({
           />
         </div>
       ) : data?.mode === 'individual' ? (
-        <DataTable
-          columns={[
-            { key: 'user', label: 'User' },
-            { key: 'providers', label: 'Providers' },
-            { key: 'calls', label: 'Calls', align: 'right' },
-            { key: 'days', label: 'Active days', align: 'right' },
-            { key: 'util', label: 'Utilization' },
-            { key: 'seat', label: 'Seat $/mo', align: 'right' },
-            { key: 'status', label: 'Status' },
-          ]}
-          rows={data.users.map((u) => ({
-            user: u.displayName,
-            providers: u.providers.join(', ') || '—',
-            calls: String(u.calls),
-            days: String(u.activeDays),
-            util: <UtilizationMeter score={u.utilizationScore} />,
-            seat: u.seatMonthlyCostUsd > 0 ? usd(u.seatMonthlyCostUsd) : '—',
-            status: <StatusBadge status={u.status} />,
-          }))}
-        />
+        <>
+          <DataTable
+            columns={[
+              { key: 'user', label: 'User' },
+              { key: 'providers', label: 'Providers' },
+              { key: 'calls', label: 'Calls', align: 'right' },
+              { key: 'days', label: 'Active days', align: 'right' },
+              { key: 'util', label: 'Utilization' },
+              { key: 'seat', label: 'Seat $/mo', align: 'right' },
+              { key: 'status', label: 'Status' },
+            ]}
+            rows={pageSlice.items.map((u) => ({
+              user: u.displayName,
+              providers: u.providers.join(', ') || '—',
+              calls: String(u.calls),
+              days: String(u.activeDays),
+              util: <UtilizationMeter score={u.utilizationScore} />,
+              seat: u.seatMonthlyCostUsd > 0 ? usd(u.seatMonthlyCostUsd) : '—',
+              status: <UtilizationStatusBadge status={u.status} />,
+            }))}
+          />
+          <TablePager slice={pageSlice} onPageChange={setPage} label="users" />
+        </>
       ) : null}
     </Card>
   );
