@@ -353,7 +353,14 @@ export default async function UsersPage({
             />
             <TablePager
               slice={pageSlice}
-              hrefForPage={(p) => buildHref({ nextPage: p })}
+              prevHref={
+                pageSlice.page > 1 ? buildHref({ nextPage: pageSlice.page - 1 }) : undefined
+              }
+              nextHref={
+                pageSlice.page < pageSlice.pageCount
+                  ? buildHref({ nextPage: pageSlice.page + 1 })
+                  : undefined
+              }
               label="members"
             />
           </>
