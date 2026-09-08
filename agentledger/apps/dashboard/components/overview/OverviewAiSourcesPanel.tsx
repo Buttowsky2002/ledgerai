@@ -2,9 +2,12 @@
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useMemo, useState } from 'react';
 import type { CursorSpendSummary } from '@/components/overview/CursorPlatformDetail';
 import { Card, DataTable, num, usd } from '@/components/ui';
+import { TablePager } from '@/components/TablePager';
 import { buildModelTableRows, type ModelTableRow } from '@/components/vendors/VendorDetailSections';
+import { paginateItems, USERS_PAGE_SIZE } from '@/lib/table-pager';
 import { vendorDetailHref } from '@/lib/vendor-routes';
 import { userVendorTotal, vendorShortLabel, type VendorSpendSlice } from '@/lib/vendor-spend';
 
@@ -60,10 +63,21 @@ export function OverviewAiSourcesPanel({
   }
 
   const modelRows: ModelTableRow[] = buildModelTableRows(models, cursorSpend);
-  const sortedUsers = [...users].sort((a, b) => userVendorTotal(b) - userVendorTotal(a));
+  const sortedUsers = useMemo(
+    () => [...users].sort((a, b) => userVendorTotal(b) - userVendorTotal(a)),
+    [users],
+  );
+  const [userPage, setUserPage] = useState(1);
+  const userSlice = useMemo(
+    () => paginateItems(sortedUsers, userPage, USERS_PAGE_SIZE),
+    [sortedUsers, userPage],
+  );
 
   return (
-    <Card title="AI sources & models" subtitle={`${from} → ${to} · Users and models in one view`}>
+    <Card
+      title="AI sources & models"
+      subtitle={`${from} → ${to} · Users and models · ${USERS_PAGE_SIZE}/page`}
+    >
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-edge pb-4">
         <div className="flex flex-wrap gap-2">
           <button
@@ -109,54 +123,57 @@ export function OverviewAiSourcesPanel({
         sortedUsers.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted">No user spend in this range.</p>
         ) : (
-          <DataTable
-            columns={[
-              { key: 'user', label: 'User' },
-              { key: 'email', label: 'Email' },
-              { key: 'team', label: 'Team' },
-              { key: 'total', label: 'Total $', align: 'right' },
-              { key: 'detail', label: '', align: 'right' },
-            ]}
-            rows={sortedUsers.map((u) => ({
-              user: (
-                <Link
-                  href={`/users/${encodeURIComponent(u.user_id)}?from=${from}&to=${to}`}
-                  className="text-accent hover:underline"
-                >
-                  {u.display_name}
-                </Link>
-              ),
-              email: u.email ?? '—',
-              team: u.team || '—',
-              total: usd(userVendorTotal(u)),
-              detail: (
-                <Link
-                  href={`/users/${encodeURIComponent(u.user_id)}?from=${from}&to=${to}`}
-                  className="text-xs text-accent hover:underline"
-                >
-                  Details →
-                </Link>
-              ),
-            }))}
-            footerRows={[
-              {
+          <>
+            <DataTable
+              columns={[
+                { key: 'user', label: 'User' },
+                { key: 'email', label: 'Email' },
+                { key: 'team', label: 'Team' },
+                { key: 'total', label: 'Total $', align: 'right' },
+                { key: 'detail', label: '', align: 'right' },
+              ]}
+              rows={userSlice.items.map((u) => ({
                 user: (
-                  <span className="text-xs uppercase tracking-wide text-muted">Grand total</span>
-                ),
-                email: '',
-                team: '',
-                total: usd(sortedUsers.reduce((s, u) => s + userVendorTotal(u), 0)),
-                detail: (
                   <Link
-                    href={`/users?from=${from}&to=${to}`}
-                    className="text-xs text-accent hover:underline"
+                    href={`/users/${encodeURIComponent(u.user_id)}?from=${from}&to=${to}`}
+                    className="text-accent hover:underline"
                   >
-                    Directory →
+                    {u.display_name}
                   </Link>
                 ),
-              },
-            ]}
-          />
+                email: u.email ?? '—',
+                team: u.team || '—',
+                total: usd(userVendorTotal(u)),
+                detail: (
+                  <Link
+                    href={`/users/${encodeURIComponent(u.user_id)}?from=${from}&to=${to}`}
+                    className="text-xs text-accent hover:underline"
+                  >
+                    Details →
+                  </Link>
+                ),
+              }))}
+              footerRows={[
+                {
+                  user: (
+                    <span className="text-xs uppercase tracking-wide text-muted">Grand total</span>
+                  ),
+                  email: '',
+                  team: '',
+                  total: usd(sortedUsers.reduce((s, u) => s + userVendorTotal(u), 0)),
+                  detail: (
+                    <Link
+                      href={`/users?from=${from}&to=${to}`}
+                      className="text-xs text-accent hover:underline"
+                    >
+                      Directory →
+                    </Link>
+                  ),
+                },
+              ]}
+            />
+            <TablePager slice={userSlice} onPageChange={setUserPage} label="users" />
+          </>
         )
       ) : modelRows.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted">No model usage in this range.</p>

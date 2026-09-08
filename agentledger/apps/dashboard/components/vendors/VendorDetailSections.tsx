@@ -4,10 +4,11 @@ import {
   CursorPlatformDetail,
   type CursorSpendSummary,
 } from '@/components/overview/CursorPlatformDetail';
-import { VendorSpendCell } from '@/components/VendorSpendCell';
+import { VendorUsersTable } from '@/components/vendors/VendorUsersTable';
 import { VendorSpendPie } from '@/components/VendorSpendPie';
 import { Card, DataTable, PageHeader, Stat, num, usd } from '@/components/ui';
 import { vendorLabel } from '@/lib/fixed-cost-catalog';
+import { USERS_PAGE_SIZE } from '@/lib/table-pager';
 import { vendorDetailHref, providerMatchesVendor } from '@/lib/vendor-routes';
 import { type VendorSpendSlice } from '@/lib/vendor-spend';
 
@@ -31,6 +32,9 @@ type UserRow = {
   email: string | null;
   team: string;
   vendor_spend?: Record<string, VendorSpendSlice>;
+  status?: 'active' | 'low_use' | 'inactive';
+  has_seat?: boolean;
+  seat_provider?: string;
 };
 
 export function VendorDetailSections({
@@ -56,13 +60,6 @@ export function VendorDetailSections({
   const seat = orgRow?.seat_usd ?? 0;
   const overage = orgRow?.budget_overage_usd ?? 0;
   const total = orgRow?.total_usd ?? seat + overage;
-
-  const vendorUsers = users
-    .filter((u) => (u.vendor_spend?.[vendorId]?.total_usd ?? 0) > 0)
-    .sort(
-      (a, b) =>
-        (b.vendor_spend?.[vendorId]?.total_usd ?? 0) - (a.vendor_spend?.[vendorId]?.total_usd ?? 0),
-    );
 
   return (
     <>
@@ -132,46 +129,11 @@ export function VendorDetailSections({
         </Card>
       )}
 
-      <Card title="Users" subtitle={`Spend attributed to ${label}`}>
-        {vendorUsers.length === 0 ? (
-          <p className="py-4 text-center text-sm text-muted">
-            No user spend for this vendor in range.
-          </p>
-        ) : (
-          <DataTable
-            columns={[
-              { key: 'user', label: 'User' },
-              { key: 'team', label: 'Team' },
-              { key: 'spend', label: 'Spend', align: 'right' },
-              { key: 'detail', label: '', align: 'right' },
-            ]}
-            rows={vendorUsers.map((u) => ({
-              user: u.display_name,
-              team: u.team || '—',
-              spend: <VendorSpendCell slice={u.vendor_spend?.[vendorId]} />,
-              detail: (
-                <Link
-                  href={`/users/${encodeURIComponent(u.user_id)}?from=${from}&to=${to}`}
-                  className="text-xs text-accent hover:underline"
-                >
-                  Details →
-                </Link>
-              ),
-            }))}
-            footerRows={[
-              {
-                user: (
-                  <span className="text-xs uppercase tracking-wide text-muted">Grand total</span>
-                ),
-                team: '',
-                spend: usd(
-                  vendorUsers.reduce((s, u) => s + (u.vendor_spend?.[vendorId]?.total_usd ?? 0), 0),
-                ),
-                detail: '',
-              },
-            ]}
-          />
-        )}
+      <Card
+        title="Users"
+        subtitle={`Spend + seat utilization for ${label} · ${USERS_PAGE_SIZE}/page`}
+      >
+        <VendorUsersTable vendorId={vendorId} from={from} to={to} users={users} />
       </Card>
 
       <p className="text-xs text-muted">

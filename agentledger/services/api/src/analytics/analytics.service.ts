@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, Optional } from '@nestjs/common';
 import { ChParam } from '../clickhouse/clickhouse.service';
 import { AnalyticsStore } from '../analytics-store/analytics-store';
 import {
@@ -35,6 +35,8 @@ import {
   RECONCILED_USER_MODEL_BREAKDOWN_SQL,
 } from '../connectors/metered-cost';
 import { loadIdentityLookups, resolveUserDirectoryIdentity } from '../reports/identity-resolver';
+import { mergeDirectoryWithUtilization } from './user-directory-utilization';
+import { UserValueService } from './user-value.service';
 import {
   canonicalUserKey,
   enrichUsersWithVendorData,
@@ -105,6 +107,13 @@ export interface UserDirectoryRow {
   vendor_spend?: Record<string, VendorSpendSlice>;
   /** Per-vendor usage for detail tabs. */
   vendor_usage?: Record<string, VendorUsageSlice>;
+  /** LARI / user-value utilization (active · low_use · inactive). */
+  status?: 'active' | 'low_use' | 'inactive';
+  has_seat?: boolean;
+  utilization_score?: number;
+  seat_monthly_cost_usd?: number;
+  seat_provider?: string;
+  plan_name?: string;
 }
 
 export interface VendorBillingResult {
@@ -165,6 +174,7 @@ export class AnalyticsService {
     private readonly copilotMemberSpend: CopilotMemberSpendService,
     private readonly cursorAnalytics: CursorAnalyticsService,
     private readonly cursorProductivity: CursorProductivityService,
+    @Optional() private readonly userValue?: UserValueService,
   ) {}
 
   /**
@@ -1355,6 +1365,17 @@ export class AnalyticsService {
       tokensByUserVendor,
       cursorPack.totals,
     );
+    if (this.userValue) {
+      try {
+        // Always assemble full utilization rows (team vs individual only affects
+        // the user-value response shape — directory needs per-user status).
+        const utilRows = await this.userValue.assembleUserUtilization(tenantId, r, 'individual');
+        users = mergeDirectoryWithUtilization(users, utilRows);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        this.logger.warn(`users directory: utilization merge skipped: ${msg}`);
+      }
+    }
     const vendors = orderedVendorIds(
       users.map((u) => u.vendor_spend ?? {}),
       orgBilling.vendors,

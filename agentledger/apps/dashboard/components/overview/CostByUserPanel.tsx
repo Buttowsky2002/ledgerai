@@ -2,10 +2,12 @@
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, DataTable, num, usd } from '@/components/ui';
+import { TablePager } from '@/components/TablePager';
 import { SpendBillingCell, BillingTypeBadge } from '@/components/SpendBillingCell';
 import { decodeRange, RANGE_COOKIE, resolveRangeWithCookie } from '@/lib/date-range';
+import { paginateItems, USERS_PAGE_SIZE } from '@/lib/table-pager';
 import { userTotalSpendUsd } from '@/lib/user-spend';
 
 type AllocationRow = {
@@ -90,10 +92,12 @@ export function CostByUserPanel({
   const [rows, setRows] = useState(initialRows);
   const [loading, setLoading] = useState(false);
   const [range, setRange] = useState({ from: initialFrom, to: initialTo });
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     const next = resolveClientRange(searchParams);
     setRange(next);
+    setPage(1);
 
     let cancelled = false;
     setLoading(true);
@@ -115,10 +119,12 @@ export function CostByUserPanel({
     };
   }, [searchParams]);
 
+  const pageSlice = useMemo(() => paginateItems(rows, page, USERS_PAGE_SIZE), [rows, page]);
+
   return (
     <Card
       title="Cost by user"
-      subtitle={`${range.from} → ${range.to} · total spend includes Cursor overage + included usage value`}
+      subtitle={`${range.from} → ${range.to} · ${USERS_PAGE_SIZE}/page · total spend includes Cursor overage + included usage value`}
       actions={
         <Link
           href={`/users?from=${range.from}&to=${range.to}`}
@@ -133,59 +139,62 @@ export function CostByUserPanel({
       ) : rows.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted">No per-user spend in this range.</p>
       ) : (
-        <DataTable
-          columns={[
-            { key: 'user', label: 'User' },
-            { key: 'cost', label: 'Total spend', align: 'right' },
-            { key: 'billing', label: 'Billing', align: 'right' },
-            { key: 'trend', label: 'Daily trend', align: 'right' },
-            { key: 'calls', label: 'Calls (incl. Cursor)', align: 'right' },
-            { key: 'tokens', label: 'Tokens', align: 'right' },
-          ]}
-          rows={rows.map((r) => ({
-            user:
-              r.key === 'Unassigned' ? (
-                <span className="text-warn">{r.key}</span>
-              ) : (
-                <Link
-                  href={`/users/${encodeURIComponent(r.key)}?from=${range.from}&to=${range.to}`}
-                  className="text-accent hover:underline"
-                >
-                  {r.key}
-                </Link>
+        <>
+          <DataTable
+            columns={[
+              { key: 'user', label: 'User' },
+              { key: 'cost', label: 'Total spend', align: 'right' },
+              { key: 'billing', label: 'Billing', align: 'right' },
+              { key: 'trend', label: 'Daily trend', align: 'right' },
+              { key: 'calls', label: 'Calls (incl. Cursor)', align: 'right' },
+              { key: 'tokens', label: 'Tokens', align: 'right' },
+            ]}
+            rows={pageSlice.items.map((r) => ({
+              user:
+                r.key === 'Unassigned' ? (
+                  <span className="text-warn">{r.key}</span>
+                ) : (
+                  <Link
+                    href={`/users/${encodeURIComponent(r.key)}?from=${range.from}&to=${range.to}`}
+                    className="text-accent hover:underline"
+                  >
+                    {r.key}
+                  </Link>
+                ),
+              cost: (
+                <span className="inline-flex flex-col items-end gap-1">
+                  <span>{usd(userTotalSpendUsd(r))}</span>
+                  <BillingTypeBadge
+                    meteredUsd={r.metered_usd}
+                    seatUsd={r.seat_usd}
+                    cursorIncludedUsd={r.cursor_included_usd}
+                    cursorOnDemandUsd={r.cursor_on_demand_usd}
+                  />
+                </span>
               ),
-            cost: (
-              <span className="inline-flex flex-col items-end gap-1">
-                <span>{usd(userTotalSpendUsd(r))}</span>
-                <BillingTypeBadge
+              billing: (
+                <SpendBillingCell
                   meteredUsd={r.metered_usd}
                   seatUsd={r.seat_usd}
-                  cursorIncludedUsd={r.cursor_included_usd}
+                  portalUsd={r.portal_import_usd}
+                  connectorUsd={r.connector_usd}
                   cursorOnDemandUsd={r.cursor_on_demand_usd}
+                  cursorIncludedUsd={r.cursor_included_usd}
                 />
-              </span>
-            ),
-            billing: (
-              <SpendBillingCell
-                meteredUsd={r.metered_usd}
-                seatUsd={r.seat_usd}
-                portalUsd={r.portal_import_usd}
-                connectorUsd={r.connector_usd}
-                cursorOnDemandUsd={r.cursor_on_demand_usd}
-                cursorIncludedUsd={r.cursor_included_usd}
-              />
-            ),
-            trend: (
-              <SpendTrendCell
-                trend={r.spend_trend}
-                changePct={r.trend_change_pct}
-                changeUsd={r.trend_change_usd}
-              />
-            ),
-            calls: num(r.calls),
-            tokens: num(r.tokens ?? 0),
-          }))}
-        />
+              ),
+              trend: (
+                <SpendTrendCell
+                  trend={r.spend_trend}
+                  changePct={r.trend_change_pct}
+                  changeUsd={r.trend_change_usd}
+                />
+              ),
+              calls: num(r.calls),
+              tokens: num(r.tokens ?? 0),
+            }))}
+          />
+          <TablePager slice={pageSlice} onPageChange={setPage} label="users" />
+        </>
       )}
     </Card>
   );
