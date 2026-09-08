@@ -5,8 +5,10 @@ import { USERS_PAGE_SIZE, type PageSlice } from '@/lib/table-pager';
 
 type Props = {
   slice: Pick<PageSlice<unknown>, 'page' | 'pageCount' | 'total' | 'fromIndex' | 'toIndex'>;
-  /** Build href for a 1-based page (server-driven). */
-  hrefForPage?: (page: number) => string;
+  /** Server-driven prev link (string only — functions cannot cross the RSC boundary). */
+  prevHref?: string;
+  /** Server-driven next link. */
+  nextHref?: string;
   /** Client-driven page change (overview panels). */
   onPageChange?: (page: number) => void;
   label?: string;
@@ -16,7 +18,8 @@ type Props = {
 /** Compact prev/next pager for condensed user tables (10 per page). */
 export function TablePager({
   slice,
-  hrefForPage,
+  prevHref,
+  nextHref,
   onPageChange,
   label = 'users',
   pageSize = USERS_PAGE_SIZE,
@@ -43,22 +46,22 @@ export function TablePager({
       disabled ? 'cursor-not-allowed text-muted/50' : 'text-muted hover:bg-white/5 hover:text-white'
     }`;
 
-  if (hrefForPage) {
+  if (prevHref != null || nextHref != null) {
     return (
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
         {summary}
         <div className="flex items-center gap-2">
-          {prevDisabled ? (
+          {prevDisabled || !prevHref ? (
             <span className={btnClass(true)}>Previous</span>
           ) : (
-            <Link href={hrefForPage(slice.page - 1)} className={btnClass(false)} scroll={false}>
+            <Link href={prevHref} className={btnClass(false)} scroll={false}>
               Previous
             </Link>
           )}
-          {nextDisabled ? (
+          {nextDisabled || !nextHref ? (
             <span className={btnClass(true)}>Next</span>
           ) : (
-            <Link href={hrefForPage(slice.page + 1)} className={btnClass(false)} scroll={false}>
+            <Link href={nextHref} className={btnClass(false)} scroll={false}>
               Next
             </Link>
           )}
