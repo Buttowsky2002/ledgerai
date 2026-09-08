@@ -1,0 +1,59 @@
+name: Deploy ECS images
+
+# Rolls BadgerIQ ECS services to a published GHCR image tag (e.g. 0.1.62-pilot).
+# Uses the same GitHub→AWS OIDC deployer role as Run migrations.
+# Prefer this when a laptop terraform apply is unavailable; keep terraform
+# image_tag in sync on the next full infra apply.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        type: choice
+        options:
+          - pilot
+          - prod
+        default: pilot
+      image_tag:
+        description: "Image tag without leading v (semver from Release, e.g. 0.1.62-pilot)"
+        required: true
+        type: string
+      services:
+        description: "Comma-separated service short names (default: api,dashboard)"
+        required: false
+        type: string
+        default: "api,dashboard"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    name: "ECS deploy ${{ inputs.image_tag }} (${{ inputs.environment }})"
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOYER_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Roll ECS services to image tag
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          SERVICES: ${{ inputs.services }}
+        run: |
+          set -euo pipefail
+          chmod +x agentledger/deploy/terraform/scripts/roll-ecs-images.sh
+          agentledger/deploy/terraform/scripts/roll-ecs-images.sh \
+            --env "$ENVIRONMENT" \
+            --tag "$IMAGE_TAG" \
+            --services "$SERVICES"
