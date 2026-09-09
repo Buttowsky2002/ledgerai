@@ -16,7 +16,7 @@
  *   toStartOfDay(x)     → date_trunc('day', (x)::timestamp)
  *   count()             → count(*)
  *   countIf(cond)       → count(*) FILTER (WHERE cond)
- *   uniqExact(x)        → count(DISTINCT x)
+ *   uniqExact(x) / countDistinct(x) → count(DISTINCT x)
  *   sumIf(x, cond)      → sum(x) FILTER (WHERE cond)
  *   if(a, b, c)         → CASE WHEN a THEN b ELSE c END   (recursive)
  *   argMax(a, b)        → (array_agg(a ORDER BY b DESC))[1]
@@ -148,6 +148,9 @@ export function translateFunctions(sql: string): string {
   sql = rewriteCalls(sql, 'toStartOfHour', ([x]) => `date_trunc('hour', (${x})::timestamp)`);
   sql = rewriteCalls(sql, 'countIf', ([cond]) => `count(*) FILTER (WHERE ${cond})`);
   sql = rewriteCalls(sql, 'uniqExact', ([x]) => `count(DISTINCT ${x})`);
+  // ClickHouse countDistinct is the same as uniqExact; LARI recommendations used it
+  // after #109 and Postgres has no such function → GET /v1/lari/recommendations 500.
+  sql = rewriteCalls(sql, 'countDistinct', ([x]) => `count(DISTINCT ${x})`);
   sql = rewriteCalls(sql, 'sumIf', ([x, cond]) => `sum(${x}) FILTER (WHERE ${cond})`);
   sql = rewriteCalls(
     sql,

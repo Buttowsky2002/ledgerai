@@ -141,7 +141,7 @@ export class LariRecommendationsService {
         calls: number;
       }>(RECONCILED_MODEL_USAGE_SQL, params),
       this.ch.queryScoped<{ provider: string; active_users: number }>(
-        `SELECT provider, countDistinct(if(user_id = '', NULL, user_id)) AS active_users
+        `SELECT provider, uniqExact(if(user_id = '', NULL, user_id)) AS active_users
          FROM llm_calls
          WHERE tenant_id = {tenant:String}
            AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
