@@ -54,6 +54,18 @@ describe('ch-sql-translator', () => {
     );
   });
 
+  it('translates countDistinct (incl. nested if) to count distinct', () => {
+    expect(translateFunctions('countDistinct(user_id) AS members')).toBe(
+      'count(DISTINCT user_id) AS members',
+    );
+    const nested = translateFunctions(
+      "countDistinct(if(user_id = '', NULL, user_id)) AS active_users",
+    );
+    expect(nested).not.toMatch(/countDistinct/i);
+    expect(nested).toContain('count(DISTINCT');
+    expect(nested).toContain("CASE WHEN user_id = '' THEN NULL ELSE user_id END");
+  });
+
   it('translates count()/countIf/sumIf/argMax', () => {
     expect(translateFunctions('count() AS calls')).toBe('count(*) AS calls');
     expect(translateFunctions("countIf(status LIKE 'blocked%') AS b")).toBe(
@@ -160,5 +172,22 @@ describe('ch-sql-translator', () => {
     const { sql } = translateChSql(chSql, { tenant: 't' });
     expect(sql).toMatch(/HAVING\s+sum\(/i);
     expect(sql).not.toMatch(/HAVING\s+cost_usd\b/i);
+  });
+
+  it('translates the LARI active-user query that previously 500ed on Postgres', () => {
+    const chSql = `SELECT provider, countDistinct(if(user_id = '', NULL, user_id)) AS active_users
+         FROM llm_calls
+         WHERE tenant_id = {tenant:String}
+           AND toDate(ts) BETWEEN {from:Date} AND {to:Date}
+         GROUP BY provider`;
+    const { sql } = translateChSql(chSql, {
+      tenant: 't',
+      from: '2026-08-28',
+      to: '2026-09-04',
+    });
+    expect(sql).not.toMatch(/countDistinct/i);
+    expect(sql).toContain('count(DISTINCT');
+    expect(sql).toContain("CASE WHEN user_id = '' THEN NULL ELSE user_id END");
+    expect(sql).toContain('$1::text');
   });
 });

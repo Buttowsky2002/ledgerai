@@ -151,7 +151,7 @@ export function LariRecommendationsPanel({
           <div className="h-16 rounded-lg bg-edge" />
           <div className="h-16 rounded-lg bg-edge" />
         </div>
-      ) : shown.length === 0 ? (
+      ) : error ? null : shown.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted">
           No savings or configuration actions flagged — portfolio looks efficient.
         </p>

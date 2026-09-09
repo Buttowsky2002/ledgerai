@@ -63,6 +63,8 @@ describe('LariRecommendationsService', () => {
 
     const sqls = queryScoped.mock.calls.map((c) => String(c[0]));
     expect(sqls.some((s) => s.includes('platform AS provider'))).toBe(true);
+    expect(sqls.some((s) => s.includes('uniqExact(if(user_id ='))).toBe(true);
+    expect(sqls.some((s) => s.includes('countDistinct'))).toBe(false);
     expect(
       sqls.some((s) =>
         s.includes(
@@ -81,7 +83,7 @@ describe('LariRecommendationsService', () => {
       if (sql.includes('platform AS provider')) {
         return [{ provider: 'anthropic', cost_usd: 500, calls: 80 }];
       }
-      if (sql.includes('countDistinct(if(user_id =')) {
+      if (sql.includes('uniqExact(if(user_id =')) {
         return [{ provider: 'anthropic', active_users: 4 }];
       }
       if (sql.includes('FROM agentledger.fixed_costs FINAL')) {
