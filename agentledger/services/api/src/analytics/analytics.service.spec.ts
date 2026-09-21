@@ -3,7 +3,7 @@ import { CopilotAnalyticsService } from '../github-copilot/github-copilot-analyt
 import { CopilotMemberSpendService } from '../github-copilot/github-copilot-member-spend.service';
 import { LariService } from '../lari/lari.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { loadIdentityLookups } from '../reports/identity-resolver';
+import { listHumanIdentityRoster, loadIdentityLookups } from '../reports/identity-resolver';
 import { CursorAnalyticsService } from '../connectors/cursor-analytics.service';
 import { AnalyticsService } from './analytics.service';
 
@@ -17,11 +17,15 @@ jest.mock('../reports/identity-resolver', () => {
   return {
     ...actual,
     loadIdentityLookups: jest.fn(),
+    listHumanIdentityRoster: jest.fn(async () => []),
   };
 });
 
 const mockedLoadIdentityLookups = loadIdentityLookups as jest.MockedFunction<
   typeof loadIdentityLookups
+>;
+const mockedListHumanIdentityRoster = listHumanIdentityRoster as jest.MockedFunction<
+  typeof listHumanIdentityRoster
 >;
 
 function emptyCopilotMemberSpend(): CopilotMemberSpendService {
@@ -252,6 +256,7 @@ describe('AnalyticsService.users', () => {
   const uuidAlice = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 
   beforeEach(() => {
+    mockedListHumanIdentityRoster.mockResolvedValue([]);
     mockedLoadIdentityLookups.mockResolvedValue({
       byId: new Map([
         [
@@ -260,6 +265,7 @@ describe('AnalyticsService.users', () => {
             displayName: 'Alice Smith',
             email: 'alice@acme.test',
             teamName: 'Eng',
+            teamId: null,
             criticalityTier: 'standard',
           },
         ],
@@ -271,6 +277,7 @@ describe('AnalyticsService.users', () => {
             displayName: 'Dev User',
             email: 'dev@company.com',
             teamName: 'Eng',
+            teamId: null,
             criticalityTier: 'standard',
           },
         ],
@@ -278,7 +285,13 @@ describe('AnalyticsService.users', () => {
       byAlias: new Map([
         [
           'cursor-user-99',
-          { displayName: 'Cursor Dev', email: null, teamName: 'Eng', criticalityTier: 'standard' },
+          {
+            displayName: 'Cursor Dev',
+            email: null,
+            teamName: 'Eng',
+            teamId: null,
+            criticalityTier: 'standard',
+          },
         ],
       ]),
     });
@@ -406,6 +419,70 @@ describe('AnalyticsService.users', () => {
     expect(result.users.some((u) => u.user_id === 'zero-spend')).toBe(false);
   });
 
+  it('keeps mapped identities on the directory when the date range has no spend', async () => {
+    const mappedId = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
+    mockedListHumanIdentityRoster.mockResolvedValue([
+      {
+        userId: mappedId,
+        displayName: 'Mapped Import User',
+        email: 'mapped@import.test',
+        team: 'Finance',
+      },
+    ]);
+    mockedLoadIdentityLookups.mockResolvedValue({
+      byId: new Map([
+        [
+          mappedId,
+          {
+            displayName: 'Mapped Import User',
+            email: 'mapped@import.test',
+            teamName: 'Finance',
+            teamId: null,
+            criticalityTier: 'standard',
+          },
+        ],
+      ]),
+      byEmail: new Map([
+        [
+          'mapped@import.test',
+          {
+            displayName: 'Mapped Import User',
+            email: 'mapped@import.test',
+            teamName: 'Finance',
+            teamId: null,
+            criticalityTier: 'standard',
+          },
+        ],
+      ]),
+      byAlias: new Map(),
+    });
+    const queryScoped = jest.fn(async () => []);
+    const ch = { queryScoped } as unknown as ClickHouseService;
+    const svc = new AnalyticsService(
+      ch,
+      {} as PrismaService,
+      {} as LariService,
+      {
+        getSpendSummary: jest.fn(async () => null),
+      } as unknown as CopilotAnalyticsService,
+      emptyCopilotMemberSpend(),
+      emptyCursorAnalytics() as never,
+      emptyCursorProductivity() as never,
+    );
+    const result = await svc.users('2020-01-01', '2020-01-31');
+    expect(result.sources.roster_identities).toBe(1);
+    expect(result.users).toHaveLength(1);
+    expect(result.users[0]).toMatchObject({
+      user_id: mappedId,
+      display_name: 'Mapped Import User',
+      email: 'mapped@import.test',
+      team: 'Finance',
+      resolved: true,
+      total_spend_usd: 0,
+      calls: 0,
+    });
+  });
+
   it('merges spend rows that resolve to the same email identity', async () => {
     const queryScoped = jest.fn(async (sql: string, params?: Record<string, unknown>) => {
       if (params?.userId) {
@@ -453,6 +530,7 @@ describe('AnalyticsService.users', () => {
             displayName: 'Alice Chen',
             email: 'alice.chen@acme.test',
             teamName: 'Eng',
+            teamId: null,
             criticalityTier: 'standard',
           },
         ],
@@ -464,6 +542,7 @@ describe('AnalyticsService.users', () => {
             displayName: 'Alice Chen',
             email: 'alice.chen@acme.test',
             teamName: 'Eng',
+            teamId: null,
             criticalityTier: 'standard',
           },
         ],
@@ -507,6 +586,7 @@ describe('AnalyticsService.users', () => {
             displayName: 'Dev User',
             email: 'dev@company.com',
             teamName: 'Platform',
+            teamId: null,
             criticalityTier: 'standard',
           },
         ],
@@ -518,6 +598,7 @@ describe('AnalyticsService.users', () => {
             displayName: 'Cursor Dev',
             email: 'dev@company.com',
             teamName: 'Platform',
+            teamId: null,
             criticalityTier: 'standard',
           },
         ],
@@ -572,7 +653,12 @@ describe('AnalyticsService.users', () => {
     );
 
     const result = await svc.users('2026-06-01', '2026-06-30');
-    expect(result.sources).toEqual({ llm_call_users: 1, copilot_members: 1, cursor_members: 0 });
+    expect(result.sources).toMatchObject({
+      llm_call_users: 1,
+      copilot_members: 1,
+      cursor_members: 0,
+      roster_identities: 0,
+    });
     expect(result.users).toHaveLength(2);
     const copilot = result.users.find((u) => u.user_id === 'octocat');
     expect(copilot).toMatchObject({
@@ -743,6 +829,7 @@ describe('AnalyticsService.users', () => {
             displayName: 'Dev User',
             email: 'dev@company.com',
             teamName: 'Eng',
+            teamId: null,
             criticalityTier: 'standard',
           },
         ],
@@ -752,6 +839,7 @@ describe('AnalyticsService.users', () => {
             displayName: 'Included Only',
             email: 'included-only@example.com',
             teamName: 'Eng',
+            teamId: null,
             criticalityTier: 'standard',
           },
         ],
@@ -863,6 +951,7 @@ describe('AnalyticsService.users', () => {
             displayName: 'Carl Miller',
             email: 'carl.miller@studiodesigner.com',
             teamName: 'Engineering',
+            teamId: null,
             criticalityTier: 'standard',
           },
         ],

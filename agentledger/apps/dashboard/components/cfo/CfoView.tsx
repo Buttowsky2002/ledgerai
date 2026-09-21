@@ -47,6 +47,63 @@ function UtilizationMeter({ score }: { score: number }) {
   );
 }
 
+function SpendByTeamCard({
+  from,
+  to,
+  rows,
+}: {
+  from: string;
+  to: string;
+  rows: NonNullable<CfoViewResponse['teamBreakdown']>;
+}) {
+  const [page, setPage] = useState(1);
+  useEffect(() => {
+    setPage(1);
+  }, [from, to, rows.length]);
+  const pageSlice = useMemo(() => paginateItems(rows, page, USERS_PAGE_SIZE), [rows, page]);
+
+  return (
+    <Card title="Spend by team" subtitle={`SCIM / mapped teams · ${from} → ${to}`}>
+      {rows.length === 0 ? (
+        <p className="py-6 text-center text-sm text-muted">
+          No teams provisioned yet. Sync SCIM Groups (or assign identities to teams) to see spend by
+          team.
+        </p>
+      ) : (
+        <>
+          <BarChartClient
+            data={rows.slice(0, 12).map((r) => ({
+              team: r.teamName,
+              spend: r.costUsd,
+            }))}
+            xKey="team"
+            yKey="spend"
+          />
+          <div className="mt-4">
+            <DataTable
+              columns={[
+                { key: 'team', label: 'Team' },
+                { key: 'spend', label: 'Spend', align: 'right' },
+                { key: 'share', label: 'Share', align: 'right' },
+                { key: 'users', label: 'Users', align: 'right' },
+                { key: 'calls', label: 'Calls', align: 'right' },
+              ]}
+              rows={pageSlice.items.map((r) => ({
+                team: r.teamName,
+                spend: usd(r.costUsd),
+                share: `${r.sharePct.toFixed(1)}%`,
+                users: String(r.users),
+                calls: String(r.calls),
+              }))}
+            />
+            <TablePager slice={pageSlice} onPageChange={setPage} label="teams" />
+          </div>
+        </>
+      )}
+    </Card>
+  );
+}
+
 function PlatformUtilizationCard({
   from,
   to,
@@ -386,6 +443,12 @@ export function CfoView({
       <div className="mb-6">
         <PlatformUtilizationCard from={from} to={to} data={userValue} loading={utilLoading} />
       </div>
+
+      {!loading && data && (
+        <div className="mb-6">
+          <SpendByTeamCard from={from} to={to} rows={data.teamBreakdown ?? []} />
+        </div>
+      )}
 
       {noOutcomesButSpend && (
         <Card title="Spend without attributed outcomes">

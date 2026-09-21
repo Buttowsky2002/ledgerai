@@ -262,9 +262,9 @@ async function IntegrationsTab({ api }: { api: Api }) {
           />
         </div>
         <p className="mt-3 text-xs text-muted">
-          Point your IdP (Okta, Entra, Google Workspace) to https://app.yourdomain.com/scim/v2 with
-          this token as the Bearer credential. SCIM Users map to identities; SCIM Groups map to
-          teams.
+          Point your IdP (Okta, Entra, Google Workspace) to
+          https://badgeriq.studiodesigner.com/scim/v2 with this token as the Bearer credential. SCIM
+          Users map to identities; SCIM Groups map to teams.
         </p>
       </Card>
 

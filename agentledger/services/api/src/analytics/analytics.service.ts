@@ -34,7 +34,11 @@ import {
   RECONCILED_USER_DAY_SPEND_SQL,
   RECONCILED_USER_MODEL_BREAKDOWN_SQL,
 } from '../connectors/metered-cost';
-import { loadIdentityLookups, resolveUserDirectoryIdentity } from '../reports/identity-resolver';
+import {
+  listHumanIdentityRoster,
+  loadIdentityLookups,
+  resolveUserDirectoryIdentity,
+} from '../reports/identity-resolver';
 import { mergeDirectoryWithUtilization } from './user-directory-utilization';
 import { UserValueService } from './user-value.service';
 import {
@@ -144,6 +148,8 @@ export interface UsersAnalyticsResult {
     llm_call_users: number;
     copilot_members: number;
     cursor_members: number;
+    /** Active identities seeded into the directory (date-independent roster). */
+    roster_identities?: number;
   };
 }
 
@@ -1357,9 +1363,18 @@ export class AnalyticsService {
       cursorPack,
     );
     const cursorSeatByUser = await this.cursorSeatUsdByUser(tenantId, r, cursorPack.totals);
-    let users = await this.assembleUserDirectory(tenantId, totals, breakdown, q, copilotPack.hints);
-    users = enrichUsersWithVendorData(
-      users,
+    const assembled = await this.assembleUserDirectory(
+      tenantId,
+      totals,
+      breakdown,
+      q,
+      copilotPack.hints,
+      {
+        seedRoster: true,
+      },
+    );
+    let users = enrichUsersWithVendorData(
+      assembled.users,
       copilotPack.byUser,
       cursorSeatByUser,
       tokensByUserVendor,
@@ -1390,6 +1405,7 @@ export class AnalyticsService {
         llm_call_users: chTotals.length,
         copilot_members: copilotPack.totals.length,
         cursor_members: cursorPack.totals.length,
+        roster_identities: assembled.rosterSeeded,
       },
     };
   }
@@ -1576,15 +1592,16 @@ export class AnalyticsService {
       cursorPack,
     );
     const cursorSeatByUser = await this.cursorSeatUsdByUser(tenantId, r, cursorPack.totals);
-    let rows = await this.assembleUserDirectory(
+    const assembled = await this.assembleUserDirectory(
       tenantId,
       totals,
       breakdown,
       undefined,
       copilotPack.hints,
+      { seedRoster: true, onlyUserId: userId },
     );
-    rows = enrichUsersWithVendorData(
-      rows,
+    const rows = enrichUsersWithVendorData(
+      assembled.users,
       copilotPack.byUser,
       cursorSeatByUser,
       tokensByUserVendor,
@@ -1739,9 +1756,8 @@ export class AnalyticsService {
     }[] = [];
 
     for (const m of resp.members) {
-      if (m.totalAllocatedCost <= 0) {
-        continue;
-      }
+      // Include $0 members so Copilot seat holders stay on the roster when the
+      // selected range has no allocated daily cost.
       const calls = m.chatTurns + m.linesAccepted + m.prSummaryCount;
       totals.push({
         user_id: m.githubLogin,
@@ -1862,7 +1878,8 @@ export class AnalyticsService {
     }[],
     q?: string,
     copilotHints: Map<string, CopilotIdentityHint> = new Map(),
-  ): Promise<UserDirectoryRow[]> {
+    opts: { seedRoster?: boolean; onlyUserId?: string } = {},
+  ): Promise<{ users: UserDirectoryRow[]; rosterSeeded: number }> {
     const totalsByUser = new Map<
       string,
       {
@@ -1907,6 +1924,30 @@ export class AnalyticsService {
     }
 
     const allUserIds = new Set([...totalsByUser.keys(), ...breakdownByUser.keys()]);
+    const rosterSeedIds = new Set<string>();
+    let rosterSeeded = 0;
+    if (opts.seedRoster) {
+      try {
+        let roster = await listHumanIdentityRoster(this.prisma, tenantId);
+        if (opts.onlyUserId) {
+          const needle = opts.onlyUserId.trim().toLowerCase();
+          roster = roster.filter(
+            (row) =>
+              row.userId.toLowerCase() === needle ||
+              (row.email != null && row.email.toLowerCase() === needle),
+          );
+        }
+        rosterSeeded = roster.length;
+        for (const row of roster) {
+          allUserIds.add(row.userId);
+          rosterSeedIds.add(row.userId);
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        this.logger.warn(`identity roster unavailable for directory: ${msg}`);
+      }
+    }
+
     const { byId, byEmail, byAlias } = await loadIdentityLookups(this.prisma, tenantId);
     const needle = q?.trim().toLowerCase() ?? '';
 
@@ -1926,17 +1967,20 @@ export class AnalyticsService {
       const tokens = totalsRow.tokens;
       const cursor_included_usd = totalsRow.cursor_included_usd;
       const cursor_on_demand_usd = totalsRow.cursor_on_demand_usd;
-      if (
-        total_spend_usd <= 0 &&
-        calls <= 0 &&
-        tokens <= 0 &&
-        cursor_included_usd <= 0 &&
-        cursor_on_demand_usd <= 0
-      ) {
+      const identity = resolveUserDirectoryIdentity(user_id, byId, byEmail, byAlias);
+      const hasActivity =
+        total_spend_usd > 0 ||
+        calls > 0 ||
+        tokens > 0 ||
+        cursor_included_usd > 0 ||
+        cursor_on_demand_usd > 0;
+      const fromRoster = rosterSeedIds.has(user_id);
+      // Keep mapped identities and Copilot members even at $0; drop other zero rows
+      // (CH already filters cost/calls, but mocks and empty aggregates can still appear).
+      if (!hasActivity && !fromRoster && !copilotHints.has(user_id)) {
         continue;
       }
 
-      const identity = resolveUserDirectoryIdentity(user_id, byId, byEmail, byAlias);
       const hint = copilotHints.get(user_id);
       const display_name = identity.resolved
         ? identity.display_name
@@ -1978,11 +2022,32 @@ export class AnalyticsService {
       merged.set(key, mergeUserDirectoryRows(existing, entry));
     }
 
-    return [...merged.values()].sort(
+    let users = [...merged.values()].sort(
       (a, b) =>
         b.total_spend_usd +
         (b.cursor_included_usd ?? 0) -
         (a.total_spend_usd + (a.cursor_included_usd ?? 0)),
     );
+
+    if (opts.onlyUserId) {
+      const only = opts.onlyUserId.trim().toLowerCase();
+      const matched = users.filter(
+        (u) =>
+          u.user_id.toLowerCase() === only || (u.email != null && u.email.toLowerCase() === only),
+      );
+      if (matched.length > 0) {
+        users = [matched[0]];
+      } else if (users.length > 0) {
+        // Alias-collapsed row: identity resolved the spend handle onto another key.
+        const viaAlias = users.find((u) => {
+          const id = resolveUserDirectoryIdentity(u.user_id, byId, byEmail, byAlias);
+          const want = resolveUserDirectoryIdentity(opts.onlyUserId!, byId, byEmail, byAlias);
+          return id.resolved && want.resolved && id.email && id.email === want.email;
+        });
+        users = viaAlias ? [viaAlias] : [];
+      }
+    }
+
+    return { users, rosterSeeded };
   }
 }

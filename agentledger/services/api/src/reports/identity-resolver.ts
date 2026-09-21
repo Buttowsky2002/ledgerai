@@ -15,6 +15,8 @@ type IdentityEntry = {
   displayName: string;
   email: string | null;
   teamName: string;
+  /** Postgres teams.team_id when the identity is assigned (SCIM Group → team). */
+  teamId: string | null;
   criticalityTier: string;
 };
 
@@ -22,6 +24,7 @@ export type UserDirectoryIdentity = {
   display_name: string;
   email: string | null;
   team: string;
+  teamId: string | null;
   criticalityTier: string;
   resolved: boolean;
 };
@@ -124,6 +127,7 @@ export function resolveUserDirectoryIdentity(
       display_name: hit.displayName,
       email: hit.email,
       team: hit.teamName,
+      teamId: hit.teamId,
       criticalityTier: hit.criticalityTier,
       resolved: true,
     };
@@ -134,6 +138,7 @@ export function resolveUserDirectoryIdentity(
       display_name: resolveDisplayName(null, trimmed, trimmed),
       email: trimmed,
       team: '',
+      teamId: null,
       criticalityTier: 'standard',
       resolved: false,
     };
@@ -142,6 +147,7 @@ export function resolveUserDirectoryIdentity(
     display_name: userId,
     email: null,
     team: '',
+    teamId: null,
     criticalityTier: 'standard',
     resolved: false,
   };
@@ -237,6 +243,51 @@ export async function resolveUserIdentities(
   return merged;
 }
 
+export type IdentityRosterRow = {
+  userId: string;
+  displayName: string;
+  email: string | null;
+  team: string;
+};
+
+/**
+ * Active human identities for the member directory roster. Independent of spend
+ * date range — portal import / SCIM / mapped users always appear, with $0 when
+ * the selected window has no usage.
+ */
+export async function listHumanIdentityRoster(
+  prisma: PrismaService,
+  tenantId: string,
+): Promise<IdentityRosterRow[]> {
+  return prisma.withTenant(tenantId, async (tx) => {
+    const identityRows = await tx.identity.findMany({
+      where: { active: true },
+      select: {
+        userId: true,
+        email: true,
+        displayName: true,
+        teamId: true,
+      },
+      orderBy: [{ displayName: 'asc' }, { email: 'asc' }],
+    });
+    const teamIds = [...new Set(identityRows.map((r) => r.teamId).filter(Boolean))] as string[];
+    const teams =
+      teamIds.length > 0
+        ? await tx.team.findMany({
+            where: { teamId: { in: teamIds } },
+            select: { teamId: true, name: true },
+          })
+        : [];
+    const teamNames = new Map(teams.map((t) => [t.teamId, t.name]));
+    return identityRows.map((row) => ({
+      userId: row.userId,
+      displayName: resolveDisplayName(row.displayName, row.email, row.userId),
+      email: row.email?.trim() || null,
+      team: row.teamId ? (teamNames.get(row.teamId) ?? '') : '',
+    }));
+  });
+}
+
 export async function loadIdentityLookups(
   prisma: PrismaService,
   tenantId: string,
@@ -292,6 +343,7 @@ export async function loadIdentityLookups(
         displayName: resolveDisplayName(displayName, email, id),
         email: email?.trim() || null,
         teamName: teamId ? (teamNames.get(teamId) ?? '') : '',
+        teamId: teamId ?? null,
         criticalityTier: criticalityTier?.trim().toLowerCase() || 'standard',
       };
       if (UUID_RE.test(id)) {

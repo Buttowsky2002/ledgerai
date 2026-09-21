@@ -67,6 +67,16 @@ export interface CfoViewProviderBreakdown {
   calls: number;
 }
 
+/** Per-team spend via SCIM identities.team_id → teams. */
+export interface CfoViewTeamBreakdown {
+  teamId: string | null;
+  teamName: string;
+  costUsd: number;
+  calls: number;
+  users: number;
+  sharePct: number;
+}
+
 export interface CfoViewModelBreakdown {
   provider: string;
   model: string;
@@ -89,6 +99,7 @@ export interface CfoViewResponse {
   outcomeBreakdown: CfoViewOutcomeBreakdown[];
   modelBreakdown: CfoViewModelBreakdown[];
   providerBreakdown: CfoViewProviderBreakdown[];
+  teamBreakdown: CfoViewTeamBreakdown[];
   costProvenance: CostProvenance;
   warnings: string[];
 }

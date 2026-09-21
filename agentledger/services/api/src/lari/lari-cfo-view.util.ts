@@ -4,6 +4,7 @@ import {
   CfoViewMonthly,
   CfoViewOutcomeBreakdown,
   CfoViewModelBreakdown,
+  CfoViewTeamBreakdown,
 } from './lari-cfo-view.types';
 
 // Pure CFO-view helpers extracted verbatim from LariCfoViewService so each
@@ -502,4 +503,73 @@ export function buildWarnings(ctx: {
   }
 
   return w;
+}
+
+const UNASSIGNED_TEAM = 'Unassigned';
+
+/**
+ * Roll reconciled per-user spend into SCIM teams via identity.team_id.
+ * Seeded teams (provisioned Groups with $0) still appear so the pane reflects
+ * the directory even when the window has no usage.
+ */
+export function buildTeamSpendBreakdown(
+  spendRows: Array<{ userId: string; costUsd: number; calls: number }>,
+  resolveTeam: (userId: string) => { teamId: string | null; teamName: string },
+  seededTeams: Array<{ teamId: string; teamName: string }> = [],
+): CfoViewTeamBreakdown[] {
+  type Bucket = {
+    teamId: string | null;
+    teamName: string;
+    costUsd: number;
+    calls: number;
+    users: Set<string>;
+  };
+  const byKey = new Map<string, Bucket>();
+
+  const ensure = (teamId: string | null, teamName: string): Bucket => {
+    const key = teamId ?? '__unassigned__';
+    let bucket = byKey.get(key);
+    if (!bucket) {
+      bucket = {
+        teamId,
+        teamName: teamName.trim() || UNASSIGNED_TEAM,
+        costUsd: 0,
+        calls: 0,
+        users: new Set(),
+      };
+      byKey.set(key, bucket);
+    }
+    return bucket;
+  };
+
+  for (const team of seededTeams) {
+    ensure(team.teamId, team.teamName);
+  }
+
+  for (const row of spendRows) {
+    if (row.costUsd <= 0 && row.calls <= 0) {
+      continue;
+    }
+    const resolved = resolveTeam(row.userId);
+    const teamId = resolved.teamId;
+    const teamName = resolved.teamName.trim() || UNASSIGNED_TEAM;
+    const bucket = ensure(teamId, teamName);
+    bucket.costUsd = usd(bucket.costUsd + row.costUsd);
+    bucket.calls += row.calls;
+    bucket.users.add(row.userId.trim().toLowerCase());
+  }
+
+  const totalCost = [...byKey.values()].reduce((s, b) => s + b.costUsd, 0);
+  return [...byKey.values()]
+    .map((b) => ({
+      teamId: b.teamId,
+      teamName: b.teamName,
+      costUsd: usd(b.costUsd),
+      calls: b.calls,
+      users: b.users.size,
+      sharePct: totalCost > 0 ? pct((b.costUsd / totalCost) * 100) : 0,
+    }))
+    .sort(
+      (a, b) => b.costUsd - a.costUsd || b.users - a.users || a.teamName.localeCompare(b.teamName),
+    );
 }

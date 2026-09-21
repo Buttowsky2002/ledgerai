@@ -39,7 +39,12 @@ type UsersResponse = {
   users: UserRow[];
   vendors: string[];
   org_billing?: { total_cost_of_ai: number };
-  sources?: { llm_call_users: number; copilot_members: number; cursor_members?: number };
+  sources?: {
+    llm_call_users: number;
+    copilot_members: number;
+    cursor_members?: number;
+    roster_identities?: number;
+  };
 };
 
 const MEMBER_TABS = [
@@ -150,11 +155,11 @@ export default async function UsersPage({
       ? 'Linked members'
       : tab === 'unlinked'
         ? 'Unlinked handles'
-        : 'Discovered users · spend + seat utilization';
+        : 'Discovered users · mapped identities + spend for range';
 
   const sourceNote =
     sources != null
-      ? `${allUsers.length} members · ${sources.llm_call_users} metered · ${sources.cursor_members ?? 0} Cursor · ${sources.copilot_members} Copilot`
+      ? `${allUsers.length} members · ${sources.roster_identities ?? 0} mapped · ${sources.llm_call_users} metered · ${sources.cursor_members ?? 0} Cursor · ${sources.copilot_members} Copilot`
       : `${allUsers.length} members`;
 
   const vendorTotals = sumVendorColumns(users, vendors);
