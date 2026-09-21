@@ -74,6 +74,16 @@ export interface CfoViewProviderBreakdown {
   calls: number;
 }
 
+/** Per-team spend rolled up via SCIM identities.team_id → teams (not raw CH team_id). */
+export interface CfoViewTeamBreakdown {
+  teamId: string | null;
+  teamName: string;
+  costUsd: number;
+  calls: number;
+  users: number;
+  sharePct: number;
+}
+
 /** Per-model token economics from collected usage (spend_daily + cost basis). */
 export interface CfoViewModelBreakdown {
   provider: string;
@@ -101,6 +111,8 @@ export interface CfoViewResponse {
   outcomeBreakdown: CfoViewOutcomeBreakdown[];
   modelBreakdown: CfoViewModelBreakdown[];
   providerBreakdown: CfoViewProviderBreakdown[];
+  /** SCIM / identity-mapped team spend for the selected window. */
+  teamBreakdown: CfoViewTeamBreakdown[];
   costProvenance: CostProvenance;
   warnings: string[];
 }

@@ -165,6 +165,12 @@ function harness(opts?: {
     withTenant: jest.fn(async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
       fn({
         $queryRaw: jest.fn(async () => []),
+        identity: {
+          findMany: jest.fn(async () => []),
+        },
+        team: {
+          findMany: jest.fn(async () => []),
+        },
       }),
     ),
   } as unknown as PrismaService;

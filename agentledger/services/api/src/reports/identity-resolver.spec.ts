@@ -12,10 +12,12 @@ const entry = (
   teamName: string,
   email: string | null = null,
   criticalityTier = 'standard',
+  teamId: string | null = null,
 ) => ({
   displayName,
   email,
   teamName,
+  teamId,
   criticalityTier,
 });
 

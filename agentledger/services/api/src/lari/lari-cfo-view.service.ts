@@ -16,9 +16,11 @@ import {
   RECONCILED_MODEL_USAGE_SQL,
   RECONCILED_PROVIDER_SPEND_SQL,
   RECONCILED_UNMAPPED_SPEND_SQL,
+  RECONCILED_USER_DAY_SPEND_SQL,
 } from '../connectors/metered-cost';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { loadIdentityLookups, resolveUserDirectoryIdentity } from '../reports/identity-resolver';
 
 import { getTenantId } from '../tenant/tenant-context';
 import {
@@ -36,6 +38,7 @@ import {
   CfoViewProviderBreakdown,
   CfoViewResponse,
   CfoViewSummary,
+  CfoViewTeamBreakdown,
 } from './lari-cfo-view.types';
 import {
   Range,
@@ -53,6 +56,7 @@ import {
   buildMonthly,
   buildOutcomeBreakdown,
   buildWarnings,
+  buildTeamSpendBreakdown,
 } from './lari-cfo-view.util';
 
 /**
@@ -231,6 +235,7 @@ export class LariCfoViewService {
       copilotSpend,
       cursorSpendSummary,
       cursorProductivity,
+      teamBreakdown,
     ] = await Promise.all([
       this.subscriptionCostForPeriod(tenantId, r),
 
@@ -243,6 +248,8 @@ export class LariCfoViewService {
       this.cursorAnalytics.getSpendSummary(tenantId, r.from, r.to),
 
       this.cursorProductivity.getProductivitySummary(tenantId, r.from, r.to),
+
+      this.buildTeamBreakdown(tenantId, r),
     ]);
 
     const fixedCostBase =
@@ -490,10 +497,54 @@ export class LariCfoViewService {
 
       providerBreakdown,
 
+      teamBreakdown,
+
       costProvenance,
 
       warnings,
     };
+  }
+
+  /**
+   * Spend by SCIM team: reconciled per-user spend joined to identities.team_id.
+   * Provisioned teams with $0 still appear so Groups show up after SCIM sync.
+   */
+  private async buildTeamBreakdown(tenantId: string, r: Range): Promise<CfoViewTeamBreakdown[]> {
+    try {
+      const [spendRows, lookups, teams] = await Promise.all([
+        this.ch.queryScoped<{ key: string; cost_usd: unknown; calls: unknown }>(
+          `SELECT key, cost_usd, calls
+           FROM (${RECONCILED_USER_DAY_SPEND_SQL}) AS reconciled
+           WHERE cost_usd > 0 OR calls > 0
+           ORDER BY cost_usd DESC`,
+          r as Record<string, ChParam>,
+        ),
+        loadIdentityLookups(this.prisma, tenantId),
+        this.prisma.withTenant(tenantId, (tx) =>
+          tx.team.findMany({ select: { teamId: true, name: true }, orderBy: { name: 'asc' } }),
+        ),
+      ]);
+
+      return buildTeamSpendBreakdown(
+        spendRows.map((row) => ({
+          userId: String(row.key),
+          costUsd: usd(n(row.cost_usd)),
+          calls: n(row.calls),
+        })),
+        (userId) => {
+          const identity = resolveUserDirectoryIdentity(
+            userId,
+            lookups.byId,
+            lookups.byEmail,
+            lookups.byAlias,
+          );
+          return { teamId: identity.teamId, teamName: identity.team };
+        },
+        teams.map((t) => ({ teamId: t.teamId, teamName: t.name })),
+      );
+    } catch {
+      return [];
+    }
   }
 
   private async queryModelCostBasis(params: Record<string, ChParam>): Promise<

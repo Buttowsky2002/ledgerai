@@ -1,0 +1,217 @@
+BadgerIQ — Demo Script
+=======================
+
+Purpose: Describe what the application does across spend, allocation, ROI, budgets, and configuration.
+Audience: FinOps / finance stakeholders
+Out of scope: Security & Risk (CISO view, Risk events, Attribution audit), Policies/DLP deep dive, SOC-TriageAgent
+Demo agents to open: InvoiceReviewAgent, DataCleanupAgent
+
+How to use this script: Speak the paragraphs under each section. Bracketed lines are click/pointing cues, not dialogue.
+
+
+------------------------------------------------------------------------------
+0:00 — Overview (/)
+------------------------------------------------------------------------------
+
+[Land on Overview. Confirm the date range in the picker. Point at the top stat row, then scroll through Product worth, daily spend, AI sources, Recommended actions, and Agent economics as you speak.]
+
+"We'll start on Overview. This is the home page for AI spend and agent economics for the selected period. The date range at the top applies across most of the product — you can use presets like 7, 30, or 90 days, last month, or all time, or set a custom from and to. That range is carried in the URL so when you move between pages you stay on the same window.
+
+At the top of Overview you get the control totals. Total cost of AI is the fully loaded number for the period: metered usage plus seat and subscription cost. Metered is observed token and API spend from usage and connectors. Fixed or seat cost is the license run-rate you record under Fixed overhead or pull from billing. The card breaks that out — for example metered dollars, monthly fixed, and call volume — so you can see how much of the total is usage versus licenses.
+
+Next to that is Seat subscriptions, which is the monthly seat run-rate: how many seats, which month, the multi-month total if you are looking across months, and whether seat count changed. Net risk-adjusted ROI is the sum of agent-level ROI after the risk discount factor is applied, with attributed business value underneath. Action items counts agents that are not on a simple maintain recommendation — those are the ones LARI has flagged for pause, retire, investigate, optimize, scale, and similar actions. Blocked calls is policy enforcement volume; we are not going into security in this walkthrough, so we will leave that as a count only.
+
+Below the stats, seat subscriptions are also listed by vendor — for example Cursor or Copilot — with monthly cost and tier breakdowns. That links into Fixed overhead when you need to edit seats. Fixed and overhead costs show a breakdown of seats, subscription per month, seat changes, overage, and total, so license cost is not hidden inside token spend.
+
+Product worth evaluates products or portfolios against spend and returned value. Each row gives a verdict — worth it, marginal, not worth it, or need more data — along with spend, value per dollar, drivers, and a suggested budget. Daily spend is the time series of USD by day for the range.
+
+AI sources and models shows where spend is coming from. You can switch between a users view and a models view. Vendor chips filter by source. On the models side you will see metered overage versus included usage value where that applies — for Cursor, included quota has an economic value that is separate from billed overage. Cost by user lists people with total spend, billing mix — metered, seat, portal, connector — daily trend, calls, and tokens.
+
+Recommended actions is the LARI queue. LARI is the recommendation layer that turns cost and value into operating actions: pause, retire, investigate, require approval, optimize, improve evidence, or scale. Each item includes context for why that action was suggested. There is also a compact LARI recommendations strip with savings-oriented cards for the top items.
+
+Finally, Agent economics is the per-agent table: agent name, cost, attributed value, risk-adjusted ROI, the LARI multiplier, an attribution confidence meter, and the recommendation. Confidence is how strongly cost is linked to outcomes; low-confidence links are excluded from headline aggregates. From here we will open two agents to show how the same columns look when the economics differ."
+
+
+------------------------------------------------------------------------------
+0:45 — Agent detail (InvoiceReviewAgent, then DataCleanupAgent)
+------------------------------------------------------------------------------
+
+[Click InvoiceReviewAgent from the Agent economics table.]
+
+"Agent detail is the drill-down for a single agent over the reporting window. The top row is operational spend: total spend, LLM call count, run count, and average cost per run. That tells you volume and unit cost of the agent's AI usage.
+
+Below that is the outcome and finance row: number of outcomes attributed to the agent, attributed business value with net underneath, cost per successful outcome — which is AI cost divided by successful outcomes, with average attribution confidence noted — and risk-adjusted ROI for this agent alone.
+
+The Cost to outcome table is the evidence chain: each row ties an outcome to a run, the AI cost on that path, the value assigned to the outcome, and confidence. That is how finance can see that ROI is not a single opaque number — it is built from linked runs and outcomes. We are not opening the attribution signal page in this demo; the table itself is enough to show the structure.
+
+Run status mix shows how runs are distributed by status, so you can see completion versus failure or other states alongside the cost picture.
+
+InvoiceReviewAgent in this dataset is the high-ROI example: relatively controlled cost, clear outcomes, and positive risk-adjusted ROI."
+
+[Return to Overview. Click DataCleanupAgent.]
+
+"DataCleanupAgent uses the same layout. Here spend is high relative to attributed value, cost per success is worse, and ROI reflects that. The point of the side-by-side is not the agent names — it is that every agent is measured with the same definitions: spend, runs, outcomes, value, confidence, and ROI. From here we move to how spend is capped."
+
+
+------------------------------------------------------------------------------
+1:30 — Budgets (/budgets)
+------------------------------------------------------------------------------
+
+[Open Budgets from Spend Management.]
+
+"Budgets is the spend-control view. Suggested budgets are generated from recent run-rate and ROI context. Each suggestion has a scope — portfolio, product, or agent — a target, current run-rate per month, suggested monthly amount, the change from current, and a short rationale. When reductions are available, the page surfaces the potential monthly reduction across those suggestions. These are advisory numbers; they are not automatically enforced until someone configures a budget.
+
+The cumulative spend chart shows burn over time against the reporting window so you can see trajectory, not only period totals.
+
+Configured budgets lists what is actually set today: scope — for example tenant, app, agent, key, or model, with an id — period, amount, and whether it is a hard limit. A hard limit is an enforceable cap where the gateway path is in use. Soft or non-hard budgets are still visible for monitoring. In this dataset DataCleanupAgent sits over a small configured amount, which is the over-budget example.
+
+Create and delete of budgets are not done on this page; management is under Settings, Budgets tab. This page is for monitoring suggestions, burn, and what is already configured."
+
+
+------------------------------------------------------------------------------
+2:00 — CFO view (/cfo)
+------------------------------------------------------------------------------
+
+[Open CFO under Business Value. Point at headline stats, provenance strip, forecast and cost-basis controls, utilization, monthly chart, and outcome-type table.]
+
+"The CFO view is the executive finance summary for the same underlying data, with a longer default lookback — typically up to a year — and explicit forecast and cost-basis controls.
+
+Headline metrics include risk-adjusted ROI compared with nominal ROI, total business value and ROI margin, projected spend for the selected forecast horizon, projected token and API cost, cost per outcome, and fixed seat run-rate. Nominal ROI is value minus cost before the risk discount. Risk-adjusted ROI applies that discount; we are treating it as a finance metric here and not opening the security pages behind it.
+
+Business value is the dollar value assigned from attributed outcomes, and where configured, from product-specific proxies such as Copilot or Cursor included-usage economics.
+
+The cost provenance strip is important for auditability. It separates the stack: tokens, fixed seats, coding-agent spend, Copilot, overhead, plus computed versus metered amounts, variance, and coverage. That is how you see whether the number on the page is mostly observed usage, mostly portal or connector billing, or a mix, and how complete the coverage is.
+
+You can change forecast horizon from roughly one week out to one year, and switch cost basis between Reconciled, Computed, and Metered. Reconciled prefers portal or connector billing when available. Computed uses the price book. Metered uses observed usage. Projected and fully loaded spend means the cost stack — tokens, seats, coding agents, Copilot, and overhead — extrapolated across the horizon, not only the raw tokens in the window.
+
+LARI recommendations appear here in fuller form, including provider value ranking and agent economics highlights.
+
+Platform utilization covers seat assignment. In team mode you see active and inactive seats, reclaimable monthly cost, and plans that are flagged. If individual-level analytics is enabled in Settings, you get per-user utilization rows instead. If seats are not imported yet, the page can fall back to metered-proxy messaging and point you at imports or Fixed overhead.
+
+The monthly risk-adjusted ROI chart shows the time series. ROI by outcome type breaks outcomes into value, fully loaded cost, cost per outcome, nominal ROI, risk-adjusted ROI, and average confidence — so finance can compare outcome categories, not only agents."
+
+
+------------------------------------------------------------------------------
+2:45 — Cost per outcome (/cost-per-outcome)
+------------------------------------------------------------------------------
+
+[Open Cost per outcome. Keep the same date range / basis / horizon if already set on CFO.]
+
+"Cost per outcome is the unit-economics page built from the same CFO payload. The lead metric is cost per outcome — fully loaded cost divided by attributed outcomes. If outcomes are not linked yet, the page can show a proxy based on calls, tokens, or Copilot activity and state that spend is present without attributed outcomes.
+
+Alongside that you get projected spend, projected token and API cost, fixed seat cost per month, and business value. The cost-stack strip again lists tokens, fixed, coding agents, Copilot, and overhead so the unit cost is not mistaken for token-only cost.
+
+LARI recommendations appear here as well. The model chart and table show cost by model in dollars per million tokens from usage: input and output tokens, dollars per million, dollars per token, and observed versus projected where applicable. When outcome types are available, you also get cost per outcome by type and an outcome unit-economics table.
+
+Forecast horizon and cost basis controls match the CFO page, and there is a link back to the full CFO view. Use this page when the question is 'what does a successful unit of work cost,' and CFO when the question is the executive ROI and projection package."
+
+
+------------------------------------------------------------------------------
+3:15 — ROI templates (/roi-templates)
+------------------------------------------------------------------------------
+
+[Open ROI templates briefly.]
+
+"ROI templates define how business value is calculated and how outcomes are matched to agent runs. Each template has a name, outcome type — for example PR merged, ticket resolved, or issue closed — a source such as GitHub, Jira, Zendesk, manual, or API, and a value formula based on hourly rate, baseline minutes, and rework percent. Value is effectively rate times baseline time, reduced by rework.
+
+You also set an attribution window in minutes and what to match on — branch, user, or issue. That window and match field drive how runs are linked to outcomes and therefore confidence on the evidence chain we saw on agent detail.
+
+Templates can be tenant-owned or built-in. Tenant templates can be deleted; built-in ones are listed for reference. This is the configuration behind the value dollars on Overview, CFO, and Cost per outcome — without templates and outcome linkage, you mainly see cost."
+
+
+------------------------------------------------------------------------------
+3:30 — Spend drivers: Allocation, Users, Model mix
+------------------------------------------------------------------------------
+
+[Open Allocation, then Users (optionally one user), then Model mix. Compress if short on time; do not skip all three if possible — at least Users or Model mix plus a sentence on Allocation.]
+
+"Under Spend Management, Allocation, Users, and Model mix answer where spend sits once you leave agent-level ROI.
+
+Allocation is a dimensional rollup of observed spend. Tabs switch the dimension between application, agent, and user. You get a bar chart of spend by that dimension and a breakdown table with spend and call counts. It does not compute ROI; it answers concentration — which apps, agents, or people account for the dollars.
+
+Users is the directory view of people and seats. Status tabs filter All, Active, Low use, Inactive, and Unlinked, with counts on each. Active, low use, and inactive come from utilization logic; unlinked means a usage handle has not been resolved to an identity. You can filter by vendor, search by name, email, or team, and paginate. The table shows user, status, email, team, per-vendor dollars, and total. Subtitle counts summarize metered activity and seat products such as Cursor and Copilot.
+
+Opening a user shows that person's total AI cost and usage by vendor: seat versus overage mix, calls, tokens, total spend, and models used. For Cursor you again see metered overage versus included usage value. This is the person-level counterpart to agent detail.
+
+Model mix is the provider and model view: a pie of spend by platform, a bar of spend by model, and tables for platform and model breakdown with provider, model, spend, and calls. Use it when the question is whether a small set of models or platforms is dominating cost."
+
+
+------------------------------------------------------------------------------
+4:00 — Admin: Data sources, Billing import, Data coverage, Fixed overhead
+------------------------------------------------------------------------------
+
+[Open Data sources (/settings/connectors).]
+
+"Configuration starts with how data enters the system. Data Sources is where you connect APIs for provider spend, seat products, and outcome systems. You add a connector from a preset — for example Anthropic, Cursor, GitHub Copilot Business, Azure DevOps, or a generic REST source. Each connector has name, category, endpoints, auth type, and an encrypted secret. Azure DevOps and similar outcome sources also take org, project, repos, and lookback.
+
+Sync time frame can be last 7, 30, or 90 days or a custom range. Connected sources show status, last sync, and actions to test, sync now, or delete, plus identity mapping so usage identities resolve to people. There is an hourly auto-sync window for recent data. This is the primary path for live usage without requiring traffic to go through a BadgerIQ gateway."
+
+[Open Billing import (/admin/billing).]
+
+"Billing import is for portal CSV uploads when you need provider invoice or export files reconciled against API usage. The page shows portal total, API total, and overlapping days so you can see double-count risk. You upload CSVs, map columns — format detection, provider, report end date, cost unit in USD or cents — preview rows, then dry-run or commit. Import history lets you remove an import, which also removes that spend from Overview and reconciliation. Source reconciliation lists day-by-day portal versus API amounts. Some analytics-only exports are detected but not treated as billing; those need the correct billing export."
+
+[Open Data coverage (/admin/data-coverage).]
+
+"Data coverage answers whether spend sources and outcomes are linked well enough for ROI analysis. It reports portal CSV coverage, connector or live coverage, CSV imports, imported outcomes, and how many outcomes are in ROI. It recommends outcome sources to connect and links back to Billing import and Data Sources. When coverage is healthy, spend and outcomes are linked and ROI analysis is ready; when it is not, this page tells you what is missing before you trust CFO numbers."
+
+[Open Fixed overhead (/admin/fixed-overhead).]
+
+"Fixed overhead is where seat licenses and subscriptions are recorded so Total cost of AI includes more than metered tokens. The header shows total cost of AI, attributable metered spend, and fixed overhead as a share of total. Overhead by vendor shows monthly cost and tier seat counts.
+
+You add seats with vendor, plan tier, billing month, seat count, dollars per seat, and optional note; total can calculate from seats times rate or be entered manually. Recorded overhead is listed for a local date range and can be edited or deleted. Premium versus basic and similar tiers are separate seat classes. These records feed Overview seat cards, CFO fixed cost, and fully loaded projections."
+
+
+------------------------------------------------------------------------------
+4:35 — Settings (/settings)
+------------------------------------------------------------------------------
+
+[Open Settings. Walk Account, Permissions, briefly Auditing and Virtual keys, skip deep Policies, open Budgets, mention Integrations only if asked, note Data sources tab duplicates connectors. Mention the privacy toggle where it appears.]
+
+"Settings is tenant and access configuration.
+
+Account shows the current session — display name, email, role, and identifiers — and supports updating the display name and signing out. Sign-in options depend on how the environment is configured.
+
+Permissions is membership and roles. Roles are viewer, analyst, and admin. Admins can invite users with a time-limited invite link, see the member table, and revoke access. That is how you control who can see finance data versus who can change configuration.
+
+Auditing, for admins, is the activity log: sign-ins, CRUD, imports, and similar events, defaulting to recent history with filters and load more. Use it when you need a record of who changed budgets, connectors, or membership.
+
+Virtual keys are API credentials for programmatic access. Keys are created with a name and environment; the plaintext secret is shown once at creation and stored hashed afterward. Keys can be revoked from the list.
+
+On Virtual keys and several later tabs there is a Privacy and analytics toggle for individual-level usage analytics. Off keeps utilization at team or plan level on the CFO page; on enables per-user utilization rows.
+
+Policies is where DLP, budget, model-allow, and approval rules are defined, with actions such as allow, log, warn, redact, block, or ticket. We are not walking policy enforcement in this demo; budgets for FinOps are managed on the Budgets tab instead.
+
+Settings Budgets is where you create and delete the caps that appear on the Budgets monitoring page: scope type, scope id, period, and amount.
+
+Integrations covers SCIM tokens and SSO identity provider settings — issuer, email domains, just-in-time provisioning — when you are wiring enterprise identity. Data sources inside Settings is the same connector management we already covered.
+
+That is the configuration surface: who can access the tenant, how value formulas and budgets are defined, how seats and billing are loaded, and how live connectors keep Overview, CFO, and Cost per outcome current."
+
+
+------------------------------------------------------------------------------
+Close
+------------------------------------------------------------------------------
+
+"That concludes the walkthrough.
+
+We began with Overview, where metered usage and seat cost are combined into total AI spend and agent economics are presented for the selected period. We then reviewed Cost per outcome, which expresses those costs as unit economics — including ROI, cost provenance, forecast, and cost basis. Allocation, Users, and Model mix identify where spend is concentrated by application, person, and model. Data sources, billing import, data coverage, and fixed overhead document how those figures are sourced and maintained. Settings covers tenant membership, API keys, and budget definitions.
+
+Thank you. I am happy to take questions on any section we covered."
+
+
+------------------------------------------------------------------------------
+Click order (reference)
+------------------------------------------------------------------------------
+
+1. Overview — stats, Product worth, daily spend, AI sources, LARI, Agent economics
+2. InvoiceReviewAgent — then DataCleanupAgent
+3. Budgets
+4. CFO
+5. Cost per outcome
+6. ROI templates (brief)
+7. Allocation → Users (optional user) → Model mix
+8. Data sources → Billing import → Data coverage → Fixed overhead
+9. Settings — Account, Permissions, Auditing (brief), Virtual keys (brief), Budgets; skip Policies deep dive
+
+Do not open: CISO, Risk events, Attribution audit (including "view signals" on agent detail).
+If asked about risk-adjusted ROI: it is ROI after applying the risk discount factor already in the metrics; do not open Security pages.
