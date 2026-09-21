@@ -47,8 +47,6 @@ function UtilizationMeter({ score }: { score: number }) {
   );
 }
 
-}
-
 function SpendByTeamCard({
   from,
   to,
@@ -56,24 +54,20 @@ function SpendByTeamCard({
 }: {
   from: string;
   to: string;
-  rows: CfoViewResponse['teamBreakdown'];
+  rows: NonNullable<CfoViewResponse['teamBreakdown']>;
 }) {
   const [page, setPage] = useState(1);
-  const slice = useMemo(() => paginate(rows, String(page)), [rows, page]);
-
   useEffect(() => {
     setPage(1);
   }, [from, to, rows.length]);
+  const pageSlice = useMemo(() => paginateItems(rows, page, USERS_PAGE_SIZE), [rows, page]);
 
   return (
-    <Card
-      title="Spend by team"
-      subtitle={`SCIM / mapped teams · ${from} → ${to}`}
-    >
+    <Card title="Spend by team" subtitle={`SCIM / mapped teams · ${from} → ${to}`}>
       {rows.length === 0 ? (
         <p className="py-6 text-center text-sm text-muted">
-          No teams provisioned yet. Sync SCIM Groups (or assign identities to teams) to see spend
-          by team.
+          No teams provisioned yet. Sync SCIM Groups (or assign identities to teams) to see spend by
+          team.
         </p>
       ) : (
         <>
@@ -94,7 +88,7 @@ function SpendByTeamCard({
                 { key: 'users', label: 'Users', align: 'right' },
                 { key: 'calls', label: 'Calls', align: 'right' },
               ]}
-              rows={slice.items.map((r) => ({
+              rows={pageSlice.items.map((r) => ({
                 team: r.teamName,
                 spend: usd(r.costUsd),
                 share: `${r.sharePct.toFixed(1)}%`,
@@ -102,15 +96,7 @@ function SpendByTeamCard({
                 calls: String(r.calls),
               }))}
             />
-            <ClientPaginationBar
-              page={slice.page}
-              pageCount={slice.pageCount}
-              total={slice.total}
-              fromIndex={slice.fromIndex}
-              toIndex={slice.toIndex}
-              onPageChange={setPage}
-              label="teams"
-            />
+            <TablePager slice={pageSlice} onPageChange={setPage} label="teams" />
           </div>
         </>
       )}

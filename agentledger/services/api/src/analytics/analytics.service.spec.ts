@@ -462,7 +462,6 @@ describe('AnalyticsService.users', () => {
       emptyCopilotMemberSpend(),
       emptyCursorAnalytics() as never,
       emptyCursorProductivity() as never,
-      emptyUserValue() as never,
     );
     const result = await svc.users('2020-01-01', '2020-01-31');
     expect(result.sources.roster_identities).toBe(1);

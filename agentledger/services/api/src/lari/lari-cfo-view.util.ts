@@ -570,9 +570,6 @@ export function buildTeamSpendBreakdown(
       sharePct: totalCost > 0 ? pct((b.costUsd / totalCost) * 100) : 0,
     }))
     .sort(
-      (a, b) =>
-        b.costUsd - a.costUsd ||
-        b.users - a.users ||
-        a.teamName.localeCompare(b.teamName),
+      (a, b) => b.costUsd - a.costUsd || b.users - a.users || a.teamName.localeCompare(b.teamName),
     );
 }

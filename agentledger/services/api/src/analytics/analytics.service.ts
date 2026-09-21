@@ -1363,9 +1363,16 @@ export class AnalyticsService {
       cursorPack,
     );
     const cursorSeatByUser = await this.cursorSeatUsdByUser(tenantId, r, cursorPack.totals);
-    const assembled = await this.assembleUserDirectory(tenantId, totals, breakdown, q, copilotPack.hints, {
-      seedRoster: true,
-    });
+    const assembled = await this.assembleUserDirectory(
+      tenantId,
+      totals,
+      breakdown,
+      q,
+      copilotPack.hints,
+      {
+        seedRoster: true,
+      },
+    );
     let users = enrichUsersWithVendorData(
       assembled.users,
       copilotPack.byUser,
