@@ -285,7 +285,13 @@ describe('AnalyticsService.users', () => {
       byAlias: new Map([
         [
           'cursor-user-99',
-          { displayName: 'Cursor Dev', email: null, teamName: 'Eng', teamId: null, criticalityTier: 'standard' },
+          {
+            displayName: 'Cursor Dev',
+            email: null,
+            teamName: 'Eng',
+            teamId: null,
+            criticalityTier: 'standard',
+          },
         ],
       ]),
     });
