@@ -353,7 +353,7 @@ export class ScimService {
       where: { userId },
       select: { aliases: true },
     });
-    const aliases = mergeDepartmentAlias(row?.aliases, name);
+    const aliases = mergeDepartmentAlias(row?.aliases, name) as Prisma.InputJsonValue;
     await tx.identity.update({
       where: { userId },
       data: { teamId: team.teamId, aliases },
