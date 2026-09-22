@@ -17,8 +17,8 @@ export function VendorSpendCell({
         </div>
       )}
       {slice.overage_usd > 0 && (
-        <div>
-          Overage <span className="num text-gray-100">{usd(slice.overage_usd)}</span>
+        <div className="text-muted">
+          Overage <span className="num text-gray-300">{usd(slice.overage_usd)}</span>
         </div>
       )}
       {slice.seat_usd <= 0 && slice.overage_usd <= 0 && (
