@@ -595,10 +595,7 @@ export class LariCfoViewService {
    * org seat run-rate across active Cursor users in the window — same rule as the
    * Users directory so CFO team spend matches member totals.
    */
-  private async cursorSeatSpendByUser(
-    tenantId: string,
-    r: Range,
-  ): Promise<Map<string, number>> {
+  private async cursorSeatSpendByUser(tenantId: string, r: Range): Promise<Map<string, number>> {
     const out = new Map<string, number>();
     const activity = await this.cursorAnalytics.getUserActivity(tenantId, r.from, r.to);
     if (activity.length === 0) {
