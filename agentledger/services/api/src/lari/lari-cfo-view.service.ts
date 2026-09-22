@@ -21,6 +21,7 @@ import {
 
 import { PrismaService } from '../prisma/prisma.service';
 import { loadIdentityLookups, resolveUserDirectoryIdentity } from '../reports/identity-resolver';
+import { canonicalUserKey } from '../analytics/user-directory.util';
 
 import { getTenantId } from '../tenant/tenant-context';
 import {
@@ -507,14 +508,15 @@ export class LariCfoViewService {
   }
 
   /**
-   * Spend by SCIM team: per-user billable spend (llm metered + coding agents +
-   * Copilot allocation + Cursor seat share) joined to identities.team_id.
-   * Provisioned teams with $0 still appear so Groups show up after SCIM sync.
+   * Spend by team: billable $ + calls collapsed by identity email (same as Users
+   * directory) then rolled to identities.team_id. Cursor seats + attributed
+   * on-demand overlay so seat/overage match the member directory. Provisioned
+   * teams with $0 still appear after SCIM sync.
    */
   private async buildTeamBreakdown(tenantId: string, r: Range): Promise<CfoViewTeamBreakdown[]> {
     try {
       const params = r as Record<string, ChParam>;
-      const [spendRows, codingRows, copilotRows, cursorSeatByUser, lookups, teams] =
+      const [spendRows, codingRows, copilotRows, cursorSeatByUser, cursorActivity, lookups, teams] =
         await Promise.all([
           this.ch.queryScoped<{ key: string; cost_usd: unknown; calls: unknown }>(
             `SELECT key, cost_usd, calls
@@ -536,45 +538,110 @@ export class LariCfoViewService {
           ),
           this.copilotAnalytics.getUserSpendAllocation(tenantId, r.from, r.to).catch(() => []),
           this.cursorSeatSpendByUser(tenantId, r).catch(() => new Map<string, number>()),
+          this.cursorAnalytics.getUserActivity(tenantId, r.from, r.to).catch(() => []),
           loadIdentityLookups(this.prisma, tenantId),
           this.prisma.withTenant(tenantId, (tx) =>
             tx.team.findMany({ select: { teamId: true, name: true }, orderBy: { name: 'asc' } }),
           ),
         ]);
 
-      const merged = new Map<string, { costUsd: number; calls: number }>();
-      const add = (userId: string, costUsd: number, calls: number) => {
-        const key = userId.trim();
-        if (!key || (costUsd <= 0 && calls <= 0)) {
+      type Agg = {
+        costUsd: number;
+        calls: number;
+        teamId: string | null;
+        teamName: string;
+        sampleUserId: string;
+      };
+      const byCanon = new Map<string, Agg>();
+
+      const ingest = (userId: string, costUsd: number, calls: number) => {
+        const raw = userId.trim();
+        if (!raw || (costUsd <= 0 && calls <= 0)) {
           return;
         }
-        const cur = merged.get(key) ?? { costUsd: 0, calls: 0 };
-        merged.set(key, {
-          costUsd: usd(cur.costUsd + costUsd),
-          calls: cur.calls + calls,
-        });
+        if (raw === 'Unassigned') {
+          const cur = byCanon.get('raw:unassigned') ?? {
+            costUsd: 0,
+            calls: 0,
+            teamId: null,
+            teamName: '',
+            sampleUserId: 'Unassigned',
+          };
+          cur.costUsd = usd(cur.costUsd + costUsd);
+          cur.calls += calls;
+          byCanon.set('raw:unassigned', cur);
+          return;
+        }
+        const identity = resolveUserDirectoryIdentity(
+          raw,
+          lookups.byId,
+          lookups.byEmail,
+          lookups.byAlias,
+        );
+        const canon = canonicalUserKey(raw, identity);
+        const cur = byCanon.get(canon) ?? {
+          costUsd: 0,
+          calls: 0,
+          teamId: identity.teamId,
+          teamName: identity.team,
+          sampleUserId: raw,
+        };
+        if (identity.resolved && identity.teamId) {
+          cur.teamId = identity.teamId;
+          cur.teamName = identity.team;
+          if (identity.email) {
+            cur.sampleUserId = identity.email;
+          }
+        }
+        cur.costUsd = usd(cur.costUsd + costUsd);
+        cur.calls += calls;
+        byCanon.set(canon, cur);
       };
 
       for (const row of spendRows) {
-        add(String(row.key), n(row.cost_usd), n(row.calls));
+        ingest(String(row.key), n(row.cost_usd), n(row.calls));
       }
       for (const row of codingRows) {
-        add(String(row.key), n(row.cost_usd), n(row.calls));
+        ingest(String(row.key), n(row.cost_usd), n(row.calls));
       }
       for (const row of copilotRows) {
-        add(row.userId, row.costUsd, row.calls);
+        ingest(row.userId, row.costUsd, row.calls);
+      }
+      // Attribute Cursor on-demand before seats so we don't subtract seat $ from overage.
+      for (const row of cursorActivity) {
+        if (row.on_demand_usd <= 0) {
+          continue;
+        }
+        const identity = resolveUserDirectoryIdentity(
+          row.user_id,
+          lookups.byId,
+          lookups.byEmail,
+          lookups.byAlias,
+        );
+        const canon = canonicalUserKey(row.user_id, identity);
+        const have = byCanon.get(canon)?.costUsd ?? 0;
+        if (have + 0.005 < row.on_demand_usd) {
+          ingest(row.user_id, usd(row.on_demand_usd - have), 0);
+        }
       }
       for (const [userId, seatUsd] of cursorSeatByUser) {
-        add(userId, seatUsd, 0);
+        ingest(userId, seatUsd, 0);
       }
 
       return buildTeamSpendBreakdown(
-        [...merged.entries()].map(([userId, v]) => ({
-          userId,
+        [...byCanon.values()].map((v) => ({
+          userId: v.sampleUserId,
           costUsd: v.costUsd,
           calls: v.calls,
         })),
         (userId) => {
+          if (userId === 'Unassigned') {
+            return { teamId: null, teamName: '' };
+          }
+          const hit = [...byCanon.values()].find((v) => v.sampleUserId === userId);
+          if (hit) {
+            return { teamId: hit.teamId, teamName: hit.teamName };
+          }
           const identity = resolveUserDirectoryIdentity(
             userId,
             lookups.byId,

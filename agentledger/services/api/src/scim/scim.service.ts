@@ -6,10 +6,12 @@ import {
   IdentityShape,
   PatchOp,
   applyUserPatch,
+  departmentFromAliases,
   fromScimUser,
   listResponse,
   memberIdsFromGroup,
   memberIdsFromPatchOp,
+  mergeDepartmentAlias,
   scimError,
   toScimGroup,
   toScimUser,
@@ -31,9 +33,10 @@ const IDENTITY_COLS = {
 
 /**
  * SCIM 2.0 provisioning against the control-plane store. SCIM Users map to
- * identities (source='scim'), SCIM Groups to teams; group membership sets an
- * identity's primary team_id (the single-team model — multi-group membership
- * beyond the primary team is out of scope, see ADR-034). Every operation runs
+ * identities (source='scim'), SCIM Groups to teams. FinOps primary team comes
+ * from User enterprise department (always wins). Group membership only fills
+ * team_id when still null so Entra assignment groups do not overwrite org
+ * departments (ADR-034 single-team model). Every operation runs
  * inside withTenant(ctx.tenantId) so Postgres RLS confines it; mutations append
  * an audit_log row with the SCIM token as the actor (rule 10).
  */
@@ -343,9 +346,18 @@ export class ScimService {
         }
       }
     }
-    if (team) {
-      await tx.identity.update({ where: { userId }, data: { teamId: team.teamId } });
+    if (!team) {
+      return;
     }
+    const row = await tx.identity.findUnique({
+      where: { userId },
+      select: { aliases: true },
+    });
+    const aliases = mergeDepartmentAlias(row?.aliases, name) as Prisma.InputJsonValue;
+    await tx.identity.update({
+      where: { userId },
+      data: { teamId: team.teamId, aliases },
+    });
   }
 
   /**
@@ -377,15 +389,36 @@ export class ScimService {
     return [...resolved];
   }
 
+  /**
+   * Group membership fills team_id only when unset. User.department always wins
+   * for FinOps (assignTeamByName overwrites) so Entra assignment groups like
+   * "BadgerIQ - AI users- SCIM" do not replace org department teams.
+   */
   private async setMembers(
     tx: Prisma.TransactionClient,
-    _ctx: ScimCtx,
+    ctx: ScimCtx,
     teamId: string,
     memberRefs: string[],
   ) {
     const userIds = await this.resolveMemberUserIds(tx, memberRefs);
-    if (userIds.length) {
-      await tx.identity.updateMany({ where: { userId: { in: userIds } }, data: { teamId } });
+    if (!userIds.length) {
+      return;
+    }
+    await tx.identity.updateMany({
+      where: { userId: { in: userIds }, teamId: null },
+      data: { teamId },
+    });
+    // Re-assert stored department so Group sync cannot leave users on the
+    // assignment-group team after a prior department map.
+    const rows = await tx.identity.findMany({
+      where: { userId: { in: userIds } },
+      select: { userId: true, aliases: true },
+    });
+    for (const row of rows) {
+      const dept = departmentFromAliases(row.aliases);
+      if (dept) {
+        await this.assignTeamByName(tx, ctx, row.userId, dept);
+      }
     }
   }
 
@@ -410,8 +443,20 @@ export class ScimService {
     teamId: string,
     memberRefs: string[],
   ) {
-    // Detach everyone currently on the team, then attach the new set.
-    await tx.identity.updateMany({ where: { teamId }, data: { teamId: null } });
+    // Diff-based replace: do not blast-clear other members' department teams.
+    const nextIds = await this.resolveMemberUserIds(tx, memberRefs);
+    const next = new Set(nextIds);
+    const current = await tx.identity.findMany({
+      where: { teamId },
+      select: { userId: true },
+    });
+    const toRemove = current.map((r) => r.userId).filter((id) => !next.has(id));
+    if (toRemove.length) {
+      await tx.identity.updateMany({
+        where: { userId: { in: toRemove }, teamId },
+        data: { teamId: null },
+      });
+    }
     await this.setMembers(tx, ctx, teamId, memberRefs);
   }
 

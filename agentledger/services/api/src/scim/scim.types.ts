@@ -100,6 +100,33 @@ export function enterpriseDepartment(body: Record<string, unknown>): string | un
   return undefined;
 }
 
+const DEPARTMENT_ALIAS_PREFIX = 'department:';
+
+/** Persist enterprise department on aliases so Group sync can re-assert it. */
+export function mergeDepartmentAlias(raw: unknown, department: string): unknown[] {
+  const name = department.trim();
+  const marker = `${DEPARTMENT_ALIAS_PREFIX}${name}`;
+  const existing = Array.isArray(raw)
+    ? raw.filter((item) => typeof item === 'string' && !item.startsWith(DEPARTMENT_ALIAS_PREFIX))
+    : [];
+  return [...existing, marker];
+}
+
+export function departmentFromAliases(raw: unknown): string | null {
+  if (!Array.isArray(raw)) {
+    return null;
+  }
+  for (const item of raw) {
+    if (typeof item === 'string' && item.startsWith(DEPARTMENT_ALIAS_PREFIX)) {
+      const name = item.slice(DEPARTMENT_ALIAS_PREFIX.length).trim();
+      if (name) {
+        return name;
+      }
+    }
+  }
+  return null;
+}
+
 // ---- team ↔ SCIM Group ----
 
 export interface GroupShape {
