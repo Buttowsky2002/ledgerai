@@ -177,7 +177,7 @@ export function DataTable({
                     {c.truncate ? (
                       <span
                         className="block truncate"
-                        title={typeof r[c.key] === 'string' ? r[c.key] : undefined}
+                        title={typeof r[c.key] === 'string' ? (r[c.key] as string) : undefined}
                       >
                         {r[c.key]}
                       </span>
