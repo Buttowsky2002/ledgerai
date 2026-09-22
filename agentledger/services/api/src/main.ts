@@ -38,7 +38,7 @@ async function bootstrap(): Promise<void> {
   // runs before anything binds a port or a DB connection.
   assertDevTrustHeaderNotInProduction();
 
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  const app = await NestFactory.create(AppModule, { bufferLogs: true, bodyParser: false });
 
   // Structured JSON logging via pino.
   const logger = app.get(Logger);
@@ -73,9 +73,12 @@ async function bootstrap(): Promise<void> {
   app.useGlobalFilters(new ProblemDetailsFilter());
 
   // Cap request bodies (control-plane writes are small). Portal CSV uploads need more headroom.
+  // Entra/Okta SCIM sends Content-Type: application/scim+json — express.json() defaults
+  // to application/json only, so PATCH/POST bodies arrived empty and SCIM returned 400.
+  const jsonTypes = ['application/json', 'application/scim+json'];
   const defaultBodyLimit = env('BADGERIQ_API_BODY_LIMIT') ?? '256kb';
-  const defaultJson = json({ limit: defaultBodyLimit });
-  const portalJson = json({ limit: '20mb' });
+  const defaultJson = json({ type: jsonTypes, limit: defaultBodyLimit });
+  const portalJson = json({ type: jsonTypes, limit: '20mb' });
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (req.path.startsWith('/v1/portal-import/')) {
       portalJson(req, res, next);

@@ -38,6 +38,22 @@ describe('SCIM PATCH parsing', () => {
     expect(applyUserPatch(ops)).toEqual({ displayName: 'Jane Doe', email: 'jane@acme.com' });
   });
 
+  it('maps externalId and ignores Entra-only attributes', () => {
+    const ops = parsePatch(
+      patchBody([
+        { op: 'replace', path: 'externalId', value: 'brandon.balams' },
+        { op: 'replace', path: 'title', value: 'Analyst' },
+        { op: 'replace', path: 'name.givenName', value: 'Brandon' },
+        {
+          op: 'replace',
+          path: 'urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:department',
+          value: 'Security',
+        },
+      ]),
+    );
+    expect(applyUserPatch(ops)).toEqual({ externalId: 'brandon.balams' });
+  });
+
   it('ignores remove ops that do not map onto identity columns', () => {
     const ops = parsePatch(patchBody([{ op: 'remove', path: 'emails[type eq "work"]' }]));
     expect(applyUserPatch(ops)).toEqual({});
