@@ -101,6 +101,7 @@ export function enterpriseDepartment(body: Record<string, unknown>): string | un
 }
 
 const DEPARTMENT_ALIAS_PREFIX = 'department:';
+const SCIM_GROUP_ALIAS_PREFIX = 'scim-group:';
 
 /** Persist enterprise department on aliases so Group sync can re-assert it. */
 export function mergeDepartmentAlias(raw: unknown, department: string): unknown[] {
@@ -125,6 +126,33 @@ export function departmentFromAliases(raw: unknown): string | null {
     }
   }
   return null;
+}
+
+/** SCIM Group membership marker — does not drive FinOps team_id (department does). */
+export function scimGroupAlias(teamId: string): string {
+  return `${SCIM_GROUP_ALIAS_PREFIX}${teamId}`;
+}
+
+export function mergeScimGroupAlias(raw: unknown, teamId: string): unknown[] {
+  const marker = scimGroupAlias(teamId);
+  const existing = Array.isArray(raw) ? [...raw] : [];
+  if (existing.some((item) => item === marker)) {
+    return existing;
+  }
+  return [...existing, marker];
+}
+
+export function removeScimGroupAlias(raw: unknown, teamId: string): unknown[] {
+  const marker = scimGroupAlias(teamId);
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw.filter((item) => item !== marker);
+}
+
+export function hasScimGroupAlias(raw: unknown, teamId: string): boolean {
+  const marker = scimGroupAlias(teamId);
+  return Array.isArray(raw) && raw.some((item) => item === marker);
 }
 
 // ---- team ↔ SCIM Group ----

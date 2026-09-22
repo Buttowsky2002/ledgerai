@@ -164,7 +164,10 @@ describe('SCIM 2.0 provisioning', () => {
     const row = await prisma.withTenant(tenantA, (tx) =>
       tx.identity.findUnique({ where: { userId } }),
     );
-    expect(row?.teamId).toBe(res.body.id); // membership set the primary team
+    // Group membership is alias-only — FinOps team_id comes from User.department.
+    expect(row?.teamId).toBeNull();
+    const aliases = Array.isArray(row?.aliases) ? row!.aliases : [];
+    expect(aliases).toContain(`scim-group:${res.body.id}`);
   });
 
   it('isolates tenants: A token cannot read B users (404)', async () => {

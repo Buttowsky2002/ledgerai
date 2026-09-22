@@ -2,9 +2,12 @@ import {
   applyUserPatch,
   departmentFromAliases,
   fromScimUser,
+  hasScimGroupAlias,
   memberIdsFromPatchOp,
   mergeDepartmentAlias,
+  mergeScimGroupAlias,
   parsePatch,
+  removeScimGroupAlias,
 } from './scim.types';
 
 describe('SCIM PATCH parsing', () => {
@@ -122,5 +125,18 @@ describe('department alias helpers', () => {
     expect(merged).toEqual(['cursor:abc', 'department:Engineering']);
     expect(departmentFromAliases(merged)).toBe('Engineering');
     expect(departmentFromAliases(['x'])).toBeNull();
+  });
+});
+
+describe('SCIM group membership aliases', () => {
+  it('adds and removes scim-group markers without touching department', () => {
+    const teamId = '11111111-1111-1111-1111-111111111111';
+    let aliases = mergeDepartmentAlias([], 'Engineering');
+    aliases = mergeScimGroupAlias(aliases, teamId);
+    expect(hasScimGroupAlias(aliases, teamId)).toBe(true);
+    expect(departmentFromAliases(aliases)).toBe('Engineering');
+    aliases = removeScimGroupAlias(aliases, teamId);
+    expect(hasScimGroupAlias(aliases, teamId)).toBe(false);
+    expect(departmentFromAliases(aliases)).toBe('Engineering');
   });
 });
