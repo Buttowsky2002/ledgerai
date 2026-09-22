@@ -37,6 +37,16 @@ resource "aws_wafv2_web_acl" "edge" {
             count {}
           }
         }
+
+        # Entra ID SCIM provisioning (Test Connection + sync) often omits
+        # User-Agent. NoUserAgent_HEADER then returns CloudFront's HTML 403
+        # ("Request blocked") and Entra reports CredentialValidationUnavailable.
+        rule_action_override {
+          name = "NoUserAgent_HEADER"
+          action_to_use {
+            count {}
+          }
+        }
       }
     }
 

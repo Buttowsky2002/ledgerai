@@ -137,9 +137,15 @@ export function parsePatch(body: Record<string, unknown>): PatchOp[] {
 export function applyUserPatch(ops: PatchOp[]): {
   email?: string;
   displayName?: string;
+  externalId?: string;
   active?: boolean;
 } {
-  const out: { email?: string; displayName?: string; active?: boolean } = {};
+  const out: {
+    email?: string;
+    displayName?: string;
+    externalId?: string;
+    active?: boolean;
+  } = {};
   const setAttr = (path: string, value: unknown) => {
     switch (path.toLowerCase()) {
       case 'active':
@@ -152,6 +158,11 @@ export function applyUserPatch(ops: PatchOp[]): {
       case 'username':
         out.email = String(value).toLowerCase();
         break;
+      case 'externalid':
+        out.externalId = String(value);
+        break;
+      // title, phoneNumbers, addresses, enterprise attrs, name.givenName, etc.
+      // are accepted and ignored — we only persist identity columns (ADR-034).
     }
   };
   for (const op of ops) {
