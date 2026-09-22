@@ -67,6 +67,8 @@ export function fromScimUser(body: Record<string, unknown>): {
   displayName?: string;
   externalId?: string;
   active?: boolean;
+  /** Entra maps [department] → enterprise User:department; we use it as team name. */
+  department?: string;
 } {
   const emails = body.emails as { value?: string; primary?: boolean }[] | undefined;
   const name = body.name as { formatted?: string } | undefined;
@@ -76,7 +78,26 @@ export function fromScimUser(body: Record<string, unknown>): {
     displayName: (body.displayName as string) ?? name?.formatted,
     externalId: body.externalId as string | undefined,
     active: typeof body.active === 'boolean' ? body.active : undefined,
+    department: enterpriseDepartment(body),
   };
+}
+
+const ENTERPRISE_USER = 'urn:ietf:params:scim:schemas:extension:enterprise:2.0:User';
+
+/** Read enterprise:2.0:User department from nested object or dotted Entra path key. */
+export function enterpriseDepartment(body: Record<string, unknown>): string | undefined {
+  const nested = body[ENTERPRISE_USER] as { department?: unknown } | undefined;
+  if (typeof nested?.department === 'string' && nested.department.trim()) {
+    return nested.department.trim();
+  }
+  const flat = body[`${ENTERPRISE_USER}:department`];
+  if (typeof flat === 'string' && flat.trim()) {
+    return flat.trim();
+  }
+  if (typeof body.department === 'string' && body.department.trim()) {
+    return body.department.trim();
+  }
+  return undefined;
 }
 
 // ---- team ↔ SCIM Group ----
@@ -102,6 +123,18 @@ export function toScimGroup(g: GroupShape, baseUrl: string): Record<string, unkn
 export function memberIdsFromGroup(body: Record<string, unknown>): string[] {
   const members = body.members as { value?: string }[] | undefined;
   return (members ?? []).map((m) => m.value).filter((v): v is string => typeof v === 'string');
+}
+
+/** Member refs from a Group PATCH op (value array or Entra path filter). */
+export function memberIdsFromPatchOp(op: PatchOp): string[] {
+  if (Array.isArray(op.value)) {
+    return (op.value as { value?: string }[])
+      .map((m) => m.value)
+      .filter((v): v is string => typeof v === 'string');
+  }
+  const path = op.path ?? '';
+  const m = /members\[\s*value\s+eq\s+"([^"]+)"\s*\]/i.exec(path);
+  return m ? [m[1]] : [];
 }
 
 // ---- PATCH (RFC 7644 §3.5.2) ----
@@ -132,22 +165,25 @@ export function parsePatch(body: Record<string, unknown>): PatchOp[] {
 /**
  * Reduce User PATCH operations to a flat attribute patch. Supports the ops Okta
  * and Entra actually emit: `replace` of `active`, `displayName`/`name.formatted`,
- * `userName` — both with an explicit path and as a no-path value object.
+ * `userName`, `externalId`, and enterprise `department` (→ team name).
  */
 export function applyUserPatch(ops: PatchOp[]): {
   email?: string;
   displayName?: string;
   externalId?: string;
   active?: boolean;
+  department?: string;
 } {
   const out: {
     email?: string;
     displayName?: string;
     externalId?: string;
     active?: boolean;
+    department?: string;
   } = {};
   const setAttr = (path: string, value: unknown) => {
-    switch (path.toLowerCase()) {
+    const p = path.toLowerCase();
+    switch (p) {
       case 'active':
         out.active = typeof value === 'boolean' ? value : String(value).toLowerCase() === 'true';
         break;
@@ -161,8 +197,22 @@ export function applyUserPatch(ops: PatchOp[]): {
       case 'externalid':
         out.externalId = String(value);
         break;
-      // title, phoneNumbers, addresses, enterprise attrs, name.givenName, etc.
-      // are accepted and ignored — we only persist identity columns (ADR-034).
+      case 'department':
+      case `${ENTERPRISE_USER.toLowerCase()}:department`:
+        if (typeof value === 'string' && value.trim()) {
+          out.department = value.trim();
+        }
+        break;
+      default:
+        // Nested enterprise object on a no-path replace.
+        if (p === ENTERPRISE_USER.toLowerCase() && value && typeof value === 'object') {
+          const dept = (value as { department?: unknown }).department;
+          if (typeof dept === 'string' && dept.trim()) {
+            out.department = dept.trim();
+          }
+        }
+        // title, phoneNumbers, addresses, name.givenName, etc. ignored.
+        break;
     }
   };
   for (const op of ops) {
