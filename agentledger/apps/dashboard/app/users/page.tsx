@@ -166,16 +166,17 @@ export default async function UsersPage({
   const directoryTotal = users.reduce((s, u) => s + userVendorTotal(u), 0);
 
   const columns = [
-    { key: 'user', label: 'User' },
-    { key: 'email', label: 'Email' },
-    { key: 'team', label: 'Team' },
-    { key: 'status', label: 'Status' },
+    { key: 'user', label: 'User', width: '16%' },
+    { key: 'email', label: 'Email', width: '22%', truncate: true },
+    { key: 'team', label: 'Team', width: '12%', truncate: true },
+    { key: 'status', label: 'Status', width: '7%' },
     ...vendors.map((v) => ({
       key: `vendor_${v}`,
       label: vendorShortLabel(v),
       align: 'right' as const,
+      width: '7%',
     })),
-    { key: 'total', label: 'Total $', align: 'right' as const },
+    { key: 'total', label: 'Total $', align: 'right' as const, width: '8%' },
   ];
 
   const footerRow: Record<string, ReactNode> = {

@@ -130,6 +130,8 @@ export interface Column {
   align?: 'right';
   /** Fixed width for numeric columns so headers align with values. */
   width?: string;
+  /** Ellipsis overflow within the column (needs table-fixed). */
+  truncate?: boolean;
 }
 
 export function DataTable({
@@ -143,13 +145,13 @@ export function DataTable({
 }) {
   return (
     <div className="overflow-x-auto">
-      <table className="table table-fixed w-full">
+      <table className="table table-fixed w-full min-w-[56rem]">
         <thead>
           <tr>
             {columns.map((c) => (
               <th
                 key={c.key}
-                className={c.align === 'right' ? 'text-right' : ''}
+                className={`${c.align === 'right' ? 'text-right' : ''} ${c.truncate ? 'overflow-hidden' : ''}`}
                 style={c.width ? { width: c.width } : undefined}
               >
                 {c.label}
@@ -168,8 +170,22 @@ export function DataTable({
             rows.map((r, i) => (
               <tr key={i}>
                 {columns.map((c) => (
-                  <td key={c.key} className={c.align === 'right' ? 'text-right' : ''}>
-                    {c.align === 'right' ? <span className="num">{r[c.key]}</span> : r[c.key]}
+                  <td
+                    key={c.key}
+                    className={`${c.align === 'right' ? 'text-right' : ''} ${c.truncate ? 'max-w-0 overflow-hidden' : ''}`}
+                  >
+                    {c.truncate ? (
+                      <span
+                        className="block truncate"
+                        title={typeof r[c.key] === 'string' ? r[c.key] : undefined}
+                      >
+                        {r[c.key]}
+                      </span>
+                    ) : c.align === 'right' ? (
+                      <span className="num">{r[c.key]}</span>
+                    ) : (
+                      r[c.key]
+                    )}
                   </td>
                 ))}
               </tr>
@@ -181,8 +197,17 @@ export function DataTable({
             {footerRows.map((r, i) => (
               <tr key={i} className="border-t border-edge bg-black/30 font-medium">
                 {columns.map((c) => (
-                  <td key={c.key} className={c.align === 'right' ? 'text-right' : ''}>
-                    {c.align === 'right' ? <span className="num">{r[c.key]}</span> : r[c.key]}
+                  <td
+                    key={c.key}
+                    className={`${c.align === 'right' ? 'text-right' : ''} ${c.truncate ? 'max-w-0 overflow-hidden' : ''}`}
+                  >
+                    {c.truncate ? (
+                      <span className="block truncate">{r[c.key]}</span>
+                    ) : c.align === 'right' ? (
+                      <span className="num">{r[c.key]}</span>
+                    ) : (
+                      r[c.key]
+                    )}
                   </td>
                 ))}
               </tr>
