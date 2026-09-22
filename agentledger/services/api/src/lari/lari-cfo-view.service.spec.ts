@@ -176,6 +176,7 @@ function harness(opts?: {
   } as unknown as PrismaService;
   const copilotAnalytics = {
     getSpendSummary: jest.fn(async () => opts?.copilotSpend ?? null),
+    getUserSpendAllocation: jest.fn(async () => []),
   } as unknown as CopilotAnalyticsService;
   const cursorAnalytics = {
     getSpendSummary: jest.fn(async () =>
@@ -200,6 +201,7 @@ function harness(opts?: {
           }
         : null,
     ),
+    getUserActivity: jest.fn(async () => []),
   } as unknown as import('../connectors/cursor-analytics.service').CursorAnalyticsService;
   const cursorProductivity = {
     getProductivitySummary: jest.fn(async () => opts?.cursorProductivity ?? null),

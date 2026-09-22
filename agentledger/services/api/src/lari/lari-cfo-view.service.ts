@@ -28,6 +28,7 @@ import {
   currentMonthlySeatRunRate,
   forecastFixedSeatCost,
   periodSeatTotalForRange,
+  prorateMonthlyCost,
   seatLookupFromDate,
   type FixedCostSeatRow,
 } from '../fixed-costs/fixed-cost-prorate';
@@ -506,30 +507,72 @@ export class LariCfoViewService {
   }
 
   /**
-   * Spend by SCIM team: reconciled per-user spend joined to identities.team_id.
+   * Spend by SCIM team: per-user billable spend (llm metered + coding agents +
+   * Copilot allocation + Cursor seat share) joined to identities.team_id.
    * Provisioned teams with $0 still appear so Groups show up after SCIM sync.
    */
   private async buildTeamBreakdown(tenantId: string, r: Range): Promise<CfoViewTeamBreakdown[]> {
     try {
-      const [spendRows, lookups, teams] = await Promise.all([
-        this.ch.queryScoped<{ key: string; cost_usd: unknown; calls: unknown }>(
-          `SELECT key, cost_usd, calls
-           FROM (${RECONCILED_USER_DAY_SPEND_SQL}) AS reconciled
-           WHERE cost_usd > 0 OR calls > 0
-           ORDER BY cost_usd DESC`,
-          r as Record<string, ChParam>,
-        ),
-        loadIdentityLookups(this.prisma, tenantId),
-        this.prisma.withTenant(tenantId, (tx) =>
-          tx.team.findMany({ select: { teamId: true, name: true }, orderBy: { name: 'asc' } }),
-        ),
-      ]);
+      const params = r as Record<string, ChParam>;
+      const [spendRows, codingRows, copilotRows, cursorSeatByUser, lookups, teams] =
+        await Promise.all([
+          this.ch.queryScoped<{ key: string; cost_usd: unknown; calls: unknown }>(
+            `SELECT key, cost_usd, calls
+             FROM (${RECONCILED_USER_DAY_SPEND_SQL}) AS reconciled
+             WHERE cost_usd > 0 OR calls > 0
+             ORDER BY cost_usd DESC`,
+            params,
+          ),
+          this.ch.queryScoped<{ key: string; cost_usd: unknown; calls: unknown }>(
+            `SELECT if(user_id = '', 'Unassigned', user_id) AS key,
+                    sum(cost_usd) AS cost_usd,
+                    sum(requests) AS calls
+             FROM coding_agent_daily
+             WHERE tenant_id = {tenant:String}
+               AND day BETWEEN {from:Date} AND {to:Date}
+             GROUP BY key
+             HAVING sum(cost_usd) > 0 OR sum(requests) > 0`,
+            params,
+          ),
+          this.copilotAnalytics.getUserSpendAllocation(tenantId, r.from, r.to).catch(() => []),
+          this.cursorSeatSpendByUser(tenantId, r).catch(() => new Map<string, number>()),
+          loadIdentityLookups(this.prisma, tenantId),
+          this.prisma.withTenant(tenantId, (tx) =>
+            tx.team.findMany({ select: { teamId: true, name: true }, orderBy: { name: 'asc' } }),
+          ),
+        ]);
+
+      const merged = new Map<string, { costUsd: number; calls: number }>();
+      const add = (userId: string, costUsd: number, calls: number) => {
+        const key = userId.trim();
+        if (!key || (costUsd <= 0 && calls <= 0)) {
+          return;
+        }
+        const cur = merged.get(key) ?? { costUsd: 0, calls: 0 };
+        merged.set(key, {
+          costUsd: usd(cur.costUsd + costUsd),
+          calls: cur.calls + calls,
+        });
+      };
+
+      for (const row of spendRows) {
+        add(String(row.key), n(row.cost_usd), n(row.calls));
+      }
+      for (const row of codingRows) {
+        add(String(row.key), n(row.cost_usd), n(row.calls));
+      }
+      for (const row of copilotRows) {
+        add(row.userId, row.costUsd, row.calls);
+      }
+      for (const [userId, seatUsd] of cursorSeatByUser) {
+        add(userId, seatUsd, 0);
+      }
 
       return buildTeamSpendBreakdown(
-        spendRows.map((row) => ({
-          userId: String(row.key),
-          costUsd: usd(n(row.cost_usd)),
-          calls: n(row.calls),
+        [...merged.entries()].map(([userId, v]) => ({
+          userId,
+          costUsd: v.costUsd,
+          calls: v.calls,
         })),
         (userId) => {
           const identity = resolveUserDirectoryIdentity(
@@ -545,6 +588,77 @@ export class LariCfoViewService {
     } catch {
       return [];
     }
+  }
+
+  /**
+   * Prorate Cursor seat license $ onto assigned identities (ai_seats), else split
+   * org seat run-rate across active Cursor users in the window — same rule as the
+   * Users directory so CFO team spend matches member totals.
+   */
+  private async cursorSeatSpendByUser(
+    tenantId: string,
+    r: Range,
+  ): Promise<Map<string, number>> {
+    const out = new Map<string, number>();
+    const activity = await this.cursorAnalytics.getUserActivity(tenantId, r.from, r.to);
+    if (activity.length === 0) {
+      return out;
+    }
+
+    const seatRows = await this.prisma.withTenant(
+      tenantId,
+      (tx) =>
+        tx.$queryRaw<
+          {
+            user_id: string | null;
+            email: string | null;
+            monthly_price_per_user: number | string;
+          }[]
+        >`
+        SELECT s.user_id::text, i.email, p.monthly_price_per_user
+        FROM ai_seats s
+        JOIN ai_subscription_plans p ON s.plan_id = p.plan_id
+        LEFT JOIN identities i ON s.user_id = i.user_id
+        WHERE s.active = true AND lower(s.provider) = 'cursor' AND s.user_id IS NOT NULL`,
+    );
+
+    const assigned = new Set<string>();
+    for (const row of seatRows) {
+      const monthly = n(row.monthly_price_per_user);
+      if (monthly <= 0) {
+        continue;
+      }
+      const prorated = prorateMonthlyCost(monthly, `${r.from.slice(0, 7)}-01`, r.from, r.to);
+      const uid = String(row.user_id);
+      out.set(uid, usd((out.get(uid) ?? 0) + prorated));
+      assigned.add(uid);
+      if (row.email) {
+        assigned.add(String(row.email).toLowerCase());
+      }
+    }
+
+    let orgSeatUsd = 0;
+    try {
+      const summary = await this.cursorAnalytics.getSpendSummary(tenantId, r.from, r.to);
+      orgSeatUsd = summary?.seatLicenseUsd ?? 0;
+    } catch {
+      orgSeatUsd = 0;
+    }
+
+    const activeMembers = activity.length;
+    const perUserFallback =
+      orgSeatUsd > 0 && activeMembers > 0 ? usd(orgSeatUsd / activeMembers) : 0;
+    if (perUserFallback > 0) {
+      for (const row of activity) {
+        const uid = String(row.user_id);
+        if (out.has(uid) || assigned.has(uid.toLowerCase())) {
+          continue;
+        }
+        out.set(uid, perUserFallback);
+      }
+    }
+
+    return out;
   }
 
   private async queryModelCostBasis(params: Record<string, ChParam>): Promise<
