@@ -1,4 +1,11 @@
-import { applyUserPatch, fromScimUser, memberIdsFromPatchOp, parsePatch } from './scim.types';
+import {
+  applyUserPatch,
+  departmentFromAliases,
+  fromScimUser,
+  memberIdsFromPatchOp,
+  mergeDepartmentAlias,
+  parsePatch,
+} from './scim.types';
 
 describe('SCIM PATCH parsing', () => {
   const patchBody = (ops: unknown[]) => ({
@@ -106,5 +113,14 @@ describe('SCIM User mapping', () => {
         'urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:department': 'Security',
       }).department,
     ).toBe('Security');
+  });
+});
+
+describe('department alias helpers', () => {
+  it('stores and reads department markers without dropping other aliases', () => {
+    const merged = mergeDepartmentAlias(['cursor:abc', 'department:Old'], 'Engineering');
+    expect(merged).toEqual(['cursor:abc', 'department:Engineering']);
+    expect(departmentFromAliases(merged)).toBe('Engineering');
+    expect(departmentFromAliases(['x'])).toBeNull();
   });
 });
