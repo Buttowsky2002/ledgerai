@@ -9,6 +9,7 @@ import {
   fromScimUser,
   listResponse,
   memberIdsFromGroup,
+  memberIdsFromPatchOp,
   scimError,
   toScimGroup,
   toScimUser,
@@ -100,6 +101,9 @@ export class ScimService {
           },
           select: IDENTITY_COLS,
         });
+        if (u.department) {
+          await this.assignTeamByName(tx, ctx, created.userId, u.department);
+        }
         await this.audit(tx, ctx, 'create', `identity:${created.userId}`, null, created);
         return toScimUser(created as IdentityShape, baseUrl);
       } catch (e) {
@@ -110,17 +114,24 @@ export class ScimService {
 
   async replaceUser(ctx: ScimCtx, id: string, body: Record<string, unknown>, baseUrl: string) {
     const u = fromScimUser(body);
-    return this.updateUser(ctx, id, baseUrl, {
-      ...(u.email ? { email: u.email } : {}),
-      displayName: u.displayName ?? null,
-      ...(u.externalId !== undefined ? { externalId: u.externalId } : {}),
-      ...(u.active !== undefined ? { active: u.active } : {}),
-    });
+    return this.updateUser(
+      ctx,
+      id,
+      baseUrl,
+      {
+        ...(u.email ? { email: u.email } : {}),
+        displayName: u.displayName ?? null,
+        ...(u.externalId !== undefined ? { externalId: u.externalId } : {}),
+        ...(u.active !== undefined ? { active: u.active } : {}),
+      },
+      u.department,
+    );
   }
 
   async patchUser(ctx: ScimCtx, id: string, ops: PatchOp[], baseUrl: string) {
     const patch = applyUserPatch(ops);
-    return this.updateUser(ctx, id, baseUrl, patch);
+    const { department, ...identityPatch } = patch;
+    return this.updateUser(ctx, id, baseUrl, identityPatch, department);
   }
 
   /** SCIM DELETE soft-deactivates (active=false) to preserve FKs + audit trail. */
@@ -133,6 +144,7 @@ export class ScimService {
     id: string,
     baseUrl: string,
     data: Record<string, unknown>,
+    department?: string,
   ) {
     return this.prisma.withTenant(ctx.tenantId, async (tx) => {
       const before = await tx.identity.findUnique({ where: { userId: id }, select: IDENTITY_COLS });
@@ -146,6 +158,11 @@ export class ScimService {
         } catch (e) {
           throw this.conflictOr(e, 'conflicting userName or externalId');
         }
+      }
+      if (department) {
+        await this.assignTeamByName(tx, ctx, id, department);
+      }
+      if (Object.keys(data).length > 0 || department) {
         await this.audit(tx, ctx, 'update', `identity:${id}`, before, after);
       }
       return toScimUser(after as IdentityShape, baseUrl);
@@ -154,15 +171,24 @@ export class ScimService {
 
   // ---- Groups (→ teams; membership sets identity.team_id, the primary team) ----
 
-  async listGroups(ctx: ScimCtx, startIndex: number, count: number, baseUrl: string) {
+  async listGroups(
+    ctx: ScimCtx,
+    filterName: string | null,
+    startIndex: number,
+    count: number,
+    baseUrl: string,
+  ) {
     return this.prisma.withTenant(ctx.tenantId, async (tx) => {
+      // Entra matches groups by displayName eq "…" before create/update.
+      const where = filterName ? { name: filterName } : {};
       const [teams, total] = await Promise.all([
         tx.team.findMany({
+          where,
           orderBy: { teamId: 'asc' },
           skip: Math.max(0, startIndex - 1),
           take: count,
         }),
-        tx.team.count(),
+        tx.team.count({ where }),
       ]);
       const shaped = await Promise.all(teams.map((t) => this.shapeGroup(tx, t)));
       return listResponse(
@@ -237,19 +263,26 @@ export class ScimService {
         throw new HttpException(scimError(404, `Group ${id} not found`), 404);
       }
       for (const op of ops) {
-        const ids = Array.isArray(op.value)
-          ? (op.value as { value?: string }[]).map((m) => m.value).filter((v): v is string => !!v)
-          : [];
-        if ((op.path ?? '').toLowerCase().startsWith('members')) {
+        const path = (op.path ?? '').toLowerCase();
+        const memberRefs = memberIdsFromPatchOp(op);
+        if (path.startsWith('members') || (memberRefs.length > 0 && !path)) {
           if (op.op === 'add') {
-            await this.setMembers(tx, ctx, id, ids);
+            await this.setMembers(tx, ctx, id, memberRefs);
           } else if (op.op === 'remove') {
-            await this.removeMembers(tx, ctx, id, ids);
+            await this.removeMembers(tx, ctx, id, memberRefs);
           } else if (op.op === 'replace') {
-            await this.replaceMembers(tx, ctx, id, ids);
+            await this.replaceMembers(tx, ctx, id, memberRefs);
           }
-        } else if (op.op === 'replace' && (op.path ?? '').toLowerCase() === 'displayname') {
+        } else if (op.op === 'replace' && path === 'displayname') {
           await tx.team.update({ where: { teamId: id }, data: { name: String(op.value) } });
+        } else if (op.op === 'replace' && !op.path && op.value && typeof op.value === 'object') {
+          const v = op.value as Record<string, unknown>;
+          if (typeof v.displayName === 'string') {
+            await tx.team.update({ where: { teamId: id }, data: { name: v.displayName } });
+          }
+          if (Array.isArray(v.members)) {
+            await this.replaceMembers(tx, ctx, id, memberIdsFromGroup({ members: v.members }));
+          }
         }
       }
       const after = await tx.team.findUnique({ where: { teamId: id } });
@@ -284,12 +317,73 @@ export class ScimService {
     return { teamId: team.teamId, name: team.name, externalId: team.externalId, members };
   }
 
+  /** Find-or-create a team by display name and set the identity's primary team_id. */
+  private async assignTeamByName(
+    tx: Prisma.TransactionClient,
+    ctx: ScimCtx,
+    userId: string,
+    department: string,
+  ) {
+    const name = department.trim();
+    if (!name) {
+      return;
+    }
+    let team = await tx.team.findFirst({ where: { name } });
+    if (!team) {
+      try {
+        team = await tx.team.create({
+          data: { tenantId: ctx.tenantId, name },
+        });
+      } catch (e) {
+        // Concurrent create on unique (tenant_id, name) — re-read.
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+          team = await tx.team.findFirst({ where: { name } });
+        } else {
+          throw e;
+        }
+      }
+    }
+    if (team) {
+      await tx.identity.update({ where: { userId }, data: { teamId: team.teamId } });
+    }
+  }
+
+  /**
+   * Resolve SCIM member refs to identity userIds. Entra usually sends our SCIM
+   * User id; some flows send externalId (mailNickname / object id) instead.
+   */
+  private async resolveMemberUserIds(
+    tx: Prisma.TransactionClient,
+    refs: string[],
+  ): Promise<string[]> {
+    if (!refs.length) {
+      return [];
+    }
+    const byId = await tx.identity.findMany({
+      where: { userId: { in: refs } },
+      select: { userId: true },
+    });
+    const resolved = new Set(byId.map((r) => r.userId));
+    const missing = refs.filter((r) => !resolved.has(r));
+    if (missing.length) {
+      const byExt = await tx.identity.findMany({
+        where: { externalId: { in: missing } },
+        select: { userId: true },
+      });
+      for (const r of byExt) {
+        resolved.add(r.userId);
+      }
+    }
+    return [...resolved];
+  }
+
   private async setMembers(
     tx: Prisma.TransactionClient,
     _ctx: ScimCtx,
     teamId: string,
-    userIds: string[],
+    memberRefs: string[],
   ) {
+    const userIds = await this.resolveMemberUserIds(tx, memberRefs);
     if (userIds.length) {
       await tx.identity.updateMany({ where: { userId: { in: userIds } }, data: { teamId } });
     }
@@ -299,8 +393,9 @@ export class ScimService {
     tx: Prisma.TransactionClient,
     _ctx: ScimCtx,
     teamId: string,
-    userIds: string[],
+    memberRefs: string[],
   ) {
+    const userIds = await this.resolveMemberUserIds(tx, memberRefs);
     if (userIds.length) {
       await tx.identity.updateMany({
         where: { userId: { in: userIds }, teamId },
@@ -313,11 +408,11 @@ export class ScimService {
     tx: Prisma.TransactionClient,
     ctx: ScimCtx,
     teamId: string,
-    userIds: string[],
+    memberRefs: string[],
   ) {
     // Detach everyone currently on the team, then attach the new set.
     await tx.identity.updateMany({ where: { teamId }, data: { teamId: null } });
-    await this.setMembers(tx, ctx, teamId, userIds);
+    await this.setMembers(tx, ctx, teamId, memberRefs);
   }
 
   private async audit(

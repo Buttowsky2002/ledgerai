@@ -1,4 +1,4 @@
-import { applyUserPatch, fromScimUser, parsePatch } from './scim.types';
+import { applyUserPatch, fromScimUser, memberIdsFromPatchOp, parsePatch } from './scim.types';
 
 describe('SCIM PATCH parsing', () => {
   const patchBody = (ops: unknown[]) => ({
@@ -44,6 +44,14 @@ describe('SCIM PATCH parsing', () => {
         { op: 'replace', path: 'externalId', value: 'brandon.balams' },
         { op: 'replace', path: 'title', value: 'Analyst' },
         { op: 'replace', path: 'name.givenName', value: 'Brandon' },
+      ]),
+    );
+    expect(applyUserPatch(ops)).toEqual({ externalId: 'brandon.balams' });
+  });
+
+  it('maps enterprise department to a team name', () => {
+    const ops = parsePatch(
+      patchBody([
         {
           op: 'replace',
           path: 'urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:department',
@@ -51,7 +59,23 @@ describe('SCIM PATCH parsing', () => {
         },
       ]),
     );
-    expect(applyUserPatch(ops)).toEqual({ externalId: 'brandon.balams' });
+    expect(applyUserPatch(ops)).toEqual({ department: 'Security' });
+  });
+
+  it('extracts member ids from Entra path-filter remove ops', () => {
+    expect(
+      memberIdsFromPatchOp({
+        op: 'remove',
+        path: 'members[value eq "e1439b68-d4ee-4ce3-8685-6a12cc0d6a37"]',
+      }),
+    ).toEqual(['e1439b68-d4ee-4ce3-8685-6a12cc0d6a37']);
+    expect(
+      memberIdsFromPatchOp({
+        op: 'add',
+        path: 'members',
+        value: [{ value: 'u1' }, { value: 'u2' }],
+      }),
+    ).toEqual(['u1', 'u2']);
   });
 
   it('ignores remove ops that do not map onto identity columns', () => {
@@ -65,5 +89,22 @@ describe('SCIM User mapping', () => {
     expect(fromScimUser({ userName: 'A@b.com' }).email).toBe('a@b.com');
     expect(fromScimUser({ emails: [{ value: 'x@y.com', primary: true }] }).email).toBe('x@y.com');
     expect(fromScimUser({ emails: [{ value: 'first@y.com' }] }).email).toBe('first@y.com');
+  });
+
+  it('extracts enterprise department from nested or flat keys', () => {
+    expect(
+      fromScimUser({
+        userName: 'a@b.com',
+        'urn:ietf:params:scim:schemas:extension:enterprise:2.0:User': {
+          department: ' Engineering ',
+        },
+      }).department,
+    ).toBe('Engineering');
+    expect(
+      fromScimUser({
+        userName: 'a@b.com',
+        'urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:department': 'Security',
+      }).department,
+    ).toBe('Security');
   });
 });

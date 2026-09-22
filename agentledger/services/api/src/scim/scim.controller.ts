@@ -152,10 +152,17 @@ export class ScimController {
   @Header('Content-Type', 'application/scim+json')
   listGroups(
     @Req() req: ScimRequest,
+    @Query('filter') filter?: string,
     @Query('startIndex') startIndex?: string,
     @Query('count') count?: string,
   ) {
-    return this.scim.listGroups(ctx(req), parseInt1(startIndex, 1), parseCount(count), base(req));
+    return this.scim.listGroups(
+      ctx(req),
+      parseGroupFilter(filter),
+      parseInt1(startIndex, 1),
+      parseCount(count),
+      base(req),
+    );
   }
 
   @Get('Groups/:id')
@@ -214,6 +221,15 @@ function parseUserFilter(filter?: string): string | null {
   }
   const m = /userName\s+eq\s+"([^"]+)"/i.exec(filter);
   return m ? m[1].toLowerCase() : null;
+}
+
+/** Entra matches Groups with `displayName eq "…"`. */
+function parseGroupFilter(filter?: string): string | null {
+  if (!filter) {
+    return null;
+  }
+  const m = /displayName\s+eq\s+"([^"]+)"/i.exec(filter);
+  return m ? m[1] : null;
 }
 
 function parseInt1(v: string | undefined, def: number): number {
