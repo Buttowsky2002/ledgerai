@@ -20,8 +20,7 @@ export function paginateItems<T>(
   pageSize: number = USERS_PAGE_SIZE,
 ): PageSlice<T> {
   const total = items.length;
-  const effectiveSize =
-    !Number.isFinite(pageSize) || pageSize <= 0 ? Math.max(total, 1) : pageSize;
+  const effectiveSize = !Number.isFinite(pageSize) || pageSize <= 0 ? Math.max(total, 1) : pageSize;
   const pageCount = Math.max(1, Math.ceil(total / effectiveSize) || 1);
   const safePage = Number.isFinite(page) && page > 0 ? Math.min(Math.floor(page), pageCount) : 1;
   const start = (safePage - 1) * effectiveSize;

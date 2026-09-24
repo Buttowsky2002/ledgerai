@@ -1,7 +1,4 @@
-import {
-  paginateItems,
-  parsePageSizeParam,
-} from '../lib/table-pager';
+import { paginateItems, parsePageSizeParam } from '../lib/table-pager';
 import { userVendorTotal, type VendorSpendSlice } from '../lib/vendor-spend';
 
 describe('parsePageSizeParam', () => {
@@ -30,7 +27,10 @@ describe('filtered grand total', () => {
     const bob: Record<string, VendorSpendSlice> = {
       cursor: { seat_usd: 40, overage_usd: 50, total_usd: 90 },
     };
-    const users = [{ vendor_spend: alice, team: 'Development' }, { vendor_spend: bob, team: 'Sales' }];
+    const users = [
+      { vendor_spend: alice, team: 'Development' },
+      { vendor_spend: bob, team: 'Sales' },
+    ];
     const development = users.filter((u) => u.team === 'Development');
     const total = development.reduce((s, u) => s + userVendorTotal(u), 0);
     expect(total).toBe(40);

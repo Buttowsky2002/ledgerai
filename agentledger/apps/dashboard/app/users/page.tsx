@@ -157,7 +157,9 @@ export default async function UsersPage({
   const pageSlice = paginateItems(users, page, pageSize);
   const loadError = !ok;
   const showUnlinkedBadge = tab !== 'linked' && pageSlice.items.some((u) => !u.resolved);
-  const filtersActive = Boolean(q || teamFilter || platformFilter || tab !== 'all' || status !== 'all');
+  const filtersActive = Boolean(
+    q || teamFilter || platformFilter || tab !== 'all' || status !== 'all',
+  );
 
   const buildHref = (opts: {
     nextTab?: MemberTab;
@@ -243,9 +245,7 @@ export default async function UsersPage({
       <span className="text-xs uppercase tracking-wide text-muted">
         Grand total
         {filtersActive && orgTotal != null && (
-          <span className="ml-2 font-normal normal-case text-muted/80">
-            (org {usd(orgTotal)})
-          </span>
+          <span className="ml-2 font-normal normal-case text-muted/80">(org {usd(orgTotal)})</span>
         )}
       </span>
     ),

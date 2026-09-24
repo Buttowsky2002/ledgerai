@@ -1638,10 +1638,7 @@ export class AnalyticsService {
       }
     }
 
-    const { assignments, tiersByUser, userIdAliases } = await this.loadSeatTier(
-      tenantId,
-      users,
-    );
+    const { assignments, tiersByUser, userIdAliases } = await this.loadSeatTier(tenantId, users);
 
     const presence: UserPlatformPresence[] = users.map((u) => {
       const extra: string[] = [];
@@ -1755,8 +1752,10 @@ export class AnalyticsService {
     }
 
     try {
-      const rows = await this.prisma.withTenant(tenantId, (tx) =>
-        tx.$queryRaw<{ user_id: string; vendor: string; tier: string }[]>`
+      const rows = await this.prisma.withTenant(
+        tenantId,
+        (tx) =>
+          tx.$queryRaw<{ user_id: string; vendor: string; tier: string }[]>`
           SELECT user_id::text, vendor, tier
           FROM identity_seat_tiers`,
       );
@@ -1773,9 +1772,7 @@ export class AnalyticsService {
 
       // Map identity UUID tiers onto directory user_id keys (email or uuid).
       for (const u of users) {
-        const hit =
-          byIdentity.get(u.user_id) ??
-          (u.email ? byIdentity.get(u.email) : undefined);
+        const hit = byIdentity.get(u.user_id) ?? (u.email ? byIdentity.get(u.email) : undefined);
         // Also match when directory key is email but tier is on UUID — resolve via aliases
         // already loaded: scan identity keys against email/user_id.
         if (hit) {

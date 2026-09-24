@@ -58,15 +58,11 @@ function SpendByTeamCard({
 }) {
   const [page, setPage] = useState(1);
   const [pageSizeOption, setPageSizeOption] = useState<PageSizeOption>(10);
-  const pageSize =
-    pageSizeOption === 'all' ? Number.POSITIVE_INFINITY : pageSizeOption;
+  const pageSize = pageSizeOption === 'all' ? Number.POSITIVE_INFINITY : pageSizeOption;
   useEffect(() => {
     setPage(1);
   }, [from, to, rows.length, pageSizeOption]);
-  const pageSlice = useMemo(
-    () => paginateItems(rows, page, pageSize),
-    [rows, page, pageSize],
-  );
+  const pageSlice = useMemo(() => paginateItems(rows, page, pageSize), [rows, page, pageSize]);
 
   return (
     <Card

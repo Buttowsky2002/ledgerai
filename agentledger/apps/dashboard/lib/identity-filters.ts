@@ -16,9 +16,6 @@ export function isDemoIdentityEmail(email: string | null | undefined): boolean {
 }
 
 /** True when a Users-directory row is a leftover Acme / demo synthetic identity. */
-export function isDemoUserRow(user: {
-  user_id?: string | null;
-  email?: string | null;
-}): boolean {
+export function isDemoUserRow(user: { user_id?: string | null; email?: string | null }): boolean {
   return isDemoIdentityEmail(user.email) || isDemoIdentityEmail(user.user_id);
 }

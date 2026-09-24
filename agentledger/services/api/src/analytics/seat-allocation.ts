@@ -184,8 +184,7 @@ export function seatPoolsForRange(rows: FixedCostSeatRow[], from: string, to: st
     return [];
   }
   // Single-month ranges use current (latest) run-rate — same as periodSeatTotalForRange.
-  const monthsToUse =
-    months.length === 1 ? [months[0]!] : months;
+  const monthsToUse = months.length === 1 ? [months[0]!] : months;
 
   const byKey = new Map<string, SeatPool>();
   for (const month of monthsToUse) {
@@ -211,9 +210,7 @@ export function vendorsWithFixedSeatPools(pools: SeatPool[]): Set<string> {
   return new Set(pools.filter((p) => p.seat_usd > 0).map((p) => p.vendor));
 }
 
-function tierLookup(
-  assignments: SeatTierAssignment[],
-): Map<string, Map<string, SeatClass>> {
+function tierLookup(assignments: SeatTierAssignment[]): Map<string, Map<string, SeatClass>> {
   const out = new Map<string, Map<string, SeatClass>>();
   for (const a of assignments) {
     const uid = String(a.user_id);
@@ -286,8 +283,7 @@ export function allocateSeatPools(input: {
     let allocated = 0;
     for (let i = 0; i < capped.length; i++) {
       const user = capped[i]!;
-      const amount =
-        i === capped.length - 1 ? usd(pool.seat_usd - allocated) : share;
+      const amount = i === capped.length - 1 ? usd(pool.seat_usd - allocated) : share;
       allocated = usd(allocated + amount);
       add(user.user_id, vendor, amount);
     }

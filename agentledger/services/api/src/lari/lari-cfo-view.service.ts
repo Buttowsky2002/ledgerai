@@ -772,10 +772,7 @@ export class LariCfoViewService {
 
     const presence: UserPlatformPresence[] = [...byCanon.entries()].map(([canon, agg]) => ({
       user_id: agg.sampleUserId,
-      vendors: [
-        ...(presenceByCanon.get(canon) ?? new Set()),
-        ...presenceVendorsFromBreakdown([]),
-      ],
+      vendors: [...(presenceByCanon.get(canon) ?? new Set()), ...presenceVendorsFromBreakdown([])],
       activity_score: agg.costUsd + agg.calls,
     }));
 
@@ -851,8 +848,10 @@ export class LariCfoViewService {
       userIdAliases.set(agg.sampleUserId.toLowerCase(), agg.sampleUserId);
     }
     try {
-      const rows = await this.prisma.withTenant(tenantId, (tx) =>
-        tx.$queryRaw<{ user_id: string; vendor: string; tier: string; email: string | null }[]>`
+      const rows = await this.prisma.withTenant(
+        tenantId,
+        (tx) =>
+          tx.$queryRaw<{ user_id: string; vendor: string; tier: string; email: string | null }[]>`
           SELECT t.user_id::text, t.vendor, t.tier, i.email
           FROM identity_seat_tiers t
           JOIN identities i ON i.user_id = t.user_id`,
