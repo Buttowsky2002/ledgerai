@@ -22,6 +22,8 @@ import { providerModelConflictMessage } from './provider-model-guard';
 
 import { shouldSurfaceLegacyImportAudit } from './legacy-import-list';
 
+import { seatVendorsFromImportRows } from './import-seat-tiers';
+
 import {
   buildEmptyFileResult,
   buildImportedFileResult,
@@ -502,10 +504,12 @@ export class PortalImportService {
       return;
     }
     const emails = [...candidates.keys()];
+    const seatVendorsByEmail = seatVendorsFromImportRows(rows);
+
     await this.prisma.withTenant(tenantId, async (tx) => {
       const existingRows = await tx.identity.findMany({
         where: { email: { in: emails } },
-        select: { email: true, displayName: true, aliases: true },
+        select: { userId: true, email: true, displayName: true, aliases: true },
       });
       const existing = new Map(existingRows.map((row) => [row.email.toLowerCase(), row]));
       for (const email of emails) {
@@ -515,8 +519,9 @@ export class PortalImportService {
         }
         const row = existing.get(email);
         const aliases = this.mergeAliases(row?.aliases, candidate.aliases);
+        let userId = row?.userId;
         if (!row) {
-          await tx.identity.create({
+          const created = await tx.identity.create({
             data: {
               tenantId,
               email,
@@ -525,16 +530,47 @@ export class PortalImportService {
               aliases: aliases as Prisma.InputJsonValue,
             },
           });
+          userId = created.userId;
+        } else {
+          const displayName = row.displayName ?? candidate.displayName ?? undefined;
+          await tx.identity.update({
+            where: { tenantId_email: { tenantId, email } },
+            data: {
+              displayName,
+              aliases: aliases as Prisma.InputJsonValue,
+            },
+          });
+        }
+        if (!userId) {
           continue;
         }
-        const displayName = row.displayName ?? candidate.displayName ?? undefined;
-        await tx.identity.update({
-          where: { tenantId_email: { tenantId, email } },
-          data: {
-            displayName,
-            aliases: aliases as Prisma.InputJsonValue,
-          },
-        });
+        const vendors = seatVendorsByEmail.get(email);
+        if (!vendors || vendors.size === 0) {
+          continue;
+        }
+        for (const vendor of vendors) {
+          const existingTier = await tx.identitySeatTier.findUnique({
+            where: {
+              tenantId_userId_vendor: { tenantId, userId, vendor },
+            },
+          });
+          // Never downgrade an existing premium tag to basic.
+          if (existingTier?.tier === 'premium') {
+            continue;
+          }
+          await tx.identitySeatTier.upsert({
+            where: {
+              tenantId_userId_vendor: { tenantId, userId, vendor },
+            },
+            create: {
+              tenantId,
+              userId,
+              vendor,
+              tier: 'basic',
+            },
+            update: { tier: 'basic' },
+          });
+        }
       }
     });
   }

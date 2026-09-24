@@ -29,7 +29,7 @@ import { getTenantId } from '../tenant/tenant-context';
 
 const ROLES = ['member', 'admin', 'finance', 'security'];
 const API_ROLES = ['viewer', 'analyst', 'admin'];
-const SEAT_TIERS = ['basic', 'premium'] as const;
+const SEAT_TIERS = ['none', 'basic', 'premium'] as const;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 class CreateIdentityDto {
@@ -111,10 +111,17 @@ export class IdentitiesController {
     if (!tenantId) {
       throw new BadRequestException('no tenant in context');
     }
-    const normalized = dto.tiers.map((t) => ({
-      vendor: String(t.vendor).trim().toLowerCase(),
-      tier: t.tier === 'premium' ? 'premium' : 'basic',
-    }));
+    const normalized = dto.tiers.map((t) => {
+      const raw = String(t.tier ?? '')
+        .trim()
+        .toLowerCase();
+      const tier: (typeof SEAT_TIERS)[number] =
+        raw === 'none' ? 'none' : raw === 'premium' ? 'premium' : 'basic';
+      return {
+        vendor: String(t.vendor).trim().toLowerCase(),
+        tier,
+      };
+    });
     for (const t of normalized) {
       if (!t.vendor) {
         throw new BadRequestException('vendor required');
@@ -125,10 +132,10 @@ export class IdentitiesController {
       const before = await tx.identitySeatTier.findMany({
         where: { userId: identity.userId },
       });
-      // Upsert each tier; remove vendors set back to basic with no other signal
-      // by deleting basic rows (default is basic when absent).
+      // Persist basic and premium so seat-only licenses create presence.
+      // "none" clears the vendor license (no Fixed Overhead seat share).
       for (const t of normalized) {
-        if (t.tier === 'basic') {
+        if (t.tier === 'none') {
           await tx.identitySeatTier.deleteMany({
             where: { userId: identity.userId, vendor: t.vendor },
           });
@@ -146,9 +153,9 @@ export class IdentitiesController {
             tenantId,
             userId: identity.userId,
             vendor: t.vendor,
-            tier: 'premium',
+            tier: t.tier,
           },
-          update: { tier: 'premium' },
+          update: { tier: t.tier },
         });
       }
       const after = await tx.identitySeatTier.findMany({

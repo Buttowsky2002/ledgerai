@@ -55,31 +55,32 @@ describe('allocateSeatPools', () => {
     { vendor: 'anthropic', tier: 'premium', seat_usd: 400, seats: 4 },
   ];
 
-  it('equal-splits basic pool across presence; premium tag moves user to premium pool', () => {
+  it('assigns Fixed Overhead unit price to each eligible user (no seat-count drop)', () => {
     const presence = [
       { user_id: 'alice', vendors: ['anthropic'], activity_score: 10 },
       { user_id: 'bob', vendors: ['anthropic'], activity_score: 5 },
       { user_id: 'cara', vendors: ['anthropic'], activity_score: 1 },
     ];
     const basicOnly = allocateSeatPools({ pools, presence });
-    expect(basicOnly.get('alice')!.anthropic).toBe(100);
-    expect(basicOnly.get('bob')!.anthropic).toBe(100);
-    expect(basicOnly.get('cara')!.anthropic).toBe(100);
-    expect(sumAllocatedSeats(basicOnly)).toBe(300);
+    // unit = 300/10 = 30
+    expect(basicOnly.get('alice')!.anthropic).toBe(30);
+    expect(basicOnly.get('bob')!.anthropic).toBe(30);
+    expect(basicOnly.get('cara')!.anthropic).toBe(30);
+    expect(sumAllocatedSeats(basicOnly)).toBe(90);
 
     const withPremium = allocateSeatPools({
       pools,
       presence,
       tiers: [{ user_id: 'alice', vendor: 'anthropic', tier: 'premium' }],
     });
-    // Alice alone on premium pool (400); bob+cara split basic (150 each).
-    expect(withPremium.get('alice')!.anthropic).toBe(400);
-    expect(withPremium.get('bob')!.anthropic).toBe(150);
-    expect(withPremium.get('cara')!.anthropic).toBe(150);
-    expect(sumAllocatedSeats(withPremium)).toBe(700);
+    // Alice alone on premium: unit 400/4 = 100; bob+cara basic unit 30 each.
+    expect(withPremium.get('alice')!.anthropic).toBe(100);
+    expect(withPremium.get('bob')!.anthropic).toBe(30);
+    expect(withPremium.get('cara')!.anthropic).toBe(30);
+    expect(sumAllocatedSeats(withPremium)).toBe(160);
   });
 
-  it('gives Anthropic-only user their seat share with $0 overage', () => {
+  it('gives Anthropic-only user their FO unit seat with $0 overage', () => {
     const allocated = allocateSeatPools({
       pools: [{ vendor: 'anthropic', tier: 'basic', seat_usd: 30, seats: 1 }],
       presence: [{ user_id: 'dana', vendors: ['anthropic'] }],
@@ -94,22 +95,50 @@ describe('allocateSeatPools', () => {
     expect(sumUserVendorSpend(spend)).toBe(30);
   });
 
-  it('does not create spend beyond Fixed Overhead pools when tagging premium', () => {
+  it('still assigns unit price when headcount exceeds purchased seats', () => {
+    const presence = Array.from({ length: 12 }, (_, i) => ({
+      user_id: `u${i}`,
+      vendors: ['anthropic'],
+      activity_score: 12 - i,
+    }));
+    const allocated = allocateSeatPools({
+      pools: [{ vendor: 'anthropic', tier: 'basic', seat_usd: 300, seats: 10 }],
+      presence,
+    });
+    expect(allocated.size).toBe(12);
+    for (const row of allocated.values()) {
+      expect(row.anthropic).toBe(30);
+    }
+    expect(sumAllocatedSeats(allocated)).toBe(360);
+  });
+
+  it('premium tag moves user to premium unit without inventing a new rate', () => {
     const presence = [
       { user_id: 'a', vendors: ['anthropic'] },
       { user_id: 'b', vendors: ['anthropic'] },
     ];
-    const poolTotal = pools.reduce((s, p) => s + p.seat_usd, 0);
-    const after = sumAllocatedSeats(
-      allocateSeatPools({
-        pools,
-        presence,
-        tiers: [{ user_id: 'a', vendor: 'anthropic', tier: 'premium' }],
-      }),
-    );
-    // Premium tag only consumes the existing premium pool — never exceeds org seats.
-    expect(after).toBeLessThanOrEqual(poolTotal);
-    expect(after).toBe(700);
+    const after = allocateSeatPools({
+      pools,
+      presence,
+      tiers: [{ user_id: 'a', vendor: 'anthropic', tier: 'premium' }],
+    });
+    expect(after.get('a')!.anthropic).toBe(100); // 400/4
+    expect(after.get('b')!.anthropic).toBe(30); // 300/10
+  });
+
+  it('equal-splits uncapped pools (seats = 0)', () => {
+    const allocated = allocateSeatPools({
+      pools: [{ vendor: 'openai', tier: 'basic', seat_usd: 90, seats: 0 }],
+      presence: [
+        { user_id: 'a', vendors: ['openai'] },
+        { user_id: 'b', vendors: ['openai'] },
+        { user_id: 'c', vendors: ['openai'] },
+      ],
+    });
+    expect(allocated.get('a')!.openai).toBe(30);
+    expect(allocated.get('b')!.openai).toBe(30);
+    expect(allocated.get('c')!.openai).toBe(30);
+    expect(sumAllocatedSeats(allocated)).toBe(90);
   });
 });
 
