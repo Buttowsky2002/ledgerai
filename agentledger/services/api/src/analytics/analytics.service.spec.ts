@@ -263,7 +263,7 @@ describe('AnalyticsService.users', () => {
           uuidAlice,
           {
             displayName: 'Alice Smith',
-            email: 'alice@acme.test',
+            email: 'alice@example.test',
             teamName: 'Eng',
             teamId: null,
             criticalityTier: 'standard',
@@ -349,7 +349,7 @@ describe('AnalyticsService.users', () => {
           { key: 'orphan-handle', cost_usd: 4, calls: 1, portal_import_usd: 0, connector_usd: 4 },
           { key: 'zero-spend', cost_usd: 0, calls: 0, portal_import_usd: 0, connector_usd: 0 },
           {
-            key: 'roster-only@acme.test',
+            key: 'roster-only@example.test',
             cost_usd: 0,
             calls: 7,
             portal_import_usd: 0,
@@ -389,16 +389,16 @@ describe('AnalyticsService.users', () => {
       uuidAlice,
       'cursor-user-99',
       'orphan-handle',
-      'roster-only@acme.test',
+      'roster-only@example.test',
     ]);
-    expect(result.users.find((u) => u.user_id === 'roster-only@acme.test')).toMatchObject({
+    expect(result.users.find((u) => u.user_id === 'roster-only@example.test')).toMatchObject({
       total_spend_usd: 0,
       calls: 7,
     });
     const alice = result.users[0];
     expect(alice).toMatchObject({
       display_name: 'Alice Smith',
-      email: 'alice@acme.test',
+      email: 'alice@example.test',
       team: 'Eng',
       resolved: true,
       total_spend_usd: 50,
@@ -491,7 +491,7 @@ describe('AnalyticsService.users', () => {
       if (sql.includes('user_id, platform, model, spend_usd')) {
         return [
           {
-            user_id: 'demo-user-0',
+            user_id: 'spend-alias-a',
             platform: 'openai',
             model: 'gpt-4o',
             spend_usd: 10,
@@ -500,7 +500,7 @@ describe('AnalyticsService.users', () => {
             connector_usd: 10,
           },
           {
-            user_id: 'alice.chen@acme.test',
+            user_id: 'alice.chen@example.test',
             platform: 'openai',
             model: 'gpt-4o',
             spend_usd: 5,
@@ -511,9 +511,9 @@ describe('AnalyticsService.users', () => {
         ];
       }
       return [
-        { key: 'demo-user-0', cost_usd: 10, calls: 2, portal_import_usd: 0, connector_usd: 10 },
+        { key: 'spend-alias-a', cost_usd: 10, calls: 2, portal_import_usd: 0, connector_usd: 10 },
         {
-          key: 'alice.chen@acme.test',
+          key: 'alice.chen@example.test',
           cost_usd: 5,
           calls: 1,
           portal_import_usd: 0,
@@ -525,10 +525,10 @@ describe('AnalyticsService.users', () => {
       byId: new Map(),
       byEmail: new Map([
         [
-          'alice.chen@acme.test',
+          'alice.chen@example.test',
           {
             displayName: 'Alice Chen',
-            email: 'alice.chen@acme.test',
+            email: 'alice.chen@example.test',
             teamName: 'Eng',
             teamId: null,
             criticalityTier: 'standard',
@@ -537,10 +537,10 @@ describe('AnalyticsService.users', () => {
       ]),
       byAlias: new Map([
         [
-          'demo-user-0',
+          'spend-alias-a',
           {
             displayName: 'Alice Chen',
-            email: 'alice.chen@acme.test',
+            email: 'alice.chen@example.test',
             teamName: 'Eng',
             teamId: null,
             criticalityTier: 'standard',
@@ -564,11 +564,55 @@ describe('AnalyticsService.users', () => {
     expect(result.users).toHaveLength(1);
     expect(result.users[0]).toMatchObject({
       display_name: 'Alice Chen',
-      email: 'alice.chen@acme.test',
+      email: 'alice.chen@example.test',
       total_spend_usd: 15,
       calls: 3,
       resolved: true,
     });
+  });
+
+  it('hides resurrecting @acme.test and demo-user-* identities', async () => {
+    const queryScoped = jest.fn(async (sql: string) => {
+      if (sql.includes('user_id, platform, model, spend_usd')) {
+        return [];
+      }
+      return [
+        { key: 'demo-user-0', cost_usd: 10, calls: 2, portal_import_usd: 0, connector_usd: 10 },
+        {
+          key: 'ghost@acme.test',
+          cost_usd: 5,
+          calls: 1,
+          portal_import_usd: 0,
+          connector_usd: 5,
+        },
+        {
+          key: 'alive@example.test',
+          cost_usd: 3,
+          calls: 1,
+          portal_import_usd: 0,
+          connector_usd: 3,
+        },
+      ];
+    });
+    mockedLoadIdentityLookups.mockResolvedValueOnce({
+      byId: new Map(),
+      byEmail: new Map(),
+      byAlias: new Map(),
+    });
+    const ch = { queryScoped } as unknown as ClickHouseService;
+    const svc = new AnalyticsService(
+      ch,
+      {} as PrismaService,
+      {} as LariService,
+      {
+        getSpendSummary: jest.fn(async () => null),
+      } as unknown as CopilotAnalyticsService,
+      emptyCopilotMemberSpend(),
+      emptyCursorAnalytics() as never,
+      emptyCursorProductivity() as never,
+    );
+    const result = await svc.users('2026-06-01', '2026-06-30');
+    expect(result.users.map((u) => u.user_id)).toEqual(['alive@example.test']);
   });
 
   it('filters by q on display name, email, and team', async () => {

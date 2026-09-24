@@ -45,6 +45,17 @@ describe('buildUserVendorSpend', () => {
     });
     expect(spend.github).toEqual({ seat_usd: 19, overage_usd: 6, total_usd: 25 });
   });
+
+  it('uses allocated seats for anthropic and replaces connector cursor when allocated', () => {
+    const spend = buildUserVendorSpend({
+      model_breakdown: [{ model: 'claude-3', platform: 'anthropic', spend_usd: 5, calls: 1 }],
+      cursor_on_demand_usd: 10,
+      cursor_seat_usd: 40,
+      allocated_seats: { anthropic: 30, cursor: 25 },
+    });
+    expect(spend.anthropic).toEqual({ seat_usd: 30, overage_usd: 5, total_usd: 35 });
+    expect(spend.cursor).toEqual({ seat_usd: 25, overage_usd: 10, total_usd: 35 });
+  });
 });
 
 describe('sumUserVendorSpend', () => {

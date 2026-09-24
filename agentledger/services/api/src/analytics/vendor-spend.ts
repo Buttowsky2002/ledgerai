@@ -86,19 +86,31 @@ export function buildUserVendorSpend(input: {
   cursor_on_demand_usd: number;
   cursor_seat_usd: number;
   copilot?: { seat_usd: number; overage_usd: number };
+  /**
+   * Seat $ from Fixed Overhead allocation (basic/premium pools). When set for a
+   * vendor, replaces connector seat paths for that vendor so org seats are not
+   * double-counted.
+   */
+  allocated_seats?: Record<string, number>;
 }): Record<string, VendorSpendSlice> {
   const out: Record<string, VendorSpendSlice> = {};
+  const allocated = input.allocated_seats ?? {};
+  const allocatedVendors = new Set(
+    Object.entries(allocated)
+      .filter(([, v]) => v > 0)
+      .map(([k]) => k.trim().toLowerCase()),
+  );
 
   if (input.copilot && (input.copilot.seat_usd > 0 || input.copilot.overage_usd > 0)) {
     const gh = ensureSlice(out, 'github');
-    gh.seat_usd = input.copilot.seat_usd;
+    gh.seat_usd = allocatedVendors.has('github') ? 0 : input.copilot.seat_usd;
     gh.overage_usd = input.copilot.overage_usd;
     finalizeSlice(gh);
   }
 
   if (input.cursor_on_demand_usd > 0 || input.cursor_seat_usd > 0) {
     const cur = ensureSlice(out, 'cursor');
-    cur.seat_usd = input.cursor_seat_usd;
+    cur.seat_usd = allocatedVendors.has('cursor') ? 0 : input.cursor_seat_usd;
     cur.overage_usd = input.cursor_on_demand_usd;
     finalizeSlice(cur);
   }
@@ -122,6 +134,15 @@ export function buildUserVendorSpend(input: {
     }
     const slice = ensureSlice(out, platformToVendor(platform));
     slice.overage_usd += row.spend_usd;
+    finalizeSlice(slice);
+  }
+
+  for (const [vendor, seatUsd] of Object.entries(allocated)) {
+    if (seatUsd <= 0) {
+      continue;
+    }
+    const slice = ensureSlice(out, vendor);
+    slice.seat_usd = usd(seatUsd);
     finalizeSlice(slice);
   }
 

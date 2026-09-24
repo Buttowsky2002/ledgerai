@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Badge, Card, PageHeader } from '../../../components/ui';
+import { SeatTierControls } from '../../../components/users/SeatTierControls';
 import { UserVendorDetailTabs } from '../../../components/users/UserVendorDetailTabs';
 import { proxyApi } from '../../../lib/api';
 import { resolveRange } from '../../../lib/resolve-range';
@@ -12,6 +13,8 @@ import { usd } from '../../../components/ui';
 
 export const dynamic = 'force-dynamic';
 
+type SeatClass = 'basic' | 'premium';
+
 type UserRow = {
   user_id: string;
   display_name: string;
@@ -21,6 +24,7 @@ type UserRow = {
   total_spend_usd: number;
   vendor_spend?: Record<string, VendorSpendSlice>;
   vendor_usage?: Record<string, VendorUsageSlice>;
+  seat_tiers?: Record<string, SeatClass>;
 };
 
 export default async function UserDetailPage({
@@ -42,6 +46,11 @@ export default async function UserDetailPage({
   const user = (userData ?? null) as UserRow | null;
   const vendors =
     (listData as { vendors?: string[] } | null)?.vendors ?? Object.keys(user?.vendor_spend ?? {});
+  const userVendors = Object.keys(user?.vendor_spend ?? {}).filter((v) => {
+    const slice = user?.vendor_spend?.[v];
+    return slice && (slice.seat_usd > 0 || slice.overage_usd > 0 || slice.total_usd > 0);
+  });
+  const tierVendors = userVendors.length > 0 ? userVendors : vendors;
 
   if (!user) {
     return (
@@ -56,6 +65,8 @@ export default async function UserDetailPage({
       </>
     );
   }
+
+  const hasPremium = Object.values(user.seat_tiers ?? {}).some((t) => t === 'premium');
 
   return (
     <>
@@ -78,12 +89,27 @@ export default async function UserDetailPage({
             unlinked
           </Badge>
         )}
+        {hasPremium && (
+          <Badge tone="info" dot>
+            premium
+          </Badge>
+        )}
         {user.email && <span className="text-sm text-muted">{user.email}</span>}
         {user.team && <span className="text-sm text-muted">Team: {user.team}</span>}
         <span className="text-xs text-muted">ID: {user.user_id}</span>
         <span className="text-sm text-gray-200">
           Total AI cost: <span className="num font-medium">{usd(userVendorTotal(user))}</span>
         </span>
+      </div>
+
+      <div className="mb-6 grid gap-4 lg:grid-cols-2">
+        <Card title="Seat class">
+          <SeatTierControls
+            userId={user.email || user.user_id}
+            vendors={tierVendors}
+            initialTiers={user.seat_tiers}
+          />
+        </Card>
       </div>
 
       <Card title="Usage by vendor">
