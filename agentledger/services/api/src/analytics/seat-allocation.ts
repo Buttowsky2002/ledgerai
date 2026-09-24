@@ -237,8 +237,13 @@ function userTierFor(
 }
 
 /**
- * Equal-split each (vendor, tier) pool across eligible users with matching
- * platform presence. Caps by seats when seats > 0 (prefer higher activity).
+ * Allocate each (vendor, tier) Fixed Overhead pool onto eligible users with
+ * matching platform presence.
+ *
+ * When purchased seats > 0, each eligible user gets the FO unit price
+ * (`seat_usd / seats`) — matching Fixed Overhead catalog pricing. Users are
+ * not dropped when headcount exceeds purchased seats (Users may sum above FO).
+ * When seats is 0, equal-split the pool across eligible users.
  *
  * Returns Map<userId, Record<vendor, seat_usd>>.
  */
@@ -276,14 +281,20 @@ export function allocateSeatPools(input: {
       continue;
     }
 
-    const capped =
-      pool.seats > 0 && pool.seats < eligible.length ? eligible.slice(0, pool.seats) : eligible;
-    const share = usd(pool.seat_usd / capped.length);
-    // Distribute remainder cents to first users so sum matches pool.
+    if (pool.seats > 0) {
+      const unit = usd(pool.seat_usd / pool.seats);
+      for (const user of eligible) {
+        add(user.user_id, vendor, unit);
+      }
+      continue;
+    }
+
+    // Uncapped pool: equal-split so sum matches pool.seat_usd.
+    const share = usd(pool.seat_usd / eligible.length);
     let allocated = 0;
-    for (let i = 0; i < capped.length; i++) {
-      const user = capped[i]!;
-      const amount = i === capped.length - 1 ? usd(pool.seat_usd - allocated) : share;
+    for (let i = 0; i < eligible.length; i++) {
+      const user = eligible[i]!;
+      const amount = i === eligible.length - 1 ? usd(pool.seat_usd - allocated) : share;
       allocated = usd(allocated + amount);
       add(user.user_id, vendor, amount);
     }

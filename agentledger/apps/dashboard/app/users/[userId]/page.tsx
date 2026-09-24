@@ -50,7 +50,8 @@ export default async function UserDetailPage({
     const slice = user?.vendor_spend?.[v];
     return slice && (slice.seat_usd > 0 || slice.overage_usd > 0 || slice.total_usd > 0);
   });
-  const tierVendors = userVendors.length > 0 ? userVendors : vendors;
+  // Always expose ChatGPT (openai) and Claude (anthropic) license controls.
+  const tierVendors = [...new Set(['openai', 'anthropic', ...userVendors, ...vendors])];
 
   if (!user) {
     return (
@@ -103,7 +104,7 @@ export default async function UserDetailPage({
       </div>
 
       <div className="mb-6 grid gap-4 lg:grid-cols-2">
-        <Card title="Seat class">
+        <Card title="Seat licenses">
           <SeatTierControls
             userId={user.email || user.user_id}
             vendors={tierVendors}
