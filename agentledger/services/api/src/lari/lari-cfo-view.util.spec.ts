@@ -63,4 +63,20 @@ describe('buildTeamSpendBreakdown', () => {
       },
     ]);
   });
+
+  it('includes allocated non-Cursor seats in department totals', () => {
+    const rows = buildTeamSpendBreakdown(
+      [
+        { userId: 'alice@acme.test', costUsd: 40, calls: 2 },
+        { userId: 'bob@acme.test', costUsd: 40, calls: 0 },
+      ],
+      () => ({ teamId: 'team-eng', teamName: 'Engineering' }),
+      [{ teamId: 'team-eng', teamName: 'Engineering' }],
+    );
+    expect(rows[0]).toMatchObject({
+      teamId: 'team-eng',
+      costUsd: 80,
+      users: 2,
+    });
+  });
 });

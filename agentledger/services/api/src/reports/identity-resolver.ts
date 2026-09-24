@@ -1,3 +1,4 @@
+import { isDemoIdentityKey } from '../analytics/demo-identity';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { UserSpendRow } from './executive-report.types';
 
@@ -279,12 +280,14 @@ export async function listHumanIdentityRoster(
           })
         : [];
     const teamNames = new Map(teams.map((t) => [t.teamId, t.name]));
-    return identityRows.map((row) => ({
-      userId: row.userId,
-      displayName: resolveDisplayName(row.displayName, row.email, row.userId),
-      email: row.email?.trim() || null,
-      team: row.teamId ? (teamNames.get(row.teamId) ?? '') : '',
-    }));
+    return identityRows
+      .filter((row) => !isDemoIdentityKey(row.email) && !isDemoIdentityKey(row.userId))
+      .map((row) => ({
+        userId: row.userId,
+        displayName: resolveDisplayName(row.displayName, row.email, row.userId),
+        email: row.email?.trim() || null,
+        team: row.teamId ? (teamNames.get(row.teamId) ?? '') : '',
+      }));
   });
 }
 

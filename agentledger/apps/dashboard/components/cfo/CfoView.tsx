@@ -13,7 +13,7 @@ import { CostPerOutcomeStat } from '@/components/cfo/CostPerOutcomeStat';
 import { fetchCfoView, fetchUserValue } from '@/lib/api/lari';
 import { rangeHref, type DateBounds } from '@/lib/date-range';
 import { forecastHorizonLabel } from '@/lib/forecast-horizon';
-import { paginateItems, USERS_PAGE_SIZE } from '@/lib/table-pager';
+import { paginateItems, USERS_PAGE_SIZE, type PageSizeOption } from '@/lib/table-pager';
 import { usdPerMonth } from '@/lib/usd-per-month';
 import type { CostBasisMode, CfoViewResponse, UserValueResponse } from '@/types/lari';
 
@@ -57,10 +57,16 @@ function SpendByTeamCard({
   rows: NonNullable<CfoViewResponse['teamBreakdown']>;
 }) {
   const [page, setPage] = useState(1);
+  const [pageSizeOption, setPageSizeOption] = useState<PageSizeOption>(10);
+  const pageSize =
+    pageSizeOption === 'all' ? Number.POSITIVE_INFINITY : pageSizeOption;
   useEffect(() => {
     setPage(1);
-  }, [from, to, rows.length]);
-  const pageSlice = useMemo(() => paginateItems(rows, page, USERS_PAGE_SIZE), [rows, page]);
+  }, [from, to, rows.length, pageSizeOption]);
+  const pageSlice = useMemo(
+    () => paginateItems(rows, page, pageSize),
+    [rows, page, pageSize],
+  );
 
   return (
     <Card
@@ -69,8 +75,8 @@ function SpendByTeamCard({
     >
       {rows.length === 0 ? (
         <p className="py-6 text-center text-sm text-muted">
-          No teams provisioned yet. Sync SCIM Groups (or assign identities to teams) to see spend by
-          team.
+          No teams provisioned yet. Map Entra User <span className="font-mono">department</span> in
+          SCIM (or assign identities to teams) to see spend by team.
         </p>
       ) : (
         <>
@@ -83,6 +89,23 @@ function SpendByTeamCard({
             yKey="spend"
           />
           <div className="mt-4">
+            <div className="mb-2 flex items-center justify-end gap-1 text-xs text-muted">
+              <span className="mr-1">Show</span>
+              {([5, 10, 'all'] as const).map((opt) => (
+                <button
+                  key={String(opt)}
+                  type="button"
+                  onClick={() => setPageSizeOption(opt)}
+                  className={`rounded px-2 py-1 ${
+                    pageSizeOption === opt
+                      ? 'bg-accent/20 text-white'
+                      : 'border border-edge hover:bg-white/5'
+                  }`}
+                >
+                  {opt === 'all' ? 'All' : opt}
+                </button>
+              ))}
+            </div>
             <DataTable
               columns={[
                 { key: 'team', label: 'Team' },

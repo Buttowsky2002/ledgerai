@@ -48,6 +48,7 @@ import {
   mergeUserDirectoryRows,
   userMatchesQuery,
 } from './user-directory.util';
+import { isDemoIdentityKey } from './demo-identity';
 import { DEFAULT_CURSOR_SEAT_USD_PER_MONTH } from './cursor-seat-license';
 import {
   billingMonthsInRange,
@@ -58,6 +59,16 @@ import {
   seatLookupToDate,
   type FixedCostSeatRow,
 } from '../fixed-costs/fixed-cost-prorate';
+import {
+  allocateSeatPools,
+  mergeAllocatedWithConnectorFallback,
+  presenceVendorsFromBreakdown,
+  seatPoolsForRange,
+  vendorsWithFixedSeatPools,
+  type SeatClass,
+  type SeatTierAssignment,
+  type UserPlatformPresence,
+} from './seat-allocation';
 import { vendorSeatChanges } from './seat-price-delta';
 import {
   buildOrgVendorBilling,
@@ -118,6 +129,8 @@ export interface UserDirectoryRow {
   seat_monthly_cost_usd?: number;
   seat_provider?: string;
   plan_name?: string;
+  /** Per-vendor basic/premium seat tier tags (default basic when absent). */
+  seat_tiers?: Record<string, SeatClass>;
 }
 
 export interface VendorBillingResult {
@@ -1373,13 +1386,25 @@ export class AnalyticsService {
         seedRoster: true,
       },
     );
+    const { allocated, tiersByUser } = await this.allocateFixedSeatsToUsers(
+      tenantId,
+      r,
+      assembled.users,
+      cursorSeatByUser,
+      copilotPack.byUser,
+      orgBilling,
+    );
     let users = enrichUsersWithVendorData(
       assembled.users,
       copilotPack.byUser,
       cursorSeatByUser,
       tokensByUserVendor,
       cursorPack.totals,
-    );
+      allocated,
+    ).map((u) => ({
+      ...u,
+      seat_tiers: tiersByUser.get(u.user_id),
+    }));
     if (this.userValue) {
       try {
         // Always assemble full utilization rows (team vs individual only affects
@@ -1572,42 +1597,226 @@ export class AnalyticsService {
     if (!userId) {
       throw new BadRequestException('userId required');
     }
-    const r = this.range(from, to);
-    const tenantId = getTenantId();
-    if (!tenantId) {
-      throw new BadRequestException('no tenant in context');
+    // Reuse the full directory so Fixed Overhead seat allocation equal-splits
+    // across all eligible members (same numbers as the Users table).
+    const directory = await this.users(from, to);
+    const needle = userId.trim().toLowerCase();
+    return (
+      directory.users.find(
+        (u) =>
+          u.user_id.toLowerCase() === needle ||
+          (u.email != null && u.email.toLowerCase() === needle),
+      ) ?? null
+    );
+  }
+
+  /**
+   * Allocate fixed_costs seat pools onto directory users by platform presence
+   * and identity_seat_tiers (basic/premium). Connector seats fill gaps only
+   * when Fixed Overhead has no pool for that vendor.
+   */
+  private async allocateFixedSeatsToUsers(
+    tenantId: string,
+    r: Range,
+    users: UserDirectoryRow[],
+    cursorSeatByUser: Map<string, number>,
+    copilotByUser: Map<string, { seat_usd: number; overage_usd: number; calls: number }>,
+    orgBilling: VendorBillingResult,
+  ): Promise<{
+    allocated: Map<string, Record<string, number>>;
+    tiersByUser: Map<string, Record<string, SeatClass>>;
+  }> {
+    const fixedRows = await this.loadFixedCostSeatRows(tenantId, r);
+    const pools = seatPoolsForRange(fixedRows, r.from, r.to);
+    const fixedVendors = vendorsWithFixedSeatPools(pools);
+
+    // Include connector-only vendors that appear on org billing as presence targets
+    // even when fixed_costs is empty (Cursor/Copilot fallback path).
+    for (const row of orgBilling.vendors) {
+      if (row.seat_usd > 0 && !fixedVendors.has(row.vendor)) {
+        // no pool — connector fallback handles seat $
+      }
     }
-    const [
-      { totals: chTotals, breakdown: chBreakdown, tokensByUserVendor },
-      copilotPack,
-      cursorPack,
-    ] = await Promise.all([
-      this.fetchUserSpendFromCh(r, userId),
-      this.fetchCopilotUserSpend(tenantId, r, userId),
-      this.fetchCursorUserActivity(tenantId, r, userId),
-    ]);
-    const { totals, breakdown } = mergeCursorActivityIntoUserSpend(
-      [...chTotals, ...copilotPack.totals],
-      [...chBreakdown, ...copilotPack.breakdown],
-      cursorPack,
-    );
-    const cursorSeatByUser = await this.cursorSeatUsdByUser(tenantId, r, cursorPack.totals);
-    const assembled = await this.assembleUserDirectory(
+
+    const { assignments, tiersByUser, userIdAliases } = await this.loadSeatTier(
       tenantId,
-      totals,
-      breakdown,
-      undefined,
-      copilotPack.hints,
-      { seedRoster: true, onlyUserId: userId },
+      users,
     );
-    const rows = enrichUsersWithVendorData(
-      assembled.users,
-      copilotPack.byUser,
-      cursorSeatByUser,
-      tokensByUserVendor,
-      cursorPack.totals,
+
+    const presence: UserPlatformPresence[] = users.map((u) => {
+      const extra: string[] = [];
+      if ((cursorSeatByUser.get(u.user_id) ?? 0) > 0 || (u.cursor_on_demand_usd ?? 0) > 0) {
+        extra.push('cursor');
+      }
+      if (copilotByUser.has(u.user_id)) {
+        extra.push('github');
+      }
+      if (u.has_seat && u.seat_provider) {
+        extra.push(platformToVendor(u.seat_provider));
+      }
+      // Explicit seat-tier tags count as presence so tagged users without metered
+      // usage still receive their Fixed Overhead share.
+      for (const vendor of Object.keys(tiersByUser.get(u.user_id) ?? {})) {
+        extra.push(vendor);
+      }
+      return {
+        user_id: u.user_id,
+        vendors: presenceVendorsFromBreakdown(u.model_breakdown, extra),
+        activity_score: u.total_spend_usd + u.calls,
+      };
+    });
+
+    const allocatedFromPools = allocateSeatPools({
+      pools,
+      presence,
+      tiers: assignments,
+      userIdAliases,
+    });
+
+    const connectorSeats = new Map<string, Record<string, number>>();
+    for (const [uid, seatUsd] of cursorSeatByUser) {
+      if (seatUsd > 0) {
+        connectorSeats.set(uid, { ...(connectorSeats.get(uid) ?? {}), cursor: seatUsd });
+      }
+    }
+    for (const [uid, pack] of copilotByUser) {
+      if (pack.seat_usd > 0) {
+        connectorSeats.set(uid, {
+          ...(connectorSeats.get(uid) ?? {}),
+          github: pack.seat_usd,
+        });
+      }
+    }
+
+    const allocated = mergeAllocatedWithConnectorFallback(
+      allocatedFromPools,
+      connectorSeats,
+      fixedVendors,
     );
-    return rows[0] ?? null;
+    return { allocated, tiersByUser };
+  }
+
+  private async loadFixedCostSeatRows(tenantId: string, r: Range): Promise<FixedCostSeatRow[]> {
+    const seatFrom = seatLookupFromDate(r.to);
+    const seatTo = seatLookupToDate(r.to);
+    try {
+      const seatRows = await this.ch.queryScoped<{
+        period_month: string;
+        vendor: string;
+        seats: unknown;
+        cost_usd: unknown;
+        line_item: string;
+        cost_type: string;
+      }>(
+        `SELECT period_month, vendor, cost_type, line_item, seats, cost_usd
+         FROM agentledger.fixed_costs FINAL
+         WHERE tenant_id = {tenant:String}
+           AND period_month >= toDate({seatFrom:String})
+           AND period_month <= toStartOfMonth(toDate({seatTo:String}))
+           AND attributable = 0`,
+        { seatFrom, seatTo },
+      );
+      return seatRows.map((row) => ({
+        period_month: String(row.period_month),
+        vendor: String(row.vendor).trim().toLowerCase(),
+        cost_usd: n(row.cost_usd),
+        seats: n(row.seats),
+        line_item: String(row.line_item ?? ''),
+        cost_type: String(row.cost_type ?? ''),
+      }));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`fixed_costs seat load failed for ${tenantId}: ${msg}`);
+      return [];
+    }
+  }
+
+  private async loadSeatTier(
+    tenantId: string,
+    users: UserDirectoryRow[],
+  ): Promise<{
+    assignments: SeatTierAssignment[];
+    tiersByUser: Map<string, Record<string, SeatClass>>;
+    userIdAliases: Map<string, string>;
+  }> {
+    const tiersByUser = new Map<string, Record<string, SeatClass>>();
+    const userIdAliases = new Map<string, string>();
+    const assignments: SeatTierAssignment[] = [];
+
+    for (const u of users) {
+      if (u.email) {
+        userIdAliases.set(u.email.toLowerCase(), u.user_id);
+      }
+      userIdAliases.set(u.user_id.toLowerCase(), u.user_id);
+    }
+
+    if (!this.prisma?.withTenant) {
+      return { assignments, tiersByUser, userIdAliases };
+    }
+
+    try {
+      const rows = await this.prisma.withTenant(tenantId, (tx) =>
+        tx.$queryRaw<{ user_id: string; vendor: string; tier: string }[]>`
+          SELECT user_id::text, vendor, tier
+          FROM identity_seat_tiers`,
+      );
+      const byIdentity = new Map<string, Record<string, SeatClass>>();
+      for (const row of rows) {
+        const tier: SeatClass = row.tier === 'premium' ? 'premium' : 'basic';
+        const vendor = String(row.vendor).trim().toLowerCase();
+        const uid = String(row.user_id);
+        const cur = byIdentity.get(uid) ?? {};
+        cur[vendor] = tier;
+        byIdentity.set(uid, cur);
+        assignments.push({ user_id: uid, vendor, tier });
+      }
+
+      // Map identity UUID tiers onto directory user_id keys (email or uuid).
+      for (const u of users) {
+        const hit =
+          byIdentity.get(u.user_id) ??
+          (u.email ? byIdentity.get(u.email) : undefined);
+        // Also match when directory key is email but tier is on UUID — resolve via aliases
+        // already loaded: scan identity keys against email/user_id.
+        if (hit) {
+          tiersByUser.set(u.user_id, hit);
+          for (const [vendor, tier] of Object.entries(hit)) {
+            assignments.push({ user_id: u.user_id, vendor, tier });
+          }
+        }
+      }
+
+      // Resolve UUID → directory user via identity lookups when directory uses email keys.
+      const lookups = await loadIdentityLookups(this.prisma, tenantId);
+      for (const [identityId, tiers] of byIdentity) {
+        const identity = lookups.byId.get(identityId);
+        if (!identity) {
+          continue;
+        }
+        for (const u of users) {
+          if (u.user_id === identityId) {
+            continue;
+          }
+          const emailMatch =
+            identity.email && u.email && identity.email.toLowerCase() === u.email.toLowerCase();
+          const idMatch = u.user_id === identity.email;
+          if (emailMatch || idMatch) {
+            tiersByUser.set(u.user_id, { ...(tiersByUser.get(u.user_id) ?? {}), ...tiers });
+            for (const [vendor, tier] of Object.entries(tiers)) {
+              assignments.push({ user_id: u.user_id, vendor, tier });
+            }
+          }
+        }
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // Table may not exist until migration 036 is applied.
+      if (!/identity_seat_tiers|does not exist|42P01/i.test(msg)) {
+        this.logger.warn(`identity_seat_tiers load failed: ${msg}`);
+      }
+    }
+
+    return { assignments, tiersByUser, userIdAliases };
   }
 
   private userSpendExcludeKey(): string {
@@ -1953,6 +2162,9 @@ export class AnalyticsService {
 
     const merged = new Map<string, UserDirectoryRow>();
     for (const user_id of allUserIds) {
+      if (isDemoIdentityKey(user_id)) {
+        continue;
+      }
       const totalsRow = totalsByUser.get(user_id) ?? {
         total_spend_usd: 0,
         calls: 0,
@@ -1968,6 +2180,9 @@ export class AnalyticsService {
       const cursor_included_usd = totalsRow.cursor_included_usd;
       const cursor_on_demand_usd = totalsRow.cursor_on_demand_usd;
       const identity = resolveUserDirectoryIdentity(user_id, byId, byEmail, byAlias);
+      if (isDemoIdentityKey(identity.email)) {
+        continue;
+      }
       const hasActivity =
         total_spend_usd > 0 ||
         calls > 0 ||
@@ -1986,6 +2201,9 @@ export class AnalyticsService {
         ? identity.display_name
         : hint?.displayName?.trim() || identity.display_name;
       const email = identity.email ?? hint?.email ?? null;
+      if (isDemoIdentityKey(email)) {
+        continue;
+      }
       const team = identity.team || hint?.team || '';
 
       const model_breakdown = breakdownByUser.get(user_id) ?? [];

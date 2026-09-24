@@ -152,6 +152,7 @@ export function enrichUsersWithVendorData(
   cursorSeatByUser: Map<string, number>,
   tokensByUserVendor: Map<string, Record<string, number>>,
   cursorTotals: { user_id: string; calls: number; tokens?: number }[],
+  allocatedSeatsByUser: Map<string, Record<string, number>> = new Map(),
 ): UserDirectoryRow[] {
   const cursorByUser = new Map(
     cursorTotals.map((row) => [
@@ -164,6 +165,7 @@ export function enrichUsersWithVendorData(
     const copilot = copilotByUser.get(user.user_id);
     const cursorSeat = cursorSeatByUser.get(user.user_id) ?? 0;
     const cursorActivity = cursorByUser.get(user.user_id);
+    const allocated = allocatedSeatsByUser.get(user.user_id);
     const vendor_spend = buildUserVendorSpend({
       model_breakdown: user.model_breakdown,
       cursor_on_demand_usd: user.cursor_on_demand_usd ?? 0,
@@ -171,6 +173,7 @@ export function enrichUsersWithVendorData(
       copilot: copilot
         ? { seat_usd: copilot.seat_usd, overage_usd: copilot.overage_usd }
         : undefined,
+      allocated_seats: allocated,
     });
     const vendor_usage = buildUserVendorUsage({
       model_breakdown: user.model_breakdown,

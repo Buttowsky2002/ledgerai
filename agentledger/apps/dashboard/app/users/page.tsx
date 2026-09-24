@@ -1,13 +1,21 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { Badge, Card, DataTable, PageHeader, usd } from '../../components/ui';
+import { DateRangePicker } from '../../components/DateRangePicker';
 import { TablePager } from '../../components/TablePager';
 import { UtilizationStatusBadge } from '../../components/UtilizationStatusBadge';
 import { VendorSpendCell } from '../../components/VendorSpendCell';
 import { proxyApi } from '../../lib/api';
-import { resolveRange } from '../../lib/resolve-range';
+import { fetchDataBounds } from '../../lib/data-bounds';
 import { vendorLabel } from '../../lib/fixed-cost-catalog';
-import { paginateItems, parsePageParam, USERS_PAGE_SIZE } from '../../lib/table-pager';
+import { isDemoUserRow } from '../../lib/identity-filters';
+import { resolvePageRange } from '../../lib/resolve-range';
+import {
+  paginateItems,
+  parsePageParam,
+  parsePageSizeParam,
+  type PageSizeOption,
+} from '../../lib/table-pager';
 import {
   sumVendorColumns,
   userVendorTotal,
@@ -18,6 +26,7 @@ import {
 export const dynamic = 'force-dynamic';
 
 type UtilizationStatus = 'active' | 'low_use' | 'inactive';
+type SeatClass = 'basic' | 'premium';
 
 type UserRow = {
   user_id: string;
@@ -31,6 +40,7 @@ type UserRow = {
   has_seat?: boolean;
   utilization_score?: number;
   seat_monthly_cost_usd?: number;
+  seat_tiers?: Record<string, SeatClass>;
 };
 
 type UsersResponse = {
@@ -70,25 +80,45 @@ function isStatusTab(v: string | undefined): v is StatusTab {
   return STATUS_TABS.some((t) => t.id === v);
 }
 
+function userHasPlatform(u: UserRow, platform: string): boolean {
+  const slice = u.vendor_spend?.[platform];
+  if (!slice) {
+    return false;
+  }
+  return slice.seat_usd > 0 || slice.overage_usd > 0 || slice.total_usd > 0;
+}
+
+function pageSizeLabel(opt: PageSizeOption): string {
+  return opt === 'all' ? 'All' : String(opt);
+}
+
 export default async function UsersPage({
   searchParams,
 }: {
   searchParams: {
     from?: string;
     to?: string;
+    range?: string;
     q?: string;
     tab?: string;
     status?: string;
+    team?: string;
+    platform?: string;
     page?: string;
+    pageSize?: string;
   };
 }) {
-  const { from, to } = resolveRange(searchParams);
+  const dataBounds = await fetchDataBounds();
+  const { from, to, isAllTime } = resolvePageRange(searchParams, dataBounds, 90);
   const q = searchParams.q?.trim() ?? '';
+  const teamFilter = searchParams.team?.trim() ?? '';
+  const platformFilter = searchParams.platform?.trim().toLowerCase() ?? '';
   const tab: MemberTab = MEMBER_TABS.some((t) => t.id === searchParams.tab)
     ? (searchParams.tab as MemberTab)
     : 'all';
   const status: StatusTab = isStatusTab(searchParams.status) ? searchParams.status : 'all';
   const page = parsePageParam(searchParams.page);
+  const { option: pageSizeOption, size: pageSize } = parsePageSizeParam(searchParams.pageSize);
 
   const qs = new URLSearchParams({ from, to });
   if (q) {
@@ -99,10 +129,14 @@ export default async function UsersPage({
   const payload = (
     ok && data && typeof data === 'object' ? data : { users: [], vendors: [] }
   ) as UsersResponse;
-  const allUsers = payload.users ?? [];
+  const allUsers = (payload.users ?? []).filter((u) => !isDemoUserRow(u));
   const vendors = payload.vendors ?? [];
   const orgTotal = payload.org_billing?.total_cost_of_ai;
   const sources = payload.sources;
+
+  const departments = [
+    ...new Set(allUsers.map((u) => u.team?.trim()).filter((t): t is string => Boolean(t))),
+  ].sort((a, b) => a.localeCompare(b));
 
   let users =
     tab === 'linked'
@@ -113,20 +147,36 @@ export default async function UsersPage({
   if (status !== 'all') {
     users = users.filter((u) => u.status === status);
   }
+  if (teamFilter) {
+    users = users.filter((u) => u.team === teamFilter);
+  }
+  if (platformFilter) {
+    users = users.filter((u) => userHasPlatform(u, platformFilter));
+  }
 
-  const pageSlice = paginateItems(users, page, USERS_PAGE_SIZE);
+  const pageSlice = paginateItems(users, page, pageSize);
   const loadError = !ok;
   const showUnlinkedBadge = tab !== 'linked' && pageSlice.items.some((u) => !u.resolved);
+  const filtersActive = Boolean(q || teamFilter || platformFilter || tab !== 'all' || status !== 'all');
 
   const buildHref = (opts: {
     nextTab?: MemberTab;
     nextStatus?: StatusTab;
     nextPage?: number;
+    nextPageSize?: PageSizeOption;
+    nextTeam?: string;
+    nextPlatform?: string;
     keepQ?: boolean;
   }) => {
     const params = new URLSearchParams({ from, to });
+    if (isAllTime) {
+      params.set('range', 'all');
+    }
     const nextTab = opts.nextTab ?? tab;
     const nextStatus = opts.nextStatus ?? status;
+    const nextTeam = opts.nextTeam !== undefined ? opts.nextTeam : teamFilter;
+    const nextPlatform = opts.nextPlatform !== undefined ? opts.nextPlatform : platformFilter;
+    const nextPageSize = opts.nextPageSize ?? pageSizeOption;
     if (nextTab !== 'all') {
       params.set('tab', nextTab);
     }
@@ -136,6 +186,15 @@ export default async function UsersPage({
     if (opts.keepQ !== false && q) {
       params.set('q', q);
     }
+    if (nextTeam) {
+      params.set('team', nextTeam);
+    }
+    if (nextPlatform) {
+      params.set('platform', nextPlatform);
+    }
+    if (nextPageSize !== 10) {
+      params.set('pageSize', String(nextPageSize));
+    }
     if (opts.nextPage != null && opts.nextPage > 1) {
       params.set('page', String(opts.nextPage));
     }
@@ -143,7 +202,7 @@ export default async function UsersPage({
   };
 
   const tabHref = (next: MemberTab, keepQ = true) =>
-    buildHref({ nextTab: next, nextStatus: status, keepQ });
+    buildHref({ nextTab: next, nextStatus: status, keepQ, nextPage: 1 });
   const statusHref = (next: StatusTab) => buildHref({ nextStatus: next, nextPage: 1 });
 
   const inactiveSeats = allUsers.filter((u) => u.has_seat && u.status === 'inactive').length;
@@ -180,15 +239,33 @@ export default async function UsersPage({
   ];
 
   const footerRow: Record<string, ReactNode> = {
-    user: <span className="text-xs uppercase tracking-wide text-muted">Grand total</span>,
+    user: (
+      <span className="text-xs uppercase tracking-wide text-muted">
+        Grand total
+        {filtersActive && orgTotal != null && (
+          <span className="ml-2 font-normal normal-case text-muted/80">
+            (org {usd(orgTotal)})
+          </span>
+        )}
+      </span>
+    ),
     email: '',
     team: '',
     status: '',
-    total: usd(orgTotal ?? directoryTotal),
+    total: usd(directoryTotal),
   };
   for (const v of vendors) {
     footerRow[`vendor_${v}`] = <VendorSpendCell slice={vendorTotals[v]} />;
   }
+
+  const extraParams: Record<string, string | undefined> = {
+    q: q || undefined,
+    tab: tab !== 'all' ? tab : undefined,
+    status: status !== 'all' ? status : undefined,
+    team: teamFilter || undefined,
+    platform: platformFilter || undefined,
+    pageSize: pageSizeOption !== 10 ? String(pageSizeOption) : undefined,
+  };
 
   return (
     <>
@@ -196,7 +273,16 @@ export default async function UsersPage({
         title="Users"
         subtitle={`${tabSubtitle} · ${sourceNote}`}
         actions={
-          <div className="flex flex-wrap justify-end gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <DateRangePicker
+              basePath="/users"
+              from={from}
+              to={to}
+              earliestDay={dataBounds.earliest_day}
+              latestDay={dataBounds.latest_day}
+              isAllTime={isAllTime}
+              extraParams={extraParams}
+            />
             {MEMBER_TABS.map((t) => {
               const count =
                 t.id === 'all'
@@ -277,13 +363,17 @@ export default async function UsersPage({
         </div>
       </Card>
 
-      <Card title="Search">
+      <Card title="Filters">
         <form method="get" className="flex flex-wrap items-end gap-3">
           <input type="hidden" name="from" value={from} />
           <input type="hidden" name="to" value={to} />
+          {isAllTime && <input type="hidden" name="range" value="all" />}
           {tab !== 'all' && <input type="hidden" name="tab" value={tab} />}
           {status !== 'all' && <input type="hidden" name="status" value={status} />}
-          <label className="flex min-w-[16rem] flex-1 flex-col gap-1 text-sm">
+          {pageSizeOption !== 10 && (
+            <input type="hidden" name="pageSize" value={String(pageSizeOption)} />
+          )}
+          <label className="flex min-w-[14rem] flex-1 flex-col gap-1 text-sm">
             <span className="text-muted">Name, email, or team</span>
             <input
               type="search"
@@ -293,15 +383,50 @@ export default async function UsersPage({
               className="rounded-md border border-edge bg-panel px-3 py-2 text-sm text-white placeholder:text-muted"
             />
           </label>
+          <label className="flex min-w-[10rem] flex-col gap-1 text-sm">
+            <span className="text-muted">Department</span>
+            <select
+              name="team"
+              defaultValue={teamFilter}
+              className="rounded-md border border-edge bg-panel px-3 py-2 text-sm text-white"
+            >
+              <option value="">All departments</option>
+              {departments.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex min-w-[10rem] flex-col gap-1 text-sm">
+            <span className="text-muted">Platform</span>
+            <select
+              name="platform"
+              defaultValue={platformFilter}
+              className="rounded-md border border-edge bg-panel px-3 py-2 text-sm text-white"
+            >
+              <option value="">All platforms</option>
+              {vendors.map((v) => (
+                <option key={v} value={v}>
+                  {vendorLabel(v)}
+                </option>
+              ))}
+            </select>
+          </label>
           <button
             type="submit"
             className="rounded-md bg-accent/20 px-4 py-2 text-sm text-white ring-1 ring-inset ring-accent/30 hover:bg-accent/30"
           >
-            Search
+            Apply
           </button>
-          {q && (
+          {(q || teamFilter || platformFilter) && (
             <Link
-              href={buildHref({ keepQ: false, nextPage: 1 })}
+              href={buildHref({
+                keepQ: false,
+                nextTeam: '',
+                nextPlatform: '',
+                nextPage: 1,
+              })}
               className="pb-2 text-sm text-muted hover:text-white"
             >
               Clear
@@ -311,12 +436,32 @@ export default async function UsersPage({
       </Card>
 
       <Card title={`Member directory · ${MEMBER_TABS.find((t) => t.id === tab)?.label ?? 'All'}`}>
-        {vendors.length > 0 && (
-          <p className="mb-3 text-xs text-muted">
-            Vendors: {vendors.map((v) => vendorLabel(v)).join(' · ')} — click a user for usage
-            detail · {USERS_PAGE_SIZE} per page
-          </p>
-        )}
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          {vendors.length > 0 ? (
+            <p className="text-xs text-muted">
+              Vendors: {vendors.map((v) => vendorLabel(v)).join(' · ')} — click a user for usage
+              detail
+            </p>
+          ) : (
+            <span />
+          )}
+          <div className="flex items-center gap-1 text-xs text-muted">
+            <span className="mr-1">Show</span>
+            {([5, 10, 'all'] as const).map((opt) => (
+              <Link
+                key={String(opt)}
+                href={buildHref({ nextPageSize: opt, nextPage: 1 })}
+                className={`rounded px-2 py-1 ${
+                  pageSizeOption === opt
+                    ? 'bg-accent/20 text-white'
+                    : 'border border-edge hover:bg-white/5'
+                }`}
+              >
+                {pageSizeLabel(opt)}
+              </Link>
+            ))}
+          </div>
+        </div>
         {pageSlice.items.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted">No users match this filter.</p>
         ) : (
@@ -324,6 +469,7 @@ export default async function UsersPage({
             <DataTable
               columns={columns}
               rows={pageSlice.items.map((u) => {
+                const hasPremium = Object.values(u.seat_tiers ?? {}).some((t) => t === 'premium');
                 const row: Record<string, ReactNode> = {
                   user: (
                     <span className="inline-flex flex-wrap items-center gap-2">
@@ -336,6 +482,11 @@ export default async function UsersPage({
                       {showUnlinkedBadge && !u.resolved && (
                         <Badge tone="warn" dot>
                           unlinked
+                        </Badge>
+                      )}
+                      {hasPremium && (
+                        <Badge tone="info" dot>
+                          premium
                         </Badge>
                       )}
                       {u.has_seat && (

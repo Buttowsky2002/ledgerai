@@ -71,8 +71,24 @@ model Identity {
   active      Boolean @default(true)
   criticalityTier String @default("standard") @map("criticality_tier")
 
+  seatTiers IdentitySeatTier[]
+
   @@unique([tenantId, email])
   @@map("identities")
+}
+
+// Per-vendor basic/premium seat class for Fixed Overhead allocation.
+model IdentitySeatTier {
+  tenantId  String   @map("tenant_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  vendor    String
+  tier      String   @default("basic")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  identity Identity @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@id([tenantId, userId, vendor])
+  @@map("identity_seat_tiers")
 }
 
 model TenantIdpConfig {

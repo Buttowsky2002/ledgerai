@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 
 import { ChParam } from '../analytics-store/analytics-store';
 
@@ -17,10 +17,22 @@ import {
   RECONCILED_PROVIDER_SPEND_SQL,
   RECONCILED_UNMAPPED_SPEND_SQL,
   RECONCILED_USER_DAY_SPEND_SQL,
+  RECONCILED_USER_MODEL_BREAKDOWN_SQL,
 } from '../connectors/metered-cost';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { loadIdentityLookups, resolveUserDirectoryIdentity } from '../reports/identity-resolver';
+import {
+  allocateSeatPools,
+  mergeAllocatedWithConnectorFallback,
+  presenceVendorsFromBreakdown,
+  seatPoolsForRange,
+  vendorsWithFixedSeatPools,
+  type SeatClass,
+  type SeatTierAssignment,
+  type UserPlatformPresence,
+} from '../analytics/seat-allocation';
+import { platformToVendor } from '../analytics/vendor-spend';
 import { canonicalUserKey } from '../analytics/user-directory.util';
 
 import { getTenantId } from '../tenant/tenant-context';
@@ -31,6 +43,7 @@ import {
   periodSeatTotalForRange,
   prorateMonthlyCost,
   seatLookupFromDate,
+  seatLookupToDate,
   type FixedCostSeatRow,
 } from '../fixed-costs/fixed-cost-prorate';
 
@@ -73,6 +86,8 @@ import {
 
 @Injectable()
 export class LariCfoViewService {
+  private readonly logger = new Logger(LariCfoViewService.name);
+
   constructor(
     private readonly ch: AnalyticsStore,
 
@@ -509,24 +524,32 @@ export class LariCfoViewService {
 
   /**
    * Spend by team: billable $ + calls collapsed by identity email (same as Users
-   * directory) then rolled to identities.team_id. Cursor seats + attributed
-   * on-demand overlay so seat/overage match the member directory. Provisioned
-   * teams with $0 still appear after SCIM sync.
+   * directory) then rolled to identities.team_id. Fixed Overhead seats are
+   * allocated by platform presence + basic/premium tier (same allocator as Users);
+   * Cursor connector seats fill gaps when fixed_costs has no Cursor pool.
    */
   private async buildTeamBreakdown(tenantId: string, r: Range): Promise<CfoViewTeamBreakdown[]> {
     try {
       const params = r as Record<string, ChParam>;
-      const [spendRows, codingRows, copilotRows, cursorSeatByUser, cursorActivity, lookups, teams] =
-        await Promise.all([
-          this.ch.queryScoped<{ key: string; cost_usd: unknown; calls: unknown }>(
-            `SELECT key, cost_usd, calls
+      const [
+        spendRows,
+        codingRows,
+        copilotRows,
+        cursorSeatByUser,
+        cursorActivity,
+        modelRows,
+        lookups,
+        teams,
+      ] = await Promise.all([
+        this.ch.queryScoped<{ key: string; cost_usd: unknown; calls: unknown }>(
+          `SELECT key, cost_usd, calls
              FROM (${RECONCILED_USER_DAY_SPEND_SQL}) AS reconciled
              WHERE cost_usd > 0 OR calls > 0
              ORDER BY cost_usd DESC`,
-            params,
-          ),
-          this.ch.queryScoped<{ key: string; cost_usd: unknown; calls: unknown }>(
-            `SELECT if(user_id = '', 'Unassigned', user_id) AS key,
+          params,
+        ),
+        this.ch.queryScoped<{ key: string; cost_usd: unknown; calls: unknown }>(
+          `SELECT if(user_id = '', 'Unassigned', user_id) AS key,
                     sum(cost_usd) AS cost_usd,
                     sum(requests) AS calls
              FROM coding_agent_daily
@@ -534,16 +557,24 @@ export class LariCfoViewService {
                AND day BETWEEN {from:Date} AND {to:Date}
              GROUP BY key
              HAVING sum(cost_usd) > 0 OR sum(requests) > 0`,
+          params,
+        ),
+        this.copilotAnalytics.getUserSpendAllocation(tenantId, r.from, r.to).catch(() => []),
+        this.cursorSeatSpendByUser(tenantId, r).catch(() => new Map<string, number>()),
+        this.cursorAnalytics.getUserActivity(tenantId, r.from, r.to).catch(() => []),
+        this.ch
+          .queryScoped<{ user_id: string; platform: string; spend_usd: unknown; calls: unknown }>(
+            `SELECT user_id, platform, spend_usd, calls
+             FROM (${RECONCILED_USER_MODEL_BREAKDOWN_SQL}) AS reconciled
+             WHERE user_id != '' AND user_id != 'Unassigned'`,
             params,
-          ),
-          this.copilotAnalytics.getUserSpendAllocation(tenantId, r.from, r.to).catch(() => []),
-          this.cursorSeatSpendByUser(tenantId, r).catch(() => new Map<string, number>()),
-          this.cursorAnalytics.getUserActivity(tenantId, r.from, r.to).catch(() => []),
-          loadIdentityLookups(this.prisma, tenantId),
-          this.prisma.withTenant(tenantId, (tx) =>
-            tx.team.findMany({ select: { teamId: true, name: true }, orderBy: { name: 'asc' } }),
-          ),
-        ]);
+          )
+          .catch(() => []),
+        loadIdentityLookups(this.prisma, tenantId),
+        this.prisma.withTenant(tenantId, (tx) =>
+          tx.team.findMany({ select: { teamId: true, name: true }, orderBy: { name: 'asc' } }),
+        ),
+      ]);
 
       type Agg = {
         costUsd: number;
@@ -624,7 +655,46 @@ export class LariCfoViewService {
           ingest(row.user_id, usd(row.on_demand_usd - have), 0);
         }
       }
-      for (const [userId, seatUsd] of cursorSeatByUser) {
+
+      // Platform presence for Fixed Overhead allocation (matches Users directory).
+      const presenceByCanon = new Map<string, Set<string>>();
+      const notePresence = (userId: string, vendor: string) => {
+        const raw = userId.trim();
+        if (!raw || raw === 'Unassigned') {
+          return;
+        }
+        const identity = resolveUserDirectoryIdentity(
+          raw,
+          lookups.byId,
+          lookups.byEmail,
+          lookups.byAlias,
+        );
+        const canon = canonicalUserKey(raw, identity);
+        const set = presenceByCanon.get(canon) ?? new Set<string>();
+        set.add(platformToVendor(vendor));
+        presenceByCanon.set(canon, set);
+      };
+      for (const row of modelRows) {
+        notePresence(String(row.user_id), String(row.platform));
+      }
+      for (const row of copilotRows) {
+        notePresence(row.userId, 'github');
+      }
+      for (const row of cursorActivity) {
+        notePresence(row.user_id, 'cursor');
+      }
+      for (const userId of cursorSeatByUser.keys()) {
+        notePresence(userId, 'cursor');
+      }
+
+      const allocatedSeats = await this.allocateTeamSeats(
+        tenantId,
+        r,
+        byCanon,
+        presenceByCanon,
+        cursorSeatByUser,
+      );
+      for (const [userId, seatUsd] of allocatedSeats) {
         ingest(userId, seatUsd, 0);
       }
 
@@ -652,9 +722,158 @@ export class LariCfoViewService {
         },
         teams.map((t) => ({ teamId: t.teamId, teamName: t.name })),
       );
-    } catch {
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`CFO team breakdown failed: ${msg}`);
       return [];
     }
+  }
+
+  /**
+   * Allocate fixed_costs seat pools onto users in the team rollup. Connector
+   * Cursor seats apply only when Fixed Overhead has no Cursor pool.
+   */
+  private async allocateTeamSeats(
+    tenantId: string,
+    r: Range,
+    byCanon: Map<
+      string,
+      {
+        costUsd: number;
+        calls: number;
+        teamId: string | null;
+        teamName: string;
+        sampleUserId: string;
+      }
+    >,
+    presenceByCanon: Map<string, Set<string>>,
+    cursorSeatByUser: Map<string, number>,
+  ): Promise<Map<string, number>> {
+    const out = new Map<string, number>();
+    const fixedRows = await this.loadFixedCostRowsForAllocation(r);
+    const pools = seatPoolsForRange(fixedRows, r.from, r.to);
+    const fixedVendors = vendorsWithFixedSeatPools(pools);
+
+    const { assignments, userIdAliases } = await this.loadSeatTierForCfo(tenantId, byCanon);
+
+    // Explicit premium tags count as presence for that vendor.
+    for (const a of assignments) {
+      for (const [canon, agg] of byCanon) {
+        if (
+          agg.sampleUserId === a.user_id ||
+          userIdAliases.get(agg.sampleUserId.toLowerCase()) === a.user_id
+        ) {
+          const set = presenceByCanon.get(canon) ?? new Set<string>();
+          set.add(a.vendor);
+          presenceByCanon.set(canon, set);
+        }
+      }
+    }
+
+    const presence: UserPlatformPresence[] = [...byCanon.entries()].map(([canon, agg]) => ({
+      user_id: agg.sampleUserId,
+      vendors: [
+        ...(presenceByCanon.get(canon) ?? new Set()),
+        ...presenceVendorsFromBreakdown([]),
+      ],
+      activity_score: agg.costUsd + agg.calls,
+    }));
+
+    const allocated = allocateSeatPools({
+      pools,
+      presence,
+      tiers: assignments,
+      userIdAliases,
+    });
+
+    const connectorSeats = new Map<string, Record<string, number>>();
+    for (const [uid, seatUsd] of cursorSeatByUser) {
+      if (seatUsd > 0) {
+        connectorSeats.set(uid, { cursor: seatUsd });
+      }
+    }
+    const merged = mergeAllocatedWithConnectorFallback(allocated, connectorSeats, fixedVendors);
+
+    for (const [userId, byVendor] of merged) {
+      const total = Object.values(byVendor).reduce((s, v) => s + v, 0);
+      if (total > 0) {
+        out.set(userId, usd(total));
+      }
+    }
+    return out;
+  }
+
+  private async loadFixedCostRowsForAllocation(r: Range): Promise<FixedCostSeatRow[]> {
+    const seatFrom = seatLookupFromDate(r.to);
+    const seatTo = seatLookupToDate(r.to);
+    try {
+      const rows = await this.ch.queryScoped<{
+        period_month: string;
+        vendor: string;
+        cost_usd: unknown;
+        seats: unknown;
+        line_item: string;
+        cost_type: string;
+      }>(
+        `SELECT period_month, vendor, cost_type, line_item, seats, cost_usd
+         FROM agentledger.fixed_costs FINAL
+         WHERE tenant_id = {tenant:String}
+           AND period_month >= toDate({seatFrom:String})
+           AND period_month <= toStartOfMonth(toDate({seatTo:String}))
+           AND attributable = 0`,
+        { seatFrom, seatTo },
+      );
+      return rows.map((row) => ({
+        period_month: String(row.period_month),
+        vendor: String(row.vendor).trim().toLowerCase(),
+        cost_usd: n(row.cost_usd),
+        seats: n(row.seats),
+        line_item: String(row.line_item ?? ''),
+        cost_type: String(row.cost_type ?? ''),
+      }));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`CFO fixed_costs load failed: ${msg}`);
+      return [];
+    }
+  }
+
+  private async loadSeatTierForCfo(
+    tenantId: string,
+    byCanon: Map<string, { sampleUserId: string }>,
+  ): Promise<{
+    assignments: SeatTierAssignment[];
+    userIdAliases: Map<string, string>;
+  }> {
+    const assignments: SeatTierAssignment[] = [];
+    const userIdAliases = new Map<string, string>();
+    for (const agg of byCanon.values()) {
+      userIdAliases.set(agg.sampleUserId.toLowerCase(), agg.sampleUserId);
+    }
+    try {
+      const rows = await this.prisma.withTenant(tenantId, (tx) =>
+        tx.$queryRaw<{ user_id: string; vendor: string; tier: string; email: string | null }[]>`
+          SELECT t.user_id::text, t.vendor, t.tier, i.email
+          FROM identity_seat_tiers t
+          JOIN identities i ON i.user_id = t.user_id`,
+      );
+      for (const row of rows) {
+        const tier: SeatClass = row.tier === 'premium' ? 'premium' : 'basic';
+        const vendor = String(row.vendor).trim().toLowerCase();
+        const uid = String(row.user_id);
+        assignments.push({ user_id: uid, vendor, tier });
+        if (row.email) {
+          userIdAliases.set(row.email.toLowerCase(), uid);
+          assignments.push({ user_id: row.email, vendor, tier });
+        }
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!/identity_seat_tiers|does not exist|42P01/i.test(msg)) {
+        this.logger.warn(`CFO seat tiers load failed: ${msg}`);
+      }
+    }
+    return { assignments, userIdAliases };
   }
 
   /**
