@@ -61,6 +61,10 @@ export function toScimUser(i: IdentityShape, baseUrl: string): Record<string, un
   };
 }
 
+function isEmailLike(value: string | undefined | null): boolean {
+  return Boolean(value && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim()));
+}
+
 /** Extract the identity-relevant fields from a SCIM User create/replace body. */
 export function fromScimUser(body: Record<string, unknown>): {
   email?: string;
@@ -73,10 +77,27 @@ export function fromScimUser(body: Record<string, unknown>): {
   const emails = body.emails as { value?: string; primary?: boolean }[] | undefined;
   const name = body.name as { formatted?: string } | undefined;
   const primaryEmail = emails?.find((e) => e.primary)?.value ?? emails?.[0]?.value;
+  const userName = typeof body.userName === 'string' ? body.userName.trim() : undefined;
+  // Entra often sets userName to objectId (UUID). Prefer a real email from emails[].
+  const email = (
+    isEmailLike(primaryEmail)
+      ? primaryEmail
+      : isEmailLike(userName)
+        ? userName
+        : (primaryEmail ?? userName)
+  )
+    ?.trim()
+    .toLowerCase();
+  const bodyExternal =
+    typeof body.externalId === 'string' && body.externalId.trim()
+      ? body.externalId.trim()
+      : undefined;
+  // Persist Entra objectId when it arrives as userName so later filters match.
+  const externalId = bodyExternal ?? (userName && !isEmailLike(userName) ? userName : undefined);
   return {
-    email: ((body.userName as string) ?? primaryEmail)?.toLowerCase(),
+    email,
     displayName: (body.displayName as string) ?? name?.formatted,
-    externalId: body.externalId as string | undefined,
+    externalId,
     active: typeof body.active === 'boolean' ? body.active : undefined,
     department: enterpriseDepartment(body),
   };

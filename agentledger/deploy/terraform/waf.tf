@@ -57,7 +57,8 @@ resource "aws_wafv2_web_acl" "edge" {
     }
   }
 
-  # Keep an 8 KB body cap everywhere except billing CSV import (Nest allows 20 MB).
+  # Keep an 8 KB body cap everywhere except billing CSV import and SCIM
+  # (Entra Group PATCH with members routinely exceeds 8 KB; Nest allows 20 MB).
   rule {
     name     = "BlockOversizedBodyExceptPortalImport"
     priority = 2
@@ -86,15 +87,32 @@ resource "aws_wafv2_web_acl" "edge" {
         statement {
           not_statement {
             statement {
-              byte_match_statement {
-                positional_constraint = "STARTS_WITH"
-                search_string         = "/api/portal-import"
-                field_to_match {
-                  uri_path {}
+              or_statement {
+                statement {
+                  byte_match_statement {
+                    positional_constraint = "STARTS_WITH"
+                    search_string         = "/api/portal-import"
+                    field_to_match {
+                      uri_path {}
+                    }
+                    text_transformation {
+                      priority = 0
+                      type     = "LOWERCASE"
+                    }
+                  }
                 }
-                text_transformation {
-                  priority = 0
-                  type     = "LOWERCASE"
+                statement {
+                  byte_match_statement {
+                    positional_constraint = "STARTS_WITH"
+                    search_string         = "/scim"
+                    field_to_match {
+                      uri_path {}
+                    }
+                    text_transformation {
+                      priority = 0
+                      type     = "LOWERCASE"
+                    }
+                  }
                 }
               }
             }
