@@ -28,6 +28,10 @@ import {
   CopilotUsageRow,
   DEFAULT_SEAT_PRICE_USD,
 } from './github-copilot.types';
+import {
+  linkCopilotMembersToIdentities,
+  reconcileDuplicateIdentities,
+} from '../reports/identity-merge';
 
 export interface SyncResult {
   ok: boolean;
@@ -111,6 +115,23 @@ export class GitHubCopilotSyncService {
           conn.orgSlug,
           members,
         );
+        try {
+          const deactivated = await reconcileDuplicateIdentities(this.prisma, tenantId);
+          const linked = await linkCopilotMembersToIdentities(
+            this.prisma,
+            tenantId,
+            members.map((m) => ({
+              githubLogin: m.githubLogin,
+              email: m.email,
+              displayName: m.displayName,
+            })),
+          );
+          if (deactivated > 0 || linked > 0) {
+            this.logger.log(`identity merge: deactivated=${deactivated} copilotAliases=${linked}`);
+          }
+        } catch (err) {
+          this.logger.warn(`identity merge after Copilot members skipped: ${safeMsg(err)}`);
+        }
       } catch (err) {
         this.logger.warn(`org members sync skipped: ${safeMsg(err)}`);
       }

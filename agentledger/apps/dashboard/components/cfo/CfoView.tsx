@@ -71,8 +71,8 @@ function SpendByTeamCard({
     >
       {rows.length === 0 ? (
         <p className="py-6 text-center text-sm text-muted">
-          No teams provisioned yet. Map Entra User <span className="font-mono">department</span> in
-          SCIM (or assign identities to teams) to see spend by team.
+          No teams provisioned yet. Sync SCIM Groups (or set User{' '}
+          <span className="font-mono">department</span>) to see spend by team.
         </p>
       ) : (
         <>

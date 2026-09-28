@@ -164,8 +164,8 @@ describe('SCIM 2.0 provisioning', () => {
     const row = await prisma.withTenant(tenantA, (tx) =>
       tx.identity.findUnique({ where: { userId } }),
     );
-    // Group membership is alias-only — FinOps team_id comes from User.department.
-    expect(row?.teamId).toBeNull();
+    // Group membership sets FinOps team when User.department is absent.
+    expect(row?.teamId).toBe(res.body.id);
     const aliases = Array.isArray(row?.aliases) ? row!.aliases : [];
     expect(aliases).toContain(`scim-group:${res.body.id}`);
   });

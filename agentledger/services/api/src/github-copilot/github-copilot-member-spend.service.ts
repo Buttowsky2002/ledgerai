@@ -135,6 +135,7 @@ export class CopilotMemberSpendService {
       return {
         githubLogin: login,
         displayName: member?.displayName ?? null,
+        email: member?.email?.trim() || null,
         avatarUrl: member?.avatarUrl ?? null,
         teamSlug,
         teamName: teamNameBySlug.get(teamSlug) ?? teamSlug,

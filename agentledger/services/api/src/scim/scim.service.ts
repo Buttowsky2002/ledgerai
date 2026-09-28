@@ -16,6 +16,7 @@ import {
   mergeScimGroupAlias,
   removeScimGroupAlias,
   scimError,
+  scimGroupTeamIdsFromAliases,
   toScimGroup,
   toScimUser,
 } from './scim.types';
@@ -36,11 +37,10 @@ const IDENTITY_COLS = {
 
 /**
  * SCIM 2.0 provisioning against the control-plane store. SCIM Users map to
- * identities (source='scim'). FinOps primary team comes only from User
- * enterprise department. SCIM Groups still create Team rows for Entra, but
- * membership is stored on identity aliases (`scim-group:<teamId>`) and never
- * writes identity.team_id — so assignment groups like "BadgerIQ - AI users-
- * SCIM" cannot overwrite org departments (ADR-034 single-team model). Every
+ * identities (source='scim'). FinOps primary team (`identity.team_id`) comes
+ * from, in order: (1) User enterprise `department` when present, else
+ * (2) SCIM Group membership (Group displayName → teams row, ADR-034). Group
+ * membership is also recorded on aliases (`scim-group:<teamId>`). Every
  * operation runs inside withTenant(ctx.tenantId) so Postgres RLS confines it;
  * mutations append an audit_log row with the SCIM token as the actor (rule 10).
  */
@@ -185,6 +185,8 @@ export class ScimService {
     count: number,
     baseUrl: string,
   ) {
+    // Heal members who got Group aliases under the old department-only policy.
+    await this.backfillTeamsFromScimGroups(ctx);
     return this.prisma.withTenant(ctx.tenantId, async (tx) => {
       // Entra matches groups by displayName eq "…" before create/update.
       const where = filterName ? { name: filterName } : {};
@@ -445,9 +447,8 @@ export class ScimService {
   }
 
   /**
-   * Record Entra Group membership on aliases only. Never sets identity.team_id
-   * from the Group (department owns FinOps team). If team_id still points at
-   * this Group from an older sync, clear it and re-apply department.
+   * Record Group membership and set FinOps team_id from the Group unless the
+   * identity already has an enterprise User.department (department wins).
    */
   private async setMembers(
     tx: Prisma.TransactionClient,
@@ -459,24 +460,36 @@ export class ScimService {
     if (!userIds.length) {
       return;
     }
+    const team = await tx.team.findUnique({
+      where: { teamId },
+      select: { teamId: true, name: true },
+    });
+    if (!team) {
+      return;
+    }
     const rows = await tx.identity.findMany({
       where: { userId: { in: userIds } },
       select: { userId: true, aliases: true, teamId: true },
     });
     for (const row of rows) {
       const aliases = mergeScimGroupAlias(row.aliases, teamId);
-      const stuckOnGroup = row.teamId === teamId;
+      const enterpriseDept = departmentFromAliases(aliases);
+      if (enterpriseDept) {
+        // Explicit User.department stays authoritative over assignment Groups.
+        await tx.identity.update({
+          where: { userId: row.userId },
+          data: { aliases: aliases as Prisma.InputJsonValue },
+        });
+        await this.assignTeamByName(tx, ctx, row.userId, enterpriseDept);
+        continue;
+      }
       await tx.identity.update({
         where: { userId: row.userId },
         data: {
+          teamId: team.teamId,
           aliases: aliases as Prisma.InputJsonValue,
-          ...(stuckOnGroup ? { teamId: null } : {}),
         },
       });
-      const dept = departmentFromAliases(aliases);
-      if (dept) {
-        await this.assignTeamByName(tx, ctx, row.userId, dept);
-      }
     }
   }
 
@@ -499,18 +512,21 @@ export class ScimService {
         continue;
       }
       const aliases = removeScimGroupAlias(row.aliases, teamId);
-      const stuckOnGroup = row.teamId === teamId;
+      const wasPrimaryTeam = row.teamId === teamId;
       await tx.identity.update({
         where: { userId: row.userId },
         data: {
           aliases: aliases as Prisma.InputJsonValue,
-          ...(stuckOnGroup ? { teamId: null } : {}),
+          ...(wasPrimaryTeam ? { teamId: null } : {}),
         },
       });
-      if (stuckOnGroup) {
+      if (wasPrimaryTeam) {
         const dept = departmentFromAliases(aliases);
         if (dept) {
           await this.assignTeamByName(tx, ctx, row.userId, dept);
+        } else {
+          // Fall back to another remaining SCIM Group, if any.
+          await this.applyTeamFromScimGroupAliases(tx, row.userId, aliases);
         }
       }
     }
@@ -525,7 +541,6 @@ export class ScimService {
     const nextIds = await this.resolveMemberUserIds(tx, memberRefs);
     const next = new Set(nextIds);
     const current = await this.identitiesInScimGroup(tx, teamId);
-    // Also treat legacy team_id==group as current members so we unstick them.
     const legacy = await tx.identity.findMany({
       where: { teamId },
       select: { userId: true },
@@ -536,6 +551,61 @@ export class ScimService {
       await this.removeMembers(tx, ctx, teamId, toRemove);
     }
     await this.setMembers(tx, ctx, teamId, memberRefs);
+  }
+
+  /**
+   * Heal identities that already have `scim-group:` aliases but never got
+   * team_id (from the prior department-only policy). Safe / idempotent.
+   */
+  async backfillTeamsFromScimGroups(ctx: ScimCtx): Promise<number> {
+    return this.prisma.withTenant(ctx.tenantId, async (tx) => {
+      const rows = await tx.identity.findMany({
+        where: { teamId: null, active: true },
+        select: { userId: true, aliases: true },
+      });
+      let fixed = 0;
+      for (const row of rows) {
+        if (departmentFromAliases(row.aliases)) {
+          await this.assignTeamByName(tx, ctx, row.userId, departmentFromAliases(row.aliases)!);
+          fixed += 1;
+          continue;
+        }
+        const applied = await this.applyTeamFromScimGroupAliases(tx, row.userId, row.aliases);
+        if (applied) {
+          fixed += 1;
+        }
+      }
+      return fixed;
+    });
+  }
+
+  /** Set team_id from the last existing `scim-group:<teamId>` alias. */
+  private async applyTeamFromScimGroupAliases(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    aliases: unknown,
+  ): Promise<boolean> {
+    const groupIds = scimGroupTeamIdsFromAliases(aliases);
+    if (!groupIds.length) {
+      return false;
+    }
+    // Prefer the most recently recorded group alias (last in the list).
+    for (let i = groupIds.length - 1; i >= 0; i--) {
+      const teamId = groupIds[i]!;
+      const team = await tx.team.findUnique({
+        where: { teamId },
+        select: { teamId: true },
+      });
+      if (!team) {
+        continue;
+      }
+      await tx.identity.update({
+        where: { userId },
+        data: { teamId: team.teamId },
+      });
+      return true;
+    }
+    return false;
   }
 
   private async audit(

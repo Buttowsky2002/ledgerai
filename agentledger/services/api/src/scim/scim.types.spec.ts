@@ -8,6 +8,7 @@ import {
   mergeScimGroupAlias,
   parsePatch,
   removeScimGroupAlias,
+  scimGroupTeamIdsFromAliases,
 } from './scim.types';
 
 describe('SCIM PATCH parsing', () => {
@@ -138,5 +139,12 @@ describe('SCIM group membership aliases', () => {
     aliases = removeScimGroupAlias(aliases, teamId);
     expect(hasScimGroupAlias(aliases, teamId)).toBe(false);
     expect(departmentFromAliases(aliases)).toBe('Engineering');
+  });
+
+  it('lists group team ids in alias order', () => {
+    const a = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+    const b = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+    const aliases = mergeScimGroupAlias(mergeScimGroupAlias([], a), b);
+    expect(scimGroupTeamIdsFromAliases(aliases)).toEqual([a, b]);
   });
 });

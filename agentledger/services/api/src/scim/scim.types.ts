@@ -128,9 +128,26 @@ export function departmentFromAliases(raw: unknown): string | null {
   return null;
 }
 
-/** SCIM Group membership marker — does not drive FinOps team_id (department does). */
+/** SCIM Group membership marker; also drives FinOps team_id when no User.department. */
 export function scimGroupAlias(teamId: string): string {
   return `${SCIM_GROUP_ALIAS_PREFIX}${teamId}`;
+}
+
+/** Team ids recorded via `scim-group:` aliases, in alias-list order. */
+export function scimGroupTeamIdsFromAliases(raw: unknown): string[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const out: string[] = [];
+  for (const item of raw) {
+    if (typeof item === 'string' && item.startsWith(SCIM_GROUP_ALIAS_PREFIX)) {
+      const id = item.slice(SCIM_GROUP_ALIAS_PREFIX.length).trim();
+      if (id) {
+        out.push(id);
+      }
+    }
+  }
+  return out;
 }
 
 export function mergeScimGroupAlias(raw: unknown, teamId: string): unknown[] {
