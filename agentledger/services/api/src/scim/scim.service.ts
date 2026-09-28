@@ -52,13 +52,22 @@ export class ScimService {
 
   async listUsers(
     ctx: ScimCtx,
-    filterEmail: string | null,
+    filterUserName: string | null,
     startIndex: number,
     count: number,
     baseUrl: string,
   ) {
     return this.prisma.withTenant(ctx.tenantId, async (tx) => {
-      const where = filterEmail ? { email: filterEmail } : {};
+      // Entra commonly filters userName eq "<objectId>" (not email). Match email
+      // or external_id so re-provision / updates find the same identity.
+      const where = filterUserName
+        ? {
+            OR: [
+              { email: { equals: filterUserName, mode: 'insensitive' as const } },
+              { externalId: { equals: filterUserName, mode: 'insensitive' as const } },
+            ],
+          }
+        : {};
       const [rows, total] = await Promise.all([
         tx.identity.findMany({
           where,
@@ -186,7 +195,12 @@ export class ScimService {
     baseUrl: string,
   ) {
     // Heal members who got Group aliases under the old department-only policy.
-    await this.backfillTeamsFromScimGroups(ctx);
+    // Never fail Entra Group discovery if backfill hits a transient DB error.
+    try {
+      await this.backfillTeamsFromScimGroups(ctx);
+    } catch {
+      /* ignore — setMembers still assigns team_id on the write path */
+    }
     return this.prisma.withTenant(ctx.tenantId, async (tx) => {
       // Entra matches groups by displayName eq "…" before create/update.
       const where = filterName ? { name: filterName } : {};

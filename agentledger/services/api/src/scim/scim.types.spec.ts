@@ -102,6 +102,16 @@ describe('SCIM User mapping', () => {
     expect(fromScimUser({ emails: [{ value: 'first@y.com' }] }).email).toBe('first@y.com');
   });
 
+  it('prefers emails[] when Entra sends objectId as userName', () => {
+    const objectId = '860d9aad-cf73-4d63-8bc7-f63c5f455bed';
+    const u = fromScimUser({
+      userName: objectId,
+      emails: [{ value: 'russ@studiodesigner.com', primary: true }],
+    });
+    expect(u.email).toBe('russ@studiodesigner.com');
+    expect(u.externalId).toBe(objectId);
+  });
+
   it('extracts enterprise department from nested or flat keys', () => {
     expect(
       fromScimUser({
