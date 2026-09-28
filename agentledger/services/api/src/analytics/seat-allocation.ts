@@ -267,14 +267,34 @@ export function allocateSeatPools(input: {
     out.set(userId, cur);
   };
 
+  const poolTiersByVendor = new Map<string, Set<SeatClass>>();
   for (const pool of input.pools) {
     if (pool.seat_usd <= 0) {
       continue;
     }
     const vendor = vendorName(pool.vendor);
+    const set = poolTiersByVendor.get(vendor) ?? new Set<SeatClass>();
+    set.add(pool.tier);
+    poolTiersByVendor.set(vendor, set);
+  }
+
+  for (const pool of input.pools) {
+    if (pool.seat_usd <= 0) {
+      continue;
+    }
+    const vendor = vendorName(pool.vendor);
+    const vendorPoolTiers = poolTiersByVendor.get(vendor) ?? new Set<SeatClass>();
+    // When FO has only one tier for a vendor (common for GitHub Copilot), every
+    // present user gets that pool — basic/premium tags only matter when both exist.
+    const singlePool = vendorPoolTiers.size <= 1;
     const eligible = input.presence
       .filter((p) => p.vendors.some((v) => vendorName(v) === vendor))
-      .filter((p) => userTierFor(p.user_id, vendor, lookup, aliases) === pool.tier)
+      .filter((p) => {
+        if (singlePool) {
+          return true;
+        }
+        return userTierFor(p.user_id, vendor, lookup, aliases) === pool.tier;
+      })
       .sort((a, b) => (b.activity_score ?? 0) - (a.activity_score ?? 0));
 
     if (eligible.length === 0) {
@@ -319,6 +339,54 @@ export function presenceVendorsFromBreakdown(
     }
   }
   return [...set];
+}
+
+/**
+ * Catalog unit prices when Fixed Overhead has no pool for a tagged license.
+ * Keep in sync with apps/dashboard/lib/fixed-cost-catalog.ts (team → basic).
+ */
+export const CATALOG_SEAT_UNIT_USD: Record<string, Partial<Record<SeatClass, number>>> = {
+  openai: { basic: 30 },
+  anthropic: { basic: 30, premium: 100 },
+  cursor: { basic: 40 },
+  google: { basic: 20 },
+  github: { basic: 19 },
+  perplexity: { basic: 20 },
+};
+
+/** Apply catalog unit $ for seat-tier tags that received no FO allocation. */
+export function applyCatalogSeatFallback(
+  allocated: Map<string, Record<string, number>>,
+  tiersByUser: Map<string, Record<string, SeatClass>>,
+  fixedVendors: Set<string>,
+): Map<string, Record<string, number>> {
+  const out = new Map<string, Record<string, number>>();
+  for (const [userId, seats] of allocated) {
+    out.set(userId, { ...seats });
+  }
+  for (const [userId, tiers] of tiersByUser) {
+    const cur = { ...(out.get(userId) ?? {}) };
+    let changed = false;
+    for (const [vendor, tier] of Object.entries(tiers)) {
+      const v = vendorName(vendor);
+      if (!v || fixedVendors.has(v)) {
+        continue;
+      }
+      if ((cur[v] ?? 0) > 0) {
+        continue;
+      }
+      const unit = CATALOG_SEAT_UNIT_USD[v]?.[tier === 'premium' ? 'premium' : 'basic'];
+      if (unit == null || unit <= 0) {
+        continue;
+      }
+      cur[v] = usd(unit);
+      changed = true;
+    }
+    if (changed || out.has(userId)) {
+      out.set(userId, cur);
+    }
+  }
+  return out;
 }
 
 /**

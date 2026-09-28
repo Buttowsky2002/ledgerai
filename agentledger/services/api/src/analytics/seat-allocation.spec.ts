@@ -1,5 +1,6 @@
 import {
   allocateSeatPools,
+  applyCatalogSeatFallback,
   keywordSeatClass,
   mergeAllocatedWithConnectorFallback,
   presenceVendorsFromBreakdown,
@@ -139,6 +140,40 @@ describe('allocateSeatPools', () => {
     expect(allocated.get('b')!.openai).toBe(30);
     expect(allocated.get('c')!.openai).toBe(30);
     expect(sumAllocatedSeats(allocated)).toBe(90);
+  });
+
+  it('single FO pool ignores basic/premium mismatch (GitHub Copilot)', () => {
+    const allocated = allocateSeatPools({
+      pools: [{ vendor: 'github', tier: 'premium', seat_usd: 190, seats: 10 }],
+      presence: [
+        { user_id: 'alice', vendors: ['github'] },
+        { user_id: 'bob', vendors: ['github'] },
+      ],
+      // Default / tagged basic would miss a premium-only pool without this rule.
+      tiers: [{ user_id: 'alice', vendor: 'github', tier: 'basic' }],
+    });
+    expect(allocated.get('alice')!.github).toBe(19);
+    expect(allocated.get('bob')!.github).toBe(19);
+  });
+});
+
+describe('applyCatalogSeatFallback', () => {
+  it('applies GitHub $19 when tagged and FO has no github pool', () => {
+    const allocated = applyCatalogSeatFallback(
+      new Map(),
+      new Map([['u1', { github: 'basic' }]]),
+      new Set(),
+    );
+    expect(allocated.get('u1')!.github).toBe(19);
+  });
+
+  it('does not invent catalog $ when FO already has that vendor', () => {
+    const allocated = applyCatalogSeatFallback(
+      new Map(),
+      new Map([['u1', { github: 'basic' }]]),
+      new Set(['github']),
+    );
+    expect(allocated.get('u1')).toBeUndefined();
   });
 });
 

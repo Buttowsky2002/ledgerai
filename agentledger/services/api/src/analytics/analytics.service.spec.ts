@@ -678,6 +678,7 @@ describe('AnalyticsService.users', () => {
         {
           githubLogin: 'octocat',
           displayName: 'Octocat',
+          email: null,
           teamName: 'Platform',
           totalAllocatedCost: 19,
           chatTurns: 3,
@@ -711,6 +712,111 @@ describe('AnalyticsService.users', () => {
       resolved: false,
       total_spend_usd: 19,
       models: ['Copilot'],
+    });
+  });
+
+  it('collapses duplicate emails and Copilot login onto one directory row', async () => {
+    const primary = {
+      displayName: 'Russ McClelland',
+      email: 'russ@studiodesigner.com',
+      teamName: 'Eng',
+      teamId: null as string | null,
+      criticalityTier: 'standard',
+    };
+    mockedLoadIdentityLookups.mockResolvedValueOnce({
+      byId: new Map([
+        ['11111111-1111-1111-1111-111111111111', primary],
+        ['22222222-2222-2222-2222-222222222222', primary],
+      ]),
+      byEmail: new Map([
+        ['russ@studiodesigner.com', primary],
+        ['russ@gmail.com', primary],
+      ]),
+      byAlias: new Map([['russ-mcclelland', primary]]),
+    });
+    mockedListHumanIdentityRoster.mockResolvedValueOnce([
+      {
+        userId: '11111111-1111-1111-1111-111111111111',
+        displayName: 'Russ McClelland',
+        email: 'russ@studiodesigner.com',
+        team: 'Eng',
+      },
+    ]);
+    const queryScoped = jest.fn(async (sql: string) => {
+      if (sql.includes('user_id, platform, model, spend_usd')) {
+        return [
+          {
+            user_id: 'russ@studiodesigner.com',
+            platform: 'openai',
+            model: 'gpt-4o',
+            spend_usd: 10,
+            calls: 2,
+            portal_import_usd: 0,
+            connector_usd: 10,
+          },
+          {
+            user_id: 'russ@gmail.com',
+            platform: 'anthropic',
+            model: 'claude-3-5-sonnet',
+            spend_usd: 5,
+            calls: 1,
+            portal_import_usd: 0,
+            connector_usd: 5,
+          },
+        ];
+      }
+      if (sql.includes('key, cost_usd, calls, portal_import_usd')) {
+        return [
+          {
+            key: 'russ@studiodesigner.com',
+            cost_usd: 10,
+            calls: 2,
+            portal_import_usd: 0,
+            connector_usd: 10,
+          },
+          {
+            key: 'russ@gmail.com',
+            cost_usd: 5,
+            calls: 1,
+            portal_import_usd: 0,
+            connector_usd: 5,
+          },
+        ];
+      }
+      return [];
+    });
+    const getMemberSpend = jest.fn(async () => ({
+      connected: true,
+      members: [
+        {
+          githubLogin: 'Russ-McClelland',
+          displayName: 'Russ McClelland',
+          email: 'russ@studiodesigner.com',
+          teamName: 'Eng',
+          totalAllocatedCost: 19,
+          chatTurns: 1,
+          linesAccepted: 0,
+          prSummaryCount: 0,
+        },
+      ],
+    }));
+    const svc = new AnalyticsService(
+      { queryScoped } as unknown as ClickHouseService,
+      {} as PrismaService,
+      {} as LariService,
+      { getSpendSummary: jest.fn(async () => null) } as unknown as CopilotAnalyticsService,
+      { getMemberSpend } as unknown as CopilotMemberSpendService,
+      emptyCursorAnalytics() as never,
+      emptyCursorProductivity() as never,
+    );
+
+    const result = await svc.users('2026-06-01', '2026-06-30');
+    expect(result.users).toHaveLength(1);
+    expect(result.users[0]).toMatchObject({
+      email: 'russ@studiodesigner.com',
+      display_name: 'Russ McClelland',
+      total_spend_usd: 34,
+      resolved: true,
     });
   });
 

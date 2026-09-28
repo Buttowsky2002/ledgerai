@@ -1,6 +1,12 @@
 import { isDemoIdentityKey } from '../analytics/demo-identity';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { UserSpendRow } from './executive-report.types';
+import {
+  parseAliasList,
+  primaryUserIdByIdentityId,
+  rosterPrimaryUserIds,
+  type MergeableIdentity,
+} from './identity-merge';
 
 export const UNASSIGNED_LABEL = 'Unassigned';
 export const UNATTRIBUTED_LABEL = 'Unattributed';
@@ -69,24 +75,7 @@ function normalizeKey(value: string): string {
 }
 
 function parseAliases(raw: unknown): string[] {
-  if (!Array.isArray(raw)) {
-    return [];
-  }
-  const out: string[] = [];
-  for (const item of raw) {
-    if (typeof item === 'string' && item.trim()) {
-      out.push(item.trim());
-    } else if (item && typeof item === 'object') {
-      const rec = item as Record<string, unknown>;
-      for (const key of ['id', 'email', 'value', 'alias']) {
-        const v = rec[key];
-        if (typeof v === 'string' && v.trim()) {
-          out.push(v.trim());
-        }
-      }
-    }
-  }
-  return out;
+  return parseAliasList(raw);
 }
 
 /**
@@ -268,9 +257,20 @@ export async function listHumanIdentityRoster(
         email: true,
         displayName: true,
         teamId: true,
+        aliases: true,
+        active: true,
       },
       orderBy: [{ displayName: 'asc' }, { email: 'asc' }],
     });
+    const mergeable: MergeableIdentity[] = identityRows.map((r) => ({
+      userId: r.userId,
+      email: r.email,
+      displayName: r.displayName,
+      aliases: parseAliases(r.aliases),
+      teamId: r.teamId,
+      active: r.active,
+    }));
+    const primaryIds = rosterPrimaryUserIds(mergeable);
     const teamIds = [...new Set(identityRows.map((r) => r.teamId).filter(Boolean))] as string[];
     const teams =
       teamIds.length > 0
@@ -281,7 +281,12 @@ export async function listHumanIdentityRoster(
         : [];
     const teamNames = new Map(teams.map((t) => [t.teamId, t.name]));
     return identityRows
-      .filter((row) => !isDemoIdentityKey(row.email) && !isDemoIdentityKey(row.userId))
+      .filter(
+        (row) =>
+          primaryIds.has(row.userId) &&
+          !isDemoIdentityKey(row.email) &&
+          !isDemoIdentityKey(row.userId),
+      )
       .map((row) => ({
         userId: row.userId,
         displayName: resolveDisplayName(row.displayName, row.email, row.userId),
@@ -306,6 +311,7 @@ export async function loadIdentityLookups(
       WHERE tenant_id = ${tenantId}::uuid AND identity_type = 'human'
     `;
     const identityRows = await tx.identity.findMany({
+      where: { active: true },
       select: {
         userId: true,
         email: true,
@@ -313,8 +319,10 @@ export async function loadIdentityLookups(
         teamId: true,
         aliases: true,
         criticalityTier: true,
+        active: true,
       },
     });
+    const activeIds = new Set(identityRows.map((r) => r.userId));
     const teamIds = [
       ...new Set([
         ...vRows.map((r) => r.team_id).filter(Boolean),
@@ -364,12 +372,49 @@ export async function loadIdentityLookups(
     };
 
     for (const row of vRows) {
+      // Skip deactivated humans — v_identities does not filter active.
+      if (!activeIds.has(row.identity_id)) {
+        continue;
+      }
       register(row.identity_id, row.display_name, row.email, row.team_id, row.criticality_tier);
     }
 
+    const mergeable: MergeableIdentity[] = [];
     for (const row of identityRows) {
       const aliases = parseAliases(row.aliases);
       register(row.userId, row.displayName, row.email, row.teamId, row.criticalityTier, aliases);
+      mergeable.push({
+        userId: row.userId,
+        email: row.email,
+        displayName: row.displayName,
+        aliases,
+        teamId: row.teamId,
+        active: row.active,
+      });
+    }
+
+    // Collapse same display-name duplicates onto the preferred primary so spend
+    // under secondary emails/UUIDs rolls into one directory person.
+    const primaryById = primaryUserIdByIdentityId(mergeable);
+    for (const row of mergeable) {
+      const primaryId = primaryById.get(row.userId);
+      if (!primaryId || primaryId === row.userId) {
+        continue;
+      }
+      const primaryEntry = byId.get(primaryId);
+      if (!primaryEntry) {
+        continue;
+      }
+      byId.set(row.userId, primaryEntry);
+      if (row.email?.trim()) {
+        byEmail.set(normalizeKey(row.email), primaryEntry);
+      }
+      for (const alias of row.aliases) {
+        byAlias.set(normalizeKey(alias), primaryEntry);
+        if (isEmailLike(alias)) {
+          byEmail.set(normalizeKey(alias), primaryEntry);
+        }
+      }
     }
 
     return { byId, byEmail, byAlias };

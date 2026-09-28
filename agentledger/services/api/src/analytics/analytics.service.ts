@@ -37,8 +37,13 @@ import {
 import {
   listHumanIdentityRoster,
   loadIdentityLookups,
+  matchIdentity,
   resolveUserDirectoryIdentity,
 } from '../reports/identity-resolver';
+import {
+  linkCopilotMembersToIdentities,
+  reconcileDuplicateIdentities,
+} from '../reports/identity-merge';
 import { mergeDirectoryWithUtilization } from './user-directory-utilization';
 import { UserValueService } from './user-value.service';
 import {
@@ -61,6 +66,7 @@ import {
 } from '../fixed-costs/fixed-cost-prorate';
 import {
   allocateSeatPools,
+  applyCatalogSeatFallback,
   mergeAllocatedWithConnectorFallback,
   presenceVendorsFromBreakdown,
   seatPoolsForRange,
@@ -1359,6 +1365,7 @@ export class AnalyticsService {
     if (!tenantId) {
       throw new BadRequestException('no tenant in context');
     }
+    await this.ensureIdentitiesMerged(tenantId);
     const [
       { totals: chTotals, breakdown: chBreakdown, tokensByUserVendor },
       copilotPack,
@@ -1386,17 +1393,22 @@ export class AnalyticsService {
         seedRoster: true,
       },
     );
+    const copilotByDirectory = await this.remapCopilotKeysToDirectory(
+      tenantId,
+      assembled.users,
+      copilotPack.byUser,
+    );
     const { allocated, tiersByUser } = await this.allocateFixedSeatsToUsers(
       tenantId,
       r,
       assembled.users,
       cursorSeatByUser,
-      copilotPack.byUser,
+      copilotByDirectory,
       orgBilling,
     );
     let users = enrichUsersWithVendorData(
       assembled.users,
-      copilotPack.byUser,
+      copilotByDirectory,
       cursorSeatByUser,
       tokensByUserVendor,
       cursorPack.totals,
@@ -1685,12 +1697,79 @@ export class AnalyticsService {
       }
     }
 
-    const allocated = mergeAllocatedWithConnectorFallback(
+    const withConnector = mergeAllocatedWithConnectorFallback(
       allocatedFromPools,
       connectorSeats,
       fixedVendors,
     );
+    // Tagged licenses with no FO pool still show catalog unit prices (e.g. GitHub $19).
+    const allocated = applyCatalogSeatFallback(withConnector, tiersByUser, fixedVendors);
     return { allocated, tiersByUser };
+  }
+
+  /**
+   * Copilot spend is keyed by githubLogin; directory rows may use UUID/email after
+   * identity merge. Remap so seat $ and presence land on the directory person.
+   */
+  private async remapCopilotKeysToDirectory(
+    tenantId: string,
+    users: UserDirectoryRow[],
+    byLogin: Map<string, { seat_usd: number; overage_usd: number; calls: number }>,
+  ): Promise<Map<string, { seat_usd: number; overage_usd: number; calls: number }>> {
+    if (byLogin.size === 0) {
+      return byLogin;
+    }
+    const out = new Map<string, { seat_usd: number; overage_usd: number; calls: number }>();
+    let lookups: Awaited<ReturnType<typeof loadIdentityLookups>> | null = null;
+    try {
+      lookups = await loadIdentityLookups(this.prisma, tenantId);
+    } catch {
+      lookups = null;
+    }
+    for (const [login, pack] of byLogin) {
+      let dirKey = users.find((u) => u.user_id.toLowerCase() === login.toLowerCase())?.user_id;
+      if (!dirKey && lookups) {
+        const resolved = resolveUserDirectoryIdentity(
+          login,
+          lookups.byId,
+          lookups.byEmail,
+          lookups.byAlias,
+        );
+        if (resolved.email) {
+          dirKey = users.find(
+            (u) => u.email != null && u.email.toLowerCase() === resolved.email!.toLowerCase(),
+          )?.user_id;
+        }
+        if (!dirKey && resolved.resolved) {
+          dirKey = users.find((u) => {
+            const other = resolveUserDirectoryIdentity(
+              u.user_id,
+              lookups!.byId,
+              lookups!.byEmail,
+              lookups!.byAlias,
+            );
+            return (
+              other.resolved &&
+              resolved.email != null &&
+              other.email != null &&
+              other.email.toLowerCase() === resolved.email.toLowerCase()
+            );
+          })?.user_id;
+        }
+      }
+      const key = dirKey ?? login;
+      const prev = out.get(key);
+      if (!prev) {
+        out.set(key, { ...pack });
+        continue;
+      }
+      out.set(key, {
+        seat_usd: prev.seat_usd + pack.seat_usd,
+        overage_usd: prev.overage_usd + pack.overage_usd,
+        calls: prev.calls + pack.calls,
+      });
+    }
+    return out;
   }
 
   private async loadFixedCostSeatRows(tenantId: string, r: Range): Promise<FixedCostSeatRow[]> {
@@ -1767,42 +1846,43 @@ export class AnalyticsService {
         const cur = byIdentity.get(uid) ?? {};
         cur[vendor] = tier;
         byIdentity.set(uid, cur);
-        assignments.push({ user_id: uid, vendor, tier });
       }
 
-      // Map identity UUID tiers onto directory user_id keys (email or uuid).
-      for (const u of users) {
-        const hit = byIdentity.get(u.user_id) ?? (u.email ? byIdentity.get(u.email) : undefined);
-        // Also match when directory key is email but tier is on UUID — resolve via aliases
-        // already loaded: scan identity keys against email/user_id.
-        if (hit) {
-          tiersByUser.set(u.user_id, hit);
-          for (const [vendor, tier] of Object.entries(hit)) {
-            assignments.push({ user_id: u.user_id, vendor, tier });
-          }
-        }
-      }
-
-      // Resolve UUID → directory user via identity lookups when directory uses email keys.
       const lookups = await loadIdentityLookups(this.prisma, tenantId);
-      for (const [identityId, tiers] of byIdentity) {
-        const identity = lookups.byId.get(identityId);
-        if (!identity) {
-          continue;
-        }
-        for (const u of users) {
-          if (u.user_id === identityId) {
+      const { byId, byEmail, byAlias } = lookups;
+
+      // Map identity UUID tiers onto each directory row (UUID, email, or github alias).
+      for (const u of users) {
+        const resolved =
+          matchIdentity(u.user_id, byId, byEmail, byAlias) ??
+          (u.email ? matchIdentity(u.email, byId, byEmail, byAlias) : null);
+        const merged: Record<string, SeatClass> = {};
+        for (const [identityId, tiers] of byIdentity) {
+          const entry = byId.get(identityId);
+          const samePerson =
+            identityId === u.user_id ||
+            (u.email != null &&
+              entry?.email != null &&
+              entry.email.toLowerCase() === u.email.toLowerCase()) ||
+            (resolved != null && entry != null && entry === resolved) ||
+            (resolved?.email != null &&
+              entry?.email != null &&
+              resolved.email.toLowerCase() === entry.email.toLowerCase());
+          if (!samePerson) {
             continue;
           }
-          const emailMatch =
-            identity.email && u.email && identity.email.toLowerCase() === u.email.toLowerCase();
-          const idMatch = u.user_id === identity.email;
-          if (emailMatch || idMatch) {
-            tiersByUser.set(u.user_id, { ...(tiersByUser.get(u.user_id) ?? {}), ...tiers });
-            for (const [vendor, tier] of Object.entries(tiers)) {
-              assignments.push({ user_id: u.user_id, vendor, tier });
-            }
+          Object.assign(merged, tiers);
+          userIdAliases.set(identityId.toLowerCase(), u.user_id);
+          if (entry?.email) {
+            userIdAliases.set(entry.email.toLowerCase(), u.user_id);
           }
+        }
+        if (Object.keys(merged).length === 0) {
+          continue;
+        }
+        tiersByUser.set(u.user_id, merged);
+        for (const [vendor, tier] of Object.entries(merged)) {
+          assignments.push({ user_id: u.user_id, vendor, tier });
         }
       }
     } catch (err) {
@@ -1987,11 +2067,42 @@ export class AnalyticsService {
       });
       hints.set(m.githubLogin, {
         displayName: m.displayName,
-        email: null,
+        email: m.email ?? null,
         team: m.teamName || '',
       });
     }
     return { totals, breakdown, hints, byUser };
+  }
+
+  /**
+   * Collapse duplicate display-name identities and attach Copilot githubLogins
+   * as aliases so the Users directory shows one row per person.
+   */
+  private async ensureIdentitiesMerged(tenantId: string): Promise<void> {
+    if (!this.prisma?.withTenant) {
+      return;
+    }
+    try {
+      await reconcileDuplicateIdentities(this.prisma, tenantId);
+      const members = await this.prisma.withTenant(tenantId, (tx) =>
+        tx.githubCopilotMember.findMany({
+          where: { tenantId },
+          select: { githubLogin: true, email: true, displayName: true },
+        }),
+      );
+      await linkCopilotMembersToIdentities(
+        this.prisma,
+        tenantId,
+        members.map((m) => ({
+          githubLogin: m.githubLogin,
+          email: m.email,
+          displayName: m.displayName,
+        })),
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`identity merge before users directory skipped: ${msg}`);
+    }
   }
 
   /** Per-user Cursor seat cost — ai_seats assignment or equal share of org license. */
@@ -2202,6 +2313,14 @@ export class AnalyticsService {
         continue;
       }
       const team = identity.team || hint?.team || '';
+      // Prefer hint email for merge keys when Copilot is not yet aliased onto identity.
+      const mergeIdentity = {
+        ...identity,
+        display_name,
+        email,
+        team,
+        resolved: identity.resolved || Boolean(email),
+      };
 
       const model_breakdown = breakdownByUser.get(user_id) ?? [];
       const models = model_breakdown
@@ -2213,7 +2332,7 @@ export class AnalyticsService {
         display_name,
         email,
         team,
-        resolved: identity.resolved,
+        resolved: mergeIdentity.resolved,
         total_spend_usd,
         calls,
         tokens,
@@ -2228,7 +2347,7 @@ export class AnalyticsService {
         continue;
       }
 
-      const key = canonicalUserKey(user_id, identity);
+      const key = canonicalUserKey(user_id, mergeIdentity);
       const existing = merged.get(key);
       if (!existing) {
         merged.set(key, entry);

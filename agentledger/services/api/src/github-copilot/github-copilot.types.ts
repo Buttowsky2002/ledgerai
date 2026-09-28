@@ -175,6 +175,7 @@ export interface CreateCopilotConnectionDto {
 export interface CopilotMemberSpendRow {
   githubLogin: string;
   displayName: string | null;
+  email: string | null;
   avatarUrl: string | null;
   teamSlug: string;
   teamName: string;

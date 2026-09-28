@@ -50,8 +50,8 @@ export default async function UserDetailPage({
     const slice = user?.vendor_spend?.[v];
     return slice && (slice.seat_usd > 0 || slice.overage_usd > 0 || slice.total_usd > 0);
   });
-  // Always expose ChatGPT (openai) and Claude (anthropic) license controls.
-  const tierVendors = [...new Set(['openai', 'anthropic', ...userVendors, ...vendors])];
+  // Always expose ChatGPT, Claude, and Copilot license controls.
+  const tierVendors = [...new Set(['openai', 'anthropic', 'github', ...userVendors, ...vendors])];
 
   if (!user) {
     return (
