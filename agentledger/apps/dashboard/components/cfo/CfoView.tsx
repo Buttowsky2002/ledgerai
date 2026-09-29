@@ -67,7 +67,7 @@ function SpendByTeamCard({
   return (
     <Card
       title="Spend by team"
-      subtitle={`Department teams · billable usage + seats · ${from} → ${to}`}
+      subtitle={`Department teams · seats + overage · ${from} → ${to}`}
     >
       {rows.length === 0 ? (
         <p className="py-6 text-center text-sm text-muted">

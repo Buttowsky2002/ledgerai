@@ -21,9 +21,14 @@ import {
 } from '../connectors/metered-cost';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { loadIdentityLookups, resolveUserDirectoryIdentity } from '../reports/identity-resolver';
+import {
+  listHumanIdentityRoster,
+  loadIdentityLookups,
+  resolveUserDirectoryIdentity,
+} from '../reports/identity-resolver';
 import {
   allocateSeatPools,
+  applyCatalogSeatFallback,
   mergeAllocatedWithConnectorFallback,
   presenceVendorsFromBreakdown,
   seatPoolsForRange,
@@ -523,8 +528,8 @@ export class LariCfoViewService {
   }
 
   /**
-   * Spend by team: billable $ + calls collapsed by identity email (same as Users
-   * directory) then rolled to identities.team_id. Fixed Overhead seats are
+   * Spend by team: billable overage + Fixed Overhead seats collapsed by identity
+   * email (same as Users directory) then rolled to identities.team_id. Seat $ is
    * allocated by platform presence + basic/premium tier (same allocator as Users);
    * Cursor connector seats fill gaps when fixed_costs has no Cursor pool.
    */
@@ -540,6 +545,7 @@ export class LariCfoViewService {
         modelRows,
         lookups,
         teams,
+        roster,
       ] = await Promise.all([
         this.ch.queryScoped<{ key: string; cost_usd: unknown; calls: unknown }>(
           `SELECT key, cost_usd, calls
@@ -574,6 +580,7 @@ export class LariCfoViewService {
         this.prisma.withTenant(tenantId, (tx) =>
           tx.team.findMany({ select: { teamId: true, name: true }, orderBy: { name: 'asc' } }),
         ),
+        listHumanIdentityRoster(this.prisma, tenantId).catch(() => []),
       ]);
 
       type Agg = {
@@ -653,6 +660,39 @@ export class LariCfoViewService {
         const have = byCanon.get(canon)?.costUsd ?? 0;
         if (have + 0.005 < row.on_demand_usd) {
           ingest(row.user_id, usd(row.on_demand_usd - have), 0);
+        }
+      }
+
+      // Seed active roster so seat $ can land on department members even when
+      // they have $0 overage in the selected window (seats + overage total).
+      for (const row of roster) {
+        const identity = resolveUserDirectoryIdentity(
+          row.userId,
+          lookups.byId,
+          lookups.byEmail,
+          lookups.byAlias,
+        );
+        if (identity.resolved && !identity.active) {
+          continue;
+        }
+        const canon = canonicalUserKey(row.userId, identity);
+        const existing = byCanon.get(canon);
+        if (!existing) {
+          byCanon.set(canon, {
+            costUsd: 0,
+            calls: 0,
+            teamId: identity.teamId,
+            teamName: identity.team || row.team,
+            sampleUserId: identity.email ?? row.email ?? row.userId,
+          });
+          continue;
+        }
+        if (!existing.teamId && identity.teamId) {
+          existing.teamId = identity.teamId;
+          existing.teamName = identity.team || row.team;
+        }
+        if (identity.email) {
+          existing.sampleUserId = identity.email;
         }
       }
 
@@ -754,9 +794,12 @@ export class LariCfoViewService {
     const pools = seatPoolsForRange(fixedRows, r.from, r.to);
     const fixedVendors = vendorsWithFixedSeatPools(pools);
 
-    const { assignments, userIdAliases } = await this.loadSeatTierForCfo(tenantId, byCanon);
+    const { assignments, tiersByUser, userIdAliases } = await this.loadSeatTierForCfo(
+      tenantId,
+      byCanon,
+    );
 
-    // Explicit premium tags count as presence for that vendor.
+    // Explicit seat-tier tags count as presence for that vendor (basic + premium).
     for (const a of assignments) {
       for (const [canon, agg] of byCanon) {
         if (
@@ -789,7 +832,13 @@ export class LariCfoViewService {
         connectorSeats.set(uid, { cursor: seatUsd });
       }
     }
-    const merged = mergeAllocatedWithConnectorFallback(allocated, connectorSeats, fixedVendors);
+    const withConnector = mergeAllocatedWithConnectorFallback(
+      allocated,
+      connectorSeats,
+      fixedVendors,
+    );
+    // Match Users directory: tagged licenses with no FO pool still get catalog unit $.
+    const merged = applyCatalogSeatFallback(withConnector, tiersByUser, fixedVendors);
 
     for (const [userId, byVendor] of merged) {
       const total = Object.values(byVendor).reduce((s, v) => s + v, 0);
@@ -840,9 +889,11 @@ export class LariCfoViewService {
     byCanon: Map<string, { sampleUserId: string }>,
   ): Promise<{
     assignments: SeatTierAssignment[];
+    tiersByUser: Map<string, Record<string, SeatClass>>;
     userIdAliases: Map<string, string>;
   }> {
     const assignments: SeatTierAssignment[] = [];
+    const tiersByUser = new Map<string, Record<string, SeatClass>>();
     const userIdAliases = new Map<string, string>();
     for (const agg of byCanon.values()) {
       userIdAliases.set(agg.sampleUserId.toLowerCase(), agg.sampleUserId);
@@ -861,9 +912,23 @@ export class LariCfoViewService {
         const vendor = String(row.vendor).trim().toLowerCase();
         const uid = String(row.user_id);
         assignments.push({ user_id: uid, vendor, tier });
+        const byVendor = tiersByUser.get(uid) ?? {};
+        byVendor[vendor] = tier;
+        tiersByUser.set(uid, byVendor);
         if (row.email) {
-          userIdAliases.set(row.email.toLowerCase(), uid);
+          const emailKey = row.email.toLowerCase();
+          userIdAliases.set(emailKey, uid);
           assignments.push({ user_id: row.email, vendor, tier });
+          const byEmail = tiersByUser.get(emailKey) ?? {};
+          byEmail[vendor] = tier;
+          tiersByUser.set(emailKey, byEmail);
+          for (const agg of byCanon.values()) {
+            if (agg.sampleUserId.toLowerCase() === emailKey) {
+              const mapped = tiersByUser.get(agg.sampleUserId) ?? {};
+              mapped[vendor] = tier;
+              tiersByUser.set(agg.sampleUserId, mapped);
+            }
+          }
         }
       }
     } catch (err) {
@@ -872,7 +937,7 @@ export class LariCfoViewService {
         this.logger.warn(`CFO seat tiers load failed: ${msg}`);
       }
     }
-    return { assignments, userIdAliases };
+    return { assignments, tiersByUser, userIdAliases };
   }
 
   /**

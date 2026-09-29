@@ -13,12 +13,14 @@ const entry = (
   email: string | null = null,
   criticalityTier = 'standard',
   teamId: string | null = null,
+  active = true,
 ) => ({
   displayName,
   email,
   teamName,
   teamId,
   criticalityTier,
+  active,
 });
 
 describe('identity-resolver', () => {
@@ -82,6 +84,7 @@ describe('identity-resolver', () => {
         team: 'Eng',
         criticalityTier: 'standard',
         resolved: true,
+        active: true,
       });
     });
 
@@ -114,7 +117,21 @@ describe('identity-resolver', () => {
         display_name: 'orphan',
         email: 'orphan@acme.test',
         resolved: false,
+        active: true,
       });
+    });
+
+    it('carries SCIM inactive flag through a resolved identity', () => {
+      const inactiveById = new Map([
+        [uuidAlice, entry('Alice Smith', 'Eng', 'alice@acme.test', 'standard', null, false)],
+      ]);
+      expect(resolveUserDirectoryIdentity(uuidAlice, inactiveById, byEmail, byAlias)).toMatchObject(
+        {
+          resolved: true,
+          active: false,
+          team: 'Eng',
+        },
+      );
     });
   });
 
