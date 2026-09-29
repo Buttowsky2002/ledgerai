@@ -59,13 +59,6 @@ export class ScimService {
     count: number,
     baseUrl: string,
   ) {
-    // Unstick assignment-Group team_ids + re-apply User.department (Entra
-    // provision-on-demand often hits Users before Groups).
-    try {
-      await this.backfillTeamsFromScimGroups(ctx);
-    } catch {
-      /* ignore — write path still assigns department */
-    }
     return this.prisma.withTenant(ctx.tenantId, async (tx) => {
       // Entra commonly filters userName eq "<objectId>" or email. Match email
       // or external_id so re-provision / updates find the same identity.
