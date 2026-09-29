@@ -281,14 +281,25 @@ function ctx(req: ScimRequest): ScimCtx {
 }
 
 function base(req: ScimRequest): string {
-  return `${req.protocol}://${req.get('host')}/scim/v2`;
+  // CloudFront → ALB is HTTP, so req.protocol is http even when the client
+  // used https. Prefer the viewer proto so SCIM Location URLs stay https.
+  const forwarded =
+    (req.get('cloudfront-forwarded-proto') || req.get('x-forwarded-proto') || '')
+      .split(',')[0]
+      ?.trim()
+      .toLowerCase() || '';
+  const protocol = forwarded === 'https' || forwarded === 'http' ? forwarded : req.protocol;
+  return `${protocol}://${req.get('host')}/scim/v2`;
 }
 
 function parseUserFilter(filter?: string): string | null {
   if (!filter) {
     return null;
   }
-  const m = /userName\s+eq\s+"([^"]+)"/i.exec(filter);
+  // Entra matching may use userName or externalId (objectId).
+  const m =
+    /(?:userName|externalId)\s+eq\s+"([^"]+)"/i.exec(filter) ??
+    /(?:userName|externalId)\s+eq\s+([^\s]+)/i.exec(filter);
   return m ? m[1].toLowerCase() : null;
 }
 
