@@ -811,7 +811,7 @@ describe('AnalyticsService.users', () => {
       teamName: 'Eng',
       teamId: null as string | null,
       criticalityTier: 'standard',
-            active: true,
+      active: true,
     };
     mockedLoadIdentityLookups.mockResolvedValueOnce({
       byId: new Map([

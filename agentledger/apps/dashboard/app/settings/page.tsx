@@ -265,8 +265,8 @@ async function IntegrationsTab({ api }: { api: Api }) {
           Point your IdP (Okta, Entra, Google Workspace) to
           https://badgeriq.studiodesigner.com/scim/v2 with this token as the Bearer credential. SCIM
           Users map to identities. FinOps department/team comes from the Entra User{' '}
-          <span className="font-mono">department</span> attribute when mapped, otherwise from
-          SCIM Group membership (Group name → team). Map{' '}
+          <span className="font-mono">department</span> attribute when mapped, otherwise from SCIM
+          Group membership (Group name → team). Map{' '}
           <span className="font-mono">
             department → urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:department
           </span>

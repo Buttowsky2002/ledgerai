@@ -65,10 +65,7 @@ function SpendByTeamCard({
   const pageSlice = useMemo(() => paginateItems(rows, page, pageSize), [rows, page, pageSize]);
 
   return (
-    <Card
-      title="Spend by team"
-      subtitle={`Department teams · seats + overage · ${from} → ${to}`}
-    >
+    <Card title="Spend by team" subtitle={`Department teams · seats + overage · ${from} → ${to}`}>
       {rows.length === 0 ? (
         <p className="py-6 text-center text-sm text-muted">
           No teams provisioned yet. Sync SCIM Groups (or set User{' '}
