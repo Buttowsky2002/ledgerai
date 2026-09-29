@@ -9,6 +9,8 @@ import {
   parsePatch,
   removeScimGroupAlias,
   scimGroupTeamIdsFromAliases,
+  scimUserName,
+  toScimUser,
 } from './scim.types';
 
 describe('SCIM PATCH parsing', () => {
@@ -110,6 +112,51 @@ describe('SCIM User mapping', () => {
     });
     expect(u.email).toBe('russ@studiodesigner.com');
     expect(u.externalId).toBe(objectId);
+  });
+
+  it('rejects objectId-only userName as email (requires work email)', () => {
+    const objectId = '860d9aad-cf73-4d63-8bc7-f63c5f455bed';
+    const u = fromScimUser({ userName: objectId });
+    expect(u.email).toBeUndefined();
+    expect(u.externalId).toBe(objectId);
+  });
+
+  it('echoes objectId as userName when externalId is non-email', () => {
+    const objectId = '860d9aad-cf73-4d63-8bc7-f63c5f455bed';
+    expect(
+      scimUserName({ email: 'russ@studiodesigner.com', externalId: objectId }),
+    ).toBe(objectId);
+    const body = toScimUser(
+      {
+        userId: 'u1',
+        email: 'russ@studiodesigner.com',
+        displayName: 'Russ',
+        externalId: objectId,
+        active: true,
+        aliases: ['department:Engineering'],
+      },
+      'https://example.com/scim/v2',
+    );
+    expect(body.userName).toBe(objectId);
+    expect(body['urn:ietf:params:scim:schemas:extension:enterprise:2.0:User']).toEqual({
+      department: 'Engineering',
+    });
+  });
+
+  it('maps objectId userName PATCH to externalId, not email', () => {
+    const objectId = '860d9aad-cf73-4d63-8bc7-f63c5f455bed';
+    const ops = parsePatch({
+      schemas: ['urn:ietf:params:scim:api:messages:2.0:PatchOp'],
+      Operations: [{ op: 'replace', path: 'userName', value: objectId }],
+    });
+    expect(applyUserPatch(ops)).toEqual({ externalId: objectId });
+  });
+
+  it('accepts PatchOp bodies that omit the schema URI', () => {
+    const ops = parsePatch({
+      Operations: [{ op: 'replace', path: 'active', value: false }],
+    });
+    expect(applyUserPatch(ops)).toEqual({ active: false });
   });
 
   it('extracts enterprise department from nested or flat keys', () => {

@@ -16,7 +16,6 @@ import {
   mergeScimGroupAlias,
   removeScimGroupAlias,
   scimError,
-  scimGroupTeamIdsFromAliases,
   toScimGroup,
   toScimUser,
 } from './scim.types';
@@ -33,16 +32,19 @@ const IDENTITY_COLS = {
   displayName: true,
   externalId: true,
   active: true,
+  aliases: true,
+  teamId: true,
 } as const;
 
 /**
  * SCIM 2.0 provisioning against the control-plane store. SCIM Users map to
  * identities (source='scim'). FinOps primary team (`identity.team_id`) comes
- * from, in order: (1) User enterprise `department` when present, else
- * (2) SCIM Group membership (Group displayName → teams row, ADR-034). Group
- * membership is also recorded on aliases (`scim-group:<teamId>`). Every
- * operation runs inside withTenant(ctx.tenantId) so Postgres RLS confines it;
- * mutations append an audit_log row with the SCIM token as the actor (rule 10).
+ * from the User enterprise `department` attribute (Entra [department] mapping).
+ * SCIM Groups are assignment/membership only (`scim-group:<teamId>` aliases) —
+ * Group displayName must not become the FinOps department (assignment groups
+ * like "AI Provisioning" are not departments). Every operation runs inside
+ * withTenant(ctx.tenantId) so Postgres RLS confines it; mutations append an
+ * audit_log row with the SCIM token as the actor (rule 10).
  */
 @Injectable()
 export class ScimService {
@@ -57,8 +59,15 @@ export class ScimService {
     count: number,
     baseUrl: string,
   ) {
+    // Unstick assignment-Group team_ids + re-apply User.department (Entra
+    // provision-on-demand often hits Users before Groups).
+    try {
+      await this.backfillTeamsFromScimGroups(ctx);
+    } catch {
+      /* ignore — write path still assigns department */
+    }
     return this.prisma.withTenant(ctx.tenantId, async (tx) => {
-      // Entra commonly filters userName eq "<objectId>" (not email). Match email
+      // Entra commonly filters userName eq "<objectId>" or email. Match email
       // or external_id so re-provision / updates find the same identity.
       const where = filterUserName
         ? {
@@ -78,8 +87,12 @@ export class ScimService {
         }),
         tx.identity.count({ where }),
       ]);
+      const teamNames = await this.teamNameMap(
+        tx,
+        rows.map((r) => r.teamId),
+      );
       return listResponse(
-        rows.map((r) => toScimUser(r as IdentityShape, baseUrl)),
+        rows.map((r) => toScimUser(this.toIdentityShape(r, teamNames), baseUrl)),
         total,
         startIndex,
       );
@@ -87,20 +100,28 @@ export class ScimService {
   }
 
   async getUser(ctx: ScimCtx, id: string, baseUrl: string) {
-    const row = await this.prisma.withTenant(ctx.tenantId, (tx) =>
-      tx.identity.findUnique({ where: { userId: id }, select: IDENTITY_COLS }),
-    );
-    if (!row) {
-      throw new HttpException(scimError(404, `User ${id} not found`), 404);
-    }
-    return toScimUser(row as IdentityShape, baseUrl);
+    return this.prisma.withTenant(ctx.tenantId, async (tx) => {
+      const row = await tx.identity.findUnique({
+        where: { userId: id },
+        select: IDENTITY_COLS,
+      });
+      if (!row) {
+        throw new HttpException(scimError(404, `User ${id} not found`), 404);
+      }
+      const teamNames = await this.teamNameMap(tx, [row.teamId]);
+      return toScimUser(this.toIdentityShape(row, teamNames), baseUrl);
+    });
   }
 
   async createUser(ctx: ScimCtx, body: Record<string, unknown>, baseUrl: string) {
     const u = fromScimUser(body);
     if (!u.email) {
       throw new HttpException(
-        scimError(400, 'userName or an email is required', 'invalidValue'),
+        scimError(
+          400,
+          'A work email is required (map Entra mail → emails[type eq "work"].value)',
+          'invalidValue',
+        ),
         400,
       );
     }
@@ -121,7 +142,13 @@ export class ScimService {
           await this.assignTeamByName(tx, ctx, created.userId, u.department);
         }
         await this.audit(tx, ctx, 'create', `identity:${created.userId}`, null, created);
-        return toScimUser(created as IdentityShape, baseUrl);
+        const fresh = await tx.identity.findUnique({
+          where: { userId: created.userId },
+          select: IDENTITY_COLS,
+        });
+        const shaped = fresh ?? created;
+        const teamNames = await this.teamNameMap(tx, [shaped.teamId]);
+        return toScimUser(this.toIdentityShape(shaped, teamNames), baseUrl);
       } catch (e) {
         throw this.conflictOr(e, 'User already exists');
       }
@@ -181,7 +208,13 @@ export class ScimService {
       if (Object.keys(data).length > 0 || department) {
         await this.audit(tx, ctx, 'update', `identity:${id}`, before, after);
       }
-      return toScimUser(after as IdentityShape, baseUrl);
+      const fresh = await tx.identity.findUnique({
+        where: { userId: id },
+        select: IDENTITY_COLS,
+      });
+      const shaped = fresh ?? after;
+      const teamNames = await this.teamNameMap(tx, [shaped.teamId]);
+      return toScimUser(this.toIdentityShape(shaped, teamNames), baseUrl);
     });
   }
 
@@ -461,8 +494,9 @@ export class ScimService {
   }
 
   /**
-   * Record Group membership and set FinOps team_id from the Group unless the
-   * identity already has an enterprise User.department (department wins).
+   * Record Group membership only. FinOps team_id comes from User.department —
+   * never from the assignment Group's displayName (that used to overwrite
+   * Engineering/Security/etc. with names like "AI Provisioning").
    */
   private async setMembers(
     tx: Prisma.TransactionClient,
@@ -488,22 +522,18 @@ export class ScimService {
     for (const row of rows) {
       const aliases = mergeScimGroupAlias(row.aliases, teamId);
       const enterpriseDept = departmentFromAliases(aliases);
-      if (enterpriseDept) {
-        // Explicit User.department stays authoritative over assignment Groups.
-        await tx.identity.update({
-          where: { userId: row.userId },
-          data: { aliases: aliases as Prisma.InputJsonValue },
-        });
-        await this.assignTeamByName(tx, ctx, row.userId, enterpriseDept);
-        continue;
-      }
+      // Clear team_id when it was incorrectly set to this assignment Group.
+      const stuckOnAssignmentGroup = row.teamId === teamId && !enterpriseDept;
       await tx.identity.update({
         where: { userId: row.userId },
         data: {
-          teamId: team.teamId,
           aliases: aliases as Prisma.InputJsonValue,
+          ...(stuckOnAssignmentGroup ? { teamId: null } : {}),
         },
       });
+      if (enterpriseDept) {
+        await this.assignTeamByName(tx, ctx, row.userId, enterpriseDept);
+      }
     }
   }
 
@@ -538,9 +568,6 @@ export class ScimService {
         const dept = departmentFromAliases(aliases);
         if (dept) {
           await this.assignTeamByName(tx, ctx, row.userId, dept);
-        } else {
-          // Fall back to another remaining SCIM Group, if any.
-          await this.applyTeamFromScimGroupAliases(tx, row.userId, aliases);
         }
       }
     }
@@ -568,24 +595,30 @@ export class ScimService {
   }
 
   /**
-   * Heal identities that already have `scim-group:` aliases but never got
-   * team_id (from the prior department-only policy). Safe / idempotent.
+   * Heal identities that have a stored enterprise department alias but no
+   * team_id, and unstick anyone whose team_id still points at an assignment
+   * Group (legacy Group-name → team policy). Safe / idempotent.
    */
   async backfillTeamsFromScimGroups(ctx: ScimCtx): Promise<number> {
     return this.prisma.withTenant(ctx.tenantId, async (tx) => {
       const rows = await tx.identity.findMany({
-        where: { teamId: null, active: true },
-        select: { userId: true, aliases: true },
+        where: { active: true },
+        select: { userId: true, aliases: true, teamId: true },
       });
       let fixed = 0;
       for (const row of rows) {
-        if (departmentFromAliases(row.aliases)) {
-          await this.assignTeamByName(tx, ctx, row.userId, departmentFromAliases(row.aliases)!);
+        const dept = departmentFromAliases(row.aliases);
+        if (dept) {
+          await this.assignTeamByName(tx, ctx, row.userId, dept);
           fixed += 1;
           continue;
         }
-        const applied = await this.applyTeamFromScimGroupAliases(tx, row.userId, row.aliases);
-        if (applied) {
+        // No User.department — if team_id is a SCIM assignment Group, clear it.
+        if (row.teamId && hasScimGroupAlias(row.aliases, row.teamId)) {
+          await tx.identity.update({
+            where: { userId: row.userId },
+            data: { teamId: null },
+          });
           fixed += 1;
         }
       }
@@ -593,33 +626,42 @@ export class ScimService {
     });
   }
 
-  /** Set team_id from the last existing `scim-group:<teamId>` alias. */
-  private async applyTeamFromScimGroupAliases(
+  private async teamNameMap(
     tx: Prisma.TransactionClient,
-    userId: string,
-    aliases: unknown,
-  ): Promise<boolean> {
-    const groupIds = scimGroupTeamIdsFromAliases(aliases);
-    if (!groupIds.length) {
-      return false;
+    teamIds: (string | null | undefined)[],
+  ): Promise<Map<string, string>> {
+    const ids = [...new Set(teamIds.filter((id): id is string => Boolean(id)))];
+    if (!ids.length) {
+      return new Map();
     }
-    // Prefer the most recently recorded group alias (last in the list).
-    for (let i = groupIds.length - 1; i >= 0; i--) {
-      const teamId = groupIds[i]!;
-      const team = await tx.team.findUnique({
-        where: { teamId },
-        select: { teamId: true },
-      });
-      if (!team) {
-        continue;
-      }
-      await tx.identity.update({
-        where: { userId },
-        data: { teamId: team.teamId },
-      });
-      return true;
-    }
-    return false;
+    const teams = await tx.team.findMany({
+      where: { teamId: { in: ids } },
+      select: { teamId: true, name: true },
+    });
+    return new Map(teams.map((t) => [t.teamId, t.name]));
+  }
+
+  private toIdentityShape(
+    row: {
+      userId: string;
+      email: string;
+      displayName: string | null;
+      externalId: string | null;
+      active: boolean;
+      aliases?: unknown;
+      teamId?: string | null;
+    },
+    teamNames: Map<string, string> = new Map(),
+  ): IdentityShape {
+    return {
+      userId: row.userId,
+      email: row.email,
+      displayName: row.displayName,
+      externalId: row.externalId,
+      active: row.active,
+      aliases: row.aliases,
+      teamName: row.teamId ? (teamNames.get(row.teamId) ?? null) : null,
+    };
   }
 
   private async audit(

@@ -62,31 +62,100 @@ export class ScimController {
   @Get('ResourceTypes')
   @Header('Content-Type', 'application/scim+json')
   resourceTypes() {
-    return [
-      {
-        schemas: ['urn:ietf:params:scim:schemas:core:2.0:ResourceType'],
-        id: 'User',
-        name: 'User',
-        endpoint: '/Users',
-        schema: 'urn:ietf:params:scim:schemas:core:2.0:User',
-      },
-      {
-        schemas: ['urn:ietf:params:scim:schemas:core:2.0:ResourceType'],
-        id: 'Group',
-        name: 'Group',
-        endpoint: '/Groups',
-        schema: 'urn:ietf:params:scim:schemas:core:2.0:Group',
-      },
-    ];
+    return {
+      schemas: ['urn:ietf:params:scim:api:messages:2.0:ListResponse'],
+      totalResults: 2,
+      Resources: [
+        {
+          schemas: ['urn:ietf:params:scim:schemas:core:2.0:ResourceType'],
+          id: 'User',
+          name: 'User',
+          endpoint: '/Users',
+          schema: 'urn:ietf:params:scim:schemas:core:2.0:User',
+          schemaExtensions: [
+            {
+              schema: 'urn:ietf:params:scim:schemas:extension:enterprise:2.0:User',
+              required: false,
+            },
+          ],
+        },
+        {
+          schemas: ['urn:ietf:params:scim:schemas:core:2.0:ResourceType'],
+          id: 'Group',
+          name: 'Group',
+          endpoint: '/Groups',
+          schema: 'urn:ietf:params:scim:schemas:core:2.0:Group',
+        },
+      ],
+    };
   }
 
   @Get('Schemas')
   @Header('Content-Type', 'application/scim+json')
   schemas() {
-    return [
-      { id: 'urn:ietf:params:scim:schemas:core:2.0:User', name: 'User' },
-      { id: 'urn:ietf:params:scim:schemas:core:2.0:Group', name: 'Group' },
-    ];
+    return {
+      schemas: ['urn:ietf:params:scim:api:messages:2.0:ListResponse'],
+      totalResults: 3,
+      Resources: [
+        {
+          id: 'urn:ietf:params:scim:schemas:core:2.0:User',
+          name: 'User',
+          description: 'User Account',
+          attributes: [
+            { name: 'userName', type: 'string', required: true, uniqueness: 'server' },
+            { name: 'displayName', type: 'string', required: false },
+            { name: 'externalId', type: 'string', required: false },
+            { name: 'active', type: 'boolean', required: false },
+            {
+              name: 'emails',
+              type: 'complex',
+              multiValued: true,
+              subAttributes: [
+                { name: 'value', type: 'string' },
+                { name: 'type', type: 'string' },
+                { name: 'primary', type: 'boolean' },
+              ],
+            },
+            {
+              name: 'name',
+              type: 'complex',
+              subAttributes: [{ name: 'formatted', type: 'string' }],
+            },
+          ],
+        },
+        {
+          id: 'urn:ietf:params:scim:schemas:extension:enterprise:2.0:User',
+          name: 'EnterpriseUser',
+          description: 'Enterprise User',
+          attributes: [
+            {
+              name: 'department',
+              type: 'string',
+              required: false,
+              description: 'FinOps department / team name',
+            },
+          ],
+        },
+        {
+          id: 'urn:ietf:params:scim:schemas:core:2.0:Group',
+          name: 'Group',
+          description: 'Group',
+          attributes: [
+            { name: 'displayName', type: 'string', required: true },
+            { name: 'externalId', type: 'string', required: false },
+            {
+              name: 'members',
+              type: 'complex',
+              multiValued: true,
+              subAttributes: [
+                { name: 'value', type: 'string' },
+                { name: 'display', type: 'string' },
+              ],
+            },
+          ],
+        },
+      ],
+    };
   }
 
   // ---- Users ----
