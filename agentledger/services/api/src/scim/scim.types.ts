@@ -7,6 +7,11 @@ const GROUP_SCHEMA = 'urn:ietf:params:scim:schemas:core:2.0:Group';
 const LIST_SCHEMA = 'urn:ietf:params:scim:api:messages:2.0:ListResponse';
 const ERROR_SCHEMA = 'urn:ietf:params:scim:api:messages:2.0:Error';
 const PATCH_SCHEMA = 'urn:ietf:params:scim:api:messages:2.0:PatchOp';
+const ENTERPRISE_USER = 'urn:ietf:params:scim:schemas:extension:enterprise:2.0:User';
+
+function isEmailLike(value: string | undefined | null): boolean {
+  return Boolean(value && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim()));
+}
 
 /** A SCIM Error object (RFC 7644 §3.12). status is a string per the spec. */
 export function scimError(
@@ -45,24 +50,49 @@ export interface IdentityShape {
   displayName: string | null;
   externalId: string | null;
   active: boolean;
+  /** Optional — when present, echoed as enterprise User.department. */
+  aliases?: unknown;
+  teamName?: string | null;
+}
+
+/**
+ * Entra matches on userName. When they map objectId → userName we store that as
+ * externalId and must echo it back as userName (not email) or provision-on-demand
+ * fails matching after create. Okta-style externalIds (mailNickname) stay on
+ * externalId — userName remains the work email.
+ */
+export function scimUserName(i: Pick<IdentityShape, 'email' | 'externalId'>): string {
+  if (i.externalId && isUuidLike(i.externalId)) {
+    return i.externalId;
+  }
+  return i.email;
+}
+
+function isUuidLike(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value.trim(),
+  );
 }
 
 export function toScimUser(i: IdentityShape, baseUrl: string): Record<string, unknown> {
-  return {
-    schemas: [USER_SCHEMA],
+  const fromAlias = departmentFromAliases(i.aliases);
+  const fromTeam = i.teamName?.trim() || null;
+  const department = fromAlias ?? fromTeam;
+  const body: Record<string, unknown> = {
+    schemas: department ? [USER_SCHEMA, ENTERPRISE_USER] : [USER_SCHEMA],
     id: i.userId,
     ...(i.externalId ? { externalId: i.externalId } : {}),
-    userName: i.email,
+    userName: scimUserName(i),
     name: { formatted: i.displayName ?? i.email },
     displayName: i.displayName ?? i.email,
-    emails: [{ value: i.email, primary: true }],
+    emails: [{ value: i.email, primary: true, type: 'work' }],
     active: i.active,
     meta: { resourceType: 'User', location: `${baseUrl}/Users/${i.userId}` },
   };
-}
-
-function isEmailLike(value: string | undefined | null): boolean {
-  return Boolean(value && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim()));
+  if (department) {
+    body[ENTERPRISE_USER] = { department };
+  }
+  return body;
 }
 
 /** Extract the identity-relevant fields from a SCIM User create/replace body. */
@@ -79,15 +109,13 @@ export function fromScimUser(body: Record<string, unknown>): {
   const primaryEmail = emails?.find((e) => e.primary)?.value ?? emails?.[0]?.value;
   const userName = typeof body.userName === 'string' ? body.userName.trim() : undefined;
   // Entra often sets userName to objectId (UUID). Prefer a real email from emails[].
-  const email = (
-    isEmailLike(primaryEmail)
-      ? primaryEmail
-      : isEmailLike(userName)
-        ? userName
-        : (primaryEmail ?? userName)
-  )
-    ?.trim()
-    .toLowerCase();
+  // Never persist a non-email (objectId) as identities.email — that breaks login + matching.
+  const emailRaw = isEmailLike(primaryEmail)
+    ? primaryEmail
+    : isEmailLike(userName)
+      ? userName
+      : undefined;
+  const email = emailRaw?.trim().toLowerCase();
   const bodyExternal =
     typeof body.externalId === 'string' && body.externalId.trim()
       ? body.externalId.trim()
@@ -102,8 +130,6 @@ export function fromScimUser(body: Record<string, unknown>): {
     department: enterpriseDepartment(body),
   };
 }
-
-const ENTERPRISE_USER = 'urn:ietf:params:scim:schemas:extension:enterprise:2.0:User';
 
 /** Read enterprise:2.0:User department from nested object or dotted Entra path key. */
 export function enterpriseDepartment(body: Record<string, unknown>): string | undefined {
@@ -241,10 +267,11 @@ export interface PatchOp {
 /** Validate + normalize a PatchOp body into the supported operation list. */
 export function parsePatch(body: Record<string, unknown>): PatchOp[] {
   const schemas = body.schemas as string[] | undefined;
-  if (!schemas?.includes(PATCH_SCHEMA)) {
+  // Entra usually sends the PatchOp schema; some clients omit it but still send Operations.
+  const ops = (body.Operations ?? body.operations) as Record<string, unknown>[] | undefined;
+  if (schemas && schemas.length > 0 && !schemas.includes(PATCH_SCHEMA) && !Array.isArray(ops)) {
     throw new Error('not a PatchOp');
   }
-  const ops = body.Operations as Record<string, unknown>[] | undefined;
   if (!Array.isArray(ops) || ops.length === 0) {
     throw new Error('Operations required');
   }
@@ -284,9 +311,16 @@ export function applyUserPatch(ops: PatchOp[]): {
       case 'name.formatted':
         out.displayName = String(value);
         break;
-      case 'username':
-        out.email = String(value).toLowerCase();
+      case 'username': {
+        const raw = String(value).trim();
+        if (isEmailLike(raw)) {
+          out.email = raw.toLowerCase();
+        } else if (raw) {
+          // Entra objectId-as-userName must not overwrite identities.email.
+          out.externalId = raw;
+        }
         break;
+      }
       case 'externalid':
         out.externalId = String(value);
         break;
