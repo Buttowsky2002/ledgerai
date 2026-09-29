@@ -185,9 +185,9 @@ describe('SCIM 2.0 provisioning', () => {
         ],
       });
     expect(res.status).toBe(200);
-    expect(
-      res.body['urn:ietf:params:scim:schemas:extension:enterprise:2.0:User']?.department,
-    ).toBe('Engineering');
+    expect(res.body['urn:ietf:params:scim:schemas:extension:enterprise:2.0:User']?.department).toBe(
+      'Engineering',
+    );
 
     const row = await prisma.withTenant(tenantA, (tx) =>
       tx.identity.findUnique({ where: { userId } }),

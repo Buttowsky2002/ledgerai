@@ -58,13 +58,20 @@ export interface IdentityShape {
 /**
  * Entra matches on userName. When they map objectId → userName we store that as
  * externalId and must echo it back as userName (not email) or provision-on-demand
- * fails matching after create.
+ * fails matching after create. Okta-style externalIds (mailNickname) stay on
+ * externalId — userName remains the work email.
  */
 export function scimUserName(i: Pick<IdentityShape, 'email' | 'externalId'>): string {
-  if (i.externalId && !isEmailLike(i.externalId)) {
+  if (i.externalId && isUuidLike(i.externalId)) {
     return i.externalId;
   }
   return i.email;
+}
+
+function isUuidLike(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value.trim(),
+  );
 }
 
 export function toScimUser(i: IdentityShape, baseUrl: string): Record<string, unknown> {

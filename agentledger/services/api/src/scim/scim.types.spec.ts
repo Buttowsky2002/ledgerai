@@ -121,11 +121,12 @@ describe('SCIM User mapping', () => {
     expect(u.externalId).toBe(objectId);
   });
 
-  it('echoes objectId as userName when externalId is non-email', () => {
+  it('echoes UUID objectId as userName; keeps email for non-UUID externalIds', () => {
     const objectId = '860d9aad-cf73-4d63-8bc7-f63c5f455bed';
-    expect(
-      scimUserName({ email: 'russ@studiodesigner.com', externalId: objectId }),
-    ).toBe(objectId);
+    expect(scimUserName({ email: 'russ@studiodesigner.com', externalId: objectId })).toBe(objectId);
+    expect(scimUserName({ email: 'alice@acme.com', externalId: 'okta-alice' })).toBe(
+      'alice@acme.com',
+    );
     const body = toScimUser(
       {
         userId: 'u1',
