@@ -147,30 +147,30 @@ describe('SCIM 2.0 provisioning', () => {
     expect(res.body.schemas).toContain('urn:ietf:params:scim:api:messages:2.0:Error');
   });
 
-  it('provisions a Group and records membership without using Group name as department', async () => {
+  it('provisions a Group (→ team) and assigns membership', async () => {
     const res = await scim()
       .post('/scim/v2/Groups')
       .set(bearer(scimToken))
       .send({
         schemas: ['urn:ietf:params:scim:schemas:core:2.0:Group'],
-        displayName: 'AI Provisioning',
+        displayName: 'Engineering',
         externalId: 'okta-grp-eng',
         members: [{ value: userId }],
       });
     expect(res.status).toBe(201);
-    expect(res.body.displayName).toBe('AI Provisioning');
+    expect(res.body.displayName).toBe('Engineering');
     expect(res.body.members.map((m: { value: string }) => m.value)).toContain(userId);
 
     const row = await prisma.withTenant(tenantA, (tx) =>
       tx.identity.findUnique({ where: { userId } }),
     );
-    // Assignment Groups must not become FinOps departments — only User.department does.
-    expect(row?.teamId).toBeNull();
+    // Group membership sets FinOps team when User.department is absent.
+    expect(row?.teamId).toBe(res.body.id);
     const aliases = Array.isArray(row?.aliases) ? row!.aliases : [];
     expect(aliases).toContain(`scim-group:${res.body.id}`);
   });
 
-  it('sets FinOps team from User enterprise department', async () => {
+  it('sets FinOps team from User enterprise department over Group name', async () => {
     const res = await scim()
       .patch(`/scim/v2/Users/${userId}`)
       .set(bearer(scimToken))
@@ -180,13 +180,13 @@ describe('SCIM 2.0 provisioning', () => {
           {
             op: 'Replace',
             path: 'urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:department',
-            value: 'Engineering',
+            value: 'Security',
           },
         ],
       });
     expect(res.status).toBe(200);
     expect(res.body['urn:ietf:params:scim:schemas:extension:enterprise:2.0:User']?.department).toBe(
-      'Engineering',
+      'Security',
     );
 
     const row = await prisma.withTenant(tenantA, (tx) =>
@@ -196,7 +196,7 @@ describe('SCIM 2.0 provisioning', () => {
     const team = await prisma.withTenant(tenantA, (tx) =>
       tx.team.findUnique({ where: { teamId: row!.teamId! } }),
     );
-    expect(team?.name).toBe('Engineering');
+    expect(team?.name).toBe('Security');
   });
 
   it('isolates tenants: A token cannot read B users (404)', async () => {
