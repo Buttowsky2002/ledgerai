@@ -25,6 +25,8 @@ type IdentityEntry = {
   /** Postgres teams.team_id when the identity is assigned (SCIM Group → team). */
   teamId: string | null;
   criticalityTier: string;
+  /** False when SCIM soft-deactivated (active=false). */
+  active: boolean;
 };
 
 export type UserDirectoryIdentity = {
@@ -34,6 +36,8 @@ export type UserDirectoryIdentity = {
   teamId: string | null;
   criticalityTier: string;
   resolved: boolean;
+  /** False when the matched identity was SCIM-deprovisioned. */
+  active: boolean;
 };
 
 type VIdentityRow = {
@@ -120,6 +124,8 @@ export function resolveUserDirectoryIdentity(
       teamId: hit.teamId,
       criticalityTier: hit.criticalityTier,
       resolved: true,
+      // Treat missing active as true for older fixtures / partial maps.
+      active: hit.active !== false,
     };
   }
   const trimmed = userId.trim();
@@ -131,6 +137,7 @@ export function resolveUserDirectoryIdentity(
       teamId: null,
       criticalityTier: 'standard',
       resolved: false,
+      active: true,
     };
   }
   return {
@@ -140,6 +147,7 @@ export function resolveUserDirectoryIdentity(
     teamId: null,
     criticalityTier: 'standard',
     resolved: false,
+    active: true,
   };
 }
 
@@ -311,7 +319,8 @@ export async function loadIdentityLookups(
       WHERE tenant_id = ${tenantId}::uuid AND identity_type = 'human'
     `;
     const identityRows = await tx.identity.findMany({
-      where: { active: true },
+      // Include inactive so deprovisioned users still map spend → last team;
+      // directory assembly filters them out of the member roster.
       select: {
         userId: true,
         email: true,
@@ -322,7 +331,7 @@ export async function loadIdentityLookups(
         active: true,
       },
     });
-    const activeIds = new Set(identityRows.map((r) => r.userId));
+    const activeIds = new Set(identityRows.filter((r) => r.active).map((r) => r.userId));
     const teamIds = [
       ...new Set([
         ...vRows.map((r) => r.team_id).filter(Boolean),
@@ -348,6 +357,7 @@ export async function loadIdentityLookups(
       email: string | null,
       teamId: string | null,
       criticalityTier: string | null,
+      active: boolean,
       aliases: string[] = [],
     ) => {
       const entry: IdentityEntry = {
@@ -356,6 +366,7 @@ export async function loadIdentityLookups(
         teamName: teamId ? (teamNames.get(teamId) ?? '') : '',
         teamId: teamId ?? null,
         criticalityTier: criticalityTier?.trim().toLowerCase() || 'standard',
+        active,
       };
       if (UUID_RE.test(id)) {
         byId.set(id, entry);
@@ -372,17 +383,30 @@ export async function loadIdentityLookups(
     };
 
     for (const row of vRows) {
-      // Skip deactivated humans — v_identities does not filter active.
-      if (!activeIds.has(row.identity_id)) {
-        continue;
-      }
-      register(row.identity_id, row.display_name, row.email, row.team_id, row.criticality_tier);
+      const isActive = activeIds.has(row.identity_id);
+      // Still register inactive v_identities rows for team attribution.
+      register(
+        row.identity_id,
+        row.display_name,
+        row.email,
+        row.team_id,
+        row.criticality_tier,
+        isActive,
+      );
     }
 
     const mergeable: MergeableIdentity[] = [];
     for (const row of identityRows) {
       const aliases = parseAliases(row.aliases);
-      register(row.userId, row.displayName, row.email, row.teamId, row.criticalityTier, aliases);
+      register(
+        row.userId,
+        row.displayName,
+        row.email,
+        row.teamId,
+        row.criticalityTier,
+        row.active,
+        aliases,
+      );
       mergeable.push({
         userId: row.userId,
         email: row.email,

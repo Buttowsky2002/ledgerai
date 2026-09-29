@@ -2291,6 +2291,12 @@ export class AnalyticsService {
       if (isDemoIdentityKey(identity.email)) {
         continue;
       }
+      // SCIM soft-deprovisioned identities drop off the member directory (roster
+      // already excludes them). Their historical spend still attributes via CFO
+      // lookups that include inactive rows.
+      if (identity.resolved && !identity.active) {
+        continue;
+      }
       const hasActivity =
         total_spend_usd > 0 ||
         calls > 0 ||

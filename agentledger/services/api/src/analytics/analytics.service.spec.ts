@@ -267,6 +267,7 @@ describe('AnalyticsService.users', () => {
             teamName: 'Eng',
             teamId: null,
             criticalityTier: 'standard',
+            active: true,
           },
         ],
       ]),
@@ -279,6 +280,7 @@ describe('AnalyticsService.users', () => {
             teamName: 'Eng',
             teamId: null,
             criticalityTier: 'standard',
+            active: true,
           },
         ],
       ]),
@@ -291,6 +293,7 @@ describe('AnalyticsService.users', () => {
             teamName: 'Eng',
             teamId: null,
             criticalityTier: 'standard',
+            active: true,
           },
         ],
       ]),
@@ -419,6 +422,86 @@ describe('AnalyticsService.users', () => {
     expect(result.users.some((u) => u.user_id === 'zero-spend')).toBe(false);
   });
 
+  it('drops SCIM-inactive identities from the member directory', async () => {
+    const inactiveId = 'cccccccc-dddd-eeee-ffff-000000000001';
+    mockedListHumanIdentityRoster.mockResolvedValue([]);
+    mockedLoadIdentityLookups.mockResolvedValue({
+      byId: new Map([
+        [
+          inactiveId,
+          {
+            displayName: 'Gone User',
+            email: 'gone@example.test',
+            teamName: 'Eng',
+            teamId: null,
+            criticalityTier: 'standard',
+            active: false,
+          },
+        ],
+      ]),
+      byEmail: new Map([
+        [
+          'gone@example.test',
+          {
+            displayName: 'Gone User',
+            email: 'gone@example.test',
+            teamName: 'Eng',
+            teamId: null,
+            criticalityTier: 'standard',
+            active: false,
+          },
+        ],
+      ]),
+      byAlias: new Map(),
+    });
+    const queryScoped = jest.fn(async (sql: string) => {
+      if (sql.includes('user_id, platform, model, spend_usd')) {
+        return [
+          {
+            user_id: inactiveId,
+            platform: 'openai',
+            model: 'gpt-4o',
+            spend_usd: 12,
+            calls: 3,
+            portal_import_usd: 0,
+            connector_usd: 0,
+          },
+        ];
+      }
+      if (sql.includes('AS key') || sql.includes('user_id')) {
+        return [
+          {
+            key: inactiveId,
+            user_id: inactiveId,
+            cost_usd: 12,
+            calls: 3,
+            tokens: 100,
+            portal_import_usd: 0,
+            connector_usd: 0,
+            cursor_on_demand_usd: 0,
+            cursor_included_usd: 0,
+          },
+        ];
+      }
+      return [];
+    });
+    const ch = { queryScoped } as unknown as ClickHouseService;
+    const svc = new AnalyticsService(
+      ch,
+      {} as PrismaService,
+      {} as LariService,
+      {
+        getSpendSummary: jest.fn(async () => null),
+      } as unknown as CopilotAnalyticsService,
+      emptyCopilotMemberSpend(),
+      emptyCursorAnalytics() as never,
+      emptyCursorProductivity() as never,
+    );
+    const result = await svc.users('2020-01-01', '2020-01-31');
+    expect(result.users.some((u) => u.user_id === inactiveId)).toBe(false);
+    expect(result.users.some((u) => u.email === 'gone@example.test')).toBe(false);
+  });
+
   it('keeps mapped identities on the directory when the date range has no spend', async () => {
     const mappedId = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
     mockedListHumanIdentityRoster.mockResolvedValue([
@@ -439,6 +522,7 @@ describe('AnalyticsService.users', () => {
             teamName: 'Finance',
             teamId: null,
             criticalityTier: 'standard',
+            active: true,
           },
         ],
       ]),
@@ -451,6 +535,7 @@ describe('AnalyticsService.users', () => {
             teamName: 'Finance',
             teamId: null,
             criticalityTier: 'standard',
+            active: true,
           },
         ],
       ]),
@@ -532,6 +617,7 @@ describe('AnalyticsService.users', () => {
             teamName: 'Eng',
             teamId: null,
             criticalityTier: 'standard',
+            active: true,
           },
         ],
       ]),
@@ -544,6 +630,7 @@ describe('AnalyticsService.users', () => {
             teamName: 'Eng',
             teamId: null,
             criticalityTier: 'standard',
+            active: true,
           },
         ],
       ]),
@@ -632,6 +719,7 @@ describe('AnalyticsService.users', () => {
             teamName: 'Platform',
             teamId: null,
             criticalityTier: 'standard',
+            active: true,
           },
         ],
       ]),
@@ -644,6 +732,7 @@ describe('AnalyticsService.users', () => {
             teamName: 'Platform',
             teamId: null,
             criticalityTier: 'standard',
+            active: true,
           },
         ],
       ]),
@@ -722,6 +811,7 @@ describe('AnalyticsService.users', () => {
       teamName: 'Eng',
       teamId: null as string | null,
       criticalityTier: 'standard',
+      active: true,
     };
     mockedLoadIdentityLookups.mockResolvedValueOnce({
       byId: new Map([
@@ -981,6 +1071,7 @@ describe('AnalyticsService.users', () => {
             teamName: 'Eng',
             teamId: null,
             criticalityTier: 'standard',
+            active: true,
           },
         ],
         [
@@ -991,6 +1082,7 @@ describe('AnalyticsService.users', () => {
             teamName: 'Eng',
             teamId: null,
             criticalityTier: 'standard',
+            active: true,
           },
         ],
       ]),
@@ -1103,6 +1195,7 @@ describe('AnalyticsService.users', () => {
             teamName: 'Engineering',
             teamId: null,
             criticalityTier: 'standard',
+            active: true,
           },
         ],
       ]),
