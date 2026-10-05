@@ -266,6 +266,7 @@ export function collapseDirectoryRowsByDisplayName(users: UserDirectoryRow[]): U
       display_name: sorted[0]!.display_name || acc.display_name,
       email: sorted[0]!.email ?? acc.email,
       team: sorted[0]!.team || acc.team,
+      team_id: sorted[0]!.team_id ?? acc.team_id ?? null,
       resolved: list.some((x) => x.resolved),
     });
   }
@@ -300,6 +301,7 @@ export function mergeUserDirectoryRows(a: UserDirectoryRow, b: UserDirectoryRow)
     display_name: resolved.display_name,
     email: resolved.email ?? primary.email ?? secondary.email,
     team: resolved.team || primary.team || secondary.team,
+    team_id: resolved.team_id ?? primary.team_id ?? secondary.team_id ?? null,
     resolved: a.resolved || b.resolved,
     total_spend_usd: usd(a.total_spend_usd + b.total_spend_usd),
     calls: a.calls + b.calls,
