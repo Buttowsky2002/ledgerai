@@ -79,4 +79,31 @@ describe('collapseDirectoryRowsByDisplayName', () => {
       resolved: true,
     });
   });
+
+  it('preserves team_id from the preferred collapsed row', () => {
+    const teamA = '11111111-1111-1111-1111-111111111111';
+    const collapsed = collapseDirectoryRowsByDisplayName([
+      row({
+        user_id: '1',
+        email: 'a@studiodesigner.com',
+        display_name: 'Alex Rivera',
+        team: 'Finance',
+        team_id: teamA,
+        resolved: true,
+        total_spend_usd: 20,
+      }),
+      row({
+        user_id: '2',
+        email: 'alex@gmail.com',
+        display_name: 'Alex Rivera',
+        team: 'Eng',
+        team_id: '22222222-2222-2222-2222-222222222222',
+        resolved: true,
+        total_spend_usd: 5,
+      }),
+    ]);
+    expect(collapsed).toHaveLength(1);
+    expect(collapsed[0]?.team_id).toBe(teamA);
+    expect(collapsed[0]?.team).toBe('Finance');
+  });
 });

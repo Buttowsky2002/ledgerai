@@ -17,6 +17,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -26,6 +27,8 @@ import { CrudService } from '../common/crud.service';
 import { parsePagination } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { getTenantId } from '../tenant/tenant-context';
+import { mergeDepartmentAlias } from '../scim/scim.types';
+import { Prisma } from '@prisma/client';
 
 const ROLES = ['member', 'admin', 'finance', 'security'];
 const API_ROLES = ['viewer', 'analyst', 'admin'];
@@ -59,6 +62,14 @@ class SeatTierItemDto {
   @IsIn(SEAT_TIERS) tier!: (typeof SEAT_TIERS)[number];
 }
 
+
+class PatchIdentityTeamDto {
+  /** FinOps team id, or null to clear department assignment. */
+  @ValidateIf((_, v) => v !== null && v !== undefined)
+  @IsUUID()
+  teamId!: string | null;
+}
+
 class PatchSeatTiersDto {
   @IsArray()
   @ValidateNested({ each: true })
@@ -81,6 +92,85 @@ export class IdentitiesController {
   @Get()
   list(@Query('limit') limit?: string, @Query('offset') offset?: string) {
     return this.crud.list(parsePagination(limit, offset));
+  }
+
+
+  @Roles('analyst')
+  @Patch(':id/team')
+  async patchTeam(@Param('id') id: string, @Body() dto: PatchIdentityTeamDto) {
+    if (!('teamId' in dto)) {
+      throw new BadRequestException('teamId is required (use null to clear)');
+    }
+    const identity = await this.resolveIdentity(id);
+    const tenantId = getTenantId();
+    if (!tenantId) {
+      throw new BadRequestException('no tenant in context');
+    }
+    const nextTeamId = dto.teamId ?? null;
+    if (nextTeamId) {
+      const team = await this.prisma.withTenant(tenantId, (tx) =>
+        tx.team.findUnique({ where: { teamId: nextTeamId }, select: { teamId: true, name: true } }),
+      );
+      if (!team) {
+        throw new NotFoundException('team not found');
+      }
+    }
+
+    return this.prisma.withTenant(tenantId, async (tx) => {
+      const before = await tx.identity.findUnique({
+        where: { userId: identity.userId },
+        select: { userId: true, email: true, teamId: true, aliases: true },
+      });
+      if (!before) {
+        throw new NotFoundException('identity not found');
+      }
+
+      let aliases: Prisma.InputJsonValue | undefined;
+      if (nextTeamId) {
+        const team = await tx.team.findUnique({
+          where: { teamId: nextTeamId },
+          select: { name: true },
+        });
+        if (team) {
+          // Persist as department: so SCIM Group sync keeps enterprise department precedence.
+          aliases = mergeDepartmentAlias(before.aliases, team.name) as Prisma.InputJsonValue;
+        }
+      } else {
+        const existing = Array.isArray(before.aliases) ? before.aliases : [];
+        aliases = existing.filter(
+          (item) => !(typeof item === 'string' && item.startsWith('department:')),
+        ) as Prisma.InputJsonValue;
+      }
+
+      const after = await tx.identity.update({
+        where: { userId: identity.userId },
+        data: {
+          teamId: nextTeamId,
+          ...(aliases !== undefined ? { aliases } : {}),
+        },
+        select: { userId: true, email: true, teamId: true, displayName: true },
+      });
+      let teamName: string | null = null;
+      if (after.teamId) {
+        const team = await tx.team.findUnique({
+          where: { teamId: after.teamId },
+          select: { name: true },
+        });
+        teamName = team?.name ?? null;
+      }
+      await recordAudit(tx, {
+        action: 'update',
+        object: `identity:${identity.userId}`,
+        before: { teamId: before.teamId },
+        after: { teamId: after.teamId, teamName },
+      });
+      return {
+        user_id: after.userId,
+        email: after.email,
+        team_id: after.teamId,
+        team: teamName ?? '',
+      };
+    });
   }
 
   @Roles('viewer')

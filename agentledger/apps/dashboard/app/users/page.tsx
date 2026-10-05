@@ -5,6 +5,10 @@ import { DateRangePicker } from '../../components/DateRangePicker';
 import { TablePager } from '../../components/TablePager';
 import { UtilizationStatusBadge } from '../../components/UtilizationStatusBadge';
 import { VendorSpendCell } from '../../components/VendorSpendCell';
+import {
+  TeamAssignmentControls,
+  type TeamOption,
+} from '../../components/users/TeamAssignmentControls';
 import { proxyApi } from '../../lib/api';
 import { fetchDataBounds } from '../../lib/data-bounds';
 import { vendorLabel } from '../../lib/fixed-cost-catalog';
@@ -33,6 +37,7 @@ type UserRow = {
   display_name: string;
   email: string | null;
   team: string;
+  team_id?: string | null;
   resolved: boolean;
   total_spend_usd: number;
   vendor_spend?: Record<string, VendorSpendSlice>;
@@ -42,6 +47,26 @@ type UserRow = {
   seat_monthly_cost_usd?: number;
   seat_tiers?: Record<string, SeatClass>;
 };
+
+function normalizeTeams(data: unknown): TeamOption[] {
+  const rows = Array.isArray(data) ? data : [];
+  return rows
+    .map((row) => {
+      if (!row || typeof row !== 'object') {
+        return null;
+      }
+      const r = row as { teamId?: unknown; team_id?: unknown; name?: unknown };
+      const teamId =
+        typeof r.teamId === 'string' ? r.teamId : typeof r.team_id === 'string' ? r.team_id : '';
+      const name = typeof r.name === 'string' ? r.name.trim() : '';
+      if (!teamId || !name) {
+        return null;
+      }
+      return { teamId, name };
+    })
+    .filter((t): t is TeamOption => t != null)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
 
 type UsersResponse = {
   from: string;
@@ -125,7 +150,10 @@ export default async function UsersPage({
     qs.set('q', q);
   }
 
-  const { ok, data } = await proxyApi(`/v1/analytics/users?${qs.toString()}`);
+  const [{ ok, data }, { data: teamsData }] = await Promise.all([
+    proxyApi(`/v1/analytics/users?${qs.toString()}`),
+    proxyApi('/v1/teams?limit=200'),
+  ]);
   const payload = (
     ok && data && typeof data === 'object' ? data : { users: [], vendors: [] }
   ) as UsersResponse;
@@ -133,6 +161,7 @@ export default async function UsersPage({
   const vendors = payload.vendors ?? [];
   const orgTotal = payload.org_billing?.total_cost_of_ai;
   const sources = payload.sources;
+  const teams = normalizeTeams(teamsData);
 
   const departments = [
     ...new Set(allUsers.map((u) => u.team?.trim()).filter((t): t is string => Boolean(t))),
@@ -497,7 +526,16 @@ export default async function UsersPage({
                     </span>
                   ),
                   email: u.email || (isEmailLike(u.user_id) ? u.user_id : '—'),
-                  team: u.team || '—',
+                  team: u.resolved ? (
+                    <TeamAssignmentControls
+                      userId={u.email || u.user_id}
+                      teams={teams}
+                      initialTeamId={u.team_id ?? null}
+                      compact
+                    />
+                  ) : (
+                    u.team || '—'
+                  ),
                   status: u.status ? <UtilizationStatusBadge status={u.status} /> : '—',
                   total: usd(userVendorTotal(u)),
                 };

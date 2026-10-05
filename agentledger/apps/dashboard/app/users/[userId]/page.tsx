@@ -1,6 +1,10 @@
 import Link from 'next/link';
 import { Badge, Card, PageHeader } from '../../../components/ui';
 import { SeatTierControls } from '../../../components/users/SeatTierControls';
+import {
+  TeamAssignmentControls,
+  type TeamOption,
+} from '../../../components/users/TeamAssignmentControls';
 import { UserVendorDetailTabs } from '../../../components/users/UserVendorDetailTabs';
 import { proxyApi } from '../../../lib/api';
 import { resolveRange } from '../../../lib/resolve-range';
@@ -20,12 +24,33 @@ type UserRow = {
   display_name: string;
   email: string | null;
   team: string;
+  team_id?: string | null;
   resolved: boolean;
   total_spend_usd: number;
   vendor_spend?: Record<string, VendorSpendSlice>;
   vendor_usage?: Record<string, VendorUsageSlice>;
   seat_tiers?: Record<string, SeatClass>;
 };
+
+function normalizeTeams(data: unknown): TeamOption[] {
+  const rows = Array.isArray(data) ? data : [];
+  return rows
+    .map((row) => {
+      if (!row || typeof row !== 'object') {
+        return null;
+      }
+      const r = row as { teamId?: unknown; team_id?: unknown; name?: unknown };
+      const teamId =
+        typeof r.teamId === 'string' ? r.teamId : typeof r.team_id === 'string' ? r.team_id : '';
+      const name = typeof r.name === 'string' ? r.name.trim() : '';
+      if (!teamId || !name) {
+        return null;
+      }
+      return { teamId, name };
+    })
+    .filter((t): t is TeamOption => t != null)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
 
 export default async function UserDetailPage({
   params,
@@ -38,9 +63,10 @@ export default async function UserDetailPage({
   const userId = decodeURIComponent(params.userId);
   const qs = new URLSearchParams({ from, to });
 
-  const [{ data: userData }, { data: listData }] = await Promise.all([
+  const [{ data: userData }, { data: listData }, { data: teamsData }] = await Promise.all([
     proxyApi(`/v1/analytics/users/${encodeURIComponent(userId)}?${qs.toString()}`),
     proxyApi(`/v1/analytics/users?${qs.toString()}`),
+    proxyApi('/v1/teams?limit=200'),
   ]);
 
   const user = (userData ?? null) as UserRow | null;
@@ -52,6 +78,7 @@ export default async function UserDetailPage({
   });
   // Always expose ChatGPT, Claude, and Copilot license controls.
   const tierVendors = [...new Set(['openai', 'anthropic', 'github', ...userVendors, ...vendors])];
+  const teams = normalizeTeams(teamsData);
 
   if (!user) {
     return (
@@ -96,7 +123,6 @@ export default async function UserDetailPage({
           </Badge>
         )}
         {user.email && <span className="text-sm text-muted">{user.email}</span>}
-        {user.team && <span className="text-sm text-muted">Team: {user.team}</span>}
         <span className="text-xs text-muted">ID: {user.user_id}</span>
         <span className="text-sm text-gray-200">
           Total AI cost: <span className="num font-medium">{usd(userVendorTotal(user))}</span>
@@ -104,6 +130,20 @@ export default async function UserDetailPage({
       </div>
 
       <div className="mb-6 grid gap-4 lg:grid-cols-2">
+        <Card title="Team">
+          {user.resolved ? (
+            <TeamAssignmentControls
+              userId={user.email || user.user_id}
+              teams={teams}
+              initialTeamId={user.team_id ?? null}
+            />
+          ) : (
+            <p className="text-sm text-muted">
+              Link this member to an identity before assigning a team.
+              {user.team ? ` Current label: ${user.team}` : ''}
+            </p>
+          )}
+        </Card>
         <Card title="Seat licenses">
           <SeatTierControls
             userId={user.email || user.user_id}

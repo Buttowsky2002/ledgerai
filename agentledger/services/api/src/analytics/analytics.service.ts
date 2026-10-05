@@ -111,6 +111,8 @@ export interface UserDirectoryRow {
   display_name: string;
   email: string | null;
   team: string;
+  /** Postgres identities.team_id when resolved; used for manual team reassignment. */
+  team_id?: string | null;
   resolved: boolean;
   total_spend_usd: number;
   calls: number;
@@ -2341,6 +2343,7 @@ export class AnalyticsService {
         display_name,
         email,
         team,
+        team_id: identity.teamId,
         resolved: mergeIdentity.resolved,
         total_spend_usd,
         calls,
