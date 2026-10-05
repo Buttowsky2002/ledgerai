@@ -1,7 +1,6 @@
 import {
   canonicalUserKey,
   collapseDirectoryRowsByDisplayName,
-  mergeUserDirectoryRows,
 } from './user-directory.util';
 import type { UserDirectoryRow } from './analytics.service';
 
