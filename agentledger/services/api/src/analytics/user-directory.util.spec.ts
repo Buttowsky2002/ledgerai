@@ -1,7 +1,4 @@
-import {
-  canonicalUserKey,
-  collapseDirectoryRowsByDisplayName,
-} from './user-directory.util';
+import { canonicalUserKey, collapseDirectoryRowsByDisplayName } from './user-directory.util';
 import type { UserDirectoryRow } from './analytics.service';
 
 const row = (
