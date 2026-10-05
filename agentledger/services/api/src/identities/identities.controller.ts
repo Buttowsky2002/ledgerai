@@ -62,7 +62,6 @@ class SeatTierItemDto {
   @IsIn(SEAT_TIERS) tier!: (typeof SEAT_TIERS)[number];
 }
 
-
 class PatchIdentityTeamDto {
   /** FinOps team id, or null to clear department assignment. */
   @ValidateIf((_, v) => v !== null && v !== undefined)
@@ -93,7 +92,6 @@ export class IdentitiesController {
   list(@Query('limit') limit?: string, @Query('offset') offset?: string) {
     return this.crud.list(parsePagination(limit, offset));
   }
-
 
   @Roles('analyst')
   @Patch(':id/team')

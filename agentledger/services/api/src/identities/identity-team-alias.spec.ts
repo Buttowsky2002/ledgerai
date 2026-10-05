@@ -6,9 +6,7 @@ function nextAliasesForTeam(raw: unknown, teamName: string | null): unknown[] {
     return mergeDepartmentAlias(raw, teamName);
   }
   const existing = Array.isArray(raw) ? raw : [];
-  return existing.filter(
-    (item) => !(typeof item === 'string' && item.startsWith('department:')),
-  );
+  return existing.filter((item) => !(typeof item === 'string' && item.startsWith('department:')));
 }
 
 describe('identity team assignment aliases', () => {
