@@ -1,4 +1,5 @@
 import { isEmailLike } from '../reports/identity-resolver';
+import { normalizeDisplayNameKey } from '../reports/identity-merge';
 import type { UserDirectoryIdentity } from '../reports/identity-resolver';
 import { modelFamilyLabel } from './model-family';
 import {
@@ -193,13 +194,82 @@ export function enrichUsersWithVendorData(
 }
 
 export function canonicalUserKey(user_id: string, identity: UserDirectoryIdentity): string {
+  // Resolved SCIM/manual identities collapse by display name so multiple emails
+  // / UUIDs for the same person share one directory row.
+  const nameKey = normalizeDisplayNameKey(identity.display_name);
+  if (identity.resolved && nameKey) {
+    return `name:${nameKey}`;
+  }
   if (identity.email) {
     return `email:${identity.email.toLowerCase()}`;
   }
   if (isEmailLike(user_id)) {
     return `email:${user_id.trim().toLowerCase()}`;
   }
+  // Unlinked Copilot/Cursor handles: still merge when the display name matches
+  // a known person (hint or resolved peer uses the same key in a later pass).
+  if (nameKey) {
+    return `name:${nameKey}`;
+  }
   return `raw:${user_id.toLowerCase()}`;
+}
+
+/**
+ * Final safety net: merge directory rows that share a normalized display name
+ * (SCIM multi-email, Copilot login + work email, portal alias).
+ */
+export function collapseDirectoryRowsByDisplayName(users: UserDirectoryRow[]): UserDirectoryRow[] {
+  const buckets = new Map<string, UserDirectoryRow[]>();
+  const leftovers: UserDirectoryRow[] = [];
+  for (const u of users) {
+    const key = normalizeDisplayNameKey(u.display_name);
+    if (!key) {
+      leftovers.push(u);
+      continue;
+    }
+    const list = buckets.get(key) ?? [];
+    list.push(u);
+    buckets.set(key, list);
+  }
+  const out: UserDirectoryRow[] = [...leftovers];
+  for (const list of buckets.values()) {
+    if (list.length === 1) {
+      out.push(list[0]!);
+      continue;
+    }
+    const sorted = [...list].sort((a, b) => {
+      const resolvedDiff = Number(b.resolved) - Number(a.resolved);
+      if (resolvedDiff !== 0) {
+        return resolvedDiff;
+      }
+      const aPref = (a.email ?? '').toLowerCase().endsWith('@studiodesigner.com') ? 0 : 1;
+      const bPref = (b.email ?? '').toLowerCase().endsWith('@studiodesigner.com') ? 0 : 1;
+      if (aPref !== bPref) {
+        return aPref - bPref;
+      }
+      const spendDiff =
+        b.total_spend_usd +
+        (b.cursor_included_usd ?? 0) -
+        (a.total_spend_usd + (a.cursor_included_usd ?? 0));
+      if (spendDiff !== 0) {
+        return spendDiff;
+      }
+      return (a.email ?? a.user_id).localeCompare(b.email ?? b.user_id);
+    });
+    let acc = sorted[0]!;
+    for (let i = 1; i < sorted.length; i++) {
+      acc = mergeUserDirectoryRows(acc, sorted[i]!);
+    }
+    out.push({
+      ...acc,
+      user_id: sorted[0]!.user_id,
+      display_name: sorted[0]!.display_name || acc.display_name,
+      email: sorted[0]!.email ?? acc.email,
+      team: sorted[0]!.team || acc.team,
+      resolved: list.some((x) => x.resolved),
+    });
+  }
+  return out;
 }
 
 export function mergeUserDirectoryRows(a: UserDirectoryRow, b: UserDirectoryRow): UserDirectoryRow {

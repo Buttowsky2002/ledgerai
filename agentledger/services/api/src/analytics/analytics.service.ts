@@ -42,6 +42,7 @@ import {
 } from '../reports/identity-resolver';
 import {
   linkCopilotMembersToIdentities,
+  healIdentityTeamAssignments,
   reconcileDuplicateIdentities,
 } from '../reports/identity-merge';
 import { mergeDirectoryWithUtilization } from './user-directory-utilization';
@@ -50,6 +51,7 @@ import {
   canonicalUserKey,
   enrichUsersWithVendorData,
   mergeCursorActivityIntoUserSpend,
+  collapseDirectoryRowsByDisplayName,
   mergeUserDirectoryRows,
   userMatchesQuery,
 } from './user-directory.util';
@@ -2084,6 +2086,7 @@ export class AnalyticsService {
     }
     try {
       await reconcileDuplicateIdentities(this.prisma, tenantId);
+      await healIdentityTeamAssignments(this.prisma, tenantId);
       const members = await this.prisma.withTenant(tenantId, (tx) =>
         tx.githubCopilotMember.findMany({
           where: { tenantId },
@@ -2362,7 +2365,7 @@ export class AnalyticsService {
       merged.set(key, mergeUserDirectoryRows(existing, entry));
     }
 
-    let users = [...merged.values()].sort(
+    let users = collapseDirectoryRowsByDisplayName([...merged.values()]).sort(
       (a, b) =>
         b.total_spend_usd +
         (b.cursor_included_usd ?? 0) -

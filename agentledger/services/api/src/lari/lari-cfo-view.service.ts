@@ -27,6 +27,10 @@ import {
   resolveUserDirectoryIdentity,
 } from '../reports/identity-resolver';
 import {
+  healIdentityTeamAssignments,
+  reconcileDuplicateIdentities,
+} from '../reports/identity-merge';
+import {
   allocateSeatPools,
   applyCatalogSeatFallback,
   mergeAllocatedWithConnectorFallback,
@@ -535,6 +539,15 @@ export class LariCfoViewService {
    */
   private async buildTeamBreakdown(tenantId: string, r: Range): Promise<CfoViewTeamBreakdown[]> {
     try {
+      // Collapse SCIM multi-email shells and heal missing team_id from department /
+      // Group aliases so spend lands on the right department.
+      try {
+        await reconcileDuplicateIdentities(this.prisma, tenantId);
+        await healIdentityTeamAssignments(this.prisma, tenantId);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        this.logger.warn(`CFO identity team heal skipped: ${msg}`);
+      }
       const params = r as Record<string, ChParam>;
       const [
         spendRows,
@@ -625,11 +638,15 @@ export class LariCfoViewService {
           sampleUserId: raw,
         };
         if (identity.resolved && identity.teamId) {
+          // Always take a resolved department — first ingest may have been an
+          // unlinked handle that later collapses onto a SCIM identity with team.
           cur.teamId = identity.teamId;
           cur.teamName = identity.team;
           if (identity.email) {
             cur.sampleUserId = identity.email;
           }
+        } else if (identity.resolved && !cur.teamId && identity.team) {
+          cur.teamName = identity.team;
         }
         cur.costUsd = usd(cur.costUsd + costUsd);
         cur.calls += calls;

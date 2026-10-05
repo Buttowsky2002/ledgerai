@@ -2,6 +2,10 @@ import { HttpException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
+  healIdentityTeamAssignments,
+  reconcileDuplicateIdentities,
+} from '../reports/identity-merge';
+import {
   GroupShape,
   IdentityShape,
   PatchOp,
@@ -118,34 +122,45 @@ export class ScimService {
         400,
       );
     }
-    return this.prisma.withTenant(ctx.tenantId, async (tx) => {
-      try {
-        const created = await tx.identity.create({
-          data: {
-            tenantId: ctx.tenantId,
-            email: u.email!,
-            displayName: u.displayName ?? null,
-            externalId: u.externalId ?? null,
-            source: 'scim',
-            active: u.active ?? true,
-          },
-          select: IDENTITY_COLS,
-        });
-        if (u.department) {
-          await this.assignTeamByName(tx, ctx, created.userId, u.department);
+    return this.prisma
+      .withTenant(ctx.tenantId, async (tx) => {
+        try {
+          const created = await tx.identity.create({
+            data: {
+              tenantId: ctx.tenantId,
+              email: u.email!,
+              displayName: u.displayName ?? null,
+              externalId: u.externalId ?? null,
+              source: 'scim',
+              active: u.active ?? true,
+            },
+            select: IDENTITY_COLS,
+          });
+          if (u.department) {
+            await this.assignTeamByName(tx, ctx, created.userId, u.department);
+          }
+          await this.audit(tx, ctx, 'create', `identity:${created.userId}`, null, created);
+          const fresh = await tx.identity.findUnique({
+            where: { userId: created.userId },
+            select: IDENTITY_COLS,
+          });
+          const shaped = fresh ?? created;
+          const teamNames = await this.teamNameMap(tx, [shaped.teamId]);
+          return toScimUser(this.toIdentityShape(shaped, teamNames), baseUrl);
+        } catch (e) {
+          throw this.conflictOr(e, 'User already exists');
         }
-        await this.audit(tx, ctx, 'create', `identity:${created.userId}`, null, created);
-        const fresh = await tx.identity.findUnique({
-          where: { userId: created.userId },
-          select: IDENTITY_COLS,
-        });
-        const shaped = fresh ?? created;
-        const teamNames = await this.teamNameMap(tx, [shaped.teamId]);
-        return toScimUser(this.toIdentityShape(shaped, teamNames), baseUrl);
-      } catch (e) {
-        throw this.conflictOr(e, 'User already exists');
-      }
-    });
+      })
+      .then(async (user) => {
+        // Collapse same-name SCIM shells onto one primary after Entra provisions.
+        try {
+          await reconcileDuplicateIdentities(this.prisma, ctx.tenantId);
+          await healIdentityTeamAssignments(this.prisma, ctx.tenantId);
+        } catch {
+          // best-effort — directory load also reconciles
+        }
+        return user;
+      });
   }
 
   async replaceUser(ctx: ScimCtx, id: string, body: Record<string, unknown>, baseUrl: string) {
@@ -428,7 +443,9 @@ export class ScimService {
     if (!name) {
       return;
     }
-    let team = await tx.team.findFirst({ where: { name } });
+    let team = await tx.team.findFirst({
+      where: { name: { equals: name, mode: 'insensitive' } },
+    });
     if (!team) {
       try {
         team = await tx.team.create({
@@ -437,7 +454,9 @@ export class ScimService {
       } catch (e) {
         // Concurrent create on unique (tenant_id, name) — re-read.
         if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-          team = await tx.team.findFirst({ where: { name } });
+          team = await tx.team.findFirst({
+            where: { name: { equals: name, mode: 'insensitive' } },
+          });
         } else {
           throw e;
         }

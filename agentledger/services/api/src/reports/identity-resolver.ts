@@ -351,6 +351,16 @@ export async function loadIdentityLookups(
     const byEmail = new Map<string, IdentityEntry>();
     const byAlias = new Map<string, IdentityEntry>();
 
+    const putEntry = (map: Map<string, IdentityEntry>, key: string, entry: IdentityEntry) => {
+      const existing = map.get(key);
+      // Never let an inactive SCIM shell overwrite an active mapping (or a primary
+      // alias) — that was splitting spend across two directory rows.
+      if (existing?.active && !entry.active) {
+        return;
+      }
+      map.set(key, entry);
+    };
+
     const register = (
       id: string,
       displayName: string | null,
@@ -369,15 +379,15 @@ export async function loadIdentityLookups(
         active,
       };
       if (UUID_RE.test(id)) {
-        byId.set(id, entry);
+        putEntry(byId, id, entry);
       }
       if (email?.trim()) {
-        byEmail.set(normalizeKey(email), entry);
+        putEntry(byEmail, normalizeKey(email), entry);
       }
       for (const alias of aliases) {
-        byAlias.set(normalizeKey(alias), entry);
+        putEntry(byAlias, normalizeKey(alias), entry);
         if (isEmailLike(alias)) {
-          byEmail.set(normalizeKey(alias), entry);
+          putEntry(byEmail, normalizeKey(alias), entry);
         }
       }
     };
@@ -410,7 +420,9 @@ export async function loadIdentityLookups(
       mergeable.push({
         userId: row.userId,
         email: row.email,
-        displayName: row.displayName,
+        // Group with resolved display names so null SCIM displayName still
+        // collapses with a peer that shares the same email local-part / name.
+        displayName: resolveDisplayName(row.displayName, row.email, row.userId),
         aliases,
         teamId: row.teamId,
         active: row.active,
@@ -429,14 +441,20 @@ export async function loadIdentityLookups(
       if (!primaryEntry) {
         continue;
       }
+      // Secondary may hold the SCIM department while the preferred-email primary
+      // does not — keep team attribution for CFO / Users.
+      if (!primaryEntry.teamId && row.teamId) {
+        primaryEntry.teamId = row.teamId;
+        primaryEntry.teamName = teamNames.get(row.teamId) ?? primaryEntry.teamName;
+      }
       byId.set(row.userId, primaryEntry);
       if (row.email?.trim()) {
-        byEmail.set(normalizeKey(row.email), primaryEntry);
+        putEntry(byEmail, normalizeKey(row.email), primaryEntry);
       }
       for (const alias of row.aliases) {
-        byAlias.set(normalizeKey(alias), primaryEntry);
+        putEntry(byAlias, normalizeKey(alias), primaryEntry);
         if (isEmailLike(alias)) {
-          byEmail.set(normalizeKey(alias), primaryEntry);
+          putEntry(byEmail, normalizeKey(alias), primaryEntry);
         }
       }
     }
