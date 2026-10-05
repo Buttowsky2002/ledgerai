@@ -6,6 +6,7 @@
 
 import type { Prisma } from '@prisma/client';
 import type { PrismaService } from '../prisma/prisma.service';
+import { departmentFromAliases, scimGroupTeamIdsFromAliases } from '../scim/scim.types';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** Corporate domains preferred as the primary email when collapsing duplicates. */
@@ -88,13 +89,14 @@ export function pickPrimaryIdentity(group: MergeableIdentity[]): MergeableIdenti
     if (rankDiff !== 0) {
       return rankDiff;
     }
-    const aliasDiff = b.aliases.length - a.aliases.length;
-    if (aliasDiff !== 0) {
-      return aliasDiff;
-    }
+    // Prefer the shell that already has a FinOps department/team.
     const teamDiff = Number(Boolean(b.teamId)) - Number(Boolean(a.teamId));
     if (teamDiff !== 0) {
       return teamDiff;
+    }
+    const aliasDiff = b.aliases.length - a.aliases.length;
+    if (aliasDiff !== 0) {
+      return aliasDiff;
     }
     return a.email.localeCompare(b.email);
   })[0]!;
@@ -133,11 +135,11 @@ export function primaryUserIdByIdentityId(rows: MergeableIdentity[]): Map<string
   const out = new Map<string, string>();
   const byName = new Map<string, MergeableIdentity[]>();
   for (const row of rows) {
-    if (!row.active) {
-      out.set(row.userId, row.userId);
-      continue;
-    }
-    const key = normalizeDisplayNameKey(row.displayName);
+    // Prefer displayName; fall back to email local-part so SCIM shells without a
+    // displayName still group with matching peers.
+    const key =
+      normalizeDisplayNameKey(row.displayName) ||
+      normalizeDisplayNameKey(row.email.includes('@') ? row.email.split('@')[0] : '');
     if (!key) {
       out.set(row.userId, row.userId);
       continue;
@@ -147,7 +149,11 @@ export function primaryUserIdByIdentityId(rows: MergeableIdentity[]): Map<string
     byName.set(key, list);
   }
   for (const list of byName.values()) {
-    const primary = list.length >= 2 ? pickPrimaryIdentity(list) : list[0]!;
+    // Inactive SCIM secondaries still map onto the active primary so spend under
+    // their email/UUID rolls into one directory person (not dropped).
+    const active = list.filter((r) => r.active);
+    const pool = active.length > 0 ? active : list;
+    const primary = pool.length >= 2 ? pickPrimaryIdentity(pool) : pool[0]!;
     for (const row of list) {
       out.set(row.userId, primary.userId);
     }
@@ -240,13 +246,23 @@ export async function reconcileDuplicateIdentities(
         primary.aliases,
         ...secondary.map((s) => [s.email, ...s.aliases]),
       );
+      // Keep department on the surviving primary when a secondary was the SCIM
+      // Group / enterprise-department assignee.
+      const inheritedTeamId =
+        primary.teamId ??
+        secondary.map((s) => s.teamId).find((id): id is string => Boolean(id)) ??
+        null;
       const aliasesChanged =
         nextAliases.length !== primary.aliases.length ||
         nextAliases.some((a, i) => a.toLowerCase() !== (primary.aliases[i] ?? '').toLowerCase());
-      if (aliasesChanged) {
+      const teamChanged = Boolean(inheritedTeamId) && inheritedTeamId !== primary.teamId;
+      if (aliasesChanged || teamChanged) {
         await tx.identity.update({
           where: { userId: primary.userId },
-          data: { aliases: nextAliases as Prisma.InputJsonValue },
+          data: {
+            ...(aliasesChanged ? { aliases: nextAliases as Prisma.InputJsonValue } : {}),
+            ...(teamChanged ? { teamId: inheritedTeamId } : {}),
+          },
         });
       }
       for (const sec of secondary) {
@@ -258,6 +274,67 @@ export async function reconcileDuplicateIdentities(
       }
     }
     return linked;
+  });
+}
+
+/**
+ * Assign team_id from enterprise department: aliases or scim-group: markers when
+ * still null. Case-insensitive team name match. Idempotent.
+ */
+export async function healIdentityTeamAssignments(
+  prisma: PrismaService,
+  tenantId: string,
+): Promise<number> {
+  return prisma.withTenant(tenantId, async (tx) => {
+    const rows = await tx.identity.findMany({
+      where: { teamId: null, active: true },
+      select: { userId: true, aliases: true },
+    });
+    let fixed = 0;
+    for (const row of rows) {
+      const dept = departmentFromAliases(row.aliases);
+      if (dept) {
+        const name = dept.trim();
+        let team = await tx.team.findFirst({
+          where: { name: { equals: name, mode: 'insensitive' } },
+        });
+        if (!team) {
+          try {
+            team = await tx.team.create({ data: { tenantId, name } });
+          } catch {
+            team = await tx.team.findFirst({
+              where: { name: { equals: name, mode: 'insensitive' } },
+            });
+          }
+        }
+        if (team) {
+          await tx.identity.update({
+            where: { userId: row.userId },
+            data: { teamId: team.teamId },
+          });
+          fixed += 1;
+          continue;
+        }
+      }
+      const groupIds = scimGroupTeamIdsFromAliases(row.aliases);
+      for (let i = groupIds.length - 1; i >= 0; i--) {
+        const gid = groupIds[i]!;
+        const team = await tx.team.findUnique({
+          where: { teamId: gid },
+          select: { teamId: true },
+        });
+        if (!team) {
+          continue;
+        }
+        await tx.identity.update({
+          where: { userId: row.userId },
+          data: { teamId: team.teamId },
+        });
+        fixed += 1;
+        break;
+      }
+    }
+    return fixed;
   });
 }
 

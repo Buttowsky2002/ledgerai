@@ -42,10 +42,18 @@ describe('identity-merge', () => {
       expect(primary.email).toBe('russ@studiodesigner.com');
     });
 
-    it('breaks ties with more aliases then team then email sort', () => {
+    it('breaks ties with team assignment then aliases then email sort', () => {
       const primary = pickPrimaryIdentity([
         id('a', 'a@example.com', 'Tim', []),
         id('b', 'b@example.com', 'Tim', ['alias-1'], 'team-1'),
+      ]);
+      expect(primary.userId).toBe('b');
+    });
+
+    it('prefers team assignment over alias count at the same email rank', () => {
+      const primary = pickPrimaryIdentity([
+        id('a', 'a@example.com', 'Tim', ['x', 'y', 'z']),
+        id('b', 'b@example.com', 'Tim', [], 'team-1'),
       ]);
       expect(primary.userId).toBe('b');
     });
@@ -87,6 +95,17 @@ describe('identity-merge', () => {
       const map = primaryUserIdByIdentityId([
         id('1', 'russ@gmail.com', 'Russ'),
         id('2', 'russ@studiodesigner.com', 'Russ'),
+      ]);
+      expect(map.get('1')).toBe('2');
+      expect(map.get('2')).toBe('2');
+    });
+
+    it('maps inactive secondaries onto the active primary', () => {
+      const inactive = id('1', 'russ@gmail.com', 'Russ McClelland');
+      inactive.active = false;
+      const map = primaryUserIdByIdentityId([
+        inactive,
+        id('2', 'russ@studiodesigner.com', 'Russ McClelland'),
       ]);
       expect(map.get('1')).toBe('2');
       expect(map.get('2')).toBe('2');
