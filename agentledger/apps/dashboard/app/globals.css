@@ -67,3 +67,9 @@ body {
 .table tbody tr:last-child td {
   @apply border-b-0;
 }
+
+/* Closed select stays on the dark panel; the native popup list needs black labels. */
+.team-assign-select option {
+  color: #111;
+  background-color: #fff;
+}

@@ -57,15 +57,13 @@ export function TeamAssignmentControls({
         aria-label="Team"
         className={
           compact
-            ? 'w-full max-w-[10rem] truncate rounded border border-edge bg-white px-1.5 py-1 text-xs text-black [color-scheme:light] disabled:opacity-50'
-            : 'w-full max-w-xs rounded border border-edge bg-white px-2 py-1.5 text-sm text-black [color-scheme:light] disabled:opacity-50'
+            ? 'team-assign-select w-full max-w-[10rem] truncate rounded border border-edge bg-panel px-1.5 py-1 text-xs text-white disabled:opacity-50'
+            : 'team-assign-select w-full max-w-xs rounded border border-edge bg-panel px-2 py-1.5 text-sm text-white disabled:opacity-50'
         }
       >
-        <option value="" className="bg-white text-black">
-          Unassigned
-        </option>
+        <option value="">Unassigned</option>
         {teams.map((t) => (
-          <option key={t.teamId} value={t.teamId} className="bg-white text-black">
+          <option key={t.teamId} value={t.teamId}>
             {t.name}
           </option>
         ))}
