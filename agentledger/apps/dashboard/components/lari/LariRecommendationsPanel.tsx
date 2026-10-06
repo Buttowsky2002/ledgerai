@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { CollapsibleDetails } from '@/components/CollapsibleDetails';
 import { Badge, BadgeTone, Card, DataTable, usd } from '@/components/ui';
 import { fetchLariRecommendations } from '@/lib/api/lari';
 import type {
@@ -164,16 +165,22 @@ export function LariRecommendationsPanel({
       )}
 
       {!loading && !compact && data && data.providerRankings.length > 0 && (
-        <details className="group mt-6 border-t border-edge/70 pt-4" defaultOpen>
-          <summary className="mb-3 flex cursor-pointer list-none items-center justify-between gap-2 marker:content-none [&::-webkit-details-marker]:hidden">
-            <h3 className="text-sm font-medium text-gray-200">Provider value ranking</h3>
-            <span
-              aria-hidden
-              className="text-[10px] text-muted transition-transform duration-150 group-open:rotate-180"
-            >
-              ▼
-            </span>
-          </summary>
+        <CollapsibleDetails
+          defaultOpen
+          className="group mt-6 border-t border-edge/70 pt-4"
+          summaryClassName="mb-3 flex cursor-pointer list-none items-center justify-between gap-2 marker:content-none [&::-webkit-details-marker]:hidden"
+          summary={
+            <>
+              <h3 className="text-sm font-medium text-gray-200">Provider value ranking</h3>
+              <span
+                aria-hidden
+                className="text-[10px] text-muted transition-transform duration-150 group-open:rotate-180"
+              >
+                ▼
+              </span>
+            </>
+          }
+        >
           <DataTable
             columns={[
               { key: 'rank', label: '#', align: 'right' },
@@ -192,20 +199,26 @@ export function LariRecommendationsPanel({
               score: `${r.efficiencyScore}`,
             }))}
           />
-        </details>
+        </CollapsibleDetails>
       )}
 
       {!loading && !compact && data && data.agentEconomicsHighlights.length > 0 && (
-        <details className="group mt-6 border-t border-edge/70 pt-4" defaultOpen>
-          <summary className="mb-3 flex cursor-pointer list-none items-center justify-between gap-2 marker:content-none [&::-webkit-details-marker]:hidden">
-            <h3 className="text-sm font-medium text-gray-200">Agent economics highlights</h3>
-            <span
-              aria-hidden
-              className="text-[10px] text-muted transition-transform duration-150 group-open:rotate-180"
-            >
-              ▼
-            </span>
-          </summary>
+        <CollapsibleDetails
+          defaultOpen
+          className="group mt-6 border-t border-edge/70 pt-4"
+          summaryClassName="mb-3 flex cursor-pointer list-none items-center justify-between gap-2 marker:content-none [&::-webkit-details-marker]:hidden"
+          summary={
+            <>
+              <h3 className="text-sm font-medium text-gray-200">Agent economics highlights</h3>
+              <span
+                aria-hidden
+                className="text-[10px] text-muted transition-transform duration-150 group-open:rotate-180"
+              >
+                ▼
+              </span>
+            </>
+          }
+        >
           <DataTable
             columns={[
               { key: 'agent', label: 'Agent' },
@@ -231,7 +244,7 @@ export function LariRecommendationsPanel({
               provider: a.topProvider ?? '—',
             }))}
           />
-        </details>
+        </CollapsibleDetails>
       )}
     </Card>
   );

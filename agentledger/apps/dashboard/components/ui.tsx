@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import { CollapsibleDetails } from './CollapsibleDetails';
 
 export function PageHeader({
   title,
@@ -77,12 +78,9 @@ export function Card({
   return (
     <section className="mb-6 overflow-hidden rounded-xl border border-edge bg-panel shadow-card">
       {canCollapse && (title || actions) ? (
-        <details className="group" defaultOpen={defaultOpen}>
-          <summary className="flex cursor-pointer list-none items-center border-b border-edge/70 px-5 py-3.5 marker:content-none [&::-webkit-details-marker]:hidden">
-            {header}
-          </summary>
+        <CollapsibleDetails defaultOpen={defaultOpen} className="group" summary={header}>
           <div className="p-5">{children}</div>
-        </details>
+        </CollapsibleDetails>
       ) : (
         <>
           {(title || actions) && (
