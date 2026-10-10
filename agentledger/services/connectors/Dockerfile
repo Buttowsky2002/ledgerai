@@ -1,4 +1,4 @@
-FROM golang:1.22-alpine AS build
+FROM golang:1.26-alpine AS build
 WORKDIR /src
 COPY . .
 # Which cmd to build: connector-sync (provider costs) or outcome-sync (outcomes).
