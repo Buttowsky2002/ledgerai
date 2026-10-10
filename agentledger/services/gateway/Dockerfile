@@ -2,7 +2,7 @@
 # COPY pricing/ — the price book lives at agentledger/pricing/, outside the
 # gateway package. The release workflow matrix and docker-compose both use
 # context: agentledger for this image.
-FROM golang:1.22-alpine AS build
+FROM golang:1.26-alpine AS build
 WORKDIR /src
 COPY services/gateway/ ./
 COPY pricing/ ./pricing/
