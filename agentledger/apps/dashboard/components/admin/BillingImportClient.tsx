@@ -85,6 +85,9 @@ type UploadResult = {
   totalCostUsd: number;
   dateRange: { from: string | null; to: string | null };
   suggestedApiSyncBaseline: string | null;
+  seatsAssigned?: number;
+  identitiesLinked?: number;
+  identitiesCreated?: number;
   files: { fileName: string; ok: boolean; error?: string; parsed: number; imported: number }[];
 };
 
@@ -1115,6 +1118,18 @@ export function BillingImportClient() {
               <li>
                 {uploadResult.usersDetected} users · {usd(uploadResult.totalCostUsd)} total
               </li>
+              {!uploadResult.dryRun && typeof uploadResult.seatsAssigned === 'number' && (
+                <li>
+                  {uploadResult.seatsAssigned} Claude/ChatGPT seat
+                  {uploadResult.seatsAssigned === 1 ? '' : 's'} assigned
+                  {typeof uploadResult.identitiesLinked === 'number' &&
+                    uploadResult.identitiesLinked > 0 &&
+                    ` · ${uploadResult.identitiesLinked} existing user${uploadResult.identitiesLinked === 1 ? '' : 's'} linked`}
+                  {typeof uploadResult.identitiesCreated === 'number' &&
+                    uploadResult.identitiesCreated > 0 &&
+                    ` · ${uploadResult.identitiesCreated} new identit${uploadResult.identitiesCreated === 1 ? 'y' : 'ies'} created`}
+                </li>
+              )}
               {uploadResult.dateRange.from && (
                 <li>
                   Date range: {uploadResult.dateRange.from} → {uploadResult.dateRange.to}
