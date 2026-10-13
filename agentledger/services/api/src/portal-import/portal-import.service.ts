@@ -22,6 +22,15 @@ import { providerModelConflictMessage } from './provider-model-guard';
 
 import { shouldSurfaceLegacyImportAudit } from './legacy-import-list';
 
+import { parseAliasList } from '../reports/identity-merge';
+
+import {
+  resolveCanonicalIdentity,
+  type ImportIdentityCandidate,
+  type SeatSyncStats,
+  type SyncIdentityRow,
+} from './import-identity-sync';
+
 import { seatVendorsFromImportRows } from './import-seat-tiers';
 
 import {
@@ -62,6 +71,15 @@ export interface PortalUploadResult {
   portalImportThrough: string | null;
 
   importRunId: string | null;
+
+  /** Claude/ChatGPT basic seat licenses written during this import. */
+  seatsAssigned: number;
+
+  /** Existing directory identities that received seat tags. */
+  identitiesLinked: number;
+
+  /** New identities created because no directory match existed. */
+  identitiesCreated: number;
 }
 
 export interface PortalImportRunItem {
@@ -279,6 +297,11 @@ export class PortalImportService {
     const totalCostUsd = importableFiles.reduce((s, f) => s + f.totalCostUsd, 0);
 
     let importRunId: string | null = null;
+    let seatSync: SeatSyncStats = {
+      seatsAssigned: 0,
+      identitiesLinked: 0,
+      identitiesCreated: 0,
+    };
 
     if (!dryRun) {
       const runId = randomUUID();
@@ -305,7 +328,7 @@ export class PortalImportService {
         duplicateSkipped += summary.skipped;
       }
 
-      await this.syncImportedUsersToIdentities(tenantId, allRows);
+      seatSync = await this.syncImportedUsersToIdentities(tenantId, allRows);
 
       if (opts?.connectorId && providersUsed.has('anthropic')) {
         await this.updateConnectorHandoff(tenantId, opts.connectorId, globalMax);
@@ -426,6 +449,12 @@ export class PortalImportService {
       portalImportThrough: globalMax,
 
       importRunId,
+
+      seatsAssigned: seatSync.seatsAssigned,
+
+      identitiesLinked: seatSync.identitiesLinked,
+
+      identitiesCreated: seatSync.identitiesCreated,
     };
   }
 
@@ -498,29 +527,75 @@ export class PortalImportService {
   private async syncImportedUsersToIdentities(
     tenantId: string,
     rows: Record<string, unknown>[],
-  ): Promise<void> {
+  ): Promise<SeatSyncStats> {
+    const stats: SeatSyncStats = {
+      seatsAssigned: 0,
+      identitiesLinked: 0,
+      identitiesCreated: 0,
+    };
     const candidates = this.collectIdentityCandidates(rows);
     if (candidates.size === 0) {
-      return;
+      return stats;
     }
-    const emails = [...candidates.keys()];
     const seatVendorsByEmail = seatVendorsFromImportRows(rows);
 
     await this.prisma.withTenant(tenantId, async (tx) => {
-      const existingRows = await tx.identity.findMany({
-        where: { email: { in: emails } },
-        select: { userId: true, email: true, displayName: true, aliases: true },
+      const identityRows = await tx.identity.findMany({
+        select: {
+          userId: true,
+          email: true,
+          displayName: true,
+          aliases: true,
+          active: true,
+          source: true,
+        },
       });
-      const existing = new Map(existingRows.map((row) => [row.email.toLowerCase(), row]));
-      for (const email of emails) {
-        const candidate = candidates.get(email);
-        if (!candidate) {
-          continue;
-        }
-        const row = existing.get(email);
-        const aliases = this.mergeAliases(row?.aliases, candidate.aliases);
-        let userId = row?.userId;
-        if (!row) {
+      const roster: SyncIdentityRow[] = identityRows.map((row) => ({
+        userId: row.userId,
+        email: row.email,
+        aliases: parseAliasList(row.aliases),
+        active: row.active,
+        source: row.source,
+      }));
+      const byUserId = new Map(identityRows.map((row) => [row.userId, row]));
+      const linkedIds = new Set<string>();
+      const assignedKeys = new Set<string>();
+
+      for (const [email, candidate] of candidates) {
+        const importCandidate: ImportIdentityCandidate = {
+          email,
+          displayName: candidate.displayName,
+          aliases: [...candidate.aliases],
+        };
+        const matched = resolveCanonicalIdentity(importCandidate, roster);
+        let userId: string | undefined;
+        let aliases: string[];
+
+        if (matched) {
+          const row = byUserId.get(matched.userId);
+          if (!row) {
+            continue;
+          }
+          aliases = this.mergeAliases(row.aliases, candidate.aliases);
+          // Keep import email as an alias when casing/domain differs from primary.
+          if (email && email !== row.email.toLowerCase()) {
+            aliases = this.mergeAliases(aliases, new Set([email]));
+          }
+          const displayName = row.displayName ?? candidate.displayName ?? undefined;
+          await tx.identity.update({
+            where: { userId: row.userId },
+            data: {
+              displayName,
+              aliases: aliases as Prisma.InputJsonValue,
+            },
+          });
+          userId = row.userId;
+          if (!linkedIds.has(userId)) {
+            linkedIds.add(userId);
+            stats.identitiesLinked += 1;
+          }
+        } else {
+          aliases = this.mergeAliases(undefined, candidate.aliases);
           const created = await tx.identity.create({
             data: {
               tenantId,
@@ -531,16 +606,24 @@ export class PortalImportService {
             },
           });
           userId = created.userId;
-        } else {
-          const displayName = row.displayName ?? candidate.displayName ?? undefined;
-          await tx.identity.update({
-            where: { tenantId_email: { tenantId, email } },
-            data: {
-              displayName,
-              aliases: aliases as Prisma.InputJsonValue,
-            },
+          roster.push({
+            userId: created.userId,
+            email,
+            aliases: parseAliasList(aliases),
+            active: true,
+            source: 'portal_import',
           });
+          byUserId.set(created.userId, {
+            userId: created.userId,
+            email,
+            displayName: candidate.displayName ?? null,
+            aliases: aliases as Prisma.JsonValue,
+            active: true,
+            source: 'portal_import',
+          });
+          stats.identitiesCreated += 1;
         }
+
         if (!userId) {
           continue;
         }
@@ -549,6 +632,7 @@ export class PortalImportService {
           continue;
         }
         for (const vendor of vendors) {
+          const seatKey = `${userId}:${vendor}`;
           const existingTier = await tx.identitySeatTier.findUnique({
             where: {
               tenantId_userId_vendor: { tenantId, userId, vendor },
@@ -570,9 +654,38 @@ export class PortalImportService {
             },
             update: { tier: 'basic' },
           });
+          if (!assignedKeys.has(seatKey)) {
+            assignedKeys.add(seatKey);
+            stats.seatsAssigned += 1;
+          }
         }
       }
     });
+
+    if (candidates.size > 0 && stats.seatsAssigned === 0) {
+      this.logger.warn(
+        {
+          event: 'portal_import_seats_none',
+          tenantId,
+          candidates: candidates.size,
+          identitiesLinked: stats.identitiesLinked,
+          identitiesCreated: stats.identitiesCreated,
+        },
+        'portal import had identity candidates but assigned zero seat licenses',
+      );
+    } else {
+      this.logger.log(
+        {
+          event: 'portal_import_seats',
+          tenantId,
+          ...stats,
+          candidates: candidates.size,
+        },
+        'portal import seat licenses synced',
+      );
+    }
+
+    return stats;
   }
 
   async listImportRuns(limit = 50): Promise<{ runs: PortalImportRunItem[] }> {
