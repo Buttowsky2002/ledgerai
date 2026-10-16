@@ -942,7 +942,8 @@ export function BillingImportClient() {
           {!activeFile.preview?.importable && activeFile.preview && (
             <div className="mb-4 rounded-lg border border-warn/30 bg-warn/10 px-4 py-3 text-sm text-warn">
               {activeFile.preview.format?.billable === false
-                ? 'This file is not billable — use a provider spend/billing export CSV instead.'
+                ? activeFile.preview.format.hint ||
+                  'This file is not billable — use the Anthropic Console spend-report CSV (user_email + total_net_spend_usd).'
                 : activeFile.preview.requiresProvider
                   ? 'Select a billing provider below — imports are stamped with the provider you choose, not the Anthropic connector.'
                   : needsReportThroughDay(activeFile) && !activeFile.reportThroughDay
