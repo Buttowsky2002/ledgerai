@@ -4,6 +4,8 @@ export type PortalCsvFormat =
   | 'anthropic_console'
   | 'claude_code_lines'
   | 'cursor_analytics'
+  /** Warehouse / admin exports (Table Name, IsBillable, …) — never Anthropic billing. */
+  | 'non_billing_export'
   | 'unknown';
 
 export interface FormatDetection {
@@ -15,6 +17,10 @@ export interface FormatDetection {
   reportFrom: string | null;
   reportTo: string | null;
 }
+
+/** Canonical Anthropic Console “Cost & usage → Spend report” export shape. */
+export const ANTHROPIC_SPEND_REPORT_HINT =
+  'Upload the Anthropic Console spend report CSV (filename like spend-report-…-YYYY-MM-DD-to-YYYY-MM-DD.csv). Required columns: user_email, total_net_spend_usd (plus product, model, user_id).';
 
 function norm(h: string): string {
   return h
@@ -73,6 +79,7 @@ export function datesFromFileName(fileName: string | undefined): {
 
 export function detectPortalCsvFormat(headers: string[], fileName?: string): FormatDetection {
   const fileDates = datesFromFileName(fileName);
+  const looksLikeSpendFile = Boolean(fileName && /spend[-_]?report/i.test(fileName));
 
   if (
     hasHeader(headers, 'user_email', 'total_net_spend_usd') ||
@@ -83,6 +90,40 @@ export function detectPortalCsvFormat(headers: string[], fileName?: string): For
       label: 'Anthropic spend report',
       billable: true,
       hint: 'Per user/product/model rows. No daily date column — rows use the report end date from the filename.',
+      reportFrom: fileDates.from,
+      reportTo: fileDates.to,
+    };
+  }
+
+  // Filename says spend-report but headers are wrong (common: wrong file still named for upload).
+  if (
+    looksLikeSpendFile &&
+    !hasHeader(headers, 'user_email') &&
+    !hasHeader(headers, 'total_net_spend_usd')
+  ) {
+    return {
+      format: 'non_billing_export',
+      label: 'Not an Anthropic spend report',
+      billable: false,
+      hint: ANTHROPIC_SPEND_REPORT_HINT,
+      reportFrom: fileDates.from,
+      reportTo: fileDates.to,
+    };
+  }
+
+  // Warehouse / admin dumps (e.g. export_data.csv with Table Name + IsBillable).
+  if (
+    (hasHeader(headers, 'Table Name') && hasHeader(headers, 'IsBillable')) ||
+    (hasHeader(headers, 'table_name') && hasHeader(headers, 'is_billable')) ||
+    (hasHeader(headers, 'Table Name') && hasHeader(headers, 'Table Size'))
+  ) {
+    return {
+      format: 'non_billing_export',
+      label: 'Non-billing export',
+      billable: false,
+      hint:
+        'This looks like a warehouse/admin export (Table Name / IsBillable), not Anthropic billing. ' +
+        ANTHROPIC_SPEND_REPORT_HINT,
       reportFrom: fileDates.from,
       reportTo: fileDates.to,
     };
@@ -110,7 +151,7 @@ export function detectPortalCsvFormat(headers: string[], fileName?: string): For
       format: 'claude_code_lines',
       label: 'Claude Code lines report',
       billable: false,
-      hint: 'Line counts per user only — no cost or date. Use the Anthropic spend report CSV for billing.',
+      hint: 'Line counts per user only — no cost or date. ' + ANTHROPIC_SPEND_REPORT_HINT,
       reportFrom: fileDates.from,
       reportTo: fileDates.to,
     };
@@ -131,7 +172,7 @@ export function detectPortalCsvFormat(headers: string[], fileName?: string): For
     format: 'unknown',
     label: 'Unknown format',
     billable: true,
-    hint: 'Map Date and Cost manually, or use an Anthropic spend report export.',
+    hint: ANTHROPIC_SPEND_REPORT_HINT,
     reportFrom: fileDates.from,
     reportTo: fileDates.to,
   };

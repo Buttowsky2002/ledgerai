@@ -154,6 +154,15 @@ describe('parseAnthropicPortalCsv', () => {
     expect(result.rows).toHaveLength(0);
   });
 
+  it('rejects warehouse export_data.csv (Table Name / IsBillable) as non-billable', () => {
+    const csv = ['Table Name,IsBillable,Table Size', 'AWSCloudTrail,TRUE,22.23'].join('\n');
+    const result = parseAnthropicPortalCsv(csv, undefined, 'export_data.csv');
+    expect(result.format.format).toBe('non_billing_export');
+    expect(result.format.billable).toBe(false);
+    expect(result.rows).toHaveLength(0);
+    expect(result.format.hint).toMatch(/spend report/i);
+  });
+
   it('uses stable idempotency keys independent of CSV line number', () => {
     const base = [
       'Usage Date,Model,Member Email,Cost (USD),Input Tokens,Output Tokens',

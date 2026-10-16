@@ -94,14 +94,20 @@ const ROLE_PATTERNS: Record<RoleKey, string[]> = {
 
 function findHeader(headers: string[], candidates: string[]): string | undefined {
   const norm = headers.map((h) => ({ raw: h, n: normalizeHeader(h) }));
+  // Exact normalized match first (prefer total_net_spend_usd over fuzzy "spend").
   for (const c of candidates) {
     const hit = norm.find((h) => h.n === c);
     if (hit) {
       return hit.raw;
     }
   }
+  // Fuzzy only for longer tokens — short stems like "name"/"user" falsely match
+  // "table_name" / "IsBillable" on warehouse dumps.
   for (const c of candidates) {
-    const hit = norm.find((h) => h.n.includes(c) || c.includes(h.n));
+    if (c.length < 5) {
+      continue;
+    }
+    const hit = norm.find((h) => h.n.includes(c) || (c.length >= 8 && c.includes(h.n)));
     if (hit) {
       return hit.raw;
     }
@@ -192,6 +198,23 @@ export function suggestColumnMapping(
     return suggestion;
   }
 
+  if (
+    format === 'non_billing_export' ||
+    format === 'cursor_analytics' ||
+    format === 'claude_code_lines'
+  ) {
+    const byHeader: Record<string, PortalColumnRole | undefined> = {};
+    for (const h of headers) {
+      byHeader[h] = 'skip';
+    }
+    return {
+      byHeader,
+      mapping: {},
+      missingRequired: ['date', 'cost'],
+      inferredCostUnit: 'usd',
+    };
+  }
+
   if (format === 'anthropic_console' || format === 'unknown') {
     const roles: Partial<Record<string, PortalColumnRole>> = {};
     const set = (role: PortalColumnRole, candidates: string[]) => {
@@ -280,7 +303,11 @@ export function findHeaderRowIndex(grid: string[][]): number {
       score = 100;
     } else if (format === 'anthropic_console') {
       score = 90;
-    } else if (format === 'cursor_analytics' || format === 'claude_code_lines') {
+    } else if (
+      format === 'cursor_analytics' ||
+      format === 'claude_code_lines' ||
+      format === 'non_billing_export'
+    ) {
       score = 10;
     } else {
       const suggestion = suggestColumnMapping(headers);

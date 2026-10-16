@@ -32,12 +32,35 @@ describe('datesFromFileName', () => {
 });
 
 describe('detectPortalCsvFormat', () => {
-  it('detects Anthropic spend report', () => {
-    const headers = ['user_email', 'account_uuid', 'total_net_spend_usd', 'model'];
-    const d = detectPortalCsvFormat(headers, 'spend-report-2026-03-26-to-2026-06-24.csv');
+  it('detects Anthropic spend report (canonical Console export)', () => {
+    const headers = [
+      'user_email',
+      'account_uuid',
+      'product',
+      'model',
+      'total_requests',
+      'total_prompt_tokens',
+      'total_completion_tokens',
+      'total_net_spend_usd',
+      'total_gross_spend_usd',
+      'user_id',
+    ];
+    const d = detectPortalCsvFormat(
+      headers,
+      'spend-report-fb01cd94-335a-4e06-80cd-af774ef7f65e-2026-09-01-to-2026-09-30.csv',
+    );
     expect(d.format).toBe('anthropic_spend_report');
     expect(d.billable).toBe(true);
-    expect(d.reportTo).toBe('2026-06-24');
+    expect(d.reportFrom).toBe('2026-09-01');
+    expect(d.reportTo).toBe('2026-09-30');
+  });
+
+  it('rejects warehouse export_data.csv style dumps', () => {
+    const headers = ['Table Name', 'IsBillable', 'Table Size'];
+    const d = detectPortalCsvFormat(headers, 'export_data.csv');
+    expect(d.format).toBe('non_billing_export');
+    expect(d.billable).toBe(false);
+    expect(d.hint).toMatch(/spend report/i);
   });
 
   it('detects Cursor analytics as non-billable', () => {
